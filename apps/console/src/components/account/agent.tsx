@@ -6,7 +6,7 @@ import { Section, Why } from "@/components/layout/section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { build, minor } from "@/lib/guard";
-import { everyText, inText, raw, sentence, usd } from "@/lib/tameion";
+import { everyText, fetchInbox, inText, raw, sentence, usd } from "@/lib/tameion";
 import type { Inbox } from "@/lib/types";
 import { Receipt, useAccount, useAction } from "./ctx";
 import { Payee } from "./payee";
@@ -50,10 +50,24 @@ export function AgentControls() {
             disabled={state.kind === "working"}
             onClick={() =>
               auto.run("Cancelling…", async () => {
-                const prep = await post<{ to: string; data: string }>("/api/level1/prepare-cancel", { policy: tenant.policy });
-                const ex = await sign(prep.to, prep.data, { fn: ["cancelPending"], data: build("cancelPending", []) });
-                refresh();
-                return { text: "Cancelled. Nothing changed.", href: ex.explorer };
+                // What the owner is cancelling, kept before the call: if the change applied first, say so in words (docs/60 P-171).
+                const due = pending.eta;
+                const what = (pending.kinds ?? 0) & 2 ? (pending.mode === "Autopilot" ? "Autopilot" : "the resume") : "the higher limit";
+                const undo = (pending.kinds ?? 0) & 2 ? "Pause" : "lower the limit";
+                try {
+                  const prep = await post<{ to: string; data: string }>("/api/level1/prepare-cancel", { policy: tenant.policy });
+                  const ex = await sign(prep.to, prep.data, { fn: ["cancelPending"], data: build("cancelPending", []) });
+                  refresh();
+                  return { text: `Cancelled: ${what} will not apply.`, href: ex.explorer };
+                } catch (e) {
+                  const now = await fetchInbox(tenant.policy).catch(() => null);
+                  refresh();
+                  if (now && !now.pending) {
+                    const at = due ? new Date(due * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "its time";
+                    throw new Error(`Too late: ${what} applied at ${at}, before the cancel reached the chain. A cut is instant: ${undo} now and it takes effect at once.`);
+                  }
+                  throw new Error(`The cancel did not go through (${(e as Error).message}). The change still waits: try again${due ? ` before ${new Date(due * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}` : ""}.`);
+                }
               })
             }
           >
@@ -216,11 +230,12 @@ export function Suggestions() {
                         policy: tenant.policy,
                         perAction: raw(sg.perAction),
                         daily: raw(sg.daily),
-                        floor: raw(inbox.caps.floor),
+                        // The floor the agent asked for, when it asked for one (docs/110 row 9); the current one otherwise.
+                        floor: raw(sg.floor ?? inbox.caps.floor),
                       });
                       const ex = await sign(prep.to, prep.data, {
                         fn: ["setLimits"],
-                        data: build("setLimits", [minor(sg.perAction), minor(sg.daily), minor(inbox.caps.floor)]),
+                        data: build("setLimits", [minor(sg.perAction), minor(sg.daily), minor(sg.floor ?? inbox.caps.floor)]),
                       });
                       setTimeout(refresh, 3000);
                       return { text: "Set.", href: ex.explorer };

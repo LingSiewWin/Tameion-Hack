@@ -459,7 +459,7 @@ function AgentKeys() {
       hint={
         toks.length
           ? `${toks.length} key${toks.length === 1 ? "" : "s"}; this account opens only to them.`
-          : "Give another agent (your ops bot, Claude, a partner) a key to this account. It can look, run and prepare, never sign. The first key you make locks the account to keys."
+          : "Give another agent (your ops bot, Claude, a partner) a key to this account. It can look, run and prepare, never sign. Once a key exists, the account's records open only to its keys and to this device."
       }
     >
       {toks.map((t) => (
