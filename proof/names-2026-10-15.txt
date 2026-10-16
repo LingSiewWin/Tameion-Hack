@@ -1,0 +1,70 @@
+Names, not addresses (docs/81, phase A: items 1, 2, 5) — live on Arc testnet, 2026-10-15 22:01 +08
+
+Account: names-2156, reserved by name on arc-testnet (lazy; nothing on chain until money arrives), policy 0xdefa3cb04fd7f6e7b2f3eb4bc29066dc374c060f
+Service: localhost:7880, tameion-app rebuilt 22:01 with crates/operator/src/parties.rs and POST /api/level1/contacts
+Connected wallet: 0xad92baCbCd4e41E63C4b6E25DFfC09903c390dAB (Arc demo wallet) -> the agent's read found 3 recurring bills
+Owner named payee 0x…00a3 "Hosting" from the page's pencil (the device holding the reserve token), screenshot 1
+Two vendors posted signed invoice v2 (crates/operator/examples/sign_invoice.rs, INVOICE_FROM / INVOICE_DOMAIN):
+  payee 0xb23d03c6ec8392082ec0137378e14b9b62f59427  from='Hosting'  domain=''
+  payee 0x23fdfe39a67863ae95ce2d254fba6268a20f658a  from='Acme Design Ltd'  domain='acme-design.example'
+
+1) GET /api/level1/inbox with X-Tameion-Device (the owner's device): parties
+  0xb23d…9427  kind=clash    label='Not your Hosting'           verified=false note='its invoice says it is Hosting; the Hosting you know is a different account'
+  0x23fd…658a  kind=invoice  label='Acme Design Ltd'            verified=false note='never paid' domain=acme-design.example
+  0x0000…00a1  kind=new      label='Payee ••00A1'               verified=false note='0.002 USDC every 5 minutes'
+  0x0000…00a2  kind=new      label='Payee ••00A2'               verified=false note='0.00535 USDC every 5 minutes'
+  0x0000…00a3  kind=owner    label='Hosting'                    verified=true  note='0.03 USDC every 5 minutes'
+  0x6c1c…9a25  kind=you      label="Tameion's relayer"          verified=true  note='pays the gas; cannot move your money'
+  0x7e80…8a1d  kind=you      label="The agent's key"            verified=true  note='pays approved payees under your limit'
+  0xad92…0dab  kind=you      label='Your wallet'                verified=true  note='a wallet you connected'
+  0xdefa…060f  kind=you      label='This account'               verified=true  note='where the money is held'
+  0xe899…3650  kind=you      label='Your passkey'               verified=true  note="the account's owner"
+
+2) The same GET without the device token: the owner's name is not sent; the clash cannot be computed either
+  0x23fd…658a  kind=invoice  label='Acme Design Ltd'            verified=false note='never paid' domain=acme-design.example
+  0xb23d…9427  kind=invoice  label='Hosting'                    verified=false note='never paid'
+  0x0000…00a1  kind=new      label='Payee ••00A1'               verified=false note='0.002 USDC every 5 minutes'
+  0x0000…00a2  kind=new      label='Payee ••00A2'               verified=false note='0.00535 USDC every 5 minutes'
+  0x0000…00a3  kind=new      label='Payee ••00A3'               verified=false note='0.03 USDC every 5 minutes'
+  0x6c1c…9a25  kind=you      label="Tameion's relayer"          verified=true  note='pays the gas; cannot move your money'
+  0x7e80…8a1d  kind=you      label="The agent's key"            verified=true  note='pays approved payees under your limit'
+  0xad92…0dab  kind=you      label='Your wallet'                verified=true  note='a wallet you connected'
+  0xdefa…060f  kind=you      label='This account'               verified=true  note='where the money is held'
+  0xe899…3650  kind=you      label='Your passkey'               verified=true  note="the account's owner"
+
+3) POST /api/level1/contacts without the device token, naming 0x…00a1 "Landlord": HTTP 403 (refused)
+
+4) The account page (proof/names-2026-10-15-3-account-page.png), DOM check in the browser after load:
+   visible text nodes matching /0x[0-9a-f]{4}/ outside a closed <details>: 0
+   inputs whose placeholder still says 0x: "0x…" (Connect a wallet), "Payee 0x…" (Type a bill) -> phase B (names in inputs)
+
+Screenshots:
+  proof/names-2026-10-15-1-name-dialog.png   the pencil: "Name this payee", ends in ••00A3, no address
+  proof/names-2026-10-15-2-clash.png         after naming 00A3 "Hosting": the other invoice claiming "Hosting" reads "Not your Hosting" in red
+  proof/names-2026-10-15-3-account-page.png  the whole account page: names, identicons, ••tails; the account address only behind Copy
+  proof/names-2026-10-15-4-details-on-tap.png the address appears only when the person taps the name and opens "Address"
+
+Not shown here: the passkey confirm dialog with names (same <Payee> component; needs a real passkey), Telegram/push
+(already address-free: "Paid 0.5 USDC to 2 payees"), the MCP tools (agents keep addresses; parties is in the inbox they read).
+
+5) 22:02 after P-98 (clash against every owner name), the same GET without the device token: 0xb23d…9427 kind=clash label='Not your Hosting'; 0x…00a3 kind=new label='Payee ••00A3' (the owner's name itself still not sent)
+
+Phase B (items 3, 4) — 22:23 +08
+6) GET /api/level1/resolve (live, 22:09): vitalik.eth -> 0xd8da…6045 kind=ens (ENS Universal Resolver
+   0xeEeE…EeEe on Ethereum mainnet, forward-checked by the resolver); uat-1539 -> 0xcae9…708e kind=tameion;
+   jesse.xyz -> kind=ens (a DNS name in ENS); example.com -> 404 "neither an ENS name nor a domain that lists an
+   address for this chain"; "Bad Name!" -> 404 before any lookup.
+7) In the page (proof/names-2026-10-15-5-typed-ens-field.png): typing "vitalik.eth" in "Type a bill" shows
+   "vitalik.eth ✓ its ENS name, checked both ways · ends ••6045"; saved. "uat-1539" -> "a Tameion account"; saved.
+8) The inbox at 22:14: typedBills lists both; parties: 0x…6045 kind=ens label=vitalik.eth note="0.01 USDC every
+   30 days"; 0x…708e kind=tameion label=uat-1539 note="0.02 USDC every 30 days"
+   (proof/names-2026-10-15-6-typed-bills-ens-tameion.png). DOM check after reload: 0 visible 0x text, 0 inputs
+   whose placeholder says 0x.
+9) Domain proof (ERC-7529 TXT ERC-7529.<chainId>._domaincontracts.<domain>, listing the payee; the payee signs the
+   domain into invoice v2): code + unit test (TXT parsing) + a live negative (example.com has no record).
+   NOT proved positive: no public domain publishes such a record (searched; snickerdoodle.dev answers a CNAME, not
+   TXT), and we control no domain. Needs one TXT record on a domain the founder owns.
+10) Gate after phase B: forge 187, Rust 376 (+6: parties 4, invoice v2 1, HTTP contacts/resolve 1), clippy, fmt,
+    python, node, ERC-7730, console 8 — all green; anvil acceptance 94/94.
+Not done: Basename (Base) primary names — ENSIP-19 needs a CCIP-Read client (the resolver reverted
+ResolverError for a Base lookup); emoji / non-ASCII ENS names are not shown (homoglyphs).
