@@ -150,7 +150,7 @@ export function Account({ tenant, cfg, onSwitch, onNew }: { tenant: Tenant; cfg:
 
   return (
     <AccountProvider value={ctx}>
-      <TopBar>
+      <TopBar surface="human">
         <AccountMenu tenant={tenant} all={all} name={name} onSwitch={onSwitch} onNew={onNew} onRenamed={() => bump((x) => x + 1)} />
         <SettingsSheet
           open={settingsOpen}

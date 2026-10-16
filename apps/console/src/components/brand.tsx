@@ -55,14 +55,14 @@ function chose(s: Surface) {
 
 /** Two links dressed as one segmented control: the page is the state, so each segment is a link (Tab reaches both,
  *  Enter follows, `aria-current` says where you are) and the choice is remembered when it is made, not when a page opens. */
-export function SurfaceToggle({ active, humanHref = "/" }: { active: Surface; humanHref?: string }) {
+export function SurfaceToggle({ active, humanHref = "/", fill = false }: { active: Surface; humanHref?: string; fill?: boolean }) {
   // Human is the account's own page, `/`, for every account; the desk's page only for an account that has a desk (an exchange connected).
   const surfaces: { id: Surface; label: string; href: string }[] = [
     { id: "human", label: "Human", href: humanHref },
     { id: "agent", label: "Agent", href: "/agent" },
   ];
   return (
-    <nav aria-label="View" className="mr-1 flex items-center rounded-lg bg-muted p-[3px]">
+    <nav aria-label="View" className={cn("items-center rounded-lg bg-muted p-[3px]", fill ? "flex w-full" : "mr-1 hidden md:flex")}>
       {surfaces.map((s) => (
         <Link
           key={s.id}
@@ -71,6 +71,7 @@ export function SurfaceToggle({ active, humanHref = "/" }: { active: Surface; hu
           onClick={() => chose(s.id)}
           className={cn(
             "inline-flex h-8 items-center rounded-md px-3 text-sm font-medium outline-ring transition-colors duration-100 focus-visible:outline-2 focus-visible:outline-offset-1 pointer-coarse:h-10",
+            fill && "flex-1 justify-center",
             s.id === active ? "bg-background text-foreground shadow-card ring-1 ring-foreground/10" : "text-muted-foreground hover:text-foreground",
           )}
         >
@@ -92,18 +93,26 @@ export function useOpenOnLastSurface() {
 
 export function TopBar({ children, surface, humanHref }: { children?: React.ReactNode; surface?: Surface; humanHref?: string }) {
   return (
-    <header className="sticky top-0 z-30 border-b border-border/70 bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-      <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
-        <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-          <Mark />
-          <span>Tameion</span>
-        </Link>
-        <div className="ml-auto flex items-center gap-1">
-          {children}
-          {surface && <SurfaceToggle active={surface} humanHref={humanHref} />}
-          <ThemeToggle />
+    <>
+      <header className="sticky top-0 z-30 border-b border-border/70 bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
+          <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
+            <Mark />
+            <span>Tameion</span>
+          </Link>
+          <div className="ml-auto flex items-center gap-1">
+            {children}
+            {surface && <SurfaceToggle active={surface} humanHref={humanHref} />}
+            <ThemeToggle />
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+      {/* Below md the header row has no room for the two segments beside the account menu (a long account name overflows it at 640 px): they get a row of their own, full width, under it. */}
+      {surface && (
+        <div className="mx-auto w-full max-w-6xl px-4 pt-3 md:hidden">
+          <SurfaceToggle active={surface} humanHref={humanHref} fill />
+        </div>
+      )}
+    </>
   );
 }
