@@ -1,0 +1,32 @@
+# 2026-10-17 00:18 +0800 Which payment methods the x402 Bazaar's listings advertise, read from the public discovery API (https://api.cdp.coinbase.com/platform/v2/x402/discovery/resources), first 600 listings. Why it matters: Tameion's account pays by x402's ERC-7710 method (crates/operator/src/x402.rs, assetTransferMethod erc7710); the only seller it has paid is our own test seller (proof/x402-2026-10-14.txt).
+# script (stdlib):
+#   # Which payment methods do the x402 Bazaar's listings advertise? (stdlib only)
+#   #   python3 -I bazaar_methods.py            # reads the first 600 listings of the public discovery API
+#   import json, collections, urllib.request
+#   URL = "https://api.cdp.coinbase.com/platform/v2/x402/discovery/resources?limit=100&offset=%d"
+#   items, total = [], None
+#   for off in range(0, 600, 100):
+#       req = urllib.request.Request(URL % off, headers={"User-Agent": "Mozilla/5.0"})
+#       d = json.load(urllib.request.urlopen(req, timeout=60))
+#       total = d["pagination"]["total"]
+#       items += d["items"]
+#   schemes, methods = collections.Counter(), collections.Counter()
+#   for x in items:
+#       for a in x.get("accepts", []):
+#           ex = a.get("extra") or {}
+#           schemes[a.get("scheme")] += 1
+#           if "assetTransferMethod" in ex:
+#               methods[ex["assetTransferMethod"]] += 1
+#           elif "name" in ex and "version" in ex:
+#               methods["(none named; EIP-3009 token-domain fields name/version)"] += 1
+#           else:
+#               methods["(no extra)"] += 1
+#   print("listings read:", len(items), "of", total, "| payment options:", sum(schemes.values()))
+#   print("schemes:", dict(schemes))
+#   print("methods:", dict(methods))
+#   print("options naming erc7710:", methods.get("erc7710", 0))
+
+listings read: 600 of 43348 | payment options: 1401
+schemes: {'exact': 1346, 'batch-settlement': 31, 'upto': 24}
+methods: {'(none named; EIP-3009 token-domain fields name/version)': 884, '(no extra)': 298, 'eip3009': 78, 'bolt11': 6, 'permit2': 115, 'permit2-exact': 20}
+options naming erc7710: 0

@@ -1,0 +1,52 @@
+Command: /opt/homebrew/bin/python3 scripts/metrics.py --no-inbox   (run 2026-10-16 23:56 local, UTC+8, by the YC seat for README.md; --no-inbox: payments the owners made with their own passkey are on chain only and are NOT counted here)
+
+Tameion service metrics — read from its own files
+generated 2026-10-16 15:56 UTC from runtime/app
+ALL ACCOUNTS BELOW WERE MADE BY THE TEAM WHILE BUILDING AND TESTING. No customers yet.
+
+ACCOUNTS
+  arbitrum-sepolia    36 accounts  (17 on chain, 19 reserved — address known, nothing on chain until money arrives)
+  arc-testnet         24 accounts  (16 on chain, 8 reserved — address known, nothing on chain until money arrives)
+  kinds: {'hold': 49, 'pull': 10, 'wallet': 1}; keyless: 3; with agent keys minted: 5; bills added by hand: 18
+
+AGENT PASSES (check history, decide, pay inside the caps, anchor)
+  passes: 122 (91 done, 31 failed, 0 other)
+  payments the agent made by itself: 7, 0.117000 USDC
+    of which early for an invoice discount: 0
+  bills it asked the owner about instead: 162; refused by the checks: 11
+  passes with an anchored record: 91
+  why passes failed (most common first):
+     22 × the service restarted during this pass; run it again
+      2 × contract call: server returned an error response: error code -32003: i
+      1 × top up agent gas: rpc transport: Max retries exceeded server returned 
+      1 × the chain records 0x179dca89f69faef5765d2e7445aa5452b8159520@179734002
+      1 × top up agent gas: contract call: server returned an error response: er
+      1 × rpc transport: Max retries exceeded server returned an error response:
+
+FIRST CHECK OF AN ACCOUNT (job start to its record written, seconds;
+  for a reserved account it also creates the account on chain)
+  before the history fix (P-38)            n=14  median    632  max   1457
+  after P-38, before receipt fix (P-43)    n= 2  median     74  max     80
+  after both                               n= 9  median     20  max     48
+  account created -> first check written: median 506 s (includes the owner's own wait before funding)
+
+READ-ONLY REPORTS (paste a wallet, see its bills; no key, nothing sent)
+  reports: 37 (28 done) on {'arc-testnet': 19, 'arbitrum-sepolia': 13, 'base': 3, 'ethereum': 1, 'arbitrum': 1}
+  time to answer: median 7.4 s, fastest 4.6 s, slowest 526.7 s
+
+PAID APIS THE AGENT BOUGHT (x402, inside the same caps)
+  attempts: 19 {'needs-you': 4, 'refused': 9, 'paid': 6}; paid 0.007000 USDC
+
+INVOICES SIGNED BY VENDORS (EIP-712, signed by the address to be paid)
+  received: 11 (one-off 7, repeating 4); decisions: {'accepted': 7}
+
+ANCHORED RECORDS (a root of every decision written on chain)
+  roots anchored: 92 across 25 accounts; events under them: 467
+
+PAYMENTS THE OWNERS MADE WITH THEIR PASSKEY: not read (--no-inbox)
+
+WHICH REASONER DECIDED EACH FINISHED PASS (appended 2026-10-16 23:58 local, UTC+8)
+  command: grep -rho '"reasoner":"[^"]*"' runtime/app/jobs | sort | uniq -c | sort -rn
+    90 "reasoner":"rule-based"
+     1 "reasoner":"rule-based (fallback from claude-opus-5)"
+  (a model has decided 0 passes; the rule baseline decided all of them. The model's one job in the pass is ordering obligations when money is short; see crates/operator/src/reasoner.rs)
