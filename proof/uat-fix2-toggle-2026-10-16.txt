@@ -1,0 +1,33 @@
+Toggle follow-up: where the header toggle's Human segment goes (2026-10-16 22:06 +08, S4 seat)
+
+Rule (PM): Human goes to / (the account's own page) for every account; to /desk only for an account that has a desk (an exchange-connected desk book).
+Code: apps/console/src/components/brand.tsx (SurfaceToggle and TopBar take humanHref, default "/"), app/desk/page.tsx (passes "/desk"),
+app/agent/page.tsx (passes "/desk" when the desk's feed names a connected exchange, "/" otherwise).
+
+How: Chromium (Playwright) at 1280x800, the console served by the PM's next dev (:3000) through a test-only proxy that sent every /api call to the PM's :7880
+(the real service, no sample frames). The operator account was logged in with a read-scope agent key from ~/.tameion/test-keys (never printed), the demo desk with
+its device token. The proxy was stopped by its PID afterwards.
+
+1. Operator account uat-u1-acme (U1, no exchange) on /agent, after the account's panels loaded:
+   path /agent
+   toggle: Human -> /   | Agent -> /agent (current)
+   panels: Mandate, Pass & anchor, Payments, Refused, Events   (no Positions, Orders, Margin, Funding or Hedge)
+   keyboard: Tab x3 reaches "Human" (href "/"); Enter -> path "/" ("Viewing uat-u1-acme"); localStorage tameion.surface = "human"
+   screenshot: proof/uat-fix2-toggle-1280.png (1280x420 clip: the header, the chip and facts, Payments, Mandate)
+
+2. Demo desk desk-gold-2329 (exchange connected) on /agent:
+   first paint, before the first frame:  Human -> /     | Agent -> /agent (current)
+   after the first frame:                Human -> /desk | Agent -> /agent (current)
+   keyboard: Tab x3 reaches "Human"; Enter -> path "/desk"; toggle there: Human -> /desk (current) | Agent -> /agent; tameion.surface = "human"
+   the Agent segment from /desk -> path "/agent"; tameion.surface = "agent" (Human reads "/" again until the next first frame, then "/desk")
+
+3. No account open (localStorage empty) on /agent, served straight from :3000:
+   toggle: Human -> / | Agent -> /agent (current); body "Open your account first ... Open it"
+
+Not the page's fault, kept for honesty: a first run used the test proxy's sample feed, which always names an exchange, so U1's account showed the exchange panels and
+"Human -> /desk" (right for a feed that names an exchange). The runs above use the real service.
+
+Found, not changed (another seat's file): the account page "/" has no toggle (components/account/account.tsx, <TopBar> without surface), so from "/" there is no segment back to Agent.
+GET /api/level1/inbox took 38 s on :7880 (U1) and 38 s on :7903 (U3) at 22:01-22:02, so /agent shows skeleton panels that long on an operator account.
+
+Gates: npx tsc --noEmit exit 0; npx eslint src test exit 0; node --test test/*.test.mts: tests 57, pass 57, fail 0.
