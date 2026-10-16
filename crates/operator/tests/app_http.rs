@@ -1257,3 +1257,78 @@ fn the_owners_device_reads_a_keyed_account_without_its_agent_key() {
     );
     assert!(b.contains(r#""scope":"run""#), "{b}");
 }
+
+/// UAT U3 (docs/60 P-182): a prepared change says who signs it and when it
+/// applies; asked with an agent key, it is kept so the owner's page shows it
+/// as one row with the agent's reason. No RPC answers here, so `applies` is
+/// the general rule; the contract's numbers make it exact on a live account.
+#[test]
+fn an_agents_prepared_change_says_who_signs_and_is_kept_for_the_owner() {
+    let srv = start_with(13, &[("TAMEION_RPC_ARC", "http://127.0.0.1:9")]);
+    let p = srv.port;
+    let dir = std::env::temp_dir().join(format!("tameion-app-test-{}-13", std::process::id()));
+    let policy = "0x00000000000000000000000000000000000000d1";
+    std::fs::create_dir_all(dir.join("tenants")).unwrap();
+    let hash = operator::level1::token_hash("k-prep");
+    std::fs::write(
+        dir.join("tenants").join(format!("{policy}.json")),
+        format!(
+            r#"{{"chain":"arc-testnet","owner":"0x0000000000000000000000000000000000000001","policy":"{policy}","agent":"0x0000000000000000000000000000000000000003","operator":"0x0000000000000000000000000000000000000004","watched":"0x0000000000000000000000000000000000000005","recovery":"0x0000000000000000000000000000000000000000","per_action":"1","daily":"1","floor":"0","delay_secs":60,"mode":1,"created_block":0,"history_from_block":0,"created":0,"deployed":true,"agent_tokens":[{{"id":"t9","label":"ops agent","scopes":["read","prepare"],"expires":4102444800,"issued":0,"hash":"{hash}"}}]}}"#
+        ),
+    )
+    .unwrap();
+    let key = "Authorization: Bearer k-prep\r\n";
+    let (st, _, b) = http_with(
+        p,
+        "POST",
+        "/api/level1/prepare-limits",
+        &format!(
+            r#"{{"policy":"{policy}","perAction":"0.004","daily":"0.008","floor":"0","reason":"the weather API raised its price"}}"#
+        ),
+        key,
+    );
+    assert_eq!(st, 200, "{b}");
+    let v: serde_json::Value = serde_json::from_str(&b).unwrap();
+    assert!(
+        v["signer"].as_str().unwrap().contains("owner's passkey"),
+        "{b}"
+    );
+    assert!(
+        v["applies"].as_str().unwrap().contains("owner can cancel"),
+        "{b}"
+    );
+    assert!(
+        v["ownerSees"]
+            .as_str()
+            .unwrap()
+            .contains("one row on the account page"),
+        "{b}"
+    );
+    let (st, _, b) = http_with(
+        p,
+        "POST",
+        "/api/level1/prepare-mode",
+        &format!(
+            r#"{{"policy":"{policy}","mode":2,"reason":"three weeks of approvals, none refused"}}"#
+        ),
+        key,
+    );
+    assert_eq!(st, 200, "{b}");
+    let asks: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("tenants").join(format!("{policy}.asks.json"))).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(asks["limits"]["perAction"], "0.004000 USDC");
+    assert_eq!(asks["limits"]["reason"], "the weather API raised its price");
+    assert_eq!(asks["limits"]["by"], "ops agent");
+    assert_eq!(asks["mode"]["mode"], 2);
+    // Without a key on a keyed account nothing is prepared, and nothing kept.
+    let (st, _, _) = http_with(
+        p,
+        "POST",
+        "/api/level1/prepare-limits",
+        &format!(r#"{{"policy":"{policy}","perAction":"0.001","daily":"0.008","floor":"0"}}"#),
+        "",
+    );
+    assert_eq!(st, 401);
+}

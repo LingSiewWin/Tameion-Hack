@@ -49,6 +49,50 @@ fn the_mcp_server_lists_its_tools_and_says_which_one_spends() {
         .iter()
         .map(|t| t["name"].as_str().unwrap())
         .collect();
+    // UAT U3 (docs/60 P-180): the gold desk was dropped; its tools are not offered.
+    for gone in [
+        "desk",
+        "send_milestone",
+        "desk_statement",
+        "desk_statements_all",
+        "stop_counterparty",
+    ] {
+        assert!(!names.contains(&gone), "{gone} is listed: {names:?}");
+    }
+    let tool = |n: &str| {
+        list["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["name"] == n)
+            .unwrap()["description"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    // The agent is told where everything waiting for the owner is (P-180),
+    // what it may still spend (P-181) and that a prepared call says who signs
+    // and when it applies (P-182).
+    let inbox = tool("treasury_inbox");
+    assert!(
+        inbox.contains("`waiting`") && inbox.contains("spent24h") && inbox.contains("leftNow"),
+        "{inbox}"
+    );
+    for p in ["prepare_limits", "prepare_mode", "prepare_payees"] {
+        let d = tool(p);
+        assert!(
+            d.contains("`signer`") && d.contains("`applies`") && d.contains("reason"),
+            "{p}: {d}"
+        );
+    }
+    for t in list["result"]["tools"].as_array().unwrap() {
+        let d = t["description"].as_str().unwrap();
+        assert!(
+            !d.contains("PLAN 5.") && !d.contains("docs/"),
+            "internal references in {}: {d}",
+            t["name"]
+        );
+    }
     for want in [
         "treasury_inbox",
         "run_pass",
@@ -96,6 +140,12 @@ fn the_mcp_server_lists_its_tools_and_says_which_one_spends() {
     let call: serde_json::Value = serde_json::from_str(&line).unwrap();
     assert_eq!(call["id"], 3);
     assert_eq!(call["result"]["isError"], true);
+    // P-184: in words an agent can act on, not "error sending request".
+    let words = call["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(
+        words.contains("is not reachable") && words.contains("TAMEION_URL"),
+        "{words}"
+    );
 
     writeln!(stdin, r#"{{"jsonrpc":"2.0","id":4,"method":"nope"}}"#).unwrap();
     line.clear();
@@ -105,4 +155,44 @@ fn the_mcp_server_lists_its_tools_and_says_which_one_spends() {
 
     drop(stdin);
     let _ = child.wait();
+}
+
+/// docs/60 P-184: a service that takes the call and never answers is reported
+/// in words an agent can act on ("the call may still complete; read the inbox
+/// before retrying"), not as "error sending request".
+#[test]
+fn a_call_with_no_answer_says_what_to_do() {
+    let silent = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = silent.local_addr().unwrap().port();
+    // Accept and hold the connection without answering.
+    let holder = std::thread::spawn(move || {
+        let (s, _) = silent.accept().unwrap();
+        std::thread::sleep(std::time::Duration::from_secs(4));
+        drop(s);
+    });
+    let mut child = Command::new(env!("CARGO_BIN_EXE_tameion-mcp"))
+        .env("TAMEION_URL", format!("http://127.0.0.1:{port}"))
+        .env("TAMEION_MCP_TIMEOUT_SECS", "1")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn tameion-mcp");
+    let mut stdin = child.stdin.take().unwrap();
+    let mut out = BufReader::new(child.stdout.take().unwrap());
+    writeln!(stdin, r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"prepare_payees","arguments":{{"policy":"0x0000000000000000000000000000000000000001","payees":["0x0000000000000000000000000000000000000002"]}}}}}}"#).unwrap();
+    let mut line = String::new();
+    out.read_line(&mut line).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&line).unwrap();
+    assert_eq!(v["result"]["isError"], true);
+    let words = v["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(
+        words.contains("no answer from")
+            && words.contains("may still complete")
+            && words.contains("treasury_inbox"),
+        "{words}"
+    );
+    drop(stdin);
+    let _ = child.wait();
+    let _ = holder.join();
 }
