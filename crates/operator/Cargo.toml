@@ -1,0 +1,54 @@
+[package]
+name = "operator"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The loop: read, decide, verify, pay, record, anchor."
+
+[dependencies]
+ledger.workspace = true
+arc.workspace = true
+hedge.workspace = true
+# The trader's book (docs/83).
+desk.workspace = true
+rust_decimal = "1"
+tokio = { workspace = true, features = ["net", "io-util", "sync", "fs"] }
+thiserror.workspace = true
+alloy.workspace = true
+reqwest.workspace = true
+# The webhook after each pass is HMAC-SHA256 signed (docs/56 #8); both
+# crates were already in the graph through alloy.
+hmac = "0.12"
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
+# Web Push (docs/65): AES-128-GCM for RFC 8291; already compiled in via rustls.
+ring = "0.17"
+sha2 = "0.10"
+# x402 headers are base64 JSON (PLAN 5.54); already in the graph via reqwest/alloy.
+base64 = "0.22"
+# gzip for the console and API replies (1.18 MB of console JS -> 380 KB);
+# already in the graph through reqwest/alloy.
+flate2 = "1.1"
+# Names people read (docs/103 S2-2): NFKC and the general category, so a name with
+# an invisible character or a look-alike letter is not a second name. Both are
+# already compiled in through reqwest's idna.
+icu_normalizer = "2.3"
+icu_properties = "2.3"
+serde.workspace = true
+serde_json.workspace = true
+
+[features]
+# For examples that build history on a test chain.
+dev-anvil = ["arc/dev-anvil"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+
+# These two build history on a local anvil chain through `arc::dev` (docs/60 P-109).
+[[example]]
+name = "prove_e2e"
+required-features = ["dev-anvil"]
+
+[[example]]
+name = "seed_history"
+required-features = ["dev-anvil"]
