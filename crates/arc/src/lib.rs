@@ -1882,6 +1882,32 @@ impl ArcClient {
     /// `None` when the policy predates the allowlist and has no
     /// `attestedPayee` to ask. That is reported as "no list" rather than as
     /// "nobody is attested", which would escalate every payment.
+    ///
+    /// When each of `candidates` was approved (`attestedSince`, unix seconds;
+    /// 0 = not approved), read from the contract: with the delay, the moment
+    /// `pay` to it stops answering `PayeeCoolingOff` (docs/60 P-181).
+    pub async fn attested_since_among(
+        &self,
+        policy: Address,
+        candidates: &[Address],
+    ) -> Result<Vec<(Address, u64)>, ArcError> {
+        let answers = eight_at_a_time(candidates.to_vec(), |who| {
+            let c = self.clone();
+            async move {
+                let p = IBudgetPolicy::new(policy, &c.provider);
+                (who, p.attestedSince(who).call().await)
+            }
+        })
+        .await?;
+        answers
+            .into_iter()
+            .map(|(who, r)| {
+                r.map(|t| (who, t))
+                    .map_err(|e| ArcError::Contract(e.to_string()))
+            })
+            .collect()
+    }
+
     pub async fn attested_among(
         &self,
         policy: Address,
