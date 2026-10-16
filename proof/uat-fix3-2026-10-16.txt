@@ -1,0 +1,30 @@
+# Wave 2 leftovers (seat S2) — 2026-10-16 23:45 +0800 — on :3000 (next dev of this tree) → :7880 (the 23:00 service build)
+
+## P-170 page side: the owner of an account with an agent key changes a limit from the page
+Account acme-agents-8821, 0xf69d65413cb255f2c409acd93579c6a58c8d26ae (Arbitrum Sepolia), opened in a clean browser profile whose
+passkey Chromium made (a virtual platform authenticator; no key ever left the browser).
+Funding: 2 USDC from the relayer 0x6c1c…9A25, tx 0xc2a749923320ab168c091291c9cac34f2d264668a5be7c6a543d5a04f8072891 (status 1).
+The page asked the service for the first check once money could reach the account; that check deployed it.
+[15:44:37Z] account deployed: true; balance 2.000000 USDC; caps {"daily":"100.000000 USDC","floor":"0.000000 USDC","leftNow":"2.000000 USDC","perAction":"50.000000 USDC","spent24h":"0.000000 USDC"}
+[15:44:47Z] after "Make a key with my passkey" (scopes read, run, buy; the page keeps no copy of a key that may buy): the account holds 1 agent key
+  POST /api/level1/token-signed → 200 {"gated":"from now on this account's read / run / prepare / import routes need an agent key; buying (x402) always did","id":"tok-bb3d5499","label":"research-bot","scopes":["read","run","buy"],"token":"<not printed>",…}
+[15:44:59Z] the owner changes the daily limit 100.000000 → 50 from the page ("Change" → "Sign with my passkey"); the dialog says "Lowered, at once."
+  request headers: POST /api/level1/prepare-limits — x-tameion-device: yes, authorization: none
+  POST /api/level1/prepare-limits → 200 {"applies":"at once when signed: it only lowers what the agent may spend","data":"0x189ae5f2…",…}
+  POST /api/level1/execute → 200 {"explorer":"https://sepolia.arbiscan.io/tx/0x548cc193daaf7750ce4554686820eaa1402a0fab51429e8342c8b96ce149362f","tx":"0x548cc193daaf7750ce4554686820eaa1402a0fab51429e8342c8b96ce149362f"}
+[15:45:08Z] the inbox after: caps {"daily":"50.000000 USDC","floor":"0.000000 USDC","leftNow":"2.000000 USDC","perAction":"50.000000 USDC","spent24h":"0.000000 USDC"}; keys 1
+Screenshot: proof/uat-fix3-limit-1280.png
+
+## P-177: both CSV exports carry the reason
+The service sends a reason on every payment: uat-u1-acme (0x4246…a555) read on :7880 with its own read key (never printed): 2 paid rows,
+2 with a reason. Those two rows were injected as acme-agents-8821's `paid` in the browser (the page builds both files from `inbox.paid`;
+the new account has paid nothing), and both buttons were pressed:
+--- proof/uat-fix3-statement.csv
+date_utc,payee,amount_usdc,paid_by,reason,transaction,explorer,account
+2026-10-16T13:20:32.000Z,Payee ••2990 (0xe7d8d72abade89be5309a6f55031079f0cf62990),0.001,agent,BTC price for the investor update,0x82f50003d084335a8e3617da3bb9e9e0dc4e9bd3d51e4ecbe7f15a548c6d6fda,https://sepolia.arbiscan.io/tx/0x82f50003d084335a8e3617da3bb9e9e0dc4e9bd3d51e4ecbe7f15a548c6d6fda,0xf69d65413cb255f2c409acd93579c6a58c8d26ae
+2026-10-16T13:11:14.000Z,Payee ••2990 (0xe7d8d72abade89be5309a6f55031079f0cf62990),0.001,agent,ETH price for the weekly research report,0xcfc999c14d8362d6cbc28eb3eb0e1eef53575624a73efd1440f4a38ada6bf665,https://sepolia.arbiscan.io/tx/0xcfc999c14d8362d6cbc28eb3eb0e1eef53575624a73efd1440f4a38ada6bf665,0xf69d65413cb255f2c409acd93579c6a58c8d26ae
+--- proof/uat-fix3-bank-statement.csv
+*Date,*Amount,Payee,Description,Reference,Reason
+2026-10-16,-0.001,Payee ••2990,USDC payment to 0xe7d8d72abade89be5309a6f55031079f0cf62990 by the agent from 0xf69d65413cb255f2c409acd93579c6a58c8d26ae,0x82f50003d084335a8e3617da3bb9e9e0dc4e9bd3d51e4ecbe7f15a548c6d6fda,BTC price for the investor update
+2026-10-16,-0.001,Payee ••2990,USDC payment to 0xe7d8d72abade89be5309a6f55031079f0cf62990 by the agent from 0xf69d65413cb255f2c409acd93579c6a58c8d26ae,0xcfc999c14d8362d6cbc28eb3eb0e1eef53575624a73efd1440f4a38ada6bf665,ETH price for the weekly research report
+Screenshot: proof/uat-fix3-csv-1280.png
