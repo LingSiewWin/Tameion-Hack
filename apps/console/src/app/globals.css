@@ -1,0 +1,157 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Not inline: the utilities read the variable, so .dark can redefine it. */
+@theme {
+  /* Flat cards on paper: a border separates, the shadow is barely there.
+     Overlays (sheet, dialog, menu) are the only thing that floats. */
+  --shadow-card: 0 1px 2px 0 rgb(18 32 27 / 0.04);
+  --shadow-overlay: 0 16px 40px -12px rgb(18 32 27 / 0.12);
+}
+
+/* Tameion's palette is banknote ink, not SaaS grey: a cool paper, a green-black
+   ink, intaglio green for what is protected, amber for what needs the owner,
+   red only for what the checks refused. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  /* Literal family names: @theme inline resolves at parse time, and the
+     next/font variables only exist at runtime (shadcn's known Geist gotcha). */
+  --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
+  --font-heading: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-attention: var(--attention);
+  --color-attention-soft: var(--attention-soft);
+  --color-protect: var(--protect);
+  --color-protect-soft: var(--protect-soft);
+  /* Type scale (docs/71): five sizes, three weights. `text-display` is the
+     Start headline, `text-headline` a page title or the hero sentence,
+     `text-title` a section or row title, then Tailwind's text-sm for body and
+     `text-caption` for the one line under a title. Nothing smaller than 12px. */
+  --text-display: clamp(2.25rem, 1.6rem + 2.6vw, 3.5rem);
+  --text-display--line-height: 1.04;
+  --text-display--letter-spacing: -0.035em;
+  --text-headline: 1.375rem;
+  --text-headline--line-height: 1.3;
+  --text-headline--letter-spacing: -0.02em;
+  --text-title: 0.9375rem;
+  --text-title--line-height: 1.4;
+  --text-title--letter-spacing: -0.01em;
+  --text-caption: 0.8125rem;
+  --text-caption--line-height: 1.45;
+  /* One curve for the product: things arrive decelerating, nothing bounces. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: #f2f4f1;
+  --foreground: #12201b;
+  --card: #fbfcfa;
+  --card-foreground: #12201b;
+  --popover: #fbfcfa;
+  --popover-foreground: #12201b;
+  --primary: #0e5c45;
+  --primary-foreground: #f2f4f1;
+  --secondary: #e4eae5;
+  --secondary-foreground: #12201b;
+  --muted: #e4eae5;
+  --muted-foreground: #586a62;
+  --accent: #e4eae5;
+  --accent-foreground: #12201b;
+  --destructive: #a3302b;
+  --border: #d5ddd7;
+  /* A field's edge is how it is found: 3:1 against card and paper (WCAG 1.4.11). */
+  --input: #868e8a;
+  --ring: #0e5c45;
+  --protect: #0e5c45;
+  --protect-soft: #dcebe3;
+  --attention: #8f5a0c;
+  --attention-soft: #f5ead6;
+  --radius: 0.625rem;
+}
+
+.dark {
+  --background: #0b1210;
+  --foreground: #e3ebe7;
+  --card: #111a17;
+  --card-foreground: #e3ebe7;
+  --popover: #111a17;
+  --popover-foreground: #e3ebe7;
+  --primary: #52c99c;
+  --primary-foreground: #0b1210;
+  --secondary: #1a2622;
+  --secondary-foreground: #e3ebe7;
+  --muted: #1a2622;
+  --muted-foreground: #8ea39a;
+  --accent: #1a2622;
+  --accent-foreground: #e3ebe7;
+  --destructive: #e0645c;
+  --border: #22302b;
+  --input: #5f6764;
+  --ring: #52c99c;
+  --protect: #52c99c;
+  --protect-soft: #14302a;
+  --attention: #e3ab52;
+  --attention-soft: #332713;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "ss01", "cv11";
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Dark surfaces separate by shade, so the card shadow goes and the overlay
+   shadow deepens (light-on-dark shadows read as dirt). */
+.dark {
+  --shadow-card: 0 0 0 0 transparent;
+  --shadow-overlay: 0 16px 40px -12px rgb(0 0 0 / 0.5);
+}
+
+/* Money is read in columns: figures line up. */
+.figures {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
