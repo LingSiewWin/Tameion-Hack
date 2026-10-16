@@ -498,6 +498,63 @@ async fn invoice_settled(
 /// next due (unix), and whether it may have ended (counted once).
 type RunwayBill = (String, i128, i64, i64, bool);
 
+/// When the owner last sent a trust-shrinking call (cancel, pause, revoke) for
+/// each account (lowercase policy → unix), for `shrink_blocks_apply` (docs/60
+/// P-171). ponytail: in memory; a restart forgets, and the chain's delay still holds.
+fn shrinks() -> &'static std::sync::Mutex<HashMap<String, u64>> {
+    static S: std::sync::OnceLock<std::sync::Mutex<HashMap<String, u64>>> =
+        std::sync::OnceLock::new();
+    S.get_or_init(Default::default)
+}
+
+/// The time of each block in `blocks` (unix seconds), read eight at a time and
+/// kept: a block's time never changes, so a warm account reads none (docs/110
+/// item 8). A block whose read failed is left out.
+async fn block_times(client: &arc::ArcClient, chain: &str, blocks: Vec<u64>) -> HashMap<u64, u64> {
+    static KEPT: std::sync::OnceLock<std::sync::Mutex<HashMap<(String, u64), u64>>> =
+        std::sync::OnceLock::new();
+    let kept = KEPT.get_or_init(Default::default);
+    let mut out = HashMap::new();
+    let mut missing = Vec::new();
+    {
+        let kept = kept.lock().unwrap_or_else(|e| e.into_inner());
+        for b in blocks {
+            match kept.get(&(chain.to_string(), b)) {
+                Some(t) => {
+                    out.insert(b, *t);
+                }
+                None if !missing.contains(&b) => missing.push(b),
+                None => {}
+            }
+        }
+    }
+    let read = arc::eight_at_a_time(missing, |b| {
+        let client = client.clone();
+        async move { (b, client.block_timestamp(b).await) }
+    })
+    .await
+    .unwrap_or_default();
+    let mut kept = kept.lock().unwrap_or_else(|e| e.into_inner());
+    for (b, t) in read {
+        if let Ok(t) = t {
+            let t = t.as_unix() as u64;
+            kept.insert((chain.to_string(), b), t);
+            out.insert(b, t);
+        }
+    }
+    out
+}
+
+/// The key the owner's payment of a Needs-you row is bound to: the bill-cycle's
+/// settlement key from the pass, stable across passes, never the proposal's
+/// `actionHash`, which changes every pass (docs/60 P-175: one tap paid the same
+/// 30-day bill twice under two hashes). `None` for a row without one.
+fn settle_key(row: &Value) -> Option<alloy::primitives::B256> {
+    row["settlementKey"]
+        .as_str()
+        .and_then(|h| alloy::primitives::B256::from_str(h).ok())
+}
+
 /// Whether a spent action hash paid the row's payee its amount: by the agent
 /// (`Paid`) or the owner (`SettledByPrincipal`). An early-payment discount
 /// pays less under the same hash, never more than `MAX_DISCOUNT_BPS` off
@@ -1678,6 +1735,16 @@ impl App {
         // Checked here against that key before anything is stored or relayed;
         // an owner needing several approvals collects them first.
         let key_index = v["keyIndex"].as_u64().unwrap_or(0);
+        // docs/60 P-171: a cancel, a pause or a revoke only shrinks trust. From
+        // the moment one is on its way, no automatic apply of a raise asked
+        // before it goes ahead (`shrink_blocks_apply`): the owner's brake wins.
+        let shrink = operator::agent_api::shrinks_trust(data);
+        if shrink.is_some() {
+            shrinks()
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(format!("{target:#x}"), now_secs());
+        }
         match level1::execute_by_key(
             preset, &self.dir, owner, target, data, key_index, &v["auth"],
         )
@@ -1688,7 +1755,39 @@ impl App {
                 self.recovery_landed(owner, target, data);
                 json_reply("200 OK", r)
             }
+            // A cancel that found nothing pending came after the change applied.
+            Err(e)
+                if shrink == Some("cancel")
+                    && (e.contains("NothingPending") || e.contains("175c1aea")) =>
+            {
+                json_reply(
+                    "409 Conflict",
+                    json!({ "error": e, "words": "Your cancel arrived after the change had already applied, so nothing was cancelled: the change is in effect now. A cut is instant: pause the agent or lower the limit and it applies at once." }),
+                )
+            }
             Err(e) => json_reply("500 Internal Server Error", json!({ "error": e })),
+        }
+    }
+
+    /// docs/60 P-171: whether the owner sent a trust-shrinking call (cancel,
+    /// pause, revoke) for `policy` at or after the moment its pending raise was
+    /// asked, so that raise must not be applied automatically. A failed read
+    /// of the pending change blocks the apply: waiting is the safe side.
+    async fn shrink_blocks_apply(&self, tenant: &level1::Tenant) -> bool {
+        let Some(at) = shrinks()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&tenant.policy.to_lowercase())
+            .copied()
+        else {
+            return false;
+        };
+        match level1::mode_action(tenant, "status").await {
+            Ok(s) => match (s["pending"]["eta"].as_u64(), s["delaySecs"].as_u64()) {
+                (Some(eta), Some(delay)) => at >= eta.saturating_sub(delay),
+                _ => false,
+            },
+            Err(_) => true,
         }
     }
 
@@ -2447,9 +2546,21 @@ impl App {
         let Some(tenant) = level1::load(&self.dir, &format!("{policy:#x}")) else {
             return json_reply("404 Not Found", json!({ "error": "no such tenant" }));
         };
+        // `TAMEION_INBOX_TIMING=1`: where the inbox's time goes, on stderr (docs/110 item 8).
+        let t0 = std::time::Instant::now();
+        let timing = std::env::var_os("TAMEION_INBOX_TIMING").is_some();
+        let tm = |what: &str| {
+            if timing {
+                eprintln!(
+                    "inbox {policy:#x}: {what} at {} ms",
+                    t0.elapsed().as_millis()
+                );
+            }
+        };
         // The chain and network reads below are independent: start them all
         // at once (on a public node they were ~7 s one after another).
-        let rc = operator::watch::chain(&tenant.chain).and_then(|c| level1::read_client(c).ok());
+        // A person waits on this page: reads that stall fail in seconds (docs/110 item 8).
+        let rc = operator::watch::chain(&tenant.chain).and_then(|c| level1::quick_client(c).ok());
         let owner_addr = Address::from_str(&tenant.owner).ok();
         let (
             status,
@@ -2526,6 +2637,7 @@ impl App {
                     .ok()
             },
         );
+        tm("first chain reads (joined)");
         let status = match status {
             Ok(v) => v,
             Err(e) => return json_reply("502 Bad Gateway", json!({ "error": e })),
@@ -2591,6 +2703,7 @@ impl App {
             .iter()
             .rev()
             .find(|j| j.status == "done" && j.report.is_some());
+        tm("passes loaded");
         let mut paid: Vec<Value> = Vec::new();
         let mut paid_minor: i128 = 0;
         for j in passes.iter().filter(|j| j.status == "done") {
@@ -2636,10 +2749,24 @@ impl App {
             .chain(mine_pre.iter().flatten())
             .map(|e| (e.action_hash, e.to, e.amount.to_minor()))
             .collect();
+        // Block times never change: read once, eight at a time, then kept
+        // (docs/110 item 8: one read per payment, in sequence, on every call).
+        let times = match rc.as_ref() {
+            Some(client) => {
+                let blocks: Vec<u64> = agent_paid_pre
+                    .iter()
+                    .flatten()
+                    .chain(mine_pre.iter().flatten())
+                    .map(|e| e.block)
+                    .collect();
+                block_times(client, &tenant.chain, blocks).await
+            }
+            None => HashMap::new(),
+        };
         // The chain is the record (docs/60 P-35): an agent payment whose pass
         // failed afterwards left no report, but the policy's `Paid` event is
         // there. Anything on chain and not yet listed is added, by tx.
-        if let (Some(client), Some(events)) = (rc.as_ref(), agent_paid_pre) {
+        if let (Some(_), Some(events)) = (rc.as_ref(), agent_paid_pre) {
             for ev in events {
                 let tx = format!("{:#x}", ev.tx);
                 let action = format!("{:#x}", ev.action_hash);
@@ -2655,11 +2782,7 @@ impl App {
                 }) {
                     continue;
                 }
-                let at = client
-                    .block_timestamp(ev.block)
-                    .await
-                    .map(|t| t.as_unix() as u64)
-                    .unwrap_or(0);
+                let at = times.get(&ev.block).copied().unwrap_or(0);
                 paid_minor += ev.amount.to_minor();
                 paid.push(json!({
                     "counterparty": format!("{:#x}", ev.to), "amount": ev.amount.to_string(),
@@ -2673,18 +2796,14 @@ impl App {
         // block, each with its block's time, and counted under Paid as
         // "by you". Without this the tile undercounted (seen 2026-10-14).
         let by_agent = paid.len();
-        let mine = match (rc.clone(), mine_pre) {
-            (Some(client), Some(m)) => Some((client, m)),
+        let mine = match (rc.as_ref(), mine_pre) {
+            (Some(_), Some(m)) => Some(m),
             _ => None,
         };
-        if let Some((client, mine)) = mine {
+        if let Some(mine) = mine {
             let mut own: Vec<Value> = Vec::new();
             for m in mine {
-                let at = client
-                    .block_timestamp(m.block)
-                    .await
-                    .map(|t| t.as_unix() as u64)
-                    .unwrap_or(0);
+                let at = times.get(&m.block).copied().unwrap_or(0);
                 paid_minor += m.amount.to_minor();
                 own.push(json!({
                     "counterparty": format!("{:#x}", m.to), "amount": m.amount.to_string(),
@@ -2696,6 +2815,7 @@ impl App {
             paid.extend(own);
             paid.sort_by_key(|p| std::cmp::Reverse(p["at"].as_u64().unwrap_or(0)));
         }
+        tm("paid rows (block times)");
         let paid_by_you = paid.len().saturating_sub(by_agent);
         let needs_you: Vec<Value> = last
             .and_then(|j| j.report.as_ref())
@@ -2718,7 +2838,10 @@ impl App {
                         let who = p["counterparty"].as_str().unwrap_or("").to_string();
                         json!({
                             "counterparty": who, "amount": p["amount"], "summary": p["summary"], "to": p["to"], "data": p["data"],
-                            "actionHash": p["actionHash"],
+                            // `actionHash` names this pass's proposal (it changes every
+                            // pass); `settlementKey` names the bill-cycle and is what any
+                            // payment of it is keyed to (docs/60 P-175).
+                            "actionHash": p["actionHash"], "settlementKey": p["settlementKey"], "cycleKey": p["cycleKey"],
                             "attest": p["attest"], "why": why.get(&who.to_lowercase()).cloned().unwrap_or_default(),
                         })
                     })
@@ -2750,9 +2873,14 @@ impl App {
                     .map(|mut n| {
                         let to = n["counterparty"].as_str().and_then(|x| Address::from_str(x).ok());
                         let amount = n["amount"].as_str().and_then(|a| ledger::Money::parse(a.trim_end_matches(" USDC"), ledger::Currency::Usdc).ok());
-                        let hash = n["actionHash"].as_str().and_then(|h| alloy::primitives::B256::from_str(h).ok());
-                        if let (Some(to), Some(amount), Some(hash)) = (to, amount, hash) {
-                            if let Ok(c) = arc::prepare_principal_settlement_bound(policy, to, amount, hash, t.fingerprint, deadline) {
+                        // The owner's payment is keyed to the bill-cycle, never to this
+                        // pass's proposal hash: a second check or a second tab then makes
+                        // the same call, which the contract refuses (`AlreadyExecuted`),
+                        // and the next pass sees the cycle paid (docs/60 P-175). A row
+                        // without a settlement key keeps the pass's own call (keyed alike).
+                        let key = settle_key(&n);
+                        if let (Some(to), Some(amount), Some(key)) = (to, amount, key) {
+                            if let Ok(c) = arc::prepare_principal_settlement_bound(policy, to, amount, key, t.fingerprint, deadline) {
                                 n["to"] = json!(format!("{:#x}", c.to));
                                 n["data"] = json!(c.data);
                                 n["summary"] = json!(c.summary);
@@ -2788,7 +2916,7 @@ impl App {
             terms.as_ref().filter(|t| t.recompute() == t.fingerprint),
             operator::watch::chain(&tenant.chain),
         ) {
-            let approved_now = match level1::read_client(c) {
+            let approved_now = match level1::quick_client(c) {
                 Ok(client) => client.attested_among(policy, &wanted).await.ok().flatten(),
                 Err(_) => None,
             };
@@ -2823,6 +2951,7 @@ impl App {
                 }
             }
         }
+        tm("sellers checked");
         // Protected per day: min(daily cap, balance - floor), never below zero.
         let money = |s: &str| {
             ledger::Money::parse(s.trim_end_matches(" USDC").trim(), ledger::Currency::Usdc)
@@ -2871,20 +3000,25 @@ impl App {
         for j in passes.iter().filter(|j| j.status == "done") {
             if let Some(r) = &j.report {
                 for p in r["pendingSignature"].as_array().into_iter().flatten() {
-                    if let Some(h) = p["actionHash"]
-                        .as_str()
-                        .and_then(|h| alloy::primitives::B256::from_str(h).ok())
-                        .filter(|h| !hashes.contains(h))
-                    {
-                        hashes.push(h);
+                    // The bill-cycle's settlement key first: the owner's tap is
+                    // bound to it since docs/60 P-175; older taps to the hash.
+                    for key in ["settlementKey", "actionHash"] {
+                        if let Some(h) = p[key]
+                            .as_str()
+                            .and_then(|h| alloy::primitives::B256::from_str(h).ok())
+                            .filter(|h| !hashes.contains(h))
+                        {
+                            hashes.push(h);
+                        }
                     }
                 }
             }
         }
-        hashes.truncate(20);
+        hashes.truncate(40);
         let executed = level1::executed_hashes(&tenant, &hashes)
             .await
             .unwrap_or_default();
+        tm("executed hashes");
         let approved = executed.len();
         // What the owner already settled is not waiting any more. A row whose
         // hash is spent but paid someone else (or a token amount) was not
@@ -2894,20 +3028,24 @@ impl App {
         let needs_you: Vec<Value> = needs_you
             .into_iter()
             .filter(|n| {
-                let Some(h) = n["actionHash"]
-                    .as_str()
-                    .and_then(|h| alloy::primitives::B256::from_str(h).ok())
+                // Settled under the bill-cycle's key (the owner's tap since
+                // docs/60 P-175) or under the row's own hash (before it).
+                let Some(h) = ["settlementKey", "actionHash"]
+                    .into_iter()
+                    .filter_map(|k| {
+                        n[k].as_str()
+                            .and_then(|h| alloy::primitives::B256::from_str(h).ok())
+                    })
+                    .find(|h| executed.contains(h))
                 else {
                     return true;
                 };
-                if !executed.contains(&h) {
-                    return true;
-                }
                 let to = n["counterparty"].as_str().and_then(|x| Address::from_str(x).ok());
                 let want = n["amount"].as_str().map(money).unwrap_or(0);
                 if named_complete && !paid_as_named(&named, h, to, want) {
                     misused.push(json!({
-                        "counterparty": n["counterparty"], "amount": n["amount"], "actionHash": n["actionHash"],
+                        // The hash that was spent (the settlement key or the row's own), re-checked below.
+                        "counterparty": n["counterparty"], "amount": n["amount"], "actionHash": format!("{h:#x}"),
                         "why": "this bill's reference was used on chain without paying this payee its amount, so it was not paid; pause the agent and pay this payee from your wallet",
                     }));
                 }
@@ -2933,9 +3071,8 @@ impl App {
                             )
                             .ok()
                         })?,
-                        n["actionHash"]
-                            .as_str()
-                            .and_then(|h| alloy::primitives::B256::from_str(h).ok())?,
+                        // One tap pays each bill-cycle once (docs/60 P-175).
+                        settle_key(n)?,
                     ))
                 })
                 .take(arc::MAX_RUN)
@@ -2943,7 +3080,7 @@ impl App {
             let consistent = terms.as_ref().filter(|t| t.recompute() == t.fingerprint);
             match (consistent, operator::watch::chain(&tenant.chain)) {
                 (Some(t), Some(c)) if rows.len() >= 2 => {
-                    let supported = match level1::read_client(c) {
+                    let supported = match level1::quick_client(c) {
                         Ok(client) => {
                             client
                                 .code_has_selector(policy, arc::settle_run_selector())
@@ -3021,7 +3158,23 @@ impl App {
                 _ => misused.clear(),
             }
         }
+        tm("misused re-check");
         refused.extend(misused);
+        // docs/60 P-174: a purchase the account refused in the last day (most
+        // often "the agent buys only on Autopilot") is shown where the page shows
+        // refusals, with why; before, it sat in `purchases` and nowhere on the page.
+        let day_ago = now_secs().saturating_sub(86_400);
+        refused.extend(
+            bought
+                .iter()
+                .filter(|p| p["status"] == "refused" && p["at"].as_u64().is_some_and(|t| t >= day_ago))
+                .map(|p| {
+                    json!({
+                        "counterparty": p["seller"], "amount": p["amount"], "purchase": true, "at": p["at"],
+                        "why": format!("a purchase was refused: {}", p["why"].as_str().unwrap_or("the account refused it")),
+                    })
+                }),
+        );
         // PLAN 5.7: the owner's keys and threshold, what waits for more of
         // them, and devices asking to join (not yet owners).
         let (owners, approvals, join_requests) = match (
@@ -3056,6 +3209,7 @@ impl App {
             }
             _ => (Value::Null, Vec::new(), Vec::new()),
         };
+        tm("owners");
         let recommend_autopilot = !tenant.keyless
             && status["mode"] == "Propose"
             && approved >= 3
@@ -3115,6 +3269,7 @@ impl App {
             },
             None => (Value::Null, Value::Null),
         };
+        tm("standing orders");
         // Runway (PLAN 5.17, docs/57 §2): a day-by-day projection of the
         // bills the last pass recovered against what the policy holds — how
         // many days until the first bill the policy could not cover, and
@@ -3248,6 +3403,7 @@ impl App {
                 "basis": "your bills and standing orders, repeated on their schedule, paid from what the account can spend above the reserve you keep; prices do not move it (it holds only USDC)",
             }))
         };
+        tm("runway");
         // PLAN 5.49: what the bill wallet holds outside dollars, what a 30%
         // fall would cost in days of bills, and whether a hedge covers it.
         let bill_wallet = level1::history_sources(&tenant).first().copied();
@@ -3313,6 +3469,7 @@ impl App {
             }
             e
         };
+        tm("exposure");
         // docs/73 T2/T3 (docs/66 route change 4): how much of the next 30
         // days of bills a price fall cannot touch -- the USDC the account holds
         // for them, plus a short held against the bill wallet's coins -- and
@@ -3357,6 +3514,7 @@ impl App {
                 "basis": "the next 30 days of bills, against the USDC this account holds for them plus any short held against your wallet's coins; a price fall does not move either",
             })
         };
+        tm("protection");
         // PLAN 5.21: a read-back mismatch leaves HALT beside the tenant's log;
         // the page says so instead of looking idle.
         let halt_path = self
@@ -3376,7 +3534,7 @@ impl App {
                 operator::watch::chain(&tenant.chain),
                 Address::from_str(&tenant.watched),
             ) {
-                (Some(c), Ok(w)) => match level1::read_client(c) {
+                (Some(c), Ok(w)) => match level1::quick_client(c) {
                     Ok(client) => {
                         let allowance = client.usdc_allowance(w, policy).await;
                         let held = client.usdc_balance(w).await;
@@ -3434,6 +3592,7 @@ impl App {
         } else {
             Value::Null
         };
+        tm("pull");
         // PLAN 5.24: when the agent's authority lapses; the page offers a
         // one-tap renewal inside the last fourteen days, and says so when it
         // has lapsed (the agent then proposes and does not pay).
@@ -3459,6 +3618,7 @@ impl App {
         // one-off one carries the owner's payment, bound to the terms like
         // every prepared approval and keyed by the invoice's own reference,
         // so the contract pays it once whoever taps twice.
+        tm("guardians");
         let mut pending_invoices = operator::invoice::pending(&self.dir, &tenant.policy);
         // Approved since it arrived? Read now, not at receipt: a second
         // invoice from a payee approved for the first must not ask for the
@@ -3504,6 +3664,7 @@ impl App {
             })
             .collect();
         // docs/65 F3: before the first pass, what the agent can already read.
+        tm("before preview");
         let preview = if last.is_none() && running.is_none() {
             self.preview(&tenant).await
         } else {
@@ -3576,6 +3737,7 @@ impl App {
                 "nextDue": b.next_due,
             })).collect::<Vec<_>>(),
         });
+        tm("reply built");
         // UAT U3 (docs/60 P-180…P-182): what an outside agent is told — its own
         // requests as one-tap rows for the owner, what it may still spend and
         // whom it may pay (read from the contract), and one list of everything
@@ -3699,6 +3861,33 @@ impl App {
                         .collect::<Vec<_>>());
                 }
             }
+            // P-177: every payment row and every Needs-you row says who asked and
+            // why, from the newest pass that knows the bill (a purchase carries its own).
+            let known: Vec<Value> = last
+                .and_then(|j| j.report.as_ref())
+                .and_then(|r| r["obligationsList"].as_array().cloned())
+                .unwrap_or_default();
+            for row in reply["needsYou"].as_array_mut().into_iter().flatten() {
+                let who = row["counterparty"].as_str().unwrap_or("").to_string();
+                row["askedBy"] = json!("the agent");
+                row["reason"] = json!(
+                    operator::agent_api::reason_for(&known, &who)
+                        .unwrap_or_else(|| "a payment the agent prepared".to_string())
+                );
+            }
+            for row in reply["paid"].as_array_mut().into_iter().flatten() {
+                if row["reason"].is_string() {
+                    continue;
+                }
+                let who = row["counterparty"].as_str().unwrap_or("").to_string();
+                let why = operator::agent_api::reason_for(&known, &who);
+                row["reason"] = json!(match (row["by"] == "you", why) {
+                    (true, Some(w)) => format!("paid by the owner; the agent asked: {w}"),
+                    (true, None) => "paid by the owner with the passkey".to_string(),
+                    (false, Some(w)) => format!("paid by the agent: {w}"),
+                    (false, None) => "paid by the agent inside the limits".to_string(),
+                });
+            }
             // P-180: everything that waits for the owner, in one list.
             let list = |k: &str| reply[k].as_array().cloned().unwrap_or_default();
             let waiting = operator::agent_api::waiting(
@@ -3728,6 +3917,7 @@ impl App {
         )
         .await
         .unwrap_or_default();
+        tm("agent view and names");
         reply["parties"] =
             operator::parties::parties(&tenant, &reply, &invoices, &proved, private_ok, now_secs());
         json_reply("200 OK", reply)
@@ -4957,7 +5147,34 @@ impl App {
             from,
             to,
         };
-        match operator::statement::build(&log_dir, &scope) {
+        // docs/60 P-177: the owner's own passkey payments are in the week too,
+        // read from the policy's `SettledByPrincipal` events (a failed read
+        // leaves the agent's record alone, as before).
+        let owner_paid: Vec<operator::statement::OwnerPaid> = match level1::read_client(c) {
+            Ok(client) => match client.block_number().await {
+                Ok(head) => {
+                    let list = client
+                        .principal_settlements(policy, tenant.created_block.min(head), head)
+                        .await
+                        .unwrap_or_default();
+                    let mut out = Vec::new();
+                    for m in list {
+                        if let Ok(t) = client.block_timestamp(m.block).await {
+                            out.push(operator::statement::OwnerPaid {
+                                at: t.as_unix(),
+                                payee: format!("{:#x}", m.to),
+                                amount: m.amount,
+                                tx: format!("{:#x}", m.tx),
+                            });
+                        }
+                    }
+                    out
+                }
+                Err(_) => Vec::new(),
+            },
+            Err(_) => Vec::new(),
+        };
+        match operator::statement::build_with(&log_dir, &scope, &owner_paid) {
             Ok(st) if get("format") == Some("csv") => respond(
                 "200 OK",
                 "text/csv; charset=utf-8",
@@ -5446,9 +5663,12 @@ impl App {
             return None;
         }
         // The owner's own device may read what the account's agent key may read (docs/103 S4-1): the desk's routes already
-        // open to it (`desk_owner`), and an account is not locked against its owner. Only `read`: a run, an import or a
-        // buy still needs a key with that scope.
-        if scope == "read" && level1::reserve_token_ok(&tenant, header(raw, "x-tameion-device")) {
+        // open to it (`desk_owner`), and an account is not locked against its owner. And it may `prepare` (docs/60 P-170: the
+        // first agent key locked the owner out of every change on their own page): a prepare only builds calldata that
+        // the owner's passkey must still sign, so it moves no authority. A run, an import or a buy still needs a key.
+        if matches!(scope, "read" | "prepare")
+            && level1::reserve_token_ok(&tenant, header(raw, "x-tameion-device"))
+        {
             return None;
         }
         let bearer = raw
@@ -6626,6 +6846,14 @@ impl App {
                 );
             }
         }
+        // docs/60 P-171: the page applies a due raise by itself; never over the
+        // owner's own cancel, pause or revoke sent after that raise was asked.
+        if action == "apply" && self.shrink_blocks_apply(&tenant).await {
+            return json_reply(
+                "409 Conflict",
+                json!({ "error": "the owner lowered trust after this change was asked (a cancel, a pause or a revoke), so it is not applied automatically; the owner can cancel it or ask again" }),
+            );
+        }
         match level1::mode_action(&tenant, action).await {
             Ok(r) => json_reply("200 OK", r),
             Err(e) if e.starts_with("unknown action") => {
@@ -6940,6 +7168,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let Some(t) = level1::load(&app.dir, &p) else {
                         continue;
                     };
+                    // docs/60 P-171: not over the owner's cancel, pause or revoke.
+                    if app.shrink_blocks_apply(&t).await {
+                        println!(
+                            "watcher: not applying {p}'s waiting change: the owner lowered trust after it was asked"
+                        );
+                        continue;
+                    }
                     match level1::mode_action(&t, "apply").await {
                         Ok(r) => {
                             println!("watcher: applied the waiting change of {p} in {}", r["tx"]);
@@ -7638,9 +7873,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             // Any call that changed an account tells its event streams; the
             // console re-reads the inbox (the call's own route is the cause).
+            // A purchase answered 409 (waits for the owner, or refused) was
+            // recorded too, so it tells them as well (docs/60 P-173, P-174).
             if method == "POST"
                 && first
-                && reply.starts_with(b"HTTP/1.1 2")
+                && (reply.starts_with(b"HTTP/1.1 2")
+                    || (path == "/api/level1/buy" && reply.starts_with(b"HTTP/1.1 409")))
                 && let Some(cause) = path.strip_prefix("/api/level1/")
                 && !cause.starts_with("prepare")
                 && let Some(p) = serde_json::from_str::<Value>(&body).ok().and_then(|v| {
@@ -7919,5 +8157,62 @@ mod invoice_settled_tests {
             7_000
         ));
         assert!(!settles(&[], id, vendor, 7_000));
+    }
+}
+
+#[cfg(test)]
+mod settle_key_tests {
+    use super::*;
+    use alloy::primitives::B256;
+    use ledger::{Currency, Money};
+
+    /// docs/60 P-175: two checks offer the same 30-day bill under two proposal
+    /// hashes; the owner's payment of either is the SAME call, keyed to the
+    /// bill-cycle, so the contract refuses the second (`AlreadyExecuted`) and
+    /// the next pass finds the cycle executed.
+    #[test]
+    fn the_owners_tap_is_keyed_to_the_bill_cycle_not_the_pass() {
+        let row = |hash: &str| {
+            json!({
+                "counterparty": "0x179dca89f69faef5765d2e7445aa5452b8159520", "amount": "0.050000 USDC",
+                "actionHash": hash,
+                "settlementKey": "0xf39a6156a544af2b1965d16d1ce40bfb73b73ad47f192f60c2db0649d38f256f",
+            })
+        };
+        let (first, second) = (
+            row("0x85dcc14b00000000000000000000000000000000000000000000000000001969"),
+            row("0xd160efea000000000000000000000000000000000000000000000000000044f7"),
+        );
+        let key = settle_key(&first).unwrap();
+        assert_eq!(
+            settle_key(&second),
+            Some(key),
+            "both checks name the same bill-cycle"
+        );
+        let call = |k: B256| {
+            arc::prepare_principal_settlement_bound(
+                Address::repeat_byte(0x48),
+                Address::from_str("0x179dca89f69faef5765d2e7445aa5452b8159520").unwrap(),
+                Money::minor(50_000, Currency::Usdc),
+                k,
+                B256::repeat_byte(0x11),
+                1_792_160_000,
+            )
+            .unwrap()
+            .data
+        };
+        assert_eq!(
+            call(key),
+            call(settle_key(&second).unwrap()),
+            "one call, so one payment"
+        );
+        assert!(
+            call(key).contains("f39a6156a544af2b1965d16d1ce40bfb73b73ad47f192f60c2db0649d38f256f")
+        );
+        assert_eq!(
+            settle_key(&json!({ "actionHash": "0x01" })),
+            None,
+            "no key, no rebinding"
+        );
     }
 }

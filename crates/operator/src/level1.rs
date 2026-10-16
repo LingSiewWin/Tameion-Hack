@@ -329,11 +329,11 @@ pub fn scope_for(method: &str, path: &str) -> Option<&'static str> {
     let p = path.strip_prefix("/api/level1/")?;
     let p = p.split('?').next().unwrap_or(p);
     Some(match (method, p) {
-        ("GET", "inbox")
-        | ("GET", "records")
-        | ("GET", "record")
-        | ("GET", "purchases.jsonl")
-        | ("GET", "statement") => "read",
+        // `records` and `record` are not here: the anchored roots and the events
+        // behind them are what the page tells anyone they can check, so a key for
+        // the agents never hides them (docs/60 P-176). Bills, payees' names,
+        // purchases and the statement stay behind `read`.
+        ("GET", "inbox") | ("GET", "purchases.jsonl") | ("GET", "statement") => "read",
         ("POST", "run") => "run",
         // `wallets` is not here: its handler gates it (the device token or an
         // `import` agent key, never open; docs/60 P-93), because this gate
@@ -831,6 +831,19 @@ pub fn agent_key(app_dir: &Path, owner: Address) -> Option<PrivateKeySigner> {
 
 fn read_only_client(c: &ChainPreset) -> Result<ArcClient, String> {
     crate::watch::client_for(c).map_err(|e| e.to_string())
+}
+
+/// A read-only client for a person waiting on a page: a stalled read fails in
+/// seconds (`ArcClient::read_only_quick`) instead of retrying for a minute
+/// (docs/110 item 8). The account page's inbox and status use it.
+pub fn quick_client(c: &ChainPreset) -> Result<ArcClient, String> {
+    let mut client = ArcClient::read_only_quick(&crate::watch::rpc_for(c))
+        .map_err(|e| e.to_string())?
+        .with_log_chunk(c.log_span);
+    if let Some(t) = c.usdc {
+        client = client.with_token(Address::from_str(t).map_err(|e| e.to_string())?);
+    }
+    Ok(client)
 }
 
 /// Deploy the treasurer's `PasskeyPrincipal` and `BudgetPolicy` (Propose mode)
@@ -1381,12 +1394,13 @@ fn save_approvals(app_dir: &Path, owner: Address, list: &[PendingApproval]) -> R
 }
 
 /// The calls still waiting for more of the owner's keys, at the current nonce.
+/// Read for the inbox, so a stalled node costs seconds (docs/110 item 8).
 pub async fn pending_approvals(
     c: &ChainPreset,
     app_dir: &Path,
     owner: Address,
 ) -> Vec<PendingApproval> {
-    let Ok(client) = read_only_client(c) else {
+    let Ok(client) = quick_client(c) else {
         return Vec::new();
     };
     let Ok(nonce) = client.passkey_nonce(owner).await else {
@@ -2140,15 +2154,38 @@ pub async fn executed_hashes(
 ) -> Result<std::collections::BTreeSet<B256>, String> {
     let c = crate::watch::chain(&t.chain).ok_or("tenant chain unknown")?;
     let policy = Address::from_str(&t.policy).map_err(|e| e.to_string())?;
-    let client = read_only_client(c)?;
-    let mut done = std::collections::BTreeSet::new();
-    for h in hashes {
-        if client
-            .executed(policy, *h)
-            .await
-            .map_err(|e| e.to_string())?
-        {
-            done.insert(*h);
+    let client = quick_client(c)?;
+    // `executed` never turns back to false: a hash seen executed is not read
+    // again, and the rest are read eight at a time, not one after another
+    // (docs/110 item 8: on a slow node the inbox spent most of 38 s here).
+    static SEEN: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::BTreeSet<(Address, B256)>>,
+    > = std::sync::OnceLock::new();
+    let seen = SEEN.get_or_init(Default::default);
+    let mut done: std::collections::BTreeSet<B256> = {
+        let seen = seen.lock().unwrap_or_else(|e| e.into_inner());
+        hashes
+            .iter()
+            .filter(|h| seen.contains(&(policy, **h)))
+            .copied()
+            .collect()
+    };
+    let unknown: Vec<B256> = hashes
+        .iter()
+        .filter(|h| !done.contains(*h))
+        .copied()
+        .collect();
+    let answers = arc::eight_at_a_time(unknown, |h| {
+        let client = client.clone();
+        async move { (h, client.executed(policy, h).await) }
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    let mut seen = seen.lock().unwrap_or_else(|e| e.into_inner());
+    for (h, r) in answers {
+        if r.map_err(|e| e.to_string())? {
+            seen.insert((policy, h));
+            done.insert(h);
         }
     }
     Ok(done)
@@ -2187,7 +2224,7 @@ pub async fn mode_action(t: &Tenant, action: &str) -> Result<Value, String> {
         // Propose, and the balance is what the reserved address can already
         // reach (pull: the wallet's balance within the allowance it granted
         // the address; hold: USDC already sent to the address).
-        let client = read_only_client(c)?;
+        let client = quick_client(c)?;
         let watched = Address::from_str(&t.watched).map_err(|e| e.to_string())?;
         let balance = if t.kind == "pull" {
             let held = client
@@ -2222,7 +2259,7 @@ pub async fn mode_action(t: &Tenant, action: &str) -> Result<Value, String> {
         }));
     }
     let client = if action == "status" {
-        read_only_client(c)?
+        quick_client(c)?
     } else {
         signed_client(c, &relayer_key()?)?
     };
@@ -2976,6 +3013,16 @@ mod tests {
             "anyone may, the chain bounds it"
         );
         assert_eq!(scope_for("POST", "/api/watch"), None);
+        // docs/60 P-176: what "anyone can check" stays open on a keyed account.
+        assert_eq!(scope_for("GET", "/api/level1/records?policy=0x2"), None);
+        assert_eq!(
+            scope_for("GET", "/api/level1/record?policy=0x2&root=0x3"),
+            None
+        );
+        assert_eq!(
+            scope_for("GET", "/api/level1/statement?policy=0x2"),
+            Some("read")
+        );
         let a = token_challenge(
             5_042_002,
             Address::repeat_byte(2),
