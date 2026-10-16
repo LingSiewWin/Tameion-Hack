@@ -1,0 +1,69 @@
+# 2026-10-13T11:29:15Z new Arc policy (docs/46 #3/#4 contract) after scripts/prove_arc.sh deploy/seed/run + prove_hedge.sh arc
+# max loss, read from chain 2026-10-13T11:29:27Z
+policy           : 0x0833FaC9905F5b6b359d98066d407dEee133FB0D  (rpc https://rpc.testnet.arc.network, block 66981728)
+principal        : 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+operator         : 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+agent            : 0x80c195BE650FBfD55a9ffe059f397Db39f2fe881
+perActionCap     : 0.010000 USDC
+dailyCap         : 1.000000 USDC   (rolling 24 h; spent in window 0.000000, remaining 0.010000)
+reserveFloor     : 0.000000 USDC
+balance          : 0.013550 USDC
+mode             : Autopilot   (pay works only in Autopilot; lowering is instant, raising waits the delay)
+delay            : 600s = 0.2 h before a raised cap, lowered floor, higher mode or new payee takes effect
+pending change   : none
+attested payees  : 3
+                   0x00000000000000000000000000000000000000a3
+                   0x00000000000000000000000000000000000000a2
+                   0x00000000000000000000000000000000000000a1
+
+agent key        : <= min(dailyCap, balance - reserveFloor) = 0.013550 USDC per rolling 24 h, only to the 3 attested payees above, <= 0.010000 per call; stopped by one operator call (setAgent).
+operator key     : <= 1.000000 USDC x (600s / 24 h) plus what is already allowed before any raise applies: a raise waits 600s and the principal can cancel it. Cannot add a payee.
+principal key    : everything (0.013550 USDC). withdraw has no cap and no delay, by design (docs/14).
+venue wallet     : <= the margin placed on the venue = 0.0 USDC (clearinghouseState.accountValue for 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25). "Cannot withdraw" is documented by third parties, not proved by us; see docs/46.
+
+
+== 2/4 decision log: recompute the root from runtime/log and compare with the chain ==
+# audit runtime/log/0xf72be96fdfed4fd8d9630c708f42d3d2b32679fd586a8bfe89091d048b26367e.events.jsonl
+[0000] HEDGE       ETH: spot 0.01 @ 2490.7 = 24.907 USDC; hedge 0 -> target -0.01; drift 10000 bps, outside band; refused: NoCollateral; no order; equity 0
+[0001] PROPOSAL    claude-opus-5 proposes pause for ETH: placeholder. Recorded for a human; nothing changed.
+[0002] OBSERVATION Holding 0.013550 USDC. Read 15 transfers (0 of them my own payments, which are not evidence) and recovered 3 recurring obligations, of which 3 fall due within 30.0 days totalling 0.037350 USDC; 3 within 3.0 days (or a tenth of their interval), which is when I pay.
+[0003] DECISION    REVIEW for 0x00000000000000000000000000000000000000a1. Highest confidence (0.81) with zero amount and timing variation, and at 2000 minor units it is the cheapest to clear, so a fixed-price subscription that typically suspends service on non-payment is settled first. Basis: 0x00000000000000000000000000000000000000a1 has been paid 5 times every 40s, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.81).
+[0004] ESCALATION  Stopping and asking a human: cycles-behind: 10 more cycles of this bill fell due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue from there. This is outside the authority delegated to me, so I will not proceed on my own. If unanswered for 7.0 days I will report it as overdue.
+[0005] DECISION    REVIEW for 0x00000000000000000000000000000000000000a2. Second at 5350 minor units because it fits alongside the first within the 13550 balance, though the 15.2% amount variation means the exact sum is less certain than the schedule. Basis: 0x00000000000000000000000000000000000000a2 has been paid 5 times every 40s, amounts varying by 15.2% and timing by 2.0%, so this reads as a recurring payment (confidence 0.75).
+[0006] ESCALATION  Stopping and asking a human: cycles-behind: 10 more cycles of this bill fell due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue from there. This is outside the authority delegated to me, so I will not proceed on my own. If unanswered for 7.0 days I will report it as overdue.
+[0007] DECISION    BLOCK for 0x00000000000000000000000000000000000000a3. Last because at 30000 minor units it exceeds the entire 13550 balance and cannot be settled this cycle regardless of rank; no signal beyond the numbers distinguishes its urgency. Basis: 0x00000000000000000000000000000000000000a3 has been paid 5 times every 39s, amounts varying by 0.0% and timing by 3.5%, so this reads as a subscription (confidence 0.77).
+events          : 8
+recomputed root : 0xf72be96fdfed4fd8d9630c708f42d3d2b32679fd586a8bfe89091d048b26367e
+file name       : 0xf72be96fdfed4fd8d9630c708f42d3d2b32679fd586a8bfe89091d048b26367e   MATCH
+chain rootOf    : 0xf72be96fdfed4fd8d9630c708f42d3d2b32679fd586a8bfe89091d048b26367e   (anchor 0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB, agent 0x80c195be650fbfd55a9ffe059f397db39f2fe881)   MATCH
+inclusion [0000]: leaf 0xc717795080f0d4602f9cb2361fab803e07e19428f944c749b7cde8889e4acd24 path 3 steps   VERIFIED
+  0: right 0x082f5516e617b6b985bf0ee9c5c50289e1e594835ff82205ba7c709181c8948d
+  1: right 0x2a4ae22be8fb22d5aeff5a4872f138c9f245b07a8081160bb8511f9527ada91e
+  2: right 0x703750de82d41e8f73f9beca4eef7c9b54265511faaf98c7e60726e82481e538
+RESULT          : PASS
+
+== 3/4 hedge books: re-post runtime/hedge/journal.jsonl and compare with the venue ==
+# audit_books runtime/hedge/journal.jsonl vs venue 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+entries         : 4   trial balance debits 2455.693000 USDC = credits 2455.693000 USDC   BALANCED
+  asset:hedge:margin           0.000000 USDC
+  asset:hedge:mtm:ETH          0.000000 USDC
+  asset:treasury:spot:ETH      24.907000 USDC
+  asset:treasury:usdc          0.000000 USDC
+  expense:fees                 0.000000 USDC
+  expense:funding              0.000000 USDC
+  expense:hedge:loss           0.000000 USDC
+  expense:spot:loss            1215.393000 USDC
+  revenue:funding              0.000000 USDC
+  revenue:hedge:gain           0.000000 USDC
+  revenue:spot:gain            1240.300000 USDC
+
+line                                          books            venue         diff
+ETH unrealised (hedge:mtm vs upnl)                0                0            0   size 0
+margin + mtm vs accountValue                      0              0.0          0.0
+venue marginUsed / maintenance                  0.0              0.0
+venue snapshot  : t=1791890972811 ms   tolerance 0.50 USDC
+note            : books carry marks but no margin was ever deposited and the venue account is empty — a dry run; the mtm lines reconcile against zero positions.
+RESULT          : PASS
+
+verify: all requested steps passed
+verify exit 0

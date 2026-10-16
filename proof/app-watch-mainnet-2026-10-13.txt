@@ -1,0 +1,15 @@
+# 2026-10-13T13:42:08Z Tameion Watch (docs/49) on mainnets, founder's own address, public RPCs
+== chains:
+   arc-testnet · public RPC; slow
+   arbitrum · public RPC; slow
+   base · public RPC refuses log scans; needs a key
+== Base without a keyed RPC (expect the message, at once):
+failed - Base's public RPC refuses log scans at this volume (mainnet.base.org answers -32011 to log scans). Set TAMEION_RPC_BASE to a keyed endpoint (an Alchemy or QuickNode free tier is enough) and run again.
+== Arbitrum One, 14 days:
+{"id":"6ace3530-0001","status":"queued"}
+running  
+ARBITRUM status: running None
+transfers: None outgoing: None obligations: 0 balance: None blocks None - None secs/block None elapsedMs: None
+== Arbitrum One result (polled to completion; the first poll loop above exited early on a pipeline status, a bug in the smoke script, not the service):
+ARBITRUM status: done None
+transfers: 3 outgoing: 2 obligations: 0 balance: 4.872224 USDC blocks 509786319 - 514445796 secs/block 0.2596 elapsedMs: 313314

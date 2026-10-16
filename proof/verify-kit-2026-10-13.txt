@@ -1,0 +1,61 @@
+# 2026-10-13T10:51:50Z scripts/verify.sh on Arc testnet, policy 0xD79aF81F2Cbd6d8877DfC5ccD7dd6d9E0aCB757c, after prove_arc.sh run anchored root 0xec4c519904baf7e870953d3dbd3c4553671748957fca65745b02fcdd123a0b94 in tx 0xbaf18684efd7c5d9e32a726e0850a64c7f23bd96b35eff7c59ad4bef3ce18b73
+
+== 1/4 limits, keys and payees, read off the contract ==
+# max loss, read from chain 2026-10-13T10:52:03Z
+policy           : 0xD79aF81F2Cbd6d8877DfC5ccD7dd6d9E0aCB757c  (rpc https://rpc.testnet.arc.network, block 66977295)
+principal        : 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+operator         : 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+agent            : 0x80c195BE650FBfD55a9ffe059f397Db39f2fe881
+perActionCap     : 0.010000 USDC
+dailyCap         : 1.000000 USDC   (rolling 24 h; spent in window 0.000000, remaining 0.010000)
+reserveFloor     : 0.000000 USDC
+balance          : 0.034450 USDC
+mode / delay     : n/a -- this policy predates docs/46 #3/#4 (no mode(), no delay()); raises apply at once
+attested payees  : 3
+                   0x00000000000000000000000000000000000000a3
+                   0x00000000000000000000000000000000000000a2
+                   0x00000000000000000000000000000000000000a1
+
+agent key        : <= min(dailyCap, balance - reserveFloor) = 0.034450 USDC per rolling 24 h, only to the 3 attested payees above, <= 0.010000 per call; stopped by one operator call (setAgent).
+operator key     : <= balance = 0.034450 USDC, still only to the same 3 payees (cannot add a payee); no delay on this deployment, stopped by one principal call (setOperator).
+principal key    : everything (0.034450 USDC). withdraw has no cap and no delay, by design (docs/14).
+venue wallet     : <= the margin placed on the venue = 0.0 USDC (clearinghouseState.accountValue for 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25). "Cannot withdraw" is documented by third parties, not proved by us; see docs/46.
+
+== 2/4 decision log: recompute the root from runtime/log and compare with the chain ==
+# audit runtime/log/0xec4c519904baf7e870953d3dbd3c4553671748957fca65745b02fcdd123a0b94.events.jsonl
+[0000] OBSERVATION Holding 0.034450 USDC. Read 21 transfers (2 of them my own payments, which are not evidence) and recovered 3 recurring obligations, of which 3 fall due within 30.0 days totalling 0.037000 USDC; 3 within 3.0 days (or a tenth of their interval), which is when I pay.
+[0001] DECISION    REVIEW for 0x00000000000000000000000000000000000000a1. Smallest obligation with zero amount variation and the tightest timing regularity, so it is the cheapest fixed subscription to keep current and clearing it leaves the most balance for the others. Basis: 0x00000000000000000000000000000000000000a1 has been paid 6 times every 3.0m, amounts varying by 0.0% and timing by 0.6%, so this reads as a subscription (confidence 0.84).
+[0002] ESCALATION  UNANSWERED for 11.7 days, past the 7.0-day deadline: cycles-behind: 5614 more cycles of this bill fell due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue from there. I have escalated this and nobody has acted. The bill is still unpaid and I cannot pay it myself.
+[0003] DECISION    REVIEW for 0x00000000000000000000000000000000000000a3. Largest exposure and an exact, unvarying subscription amount, so it is the most likely of the remainder to trigger service withdrawal if left unpaid, though I have no counterparty signal beyond the payment history. Basis: 0x00000000000000000000000000000000000000a3 has been paid 6 times every 3.0m, amounts varying by 0.0% and timing by 1.6%, so this reads as a subscription (confidence 0.83).
+[0004] ESCALATION  UNANSWERED for 11.7 days, past the 7.0-day deadline: per-action-cap: 0.030000 USDC over cap 0.010000 USDC; cycles-behind: 5584 more cycles of this bill fell due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue from there. I have escalated this and nobody has acted. The bill is still unpaid and I cannot pay it myself.
+[0005] DECISION    REVIEW for 0x00000000000000000000000000000000000000a2. Amounts vary by 13.9%, so the billed figure is less certain than the fixed subscriptions and a short delay risks less than underpaying or overpaying a drifting arrangement. Basis: 0x00000000000000000000000000000000000000a2 has been paid 6 times every 3.0m, amounts varying by 13.9% and timing by 1.3%, so this reads as a recurring payment (confidence 0.80).
+[0006] ESCALATION  UNANSWERED for 11.7 days, past the 7.0-day deadline: cycles-behind: 5614 more cycles of this bill fell due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue from there. I have escalated this and nobody has acted. The bill is still unpaid and I cannot pay it myself.
+events          : 7
+recomputed root : 0xec4c519904baf7e870953d3dbd3c4553671748957fca65745b02fcdd123a0b94
+file name       : 0xec4c519904baf7e870953d3dbd3c4553671748957fca65745b02fcdd123a0b94   MATCH
+chain rootOf    : 0xec4c519904baf7e870953d3dbd3c4553671748957fca65745b02fcdd123a0b94   (anchor 0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB, agent 0x80c195be650fbfd55a9ffe059f397db39f2fe881)   MATCH
+inclusion [0001]: leaf 0x2f132f865546fad26294fad5aad64e86dddf82c6b1f2b74bb3faa8f4e0711205 path 3 steps   VERIFIED
+  0: left  0x2843aac051da4c139f371f6d87a7fe06fb1a84d3a0fb9aba108aa4e521aa84f2
+  1: right 0x814eca368acecff1a2b2b31164f5ff91f4d415b99f4abce95915dae2f36ff380
+  2: right 0x79107137cce438b5e284b6185a9d48a26736c846cb3b5a04157bae80b3e53af1
+RESULT          : PASS
+
+== 3/4 hedge books: re-post runtime/hedge/journal.jsonl and compare with the venue ==
+# audit_books runtime/hedge/journal.jsonl vs venue 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+no journal at runtime/hedge: nothing to reconcile yet (exit 3)
+(no hedge books on disk yet: nothing to reconcile, not a failure)
+
+== 4/4 clear-signing page ==
+The page loads one same-origin script and makes no network call (web/passkey/index.html, call.js).
+Hashes of what you are served, to compare with this repo:
+  5ecbc05a9710c69742fe4e042468d5d6aee81a2cecb18cc595e039a29ed2121c  web/passkey/index.html
+  252d3c124f809ad618d969f66e08b538c5546e5f5c49ddbf69454cd49dcd7531  web/passkey/call.js
+Before Touch ID, recompute the challenge the page shows on another machine:
+  cast call <PasskeyPrincipal> 'challengeFor(address,uint256,bytes,uint256)(bytes32)' <target> <value> <calldata> <nonce> --rpc-url https://rpc.testnet.arc.network
+  (the page prints target, value, calldata and nonce in words; the two 32-byte values must be identical)
+The page's own hash routine against pinned Keccak vectors:
+  ℹ pass 8
+  ℹ fail 0
+
+verify: all requested steps passed
+verify exit 0

@@ -1,0 +1,276 @@
+# 2026-10-13T14:18:06Z Level 1 (docs/52) from a real browser: passkey created by a CDP virtual authenticator, policy deployed through the service, Arc testnet
+owner (PasskeyPrincipal) 0xd439f2ea1f47740104ce52eb91c2fdc69fd0f654
+policy (BudgetPolicy)    0x224fa9badcffb95fe41f3257cfb4f5e94436991a
+qx on chain  0x0c5d72245dcb15f4b401be4e5354941a73b102fa62ca46603d49d107bad2b1c0
+qy on chain  0x1c266f4adcc04eac74e2a43f7ab63e75c189a8f1b5816dcd25d33b7c806eac23
+recovery     0x0000000000000000000000000000000000000000   recoveryDelay 60 s
+principal    0xD439F2ea1f47740104cE52Eb91C2fdc69FD0F654
+mode         1 (1 = Propose)   delay 60 s
+caps         perAction 10000 daily 1000000 floor 0 (USDC minor units)
+== fund the policy with 0.05 USDC from the treasury (the treasurer's own step in production)
+  tx 0xcfa51a223f9acf784fdb4d4cb314e63efefb385ec22d99e90505b889b639c550 status 0x1
+policy balance 50000 minor units
+== payees approved from the browser (virtual passkey signed; relayer submitted PasskeyPrincipal.execute)
+  tx 0xdf2f14ddf674f488c441b08b7398f7b7cd39caadec92bd9dad30db3197b0c633
+  owner nonce now 1
+  A1 attested true since 1791901133 [1.791e9]
+  A2 attested true since 1791901133 [1.791e9]
+  A3 attested true since 1791901133 [1.791e9]
+== gas for the tenant's agent key (anchoring costs gas; the service pays this on deploy from now on)
+  tx 0x29d592ad0d9d0f4985907d142a854eb6caa4e8a85cfe439269ff5abfde958b61 status 0x1
+  agent balance 0.013478000000000000 USDC
+== run (Propose mode) from the browser, job 6ace3e09-0000
+status: done 
+mode: Propose balance: 0.050000 USDC transfers: 22 obligations: 2 root: 0xb97dba7ae7167c1c55906544efe83fd0ff7548981326a96c14df5e43afac248d anchorTx: 0x6722f17834106abbf173b5beb89814e018174e7e34550cc84dbd2bf1c851377b
+settled: 0 escalated: 2 blocked: 0 pendingSignature: 2
+  waiting for the passkey: 111111 0.003000 USDC | settle 0.003000 USDC to 0x1111111111111111111111111111111111111111, marking action 0xfad97 | attest: True
+  waiting for the passkey: 333333 0.002000 USDC | settle 0.002000 USDC to 0x3333333333333333333333333333333333333333, marking action 0x7bfdd | attest: True
+  escalated: 111111 0.003000 USDC REVIEW payee-attested: 0x1111111111111111111111111111111111111111 is not attested on chain, so the contract would refuse it. Th
+  escalated: 333333 0.002000 USDC REVIEW payee-attested: 0x3333333333333333333333333333333333333333 is not attested on chain, so the contract would refuse it. Th
+   [0000] OBSERVATION Holding 0.050000 USDC. Read 22 transfers (0 of them my own payments, which are not evidence) and recovered 2 recurring obligations, of which 
+   [0001] DECISION    REVIEW for 0x1111111111111111111111111111111111111111. ranked 1 of 2: overdue by 11.8 days, confidence 0.83, 0.003000 USDC covered Basis: 0x1
+   [0002] ESCALATION  UNANSWERED for 11.8 days, past the 7.0-day deadline: payee-attested: 0x1111111111111111111111111111111111111111 is not attested on chain, so 
+   [0003] DECISION    REVIEW for 0x3333333333333333333333333333333333333333. ranked 2 of 2: overdue by 11.8 days, confidence 0.83, 0.002000 USDC covered Basis: 0x3
+   [0004] ESCALATION  UNANSWERED for 11.8 days, past the 7.0-day deadline: payee-attested: 0x3333333333333333333333333333333333333333 is not attested on chain, so 
+== after the service restart (new build): the page restored the pass from disk (job 6ace3e09-0000), 2 rows waiting
+== row 0x1111: "Approve payee" tapped (virtual passkey signed setPayee(0x1111, true); relayer submitted PasskeyPrincipal.execute)
+  tx 0x553d83016538a41b55249e069eefdb2d368ee9d36fcef7058ab7047f02a6ea1a status 1 (success)
+  attestedPayee(0x1111) true, attestedSince 1791902763
+== same row, "Sign & pay" tapped (settleAsPrincipal 0.003000 USDC to 0x1111, marking action 0xfad97e15… executed)
+  tx 0x2be9c9ba5309a069d31417b040137e015bcbab7e7d7c852b7ef2f1aeb5909c98 status 1 (success)
+  executed(0xfad97e15…) true; policy balance 50000 -> 47000 minor units; owner nonce 3
+== operator side of Level 2 (`POST /api/level1/mode`, relayer key)
+  action autopilot with a wrong token: 403 "the operator's mode actions need the admin token; the principal uses prepare-mode + execute with the passkey"
+  action autopilot with the admin token: tx 0x6b843c8348cdbdd2d848e0a49320895779568ef3f90763b3ce3c46b0488eff00
+  mode still Propose; pending {mode: Autopilot, kinds: 2, eta: 1791902880} = the raise waits the 60 s delay
+== the principal cancels the raise from the page ("Cancel (passkey)": prepare-cancel -> virtual passkey signed cancelPending() -> execute)
+  tx 0x5af8632b8c21146aba354e21a64fec66aa2f020ec216957b3ce4ff6d12ffaabf status 1 (success)
+  pending() now: 0 0 0 0 0 0  (kinds 0 = nothing pending); mode() 1 (1 = Propose, unchanged)
+
+== SECOND TENANT, new contract build (setMode/setLimits principal-or-operator; bytecode re-snapshotted 2026-10-13T14:42:15Z)
+   same passkey, "Deploy" tapped again with watched 0x6c1c…9A25, caps 0.01 / 1 / 0, 2 days of history
+  owner (PasskeyPrincipal) 0x7d1a44b84a176ffa1599eb25fe953c9f73ff8af3
+  policy (BudgetPolicy)    0x1645951793f7ca2ae36d7a3eeae90ef93e1932ab   created block 67005170, history from 65817191
+  agent                    0x93f29c2d61a17c414d67e6005768c9d846849ea8   gas from the relayer on deploy: tx 0xdfda2d8065c8a9e8027aec7a19db4593354430a580e4b9bc75d60d8881d00fd1
+  principal() 0x7D1A44b84A176Ffa1599EB25Fe953c9f73fF8aF3  mode() 1 (Propose)  delay() 60 s
+== fund it with 0.05 USDC from the treasury (the treasurer's own step in production)
+  tx/status: 0x49e5a513cecdcc25977904678b18a6f262c5044e95981cbc59352d93da634aae 0x1
+  policy balance 50000000000000000 wei
+== payees 0x1111 and 0x3333 approved from the browser (one passkey tap: setPayees([..], true) through PasskeyPrincipal.execute)
+  tx 0xbe3c80d65b2aa0ac2070d31d616d717d5d14b32398f32e5489e103b7e104fa0f status 1 (success)
+  attestedSince: 0x1111 1791902958, 0x3333 1791902958 (payable by the agent 60 s later)
+== Level 2 from the principal's seat: "Ask for Autopilot (passkey)" tapped (prepare-mode 2 -> virtual passkey signed setMode(2) -> execute)
+  tx 0x3b89343683b6daec1f2d5b92a4a9ad0e4ce47632c3076d5daf8348dddd2c9470 status 1 (success)
+  mode() still 1 (Propose); pending() = 0 0 0 2 1791903042 2   (perAction, daily, floor, mode=2 Autopilot, eta, kinds=2): the raise waits the delay even when the owner asks
+== after the delay: "Apply (after the delay)" tapped (anyone may; the relayer sent applyPending())
+  tx 0x99e45e0267391a0b9f9abf8e8639c4e81c15ca11ee7ae9e8a8712ae5db9de856 status 1 (success)
+  mode() now 2 (2 = Autopilot); pending() 0 0 0 0 0 0 
+== run (Autopilot) from the browser on the second tenant, job 6ace4575-0000
+status: failed log query for blocks 66127191..=66127440 was refused: error sending request for url (https://rpc.testnet.arc.network/) created 1791903093
+
+== check it yourself: the tenant's own audit record (docs/46 #1 verifier, step 2) against Arc
+   TAMEION_LOG_DIR=runtime/app/tenants/0x224fa9badcffb95fe41f3257cfb4f5e94436991a/log cargo run --locked -q -p operator --example audit
+  # audit runtime/app/tenants/0x224fa9badcffb95fe41f3257cfb4f5e94436991a/log/0xb97dba7ae7167c1c55906544efe83fd0ff7548981326a96c14df5e43afac248d.events.jsonl
+  [0000] OBSERVATION Holding 0.050000 USDC. Read 22 transfers (0 of them my own payments, which are not evidence) and recovered 2 recurring obligations, of which 2 fall due within 30.0 days totalling 0.005000 USDC; 2 within 3.0 days (or a tenth of their interval), which is when I pay. Policy mode is Propose: the contract refuses my payments, so each one below is prepared for the owner's passkey instead of sent.
+  [0001] DECISION    REVIEW for 0x1111111111111111111111111111111111111111. ranked 1 of 2: overdue by 11.8 days, confidence 0.83, 0.003000 USDC covered Basis: 0x1111111111111111111111111111111111111111 has been paid 6 times every 3.0m, amounts varying by 0.0% and timing by 1.6%, so this reads as a subscription (confidence 0.83).
+  [0002] ESCALATION  UNANSWERED for 11.8 days, past the 7.0-day deadline: payee-attested: 0x1111111111111111111111111111111111111111 is not attested on chain, so the contract would refuse it. The principal can attest it or settle by hand; cycles-behind: 5668 more cycles of this bill fell due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue from there. I have escalated this and nobody has acted. The bill is still unpaid and I cannot pay it myself.
+  [0003] DECISION    REVIEW for 0x3333333333333333333333333333333333333333. ranked 2 of 2: overdue by 11.8 days, confidence 0.83, 0.002000 USDC covered Basis: 0x3333333333333333333333333333333333333333 has been paid 6 times every 3.0m, amounts varying by 0.0% and timing by 1.4%, so this reads as a subscription (confidence 0.83).
+  [0004] ESCALATION  UNANSWERED for 11.8 days, past the 7.0-day deadline: payee-attested: 0x3333333333333333333333333333333333333333 is not attested on chain, so the contract would refuse it. The principal can attest it or settle by hand; cycles-behind: 5637 more cycles of this bill fell due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue from there. I have escalated this and nobody has acted. The bill is still unpaid and I cannot pay it myself.
+  events          : 5
+  recomputed root : 0xb97dba7ae7167c1c55906544efe83fd0ff7548981326a96c14df5e43afac248d
+  file name       : 0xb97dba7ae7167c1c55906544efe83fd0ff7548981326a96c14df5e43afac248d   MATCH
+  chain rootOf    : 0xb97dba7ae7167c1c55906544efe83fd0ff7548981326a96c14df5e43afac248d   (anchor 0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB, agent 0x8ae346348ed126c6e6da96defa61f74b231ee133)   MATCH
+  RESULT          : PASS
+  exit 0
+== run (Autopilot) from the browser on the second tenant, re-run after the scanner fix, job 6ace8c12-0000
+status: done  created 1791921170 finished about 1791921568 (398 s)
+mode: Autopilot balance: 0.050000 USDC transfers: 5 obligations: 0 root: 0x9c053890d95482604aa2fc8744a349e58b8ea6cb1aa6f29b3bc8932d3e821a96 anchorTx: 0x71cb91351d3d60dfce94044fa71b0238d67a1d06278cf95bcbb4d1cb48db3020
+settled: 0 escalated: 0 blocked: 0 pendingSignature: 0
+   [0000] OBSERVATION Holding 0.050000 USDC. Read 5 transfers (0 of them my own payments, which are not evidence) and recovered 0 recurring obligations, of which 0 fall due within 30.0 days totalling 0.0
+== fresh history for the second tenant's Autopilot proof: the treasury 0x6c1c pays 0x4444 0.003 USDC and 0x5555 0.002 USDC, 3 rounds, 300 s apart (started 1791921642)
+  (the pass above: 5 transfers in the 2-day window, no recurring bill in it — the 0x1111/0x3333 history is 12 days old — so nothing to pay; root 0x9c053890d95482604aa2fc8744a349e58b8ea6cb1aa6f29b3bc8932d3e821a96 anchored in 0x71cb91351d3d60dfce94044fa71b0238d67a1d06278cf95bcbb4d1cb48db3020; 389 s for a 1.19 M-block scan after the scanner fix, against 24 min before)
+== two more payees approved from the browser for a fresh bill: 0x4444, 0x5555 (passkey, one tap)
+  tx 0xff534ad315d37f82ce42c560392128a176e1fda06756ac032a28eb95094bb341 status 1 (success)
+  round 1/3 at 1791921645: 0x4444 <- 0xe6a51e0b697ca7ad00bc99124c3be54dbd457b363c41c6538288a7aeb09703f1 0x1 | 0x5555 <- (sent; cast --json printed two documents and the hash was not captured; the pass below reads it off the chain)
+  round 2/3 at 1791921946: 0x4444 <- 0x32286c7f58d8e95eba99c30d50bfdff2a427c91aa7bb8dce535a807e0e8e471d 0x1 | 0x5555 <- 0x6fc6b6ca83a5e3c84819a84aad04e5823e4f390a9159a512f1f292fefda3eb17 0x1
+  round 3/3 at 1791922245: 0x4444 <- 0x59aa4f0fa34daec63f7089c830639ac79b9e43eebb1bcedb2b7feccf55c3d4e2 0x1 | 0x5555 <- 0xa3c72eda2519c68746353ba6f25e67174939f33f3c1e47d7f880928e3f29e342 0x1
+  seed done at 1791922245
+== run (Autopilot) from the browser on the second tenant after the fresh history, job 6ace9058-0000
+status: failed contract call: server returned an error response: error code -32003: insufficient funds for gas * price + value: have 4417900750000000 want 5948565000000000 created 1791922264 finished about 1791922998 (734 s)
+  (that pass, decoded from the tenant's own events file 0xfd6a…93bf: "Read 11 transfers … recovered 2 recurring obligations … 0 within 3.0 days (or a tenth of their interval), which is when I pay" — the third seed round had landed 20 s before the pass read the chain, so the next cycle was 280 s away and not yet payable; the pass then died anchoring: the agent key had 0.0044 USDC left of the 0.01 it was given at deploy, and an Arc transaction costs about 0.006. Root cause: the service funded an agent once, at deploy, and never again. Fixed before the next pass: the relayer tops the agent up before every pass when it is under 0.02 USDC (`TAMEION_AGENT_GAS_FLOOR_WEI`), default grant raised to 0.05 (`TAMEION_AGENT_GAS_WEI`).)
+== run (Autopilot) from the browser on the second tenant, after the gas top-up fix, job 6ace93a1-0000
+status: done  created 1791923105 finished about 1791923505 (400 s)
+agentGasTopUpTx: 0x62a39dc52da2095c9b4d205dfca5496fdf44360b30537541a8f85afe9eb1b01c
+mode: Autopilot balance: 0.050000 USDC transfers: 12 obligations: 2 root: 0x8f914f74450273a6b37ed1c784cb06e614027aa9070d058e7b5550927e50b011 anchorTx: 0xaef5a3a2a9b65774e1e682e241fe47766aa0df012920dcae8cd8d874720ba4e0
+settled: 0 escalated: 2 blocked: 0 pendingSignature: 2
+  escalated: 0x4444444444444444444444444444444444444444 0.003000 USDC REVIEW cycles-behind: 1 more cycle of this bill fell due after this one and nobody paid                  it: it may have ended. Settle one by hand to confirm, and I will                  continue from there; pre:confidence: con
+  escalated: 0x5555555555555555555555555555555555555555 0.002000 USDC REVIEW cycles-behind: 1 more cycle of this bill fell due after this one and nobody paid                  it: it may have ended. Settle one by hand to confirm, and I will                  continue from there; pre:confidence: con
+   [0000] OBSERVATION Holding 0.050000 USDC. Read 12 transfers (0 of them my own payments, which are not evidence) and recovered 2 recurring obligations, of which 2 fall due within 30.0 days totalling 0.005000 USDC; 2 within 3.0 days (or a ten
+   [0001] DECISION    REVIEW for 0x4444444444444444444444444444444444444444. ranked 1 of 2: overdue by 0.0 days, confidence 0.62, 0.003000 USDC covered Basis: 0x4444444444444444444444444444444444444444 has been paid 3 times every 5.0m, amounts
+   [0002] ESCALATION  Stopping and asking a human: cycles-behind: 1 more cycle of this bill fell due after this one and nobody paid                  it: it may have ended. Settle one by hand to confirm, and I will                  continue fro
+   [0003] DECISION    REVIEW for 0x5555555555555555555555555555555555555555. ranked 2 of 2: overdue by 0.0 days, confidence 0.62, 0.002000 USDC covered Basis: 0x5555555555555555555555555555555555555555 has been paid 3 times every 5.0m, amounts
+   [0004] ESCALATION  Stopping and asking a human: cycles-behind: 1 more cycle of this bill fell due after this one and nobody paid                  it: it may have ended. Settle one by hand to confirm, and I will                  continue fro
+
+== fresh history, second attempt, timed for the pay window: the treasury pays 0x6666 0.003 USDC and 0x7777 0.002 USDC, 3 rounds, 300 s apart (started 1791923630)
+  round 1/3 at 1791923637: 0x6666 <- 0xbe5de74e93b3f9df3158af4b348ed12f939dcb9a242bcb2c6b98a983dee32026 0x1 | 0x7777 <- 0x2ac7b77924593b344ba4ef6a6cac7b04c7d61d2e60f60984796fb7320e4a1680 0x1
+== payees 0x6666 and 0x7777 approved from the browser (passkey, one tap) for the timed attempt
+  tx 0x696f4415e6d538480b4d68b1b259398431b14788bf0c5a0573e32342e87d2403 status 1 (success)
+== clear signing on the hosted page itself (added 2026-10-14): the page now describes the calldata with its own routine (web/passkey/call.js, served as /level1/call.js, the file whose hash scripts/verify.sh prints) and recomputes the challenge the service returns; it signs only a call it can describe and only a challenge that matches
+  approve 0x8888 from the browser: page said "Signing: Allow the agent to pay 0x8888888888888888888888888888888888888888 · challenge recomputed by this page matches the service's (nonce 4)"
+  tx 0x538387020768bb8c7bbd5753c37f6a02a2c27671b9804878333c6f21db7ea549 status 1 (success)
+  refusals, from the page's own console: signAndExecute(policy, "0xdeadbeef") -> "not signing: this page cannot describe the call (selector 0xdeadbeef)"; with the service's challenge reply tampered to 0x1111… -> "not signing: the service's challenge differs from the one this page computed" (no passkey prompt, no transaction, in either case)
+  round 2/3 at 1791923933: 0x6666 <- 0xf63a28cd49bb5311bceb5de48eb75c4830767899176e08b0d3724266181ab642 0x1 | 0x7777 <- 0x19e59709676f2c21c2e6108cc7c6e6c7628fe68dc35ae72571b53d7c2d3f5463 0x1
+
+== check it yourself, as a hosted tenant would (2026-10-14): download the record through the page's link, run the audit command the page prints
+   curl .../api/level1/record?policy=0x224f…991a&root=0xb97dba7ae7167c1c55906544efe83fd0ff7548981326a96c14df5e43afac248d ->    11199 bytes,        5 events
+   AUDIT_EVENTS=<file> AGENT=0x8ae346348ed126c6e6da96defa61f74b231ee133 ANCHOR=0xdab65a5380bcc2eebc3a3a91d0ad11eec95994db cargo run -q -p operator --example audit
+  # audit <scratchpad>/auditor/0xb97dba7ae7167c1c55906544efe83fd0ff7548981326a96c14df5e43afac248d.events.jsonl
+  events          : 5
+  recomputed root : 0xb97dba7ae7167c1c55906544efe83fd0ff7548981326a96c14df5e43afac248d
+  file name       : 0xb97dba7ae7167c1c55906544efe83fd0ff7548981326a96c14df5e43afac248d   MATCH
+  chain rootOf    : 0xb97dba7ae7167c1c55906544efe83fd0ff7548981326a96c14df5e43afac248d   (anchor 0xdab65a5380bcc2eebc3a3a91d0ad11eec95994db, agent 0x8ae346348ed126c6e6da96defa61f74b231ee133)   MATCH
+  RESULT          : PASS
+  round 3/3 at 1791925201: 0x6666 <- sent (hash not parsed) | 0x7777 <- sent (hash not parsed)
+  seed done at 1791925201; the pass must start between +270 s and +599 s after this to find the first cycle due and none behind
+
+== timed autopay attempt (2026-10-14, after a 4 h pause): the treasury pays 0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa 0.003 USDC and 0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB 0.002 USDC, 3 rounds 300 s apart, then the service is asked for a pass 300 s after the last round (started 1791940798)
+  round 1/3 at 1791940805: A <- 0x801a1c6824a60365e688ccd8e4bd556b94815433d2474bc3484e5864b8e66b08 0x1 | B <- 0xff0c053c2d0e7e881b401fa440e11b19f10523bffc05f111bf0502956f49d832 0x1
+== revoke from the page (2026-10-14): "Revoke (passkey, instant)" on 0x8888 -> page described "Stop the agent paying 0x8888…", challenge recomputed and matched (nonce 6)
+  tx 0x44efb5ac9ff47596952dad16101e5b6ed563d496ab87d27f451661d4acab2368 status 1 (success); attestedPayee(0x8888) now false (revocation applied at once, no delay)
+  round 2/3 at 1791941103: A <- 0xffacbdcfc0e4bf423486e07afa12a6f71a62556c794f30402785cfdaf6d0d337 0x1 | B <- 0x57d47102b190f2ee9cdb626b17af31994f895250711bf320ad1b82ecc0e32218 0x1
+== recovery address from the page (2026-10-14): "Set recovery (passkey)" -> page described "Name the recovery address that may replace your passkey after the delay 0x6c1c…", challenge recomputed and matched (nonce 7)
+  tx 0x5a64e569d8ab19fa30ebf8b0a229b5c32e68d67b57da56e8858743fc67fe30d8 status 1 (success); owner.recovery() now 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+  round 3/3 at 1791941402: A <- 0x48723a971bafe132c0eea727a8e522a385a0d9ae9694207f0651f6cbdac6706d 0x1 | B <- 0x2924d82f926c7266be06adc6d08c0bed2737ffbdc5ce6f9dfdb97d7dd2d5eb4b 0x1
+  seed done at 1791941402
+  pass asked at 1791941702 (300 s after the last round): job 6acedc46-0000 -> {"id":"6acedc46-0000","status":"queued"}
+  status: done  created 1791941702 finished about 1791942108 (406 s)
+  agentGasTopUpTx: None
+  mode: Autopilot balance: 0.050000 USDC transfers: 22 obligations: 4 root: 0xe7eeb221209025edffd28ebf94d33812f898c033f387fd5622ea10f66a7feb29 anchorTx: 0xd21ddec371f11f4398196eeced538abb042dfaff5911bac2e104efe9e7d393cb
+  settled: 0 escalated: 4 blocked: 0 pendingSignature: 4
+    escalated: 0x4444444444444444444444444444444444444444 0.003000 USDC REVIEW cycles-behind: 63 more cycles of this bill fell due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue from there; pre:confidence:
+    escalated: 0x5555555555555555555555555555555555555555 0.002000 USDC REVIEW cycles-behind: 63 more cycles of this bill fell due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue from there; pre:confidence:
+    escalated: 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 0.003000 USDC REVIEW pre:confidence: confidence 0.62 below floor 0.75
+    escalated: 0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb 0.002000 USDC REVIEW pre:confidence: confidence 0.62 below floor 0.75
+     [0000] OBSERVATION Holding 0.050000 USDC. Read 22 transfers (0 of them my own payments, which are not evidence) and recovered 4 recurring obligations, of which 4 fall due within 30.0 days totalling 0.010000 USDC; 4 within 3.0 days (or a ten
+     [0001] DECISION    REVIEW for 0x4444444444444444444444444444444444444444. ranked 1 of 4: overdue by 0.2 days, confidence 0.62, 0.003000 USDC covered Basis: 0x4444444444444444444444444444444444444444 has been paid 3 times every 5.0m, amounts
+     [0002] ESCALATION  Stopping and asking a human: cycles-behind: 63 more cycles of this bill fell due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue
+     [0003] DECISION    REVIEW for 0x5555555555555555555555555555555555555555. ranked 2 of 4: overdue by 0.2 days, confidence 0.62, 0.002000 USDC covered Basis: 0x5555555555555555555555555555555555555555 has been paid 3 times every 5.0m, amounts
+     [0004] ESCALATION  Stopping and asking a human: cycles-behind: 63 more cycles of this bill fell due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue
+     [0005] DECISION    REVIEW for 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa. ranked 3 of 4: overdue by 0.0 days, confidence 0.62, 0.003000 USDC covered Basis: 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa has been paid 3 times every 5.0m, amounts
+     [0006] ESCALATION  Stopping and asking a human: pre:confidence: confidence 0.62 below floor 0.75. This is outside the authority delegated to me, so I will not proceed on my own. If unanswered for 7.0 days I will report it as overdue.
+     [0007] DECISION    REVIEW for 0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb. ranked 4 of 4: overdue by 0.0 days, confidence 0.62, 0.002000 USDC covered Basis: 0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb has been paid 3 times every 5.0m, amounts
+     [0008] ESCALATION  Stopping and asking a human: pre:confidence: confidence 0.62 below floor 0.75. This is outside the authority delegated to me, so I will not proceed on my own. If unanswered for 7.0 days I will report it as overdue.
+  (read: both fresh bills were inside the pay window — "overdue by 0.0 days", no cycle behind — and the agent still asked, for a stated reason: "confidence 0.62 below floor 0.75". Three samples are not enough evidence for the agent to pay on its own (CLAUDE.md: confidence is load-bearing; the floor is read from the chain-side World, not the model). The 0x4444/0x5555 series, 63 cycles stale by now, were asked about for the same reason plus cycles-behind. Next: six rounds, so the floor is met, and the pass inside the window.)
+
+== autopay attempt with enough evidence: the treasury pays 0xcCcCCCCcCCCcCCcCcCCcccCCCCcCcCCCCccCcCCC 0.003 USDC and 0xdDdDDdDdDDDDdddDDDdDDddDDdddddDDddDDdddD 0.002 USDC, 6 rounds 300 s apart, then a pass 300 s after the last round (started 1791942160)
+  round 1/6 at 1791942167: C <- 0x0d34de818d06b53dd11c91ae29363fe6b20b647be02f08484e77b4cc95ae5943 0x1 | D <- 0x94540150081bef98ddb49ddd92bcb33eed7831a49c23a1c38eadf798e7a25044 0x1
+== payees 0xCCCC and 0xDDDD approved from the browser (passkey, one tap) for the six-round attempt
+  tx 0x75b9ea8852050cb071caf69edcfad3bce906833d03e1626c9ed2052b7926a7e3 status 1 (success)
+
+== scripts/verify_tenant.sh against the running service, tenant 1 (2026-10-14): the auditor's machine needs the host URL and the policy address, nothing else
+   scripts/verify_tenant.sh http://127.0.0.1:7880 0x224fa9badcffb95fe41f3257cfb4f5e94436991a
+  policy  0x224fa9badcffb95fe41f3257cfb4f5e94436991a
+  root    0xb97dba7ae7167c1c55906544efe83fd0ff7548981326a96c14df5e43afac248d  (anchored in 0x6722f17834106abbf173b5beb89814e018174e7e34550cc84dbd2bf1c851377b)
+  events  5 lines downloaded
+  # audit /var/folders/g4/1m9xkbrd2cv9js0zzsrn5gfh0000gn/T/tmp.sQ6bDNyyIP/0xb97dba7ae7167c1c55906544efe83fd0ff7548981326a96c14df5e43afac248d.events.jsonl
+  events          : 5
+  recomputed root : 0xb97dba7ae7167c1c55906544efe83fd0ff7548981326a96c14df5e43afac248d
+  file name       : 0xb97dba7ae7167c1c55906544efe83fd0ff7548981326a96c14df5e43afac248d   MATCH
+  chain rootOf    : 0xb97dba7ae7167c1c55906544efe83fd0ff7548981326a96c14df5e43afac248d   (anchor 0xdab65a5380bcc2eebc3a3a91d0ad11eec95994db, agent 0x8ae346348ed126c6e6da96defa61f74b231ee133)   MATCH
+  RESULT          : PASS
+  exit 
+  (tenant 2 through the same script: latest root 0xe7eeb221…7feb29, 9 events downloaded, recomputed root = file name = chain rootOf, MATCH)
+== limits from the page (2026-10-14): "Set limits (passkey)" 0.01 / 1 / 0 -> 0.005 / 0.5 / 0 — a tightening
+  page: "Set the agent's limits: 0.005000 USDC per payment, 0.500000 USDC per day, keep 0.000000 USDC untouched — tightening applies at once …", challenge recomputed and matched (nonce 9)
+  tx 0xf0b6b333aa420891915a7f66c07ea9bb77c17cae5dae221708d3b59f30df7f47 status 1 (success); perActionCap() 5000 dailyCap() 500000 (minor units): applied at once, no delay
+== loosening back (0.01 / 1 / 0) from the page: scheduled, not applied
+  tx 0x29e762432e0aca1ec6e6c5932ec146ce4599de4f4bb7f928a27e43b148f8c3e1 status 1 (success); caps still 0.005 / 0.5; page showed the pending change with its ETA (kinds 1 = limits)
+== "Cancel (passkey)" on that pending loosening
+  tx 0x6a0cfd2d163c6804cd31a8f9480c6eefea52fec663eb96a9c8da798990954681 status 1 (success); pending() now 0 0 0 0 0 0  (nothing pending); perActionCap() 5000 — the tightening stands, the loosening never applied
+  round 2/6 at 1791942466: C <- 0x056556db1c88bf990ce7f70f7368c24a5f066ad0bdb40a48636bb32235af03df 0x1 | D <- 0xeb1d03fa0c016f1ed78b4a0c07e8d7fff1461be5bbcc40d7ae47ba411071186f 0x1
+  round 3/6 at 1791942767: C <- 0xccef7db9b688110014e404f029cb6763a12f3fee46ad86fe22f4a795fa68cdff 0x1 | D <- 0x9c8d23ec168ca4877215478b064e6edec639f9ae0cd9a03b5ce056e05068f197 0x1
+  round 4/6 at 1791943064: C <- 0x9133ea589a65342548a2b5a4bac4e3802dd9f67caeeb86c11314632b72f60033 0x1 | D <- 0x99e70f0992a15aa86f24a01b0a53bad3c04f6b7ee1d459dbcba293f168582ce8 0x1
+  round 5/6 at 1791943365: C <- 0x8ac9841ac07e829fc1b0a91e6a56cbfb6c427c730bcb81bbaeeedde64273cdef 0x1 | D <- 0xa0ef19614c1f300f6e61481e6002a8a76b400bd1ef4c39fca2333252e9f82a45 0x1
+  round 6/6 at 1791943667: C <- 0x37f506ac131383beec16ef9c33f4c189a1cd6481f3a60ff9efea4067c466a5b6 0x1 | D <- 0x9169fc4345683a40666f28b249445909eca5cf349c700ca0787001a4ae47f4ab 0x1
+  seed done at 1791943667
+  pass asked at 1791943967 (300 s after the last round): job 6acee51f-0000 -> {"id":"6acee51f-0000","status":"queued"}
+  status: done  created 1791943967 finished about 1791944390 (423 s)
+  agentGasTopUpTx: None
+  mode: Autopilot balance: 0.050000 USDC transfers: 34 obligations: 6 root: 0x57d6e19461c9bac056599d5a0e006d927eb6beecf3e3a3d4c794393e55c411ec anchorTx: 0x77578a70845bc17a87798b8f7c1137248313bdc71ac47aa44c532d18f123ff51
+  settled: 2 escalated: 4 blocked: 0 pendingSignature: 4
+    SETTLED by the agent: 0xcccccccccccccccccccccccccccccccccccccccc 0.003000 USDC tx 0x44d7be79281cd6ecb6faa758ecac8b27b6ff806b16b304c330ba4ae49e67896b
+    SETTLED by the agent: 0xdddddddddddddddddddddddddddddddddddddddd 0.002000 USDC tx 0xbaa5e9d31f14a241c933648405eba397870113732a18fef1951a7bf837465ab0
+    escalated: 0x4444444444444444444444444444444444444444 0.003000 USDC REVIEW cycles-behind: 71 more cycles of this bill fell due after this one and nobody paid  them: it may have ended. Settle one by hand to confirm, and I will  continue from there; pre:confidence: confidence 0.62 bel
+    escalated: 0x5555555555555555555555555555555555555555 0.002000 USDC REVIEW cycles-behind: 71 more cycles of this bill fell due after this one and nobody paid  them: it may have ended. Settle one by hand to confirm, and I will  continue from there; pre:confidence: confidence 0.62 bel
+    escalated: 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 0.003000 USDC REVIEW cycles-behind: 7 more cycles of this bill fell due after this one and nobody paid  them: it may have ended. Settle one by hand to confirm, and I will  continue from there; pre:confidence: confidence 0.62 belo
+    escalated: 0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb 0.002000 USDC REVIEW cycles-behind: 7 more cycles of this bill fell due after this one and nobody paid  them: it may have ended. Settle one by hand to confirm, and I will  continue from there; pre:confidence: confidence 0.62 belo
+     [0000] OBSERVATION Holding 0.050000 USDC. Read 34 transfers (0 of them my own payments, which are not evidence) and recovered 6 recurring obligations, of which 6 fall due within 30.0 days totalling 0.015000 USDC; 6 within 3.0 days (or a tenth of their interval
+     [0001] DECISION    REVIEW for 0x4444444444444444444444444444444444444444. ranked 1 of 6: overdue by 0.2 days, confidence 0.62, 0.003000 USDC covered Basis: 0x4444444444444444444444444444444444444444 has been paid 3 times every 5.0m, amounts varying by 0.0% and
+     [0002] ESCALATION  Stopping and asking a human: cycles-behind: 71 more cycles of this bill fell due after this one and nobody paid  them: it may have ended. Settle one by hand to confirm, and I will  continue from there; pre:con
+     [0003] DECISION    REVIEW for 0x5555555555555555555555555555555555555555. ranked 2 of 6: overdue by 0.2 days, confidence 0.62, 0.002000 USDC covered Basis: 0x5555555555555555555555555555555555555555 has been paid 3 times every 5.0m, amounts varying by 0.0% and
+     [0004] ESCALATION  Stopping and asking a human: cycles-behind: 71 more cycles of this bill fell due after this one and nobody paid  them: it may have ended. Settle one by hand to confirm, and I will  continue from there; pre:con
+     [0005] DECISION    REVIEW for 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa. ranked 3 of 6: overdue by 0.0 days, confidence 0.62, 0.003000 USDC covered Basis: 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa has been paid 3 times every 5.0m, amounts varying by 0.0% and
+     [0006] ESCALATION  Stopping and asking a human: cycles-behind: 7 more cycles of this bill fell due after this one and nobody paid  them: it may have ended. Settle one by hand to confirm, and I will  continue from there; pre:conf
+     [0007] DECISION    REVIEW for 0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb. ranked 4 of 6: overdue by 0.0 days, confidence 0.62, 0.002000 USDC covered Basis: 0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb has been paid 3 times every 5.0m, amounts varying by 0.0% and
+     [0008] ESCALATION  Stopping and asking a human: cycles-behind: 7 more cycles of this bill fell due after this one and nobody paid  them: it may have ended. Settle one by hand to confirm, and I will  continue from there; pre:conf
+     [0009] DECISION    ALLOW for 0xcccccccccccccccccccccccccccccccccccccccc. ranked 5 of 6: overdue by 0.0 days, confidence 0.85, 0.003000 USDC covered Basis: 0xcccccccccccccccccccccccccccccccccccccccc has been paid 6 times every 5.0m, amounts varying by 0.0% and 
+     [0010] SETTLEMENT  Paid 0.003000 USDC to 0xcccccccccccccccccccccccccccccccccccccccc, settled in 0x44d7be79281cd6ecb6faa758ecac8b27b6ff806b16b304c330ba4ae49e67896b.
+     [0011] DECISION    ALLOW for 0xdddddddddddddddddddddddddddddddddddddddd. ranked 6 of 6: overdue by 0.0 days, confidence 0.84, 0.002000 USDC covered Basis: 0xdddddddddddddddddddddddddddddddddddddddd has been paid 6 times every 5.0m, amounts varying by 0.0% and 
+     [0012] SETTLEMENT  Paid 0.002000 USDC to 0xdddddddddddddddddddddddddddddddddddddddd, settled in 0xbaa5e9d31f14a241c933648405eba397870113732a18fef1951a7bf837465ab0.
+  (read: THE AGENT PAID BY ITSELF. Two fresh bills with six samples each reached confidence 0.85 / 0.84, were inside their pay window, their payees had been attested by the passkey 60 s or more before, the policy was in Autopilot by the passkey's own request: ALLOW -> pay() -> settled 0.003 USDC to 0xCCCC in 0x44d7be79…67896b and 0.002 USDC to 0xDDDD in 0xbaa5e9d3…465ab0. The four older bills (3 samples, cycles behind) were escalated with the reason, not paid. Root 0x57d6e194…c411ec anchored in 0x77578a70…23ff51.)
+  on chain: receipts 1 (success) / 1 (success), both sent by the tenant's agent key 0x93f29C2d61A17c414d67e6005768C9D846849eA8; policy balance now 45000000000000000 wei (0.050 -> 0.045 USDC); spentInWindow() 5000 minor units (= 0.005 USDC, inside the tightened 0.5/day and 0.005/payment caps the passkey set earlier)
+
+== the account page (docs/53) over the second tenant, 2026-10-14, real browser: proof/home-2026-10-14.png
+  "/" opened on the tenant kept on the device: "Your treasury · Last checked 9 min ago · 6 recurring bills found"
+  tiles: Paid 2 (0.005000 USDC, by the agent) · Needs you 4 (tap to approve) · Protected 0.045000 (the most it can pay out in a day)
+  "The agent suggests a daily limit of 0.006000 USDC — twice your largest bill so far (0.003000 USDC), within what the policy holds" with one tap to set it
+  Needs you: four rows "Pay 0.003000 USDC to 0x4444…4444 — cycles-behind: 71 more cycles …" each with one button; Recent: the two payments the agent made, with receipts
+  controls: "Autopilot is on" · "Pause" · "Check now" · "Autopilot · holds 0.045000 USDC"; no calldata, root, nonce or relayer on the page
+== "Bill ended" on the account page (the agent had said 0x4444 "may have ended"): one tap, passkey signed setPayees([0x4444], false)
+  tx 0x3e1569ba0c9ae935ef9ba3f4de630b16bdaaa695e69d481d5f33e6a1378349f0 status 1 (success); attestedPayee(0x4444) now false; the row became "Stopped paying 0x4444… · the agent will not ask again"
+
+== model outage rehearsal (2026-10-14, docs/54 §0): the service started with ANTHROPIC_API_KEY set (so the Claude reasoner is active) and ANTHROPIC_BASE_URL=http://127.0.0.1:9 (nothing listens: every call to the model fails at the socket); a pass asked at 1791944967: job 6acee907-0000
+  status: done  (468 s)
+  reasoner: rule-based (fallback from claude-opus-5) | mode: Autopilot | transfers: 36 obligations: 6 | settled: 0 escalated: 6 | root: 0xa640b55e50a25c4f8c33deeca58784729b277b01dc1212dc37b998e77a2e0cb3 anchorTx: 0xb389a84e7eb12aadf688a82863a3cceeca76a868ace851f985a76f675f7c3fd2
+     [0000] OBSERVATION Holding 0.045000 USDC. Read 36 transfers (2 of them my own payments, which are not evidence) and recovered 6 recurring obligations, of which 6 fall due within 30.0 days totalling 0.015000 USDC; 6 within 3.0 days (or a tenth of their interval), which is when I pay.
+     [0001] OBSERVATION Reasoner claude-opus-5 failed [reasoner-transient], retryable=true: reasoner temporarily unavailable: request failed: error sending request for url (http://127.0.0.1:9/v1/messages). Ordered by the deterministic baseline instead. Limits are unchanged.
+
+== bill import from the account page (PLAN 5.8, docs/55 step 6), 2026-10-14: "Add bills" with one line "0xeEeE…EeEe, 0.002, 30"
+  one passkey tap attested the payee (setPayees) -> tx 0x20214ffcea3816a41be9c9fc5d9f1c25bf7de57a03dada874de7fc84d78ff6ca status 1 (success); the service kept the bill because the chain now attests the payee: tenant bills = [{"payee": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "amount": "0.002", "every_days": 30, "next_due": 1791945722}]
+  the page then started a pass by itself (the agent's job is to run); the payee is inside its 60 s cooling-off at that moment, so that pass is expected to ask, and the pass after it to pay from the owner's word alone — no payment history for 0xEEEE exists anywhere
+
+== Tameion as an MCP server (PLAN 5.11), 2026-10-14: tameion-mcp over stdio against the running service, as another agent would call it
+  initialize -> {'name': 'tameion', 'version': '0.1.0'} | Tameion is a treasury account that pays a company's recurring bills by itself inside a lim…
+  treasury_inbox -> mode Autopilot | balance 0.045000 USDC | protectedPerDay 0.045000 USDC | paid 2 0.005000 USDC | needsYou 6 | lastPass 6acee907-0000 modelUnavailable True | running True
+  prepare_payees -> allow the agent to pay these 1 payees from now on | to 0x1645951793f7ca2ae36d7a3eeae90ef93e1932ab | data 0x48a565030000000000… (calldata for the owner passkey; this server cannot sign)
+== pass right after the import, job 6aceebfa-0000
+  status: done  | reasoner: rule-based | settled: 0 escalated: 7 | root: 0x9b66c14f4a9ebfd22f4a5bf1ae9004410acffc285467b72c7f7fcd296b0ea8bc anchor: 0x25e7da94d2b09ead883e4d1fdc7bd71e4af58dd8796ade7cf1a42914ad78ee83
+    0xEEEE: REVIEW | pre:evidence: 0 pieces of evidence, wanted 1; pre:provenance: no evidence at all; pre:known: 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee never paid before; pre:evidence: 0 pieces of evidence, wanted 3
+  (read: the first pass after the import found the imported bill and refused to pay it: "0 pieces of evidence, wanted 1; no evidence at all; 0xeeee… never paid before". The import had put the bill in front of the agent but the verifier — rightly — demanded evidence, and a seed had none. Fixed before the next pass, in the operator, not by loosening the verifier: an owner-imported bill carries one piece of HUMAN-CONFIRMED evidence (the owner's import, whose payee the owner attested on chain) with a bar of one piece instead of three samples, and the payee counts as known by the owner's word; history takes over for the same payee once it exists.)
+== pass after the fix (an imported bill carries the owner's word as human-confirmed evidence; the payee's cooling-off is over), job 6aceeed2-0000 -> {"id":"6aceeed2-0000","status":"queued"}
+  status: done  (573 s) | reasoner: rule-based | transfers: 36 obligations: 7 | settled: 1 escalated: 6 | root: 0x653fdaf17b5b15cae6f1973d3ac767eea8574e08e2478c770909c6d44b715621 anchor: 0x8221e5cfe28fb4e2c1c7fe22c04a9a76053c11474f2c3ece93ca0b1f217bd250
+    SETTLED by the agent: 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee 0.002000 USDC tx 0x48886cc90f5b9979e21a89ec405e20e73d4092daa829fa2f2f8b217b5fa273e4
+     [0013] DECISION    ALLOW for 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee. ranked 7 of 7: overdue by 0.0 days, confidence 1.00, 0.002000 USDC covered Basis: 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee has been paid 0 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%,
+     [0014] SETTLEMENT  Paid 0.002000 USDC to 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, settled in 0x48886cc90f5b9979e21a89ec405e20e73d4092daa829fa2f2f8b217b5fa273e4.
+  (read: THE AGENT PAID A BILL IT HAD NEVER SEEN IN HISTORY. 0xEEEE had no payment history anywhere; the owner typed one line on the account page, tapped once (the payee attested on chain), and on the next pass — cooling-off over, the owner's word carried as human-confirmed evidence — the agent paid 0.002 USDC to 0xEEEE in 0x48886cc9…a273e4 (receipt 1 (success), sent by 0x93f29C2d61A17c414d67e6005768C9D846849eA8); policy balance now 43000000000000000 wei. The six older bills were escalated with reasons as before. The three-samples cold start is gone for a bill the owner names.)
+
+== Watch, from the page's own demo link (2026-10-14): /watch -> 'try the demo treasury' -> Watch this address (Arc testnet, 7 days), job 6acef2f1-0000
+  status: done  (283 s)
+  transfers: 35 obligations: 6 liquidity30d: 0.015000 USDC balance: 0.410295 USDC | first bills: [('0x44444444', '0.003000 USDC', '5.0m'), ('0x55555555', '0.002000 USDC', '5.0m'), ('0xaaaaaaaa', '0.003000 USDC', '5.0m'), ('0xbbbbbbbb', '0.002000 USDC', '5.0m')]
+  on the page (proof/watch-demo-2026-10-14.png): "Obligations inferred 6 · 35 transfers read · 14 counterparties · 7 days on Arc testnet · Needed within 30 days 0.015000 USDC · USDC balance now 0.410295 covers the next 30 days"; the max-loss box prefilled per-action 0.003 / daily 0.015 from the bills; "Start Level 1 with these caps and payees" links to /level1?run=6acef2f1-0000
+  submitting the same address, chain and window again answered at once from the finished run: the page showed "This report comes from a scan of the same address within the last hour. Scan again now." (cached: true)
+
+== runway (PLAN 5.17), 2026-10-14: a pass with the new report (job 6acef5a1-0000), then the inbox's projection
+  pass: failed log query for blocks 65817191..=65817440 was refused: server returned an error response: error code -32014: requested data not available | obligations on the report: 0 | settled 0 escalated 0 | root 
+  inbox balance: 0.043000 USDC | runway: {"basis": "the bills the last pass recovered, repeated on their cadence, paid from what the policy holds above the floor; no price moves (the policy holds only USDC)", "billsInHorizon": "0.000000 USDC", "days": 90, "firstAtRisk": null, "horizonDays": 90}
+== runway (PLAN 5.17), 2026-10-14, after the node-horizon fix: pass 6acef64b-0000
+  pass: done  (437 s) | transfers 37 | bills on the report: 7 | settled 0 escalated 6 | root 0xaf8216b40b83 anchor 0xd1cb1ae07804
+    bill: 0x44444444 0.003000 USDC every 300 s, next due 1791922544 confidence 0.625 samples 3
+    bill: 0x55555555 0.002000 USDC every 300 s, next due 1791922545 confidence 0.6208 samples 3
+    bill: 0xaaaaaaaa 0.003000 USDC every 300 s, next due 1791941700 confidence 0.6208 samples 3
+    bill: 0xbbbbbbbb 0.002000 USDC every 299 s, next due 1791941700 confidence 0.6208 samples 3
+    bill: 0xcccccccc 0.003000 USDC every 300 s, next due 1791944262 confidence 0.8466 samples 6
+    bill: 0xdddddddd 0.002000 USDC every 299 s, next due 1791944263 confidence 0.8424 samples 6
+    bill: 0xeeeeeeee 0.002000 USDC every 2592000 s, next due 1794537722 confidence 1.0 samples 0
+  inbox balance: 0.043000 USDC | runway: {"basis": "the bills the last pass recovered, repeated on their cadence, paid from what the policy holds above the floor; no price moves (the policy holds only USDC)", "billsInHorizon": "0.042000 USDC", "days": 0, "firstAtRisk": {"amount": "0.003000 USDC", "counterparty": "0xcccccccccccccccccccccccccccccccccccccccc", "onUnix": 1791949406}, "horizonDays": 90}
+  ranges the node no longer serves, skipped: 0

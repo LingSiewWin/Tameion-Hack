@@ -1,0 +1,12 @@
+Connection to 127.0.0.1 port 8545 [tcp/*] succeeded!
+writing real payment history to chain...
+20 transfers written to chain; clock at t=1815112514
+  treasury 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+  token    0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9
+
+  Tameion demo → http://127.0.0.1:7878
+
+  policy 0x5FbDB2315678afecb367f032d93F642f64180aa3  anchor 0x5FC8d32690cc91D4c39d9d3abcBD16989F875707
+  reasoner claude-opus-5
+
+demo exited 143

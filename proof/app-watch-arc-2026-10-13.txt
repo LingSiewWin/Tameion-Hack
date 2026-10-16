@@ -1,0 +1,24 @@
+# 2026-10-13T13:39:28Z Tameion Watch (docs/49) end to end on Arc testnet: POST /api/watch for the treasury, poll, report, admin runs. Local service, public RPC.
+== healthz: ok
+== chains:
+   arc-testnet Arc testnet 5042002
+   arbitrum Arbitrum One 42161
+   base Base 8453
+== bad request:
+{"error":"chain must be one of the keys from GET /api/chains"}
+== submit (Arc testnet treasury, 13 days, caps 0.01/1/0):
+{"id":"6ace3279-0000","status":"queued"}
+running 
+running reading the chain clock
+done inferring obligations
+== final:
+status: done None
+transfers: 21 obligations: 2 liquidity30d: 0.005000 USDC balance: 0.856380 USDC elapsedMs: 526679
+   111111 0.003000 USDC every 3.0m conf 0.83 pay - due now, inside the cap, once you have approved this payee
+   333333 0.002000 USDC every 3.0m conf 0.83 pay - due now, inside the cap, once you have approved this payee
+maxLoss: {'agentKey24h': '0.856380 USDC', 'agentKeyPerCall': '0.010000 USDC', 'dailyCap': '1.000000 USDC', 'onlyTo': 'payees you approved with your passkey', 'operatorKeyNoDelay': '0.856380 USDC', 'operatorKeyWith48h': '2.000000 USDC', 'perActionCap': '0.010000 USDC', 'principal': '0.856380 USDC', 'reserveFloor': '0.000000 USDC'}
+== runs (admin):
+{'address': '0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25', 'chain': 'arc-testnet', 'created': 1791898233, 'days': 13, 'error': None, 'finished': 1791898759, 'id': '6ace3279-0000', 'liquidity30d': '0.005000 USDC', 'obligations': 2, 'status': 'done', 'transfers': 21}
+
+[exited with code 0]
+(progress lines elided: 102 polls)

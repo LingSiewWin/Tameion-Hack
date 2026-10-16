@@ -1,0 +1,41 @@
+# 2026-10-13T06:11:17Z persistence across two dashboard passes, HEDGE_HALT_DIR=runtime/hedge-demo
+
+## pass 1
+http 200
+root: 0x1fb492354bd5dd065b18e56062076de35f18f88435b6a5026f71f1d2869ffe9c anchorTx: 0x4aaa8914e1b6ae93c543b130590bf77403ad1ca8bff1ed317c302e00b85244f1
+hedge.entries (journal total): 1 | trialBalance: 1255.655000 USDC = 1255.655000 USDC
+coin ETH spotValue 1255.655 outcome REFUSE net 1255.655000 USDC
+[0000] HEDGE       ETH: spot 0.5 @ 2511.31 = 1255.655 USDC; hedge 0 -> target -0.5; drift 10000 bps, outside band; refused: NoCollateral; no order; equity 0
+journal lines on disk:        1
+state.json:
+{
+  "entries": 1,
+  "fundingCursorMs": 1791785484573,
+  "lastHedgeUpnl": {
+    "ETH": "0"
+  },
+  "lastSpotValue": {
+    "ETH": "1255.655"
+  }
+}
+## pass 2
+http 200
+root: 0x84cf0478932d3c9dc1aeb0ba1412430afa886b59cb688417bb1f19d3f141ebd1 anchorTx: 0xb3f720e5f97d1589fafa13349e9e12c0eb45dc63c8274340ecd74bf2440f8656
+hedge.entries (journal total): 2 | trialBalance: 1255.800000 USDC = 1255.800000 USDC
+coin ETH spotValue 1255.8 outcome REFUSE net 1255.800000 USDC
+[0000] HEDGE       ETH: spot 0.5 @ 2511.6 = 1255.8 USDC; hedge 0 -> target -0.5; drift 10000 bps, outside band; refused: NoCollateral; no order; equity 0
+journal lines on disk:        2
+state.json:
+{
+  "entries": 2,
+  "fundingCursorMs": 1791785484573,
+  "lastHedgeUpnl": {
+    "ETH": "0"
+  },
+  "lastSpotValue": {
+    "ETH": "1255.8"
+  }
+}
+## journal.jsonl
+{"credits":[{"account":"revenue:spot:gain","ccy":"USDC","minor":"1255655000"}],"debits":[{"account":"asset:treasury:spot:ETH","ccy":"USDC","minor":"1255655000"}],"doc":{"id":"ETH@1791871886051","kind":"mark"}}
+{"credits":[{"account":"revenue:spot:gain","ccy":"USDC","minor":"145000"}],"debits":[{"account":"asset:treasury:spot:ETH","ccy":"USDC","minor":"145000"}],"doc":{"id":"ETH@1791871893158","kind":"mark"}}

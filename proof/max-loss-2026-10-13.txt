@@ -1,0 +1,18 @@
+# max loss, read from chain 2026-10-13T10:08:43Z
+policy           : 0xD79aF81F2Cbd6d8877DfC5ccD7dd6d9E0aCB757c  (rpc https://rpc.testnet.arc.network, block 66972160)
+principal        : 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+operator         : 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+agent            : 0x80c195BE650FBfD55a9ffe059f397Db39f2fe881
+perActionCap     : 0.010000 USDC
+dailyCap         : 1.000000 USDC   (rolling 24 h; spent in window 0.000000, remaining 0.010000)
+reserveFloor     : 0.000000 USDC
+balance          : 0.034450 USDC
+attested payees  : 3
+                   0x00000000000000000000000000000000000000a3
+                   0x00000000000000000000000000000000000000a2
+                   0x00000000000000000000000000000000000000a1
+
+agent key        : <= min(dailyCap, balance - reserveFloor) = 0.034450 USDC per rolling 24 h, only to the 3 attested payees above, <= 0.010000 per call; stopped by one operator call (setAgent).
+operator key     : <= balance = 0.034450 USDC, still only to the same 3 payees (cannot add a payee); no delay today, stopped by one principal call (setOperator). docs/46 #3 adds a 48 h delay on raises.
+principal key    : everything (0.034450 USDC). withdraw has no cap and no delay, by design (docs/14).
+venue wallet     : <= the margin placed on the venue = 999.0 USDC (clearinghouseState.accountValue for 0x557E1E07652B75ABaA667223B11704165fC94d09). "Cannot withdraw" is documented by third parties, not proved by us; see docs/46.

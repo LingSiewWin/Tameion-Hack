@@ -1,0 +1,18 @@
+# 2026-10-13 local demo (anvil, scripts/demo.sh with HEDGE_SPOT=ETH=0.5), docs/46 rows on the dashboard
+# POST /api/run  → mode, hedge policy, liveDemoted
+mode: Autopilot
+settled: 2 escalated: 2 anchorTx: 0xd8a0a82d6ed5…
+hedge mode: dry-run  liveDemoted: False
+hedge policy: band 500 bps, max leverage 2x, k_maintenance 4, max margin share 50 %, allowlist BTC/ETH/SOL
+# POST /api/verify → governance and the max-loss number, all from chain reads
+rootsMatch: True
+mode: Autopilot
+delaySecs: 172800        (48 h; the anvil deployment passes DELAY=172800 MODE=2)
+reserveFloor: 50.000000 USDC
+pending: None
+perActionCap: 1000.000000 USDC
+dailyCap: 50000.000000 USDC
+policyBalance: 4445.000000 USDC
+maxLossAgent24h: 4395.000000 USDC   = min(dailyCap − spent, balance − reserveFloor) = min(50000, 4445 − 50)
+# screenshot: proof/demo-trust-2026-10-13.png
+# note: the png shows 'USDC USDC' on the max-loss row; the doubled unit was fixed in serve.html right after the capture (Money already prints its unit)

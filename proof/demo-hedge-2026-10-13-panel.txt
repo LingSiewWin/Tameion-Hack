@@ -1,0 +1,17 @@
+# 2026-10-13 dashboard hedge panel, as rendered (Playwright, http://127.0.0.1:7878 after one press of 跑一轮)
+# screenshot: proof/demo-hedge-2026-10-13.png ; API JSON of the first pass: proof/demo-hedge-2026-10-13.json
+
+对冲 · HYPERLIQUID TESTNET
+只算,不下单
+MODE            dry-run
+ACCOUNT         equity 0 · margin 0 · MM 0 · health —
+ETH             spot 0.5 @ 2511.51 = 1255.755 USDC · hedge 0 → target -0.5 · funding/h -0.0007812003
+· VERDICT       REFUSE
+· BOOKS         spot 1255.755000 USDC + hedge 0.000000 USDC = net 1255.755000 USDC
+JOURNAL         1 entries (0 funding) · trial balance 1255.755000 USDC = 1255.755000 USDC
+
+这一轮的交易 (same pass, same anchored root)
+HELD   0x444444 1200.000000 USDC [per-action-cap, payee-attested]
+HELD   0x333333 1500.000000 USDC [per-action-cap, pre:confidence]
+ANCHOR TX  0xe4ce473a…b28eea0a
+LOG ROOT   0x410e9378…35a83e8d

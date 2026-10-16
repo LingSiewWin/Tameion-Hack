@@ -1,0 +1,101 @@
+Connection to 127.0.0.1 port 8545 [tcp/*] succeeded!
+[1mdeployed[0m
+  TestUSDC      0x5FbDB2315678afecb367f032d93F642f64180aa3   (stand-in: a plain anvil emits no ERC-20 event for a native transfer)
+  BudgetPolicy  0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512  (per-action 1000 USDC / daily 5000 / floor 50)
+  MemoryAnchor  0x5FC8d32690cc91D4c39d9d3abcBD16989F875707
+  treasury      0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+  policy funded 5000000000 [5e9] USDC minor units
+
+[1mSTEP 1  Fund the treasury[0m
+─────────────────────────
+  treasury 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+  holding  20000.000000 USDC
+
+[1mSTEP 2  Build six months of real payment history on chain[0m
+─────────────────────────────────────────────────────────
+  Each line below is a mined transaction with a receipt and a log.
+  Between each one the chain clock moves forward.
+
+  subscription  cycle 1/6   20.000000 USDC -> 0x1111…  0x6b337412a65482b14842c869bc15307ae10e13d14b56d219b6419b787c1006b2
+  subscription  cycle 2/6   20.000000 USDC -> 0x1111…  0xa58e4171d02e65c5e12bec060f176a180f8bae2aa853447f0ab5fba45491f112
+  subscription  cycle 3/6   20.000000 USDC -> 0x1111…  0x89b5e194cee9a48eb7ada05a5a5e702c9a012543257680dbf4fe300b519d811e
+  subscription  cycle 4/6   20.000000 USDC -> 0x1111…  0x7a503ce439670bb4fe219a94b6ecccc806a843bf28090f067542fb089dad3927
+  subscription  cycle 5/6   20.000000 USDC -> 0x1111…  0xba8b38a407b875917057071021697f8e27bc6bd5edfa4bf58003efe47e3ea8f8
+  subscription  cycle 6/6   20.000000 USDC -> 0x1111…  0x0ad9878764f3c7660e0a300bf1356381d3eb71cac299de8155e515c8f3004df1
+  contractor    cycle 1/5  500.000000 USDC -> 0x2222…  0x9c01e6e0d8c9b7b40b134f43a2597d01f6714f66bcb4ddbfc5ec68a836343728
+  contractor    cycle 2/5  620.000000 USDC -> 0x2222…  0xecbacf8abd7c240001c04c7e7d8a9303bca71e9d6e5b24497d96e82121b1e9a0
+  contractor    cycle 3/5  410.000000 USDC -> 0x2222…  0x00fde0552d5e83e3807c1bcfe383d95cb550340d9c625141d36fd497ccd878a0
+  contractor    cycle 4/5  580.000000 USDC -> 0x2222…  0x2eccf2ee63cdf85e32be98d52f0a41acb8e4e685555fc8088a71620db42fa9f5
+  contractor    cycle 5/5  535.000000 USDC -> 0x2222…  0xaef3003f63c96baf99de2bce0ae7f676ab3b8fe5d6ad2a0d477f41ed10e182ed
+  big vendor    cycle 1/3  1500.000000 USDC -> 0x3333…  0x6ce513129ad6eea69f1bc39397c879f7d056abd7a39a5a36563efee20c651493
+  big vendor    cycle 2/3  1500.000000 USDC -> 0x3333…  0x0543c636b70ef1fa3e468b19573b6bc340eab873f79211c238727ecc010a47dd
+  big vendor    cycle 3/3  1500.000000 USDC -> 0x3333…  0xc40d6a99c45ffaa99d4ec6295af21c1b0a66901676624f0682bbaf02c68309d6
+
+  chain clock is now t=1836988747, about 15 months after it started
+
+[1mSTEP 3  The agent reads that history back off the chain[0m
+───────────────────────────────────────────────────────
+  eth_getLogs returned 15 transfers touching the treasury
+  14 of them outgoing; the inbound one is the mint that funded it
+  the agent was not told what any of them were for
+
+[1mSTEP 4  One pass of the loop[0m
+────────────────────────────
+balance 5000.000000 USDC · 3 obligations · 0 settled · 3 escalated (2 UNANSWERED past deadline) · 0 blocked · 0 already paid
+log root   0xde2274a338e2e36bc9cb86407de1cbf8a0b4791fd5e9e38b8c260abef5bcfe92
+anchored   0xe10c9434bc29cd6e95c8b84633542e654b1ae61a41e8eb03c9d6a5d3a845f2ac
+
+  escalated to a human:
+    0x1111111111111111111111111111111111111111 20.000000 USDC
+        [review] cycles-behind            11 more cycles of this bill fell due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue from there
+    0x2222222222222222222222222222222222222222 535.000000 USDC
+        [review] cycles-behind            19 more cycles of this bill fell due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue from there
+    0x3333333333333333333333333333333333333333 1500.000000 USDC
+        [review] per-action-cap           1500.000000 USDC over cap 1000.000000 USDC
+        [review] pre:confidence           confidence 0.62 below floor 0.75
+
+[1mSTEP 5  What the agent inferred, from addresses alone[0m
+─────────────────────────────────────────────────────
+  0x1111111111111111111111111111111111111111 has been paid 6 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.85).
+  0x2222222222222222222222222222222222222222 has been paid 5 times every 14.0 days, amounts varying by 15.2% and timing by 0.0%, so this reads as a recurring payment (confidence 0.78).
+  0x3333333333333333333333333333333333333333 has been paid 3 times every 90.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.62).
+
+[1mSTEP 6  The record[0m
+──────────────────
+[0000] OBSERVATION Holding 5000.000000 USDC. Read 15 transfers (0 of them my own payments, which are not evidence) and recovered 3 recurring obligations, of which 3 fall due within 120.0 days totalling 2055.000000 USDC; 3 within 3.0 days (or a tenth of their interval), which is when I pay.
+[0001] DECISION    REVIEW for 0x1111111111111111111111111111111111111111. ranked 1 of 3: overdue by 340.0 days, confidence 0.85, 20.000000 USDC covered Basis: 0x1111111111111111111111111111111111111111 has been paid 6 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.85).
+[0002] ESCALATION  UNANSWERED for 340.0 days, past the 7.0-day deadline: cycles-behind: 11 more cycles of this bill fell due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue from there. I have escalated this and nobody has acted. The bill is still unpaid and I cannot pay it myself.
+[0003] DECISION    REVIEW for 0x2222222222222222222222222222222222222222. ranked 2 of 3: overdue by 270.0 days, confidence 0.78, 535.000000 USDC covered Basis: 0x2222222222222222222222222222222222222222 has been paid 5 times every 14.0 days, amounts varying by 15.2% and timing by 0.0%, so this reads as a recurring payment (confidence 0.78).
+[0004] ESCALATION  UNANSWERED for 270.0 days, past the 7.0-day deadline: cycles-behind: 19 more cycles of this bill fell due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue from there. I have escalated this and nobody has acted. The bill is still unpaid and I cannot pay it myself.
+[0005] DECISION    REVIEW for 0x3333333333333333333333333333333333333333. ranked 3 of 3: overdue by 0.0 days, confidence 0.62, 1500.000000 USDC covered Basis: 0x3333333333333333333333333333333333333333 has been paid 3 times every 90.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.62).
+[0006] ESCALATION  Stopping and asking a human: per-action-cap: 1500.000000 USDC over cap 1000.000000 USDC; pre:confidence: confidence 0.62 below floor 0.75. This is outside the authority delegated to me, so I will not proceed on my own. If unanswered for 7.0 days I will report it as overdue.
+
+## audit: recompute the anchored root from runtime/log-anvil and compare with rootOf() on this chain
+# audit runtime/log-anvil/0xde2274a338e2e36bc9cb86407de1cbf8a0b4791fd5e9e38b8c260abef5bcfe92.events.jsonl
+[0000] OBSERVATION Holding 5000.000000 USDC. Read 15 transfers (0 of them my own payments, which are not evidence) and recovered 3 recurring obligations, of which 3 fall due within 120.0 days totalling 2055.000000 USDC; 3 within 3.0 days (or a tenth of their interval), which is when I pay.
+[0001] DECISION    REVIEW for 0x1111111111111111111111111111111111111111. ranked 1 of 3: overdue by 340.0 days, confidence 0.85, 20.000000 USDC covered Basis: 0x1111111111111111111111111111111111111111 has been paid 6 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.85).
+[0002] ESCALATION  UNANSWERED for 340.0 days, past the 7.0-day deadline: cycles-behind: 11 more cycles of this bill fell due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue from there. I have escalated this and nobody has acted. The bill is still unpaid and I cannot pay it myself.
+[0003] DECISION    REVIEW for 0x2222222222222222222222222222222222222222. ranked 2 of 3: overdue by 270.0 days, confidence 0.78, 535.000000 USDC covered Basis: 0x2222222222222222222222222222222222222222 has been paid 5 times every 14.0 days, amounts varying by 15.2% and timing by 0.0%, so this reads as a recurring payment (confidence 0.78).
+[0004] ESCALATION  UNANSWERED for 270.0 days, past the 7.0-day deadline: cycles-behind: 19 more cycles of this bill fell due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue from there. I have escalated this and nobody has acted. The bill is still unpaid and I cannot pay it myself.
+[0005] DECISION    REVIEW for 0x3333333333333333333333333333333333333333. ranked 3 of 3: overdue by 0.0 days, confidence 0.62, 1500.000000 USDC covered Basis: 0x3333333333333333333333333333333333333333 has been paid 3 times every 90.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.62).
+[0006] ESCALATION  Stopping and asking a human: per-action-cap: 1500.000000 USDC over cap 1000.000000 USDC; pre:confidence: confidence 0.62 below floor 0.75. This is outside the authority delegated to me, so I will not proceed on my own. If unanswered for 7.0 days I will report it as overdue.
+events          : 7
+recomputed root : 0xde2274a338e2e36bc9cb86407de1cbf8a0b4791fd5e9e38b8c260abef5bcfe92
+file name       : 0xde2274a338e2e36bc9cb86407de1cbf8a0b4791fd5e9e38b8c260abef5bcfe92   MATCH
+chain rootOf    : 0xde2274a338e2e36bc9cb86407de1cbf8a0b4791fd5e9e38b8c260abef5bcfe92   (anchor 0x5FC8d32690cc91D4c39d9d3abcBD16989F875707, agent 0x70997970C51812dc3A010C7d01b50e0d17dc79C8)   MATCH
+RESULT          : PASS
+## audit, tampered copy: one canonical byte edited must fail
+# audit runtime/log-anvil/0xde2274a338e2e36bc9cb86407de1cbf8a0b4791fd5e9e38b8c260abef5bcfe92.events.jsonl.tampered
+[0000] OBSERVATION Holding 5000.000000 USDC. Read 15 transfers (0 of them my own payments, which are not evidence) and recovered 3 recurring obligations, of which 3 fall due within 120.0 days totalling 2055.000000 USDC; 3 within 3.0 days (or a tenth of their interval), which is when I pay.
+[0001] DECISION    REVIEW for 0x1111111111111111111111111111111111111111. ranked 1 of 3: overdue by 340.0 days, confidence 0.85, 20.000000 USDC covered Basis: 0x1111111111111111111111111111111111111111 has been paid 6 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.85).
+[0002] ESCALATION  UNANSWERED for 340.0 days, past the 7.0-day deadline: cycles-behind: 11 more cycles of this bill fell due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue from there. I have escalated this and nobody has acted. The bill is still unpaid and I cannot pay it myself.
+[0003] DECISION    REVIEW for 0x2222222222222222222222222222222222222222. ranked 2 of 3: overdue by 270.0 days, confidence 0.78, 535.000000 USDC covered Basis: 0x2222222222222222222222222222222222222222 has been paid 5 times every 14.0 days, amounts varying by 15.2% and timing by 0.0%, so this reads as a recurring payment (confidence 0.78).
+[0004] ESCALATION  UNANSWERED for 270.0 days, past the 7.0-day deadline: cycles-behind: 19 more cycles of this bill fell due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue from there. I have escalated this and nobody has acted. The bill is still unpaid and I cannot pay it myself.
+[0005] DECISION    REVIEW for 0x3333333333333333333333333333333333333333. ranked 3 of 3: overdue by 0.0 days, confidence 0.62, 1500.000000 USDC covered Basis: 0x3333333333333333333333333333333333333333 has been paid 3 times every 90.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.62).
+[0006] ESCALATION  Stopping and asking a human: per-action-cap: 1500.000000 USDC over cap 1000.000000 USDC; pre:confidence: confidence 0.62 below floor 0.75. This is outside the authority delegated to me, so I will not proceed on my own. If unanswered for 7.0 days I will report it as overdue.
+events          : 7
+recomputed root : 0xf367cec76d0c138fed3362f570eb43b4031837cce72a37e8343b3de44e8e23d7
+file name       : (not <root>.events.jsonl)   MISMATCH — edited or renamed
+chain rootOf    : 0xde2274a338e2e36bc9cb86407de1cbf8a0b4791fd5e9e38b8c260abef5bcfe92   (anchor 0x5FC8d32690cc91D4c39d9d3abcBD16989F875707, agent 0x70997970C51812dc3A010C7d01b50e0d17dc79C8)   DIFFERS — no anchoring transaction on record for this root
+RESULT          : FAIL
+ok: tampered events file refused (exit 2)

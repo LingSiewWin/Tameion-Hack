@@ -1,0 +1,48 @@
+# 2026-10-13T10:16:42Z supply chain (docs/46 #5)
+
+## cargo deny check (deny.toml: crates.io only; openssl/native-tls banned; one advisory ignored with reason)
+   1 advisories ok, bans ok, licenses ok, sources ok
+   1 warning[duplicate]: found 2 duplicate entries for crate 'base64'
+   1 warning[duplicate]: found 2 duplicate entries for crate 'block-buffer'
+   1 warning[duplicate]: found 2 duplicate entries for crate 'const-oid'
+   1 warning[duplicate]: found 2 duplicate entries for crate 'core-foundation'
+   1 warning[duplicate]: found 2 duplicate entries for crate 'cpufeatures'
+   1 warning[duplicate]: found 2 duplicate entries for crate 'crypto-common'
+   1 warning[duplicate]: found 2 duplicate entries for crate 'darling'
+   1 warning[duplicate]: found 2 duplicate entries for crate 'darling_core'
+   1 warning[duplicate]: found 2 duplicate entries for crate 'darling_macro'
+   1 warning[duplicate]: found 2 duplicate entries for crate 'digest'
+   1 warning[duplicate]: found 2 duplicate entries for crate 'hashbrown'
+   1 warning[duplicate]: found 2 duplicate entries for crate 'r-efi'
+   1 warning[duplicate]: found 2 duplicate entries for crate 'sha3'
+   1 warning[duplicate]: found 2 duplicate entries for crate 'syn'
+   1 warning[duplicate]: found 2 duplicate entries for crate 'windows-sys'
+   1 warning[duplicate]: found 3 duplicate entries for crate 'getrandom'
+   3 warning[license-not-encountered]: license was not encountered
+
+## advisories patched this session
+name = "aws-lc-rs"
+version = "1.18.2"
+name = "aws-lc-sys"
+version = "0.46.0"
+name = "rustls"
+version = "0.23.45"
+name = "yoke-derive"
+version = "0.8.4"
+
+## cargo vet (every current dependency exempted = the visible list that must shrink)
+
+Use |cargo vet certify| to record the audits.
+exemptions: 565
+
+## --locked on every cargo call in scripts/
+locked calls: 23
+unlocked calls: 0   (every non-comment `cargo test|run|clippy|build` in scripts/*.sh)
+
+## passkey page: scripts it loads, network calls it makes
+72:<script src="call.js"></script>
+73:<script>
+network references: web/passkey/index.html:0
+network references: web/passkey/call.js:0
+5ecbc05a9710c69742fe4e042468d5d6aee81a2cecb18cc595e039a29ed2121c  web/passkey/index.html
+b8c28ef8aa8fbb3b3233ab1defdcadf8297812fe83ecbc11ebf2fb05018ad489  web/passkey/call.js

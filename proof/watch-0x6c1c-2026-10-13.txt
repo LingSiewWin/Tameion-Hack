@@ -1,0 +1,20 @@
+# 2026-10-13T10:52:41Z level 0: watch the treasury address read-only (docs/46 #8)
+# watch 0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25  (level 0: read-only, no key, nothing sent)
+chain      5042002  history ArcNative  from block 64982959
+policy     0xd79af81f2cbd6d8877dfc5ccd7dd6d9e0acb757c  (replay guard and payee list are read here; a stranger has none attested)
+history    14 transfers read, 14 outgoing
+
+## what this address owes, inferred from its own payments (2 obligations)
+- 0x1111111111111111111111111111111111111111  0.003000 USDC every 3.0m  confidence 0.83  overdue by 11.7 days  evidence 6 tx
+    0x1111111111111111111111111111111111111111 has been paid 6 times every 3.0m, amounts varying by 0.0% and timing by 1.6%, so this reads as a subscription (confidence 0.83).
+    not attested: the agent would ASK YOU before ever paying this (one passkey tap approves it)
+- 0x3333333333333333333333333333333333333333  0.002000 USDC every 3.0m  confidence 0.83  overdue by 11.7 days  evidence 6 tx
+    0x3333333333333333333333333333333333333333 has been paid 6 times every 3.0m, amounts varying by 0.0% and timing by 1.4%, so this reads as a subscription (confidence 0.83).
+    not attested: the agent would ASK YOU before ever paying this (one passkey tap approves it)
+
+## next 30 days: 2 obligations, 2 within the pay lead right now
+liquidity needed within 30 days: 0.005000 USDC
+
+Nothing was sent, signed or stored. To add the hedge view for the same address:
+  HEDGE_USER=0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25 HEDGE_SPOT=ETH=<size> scripts/prove_hedge.sh dry
+exit 0

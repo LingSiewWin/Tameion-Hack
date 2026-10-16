@@ -1,0 +1,22 @@
+# 2026-10-13T09:01:28Z one dashboard pass with HEDGE_SPOT=ETH=0.5: hedge step + model proposal (claude-opus-5) + payments under one anchored root (anvil)
+http 200
+reasoner: claude-opus-5 | settled: 2 | escalated: 2
+root: 0xbaa672207713d1dbcc3da1c487e3d640831386738ef47228bc869152d72dacf5
+anchorTx: 0x46e1ea1a28eda2240be93d9e970d8bf54a30f7533e3b8eb4b5234fa1ff24143d
+
+-- hedge.proposals --
+[
+ {
+  "advice": "pause",
+  "bandBps": null,
+  "by": "claude-opus-5",
+  "coin": "ETH",
+  "reason": "The hedge was refused for NoCollateral with zero account equity and funding at -0.00057/hour runs against the short, so hedging ETH cannot be executed and should pause pending human review and funding.Z"
+ }
+]
+
+-- log lines: HEDGE / PROPOSAL --
+[0000] HEDGE       ETH: spot 0.5 @ 2500.1 = 1250.05 USDC; hedge 0 -> target -0.5; drift 10000 bps, outside band; refused: NoCollateral; no order; equity 0
+[0001] PROPOSAL    claude-opus-5 proposes pause for ETH: The hedge was refused for NoCollateral with zero account equity and funding at -0.00057/hour runs against the short, so hedging ETH cannot be executed and should pause pending human review and funding.Z. Recorded for a human; nothing changed.
+
+log length: 11

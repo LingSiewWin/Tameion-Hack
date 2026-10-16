@@ -1,0 +1,204 @@
+# 2026-10-13T11:58:49Z Arc testnet redeploy with the docs/46 #3/#4 contract (DELAY=60 MODE=2), seeded at a 300 s cadence, two passes, hedge pass
+
+# 2026-10-13T11:30:50Z redeploy #2: DELAY=60 (one minute on testnet so the 40 s-cadence proof can pay), GAP=300, MODE=2; previous new policy kept in runtime/*.delay600, original in runtime/*.pre-46
+== chain ==
+  chain 5042002 · treasury 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25 (1.120704 USDC)
+  ERC-8004 agent 896918, owned by the treasury
+== deploy ==
+  BudgetPolicy 0xad92baCbCd4e41E63C4b6E25DFfC09903c390dAB
+  MemoryAnchor 0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB  (unchanged, reused)
+== fund the policy ==
+  policy holds 0.200000 USDC
+== attest the payees ==
+  0x00000000000000000000000000000000000000A1 attested=true  tx 0xddad9f6e8e474dbbd25a2ffc66abb5573c6c532c2748c1301a71e91dad2d0d52
+  0x00000000000000000000000000000000000000A2 attested=true  tx 0xe76afe8bea9db6b028fd44d896cf963795917d1196a1ae430c7600510e123121
+  0x00000000000000000000000000000000000000A3 attested=true  tx 0x2cd5d3cdc8884b4e18e224b4d99dd8573e3380f4498d6fb828ed5a2f4be1e986
+  history starts at block 66981960
+== write 5 rounds of real payment history, 300s apart ==
+  Payments leave the *policy*, because that is the treasury the agent
+  watches -- its own past spending is what it has to learn from. Sent
+  with withdraw(), which is the principal paying vendors directly,
+  exactly as it would have before there was an agent.
+  Arc emits a Transfer from 0xffff…fffe for each one.
+  round 1/5  0.002000 -> A1   0.005000 -> A2   0.030000 -> A3
+  round 2/5  0.002000 -> A1   0.006200 -> A2   0.030000 -> A3
+  round 3/5  0.002000 -> A1   0.004100 -> A2   0.030000 -> A3
+  round 4/5  0.002000 -> A1   0.005800 -> A2   0.030000 -> A3
+  round 5/5  0.002000 -> A1   0.005350 -> A2   0.030000 -> A3
+  treasury now holds 0.856380 USDC · policy 0.013550 USDC
+sleeping 180 s so the first run lands inside the pay window of a 300 s cadence
+== the agent reads Arc and decides ==
+链
+─
+  chain id   5042002
+  history    ArcNative
+  agent      0x80c195BE650FBfD55a9ffe059f397Db39f2fe881
+  policy     0xad92baCbCd4e41E63C4b6E25DFfC09903c390dAB
+  anchor     0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB
+  单笔上限   0.010000 USDC
+  每日上限   1.000000 USDC  已花 0.000000 USDC
+  合约余额   0.013550 USDC
+  reasoner   claude-opus-5 (model)
+读历史
+───
+  链上读到 15 笔,其中 15 笔是付出去的
+跑一轮
+───
+  balance 0.013550 USDC · 3 obligations · 0 settled · 0 escalated · 0 blocked · 0 already paid
+  policy mode Autopilot
+  log root   0x6e97f6aaff0f512bf56d5b1c5249ad5ee806aa4952490db6d6e382150bde20bc
+  anchored   0xcb799f2c7cbacaed350429a9500070c5822544b52232b71612de9fe80931a2b3
+记录
+──
+[0000] OBSERVATION Holding 0.013550 USDC. Read 15 transfers (0 of them my own payments, which are not evidence) and recovered 3 recurring obligations, of which 3 fall due within 30.0 days totalling 0.037350 USDC; 0 within 3.0 days (or a tenth of their interval), which is when I pay.
+== read the anchored root back off chain ==
+0x6e97f6aaff0f512bf56d5b1c5249ad5ee806aa4952490db6d6e382150bde20bc
+run1 exit 0
+second pass 120 s later (idempotent: no double pay)
+== the agent reads Arc and decides ==
+链
+─
+  chain id   5042002
+  history    ArcNative
+  agent      0x80c195BE650FBfD55a9ffe059f397Db39f2fe881
+  policy     0xad92baCbCd4e41E63C4b6E25DFfC09903c390dAB
+  anchor     0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB
+  单笔上限   0.010000 USDC
+  每日上限   1.000000 USDC  已花 0.000000 USDC
+  合约余额   0.013550 USDC
+  reasoner   claude-opus-5 (model)
+读历史
+───
+  链上读到 15 笔,其中 15 笔是付出去的
+跑一轮
+───
+  balance 0.013550 USDC · 3 obligations · 2 settled · 0 escalated · 1 blocked · 0 already paid
+  policy mode Autopilot
+  log root   0x14ab15c5dca3920316ebc2968f1e517c956ff0cfcf4921506ca2deec4a2018ae
+  anchored   0x2d2f2d2ef2e41c3c644c2229b7db8872e431abacc12931734608cb030addefce
+  付掉的:
+    0x00000000000000000000000000000000000000a1 0.002000 USDC  0x3754a58f7314b7b0547e9fb403be60887f3fb480310c17d96abddd9405ecd036
+    0x00000000000000000000000000000000000000a2 0.005350 USDC  0x93589309f0e83a4e7c21bb82695b84aee98e8164dbffc666762904e6cd19c50e
+  拒绝的:
+    0x00000000000000000000000000000000000000a3 0.030000 USDC
+        [  FAIL] solvency                 balance 0.013550 USDC cannot cover 0.030000 USDC
+        [review] per-action-cap           0.030000 USDC over cap 0.010000 USDC
+记录
+──
+[0000] OBSERVATION Holding 0.013550 USDC. Read 15 transfers (0 of them my own payments, which are not evidence) and recovered 3 recurring obligations, of which 3 fall due within 30.0 days totalling 0.037350 USDC; 3 within 3.0 days (or a tenth of their interval), which is when I pay.
+[0001] DECISION    ALLOW for 0x00000000000000000000000000000000000000a1. Smallest fixed-amount subscription with zero amount and timing drift and the highest confidence, so it is the cheapest certain obligation to clear from a short balance. Basis: 0x00000000000000000000000000000000000000a1 has been paid 5 times every 5.0m, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.81).
+[0002] SETTLEMENT  Paid 0.002000 USDC to 0x00000000000000000000000000000000000000a1, settled in 0x3754a58f7314b7b0547e9fb403be60887f3fb480310c17d96abddd9405ecd036.
+[0003] DECISION    ALLOW for 0x00000000000000000000000000000000000000a2. Due now and still affordable alongside the first item, though its 15.2% amount variation means the exact figure is less certain than its existence. Basis: 0x00000000000000000000000000000000000000a2 has been paid 5 times every 5.0m, amounts varying by 15.2% and timing by 0.4%, so this reads as a recurring payment (confidence 0.77).
+[0004] SETTLEMENT  Paid 0.005350 USDC to 0x00000000000000000000000000000000000000a2, settled in 0x93589309f0e83a4e7c21bb82695b84aee98e8164dbffc666762904e6cd19c50e.
+[0005] DECISION    BLOCK for 0x00000000000000000000000000000000000000a3. At 0.030000 USDC it exceeds the entire balance on its own, so settling it first would starve both smaller obligations without completing this one; no signal beyond the numbers distinguishes its urgency. Basis: 0x00000000000000000000000000000000000000a3 has been paid 5 times every 5.0m, amounts varying by 0.0% and timing by 0.7%, so this reads as a subscription (confidence 0.80).
+== read the anchored root back off chain ==
+0x14ab15c5dca3920316ebc2968f1e517c956ff0cfcf4921506ca2deec4a2018ae
+run2 exit 0
+# 2026-10-13T11:57:26Z prove_arc.sh run HEDGE_SPOT=ETH=0.01 HEDGE_USER=0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+== the agent reads Arc and decides ==
+链
+─
+  chain id   5042002
+  history    ArcNative
+  agent      0x80c195BE650FBfD55a9ffe059f397Db39f2fe881
+  policy     0xad92baCbCd4e41E63C4b6E25DFfC09903c390dAB
+  anchor     0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB
+  单笔上限   0.010000 USDC
+  每日上限   1.000000 USDC  已花 0.007350 USDC
+  合约余额   0.006200 USDC
+  reasoner   claude-opus-5 (model)
+读历史
+───
+  链上读到 17 笔,其中 17 笔是付出去的
+对冲
+──
+  mode       dry-run
+  account    equity 0.0 margin 0.0 MM 0.0
+  ETH: spot 0.01 @ 2484.24 = 24.8424 USDC; hedge 0 -> target -0.01; drift 10000 bps, outside band; refused: NoCollateral; no order; equity 0
+  claude-opus-5 proposes pause for ETH: The hedge was refused for NoCollateral with equity of 0 USDC and funding at -0.000626 hourly running against the short, so hedging ETH cannot be sustained until collateral is restored.unused. Recorded for a human; nothing changed.
+跑一轮
+───
+  balance 0.006200 USDC · 3 obligations · 0 settled · 0 escalated · 1 blocked · 0 already paid
+  policy mode Autopilot
+  log root   0xb30efdbd0171ecbbd9daeac83d5ddd090a096440c2a6df47dadf402b0d986b70
+  anchored   0x509493757c3005028e22c706e7f256f0c9141e6865225bf9cf5e7def391dc7c3
+  拒绝的:
+    0x00000000000000000000000000000000000000a3 0.030000 USDC
+        [  FAIL] solvency                 balance 0.006200 USDC cannot cover 0.030000 USDC
+        [review] per-action-cap           0.030000 USDC over cap 0.010000 USDC
+记录
+──
+[0000] HEDGE       ETH: spot 0.01 @ 2484.24 = 24.8424 USDC; hedge 0 -> target -0.01; drift 10000 bps, outside band; refused: NoCollateral; no order; equity 0
+[0001] PROPOSAL    claude-opus-5 proposes pause for ETH: The hedge was refused for NoCollateral with equity of 0 USDC and funding at -0.000626 hourly running against the short, so hedging ETH cannot be sustained until collateral is restored.unused. Recorded for a human; nothing changed.
+[0002] OBSERVATION Holding 0.006200 USDC. Read 17 transfers (2 of them my own payments, which are not evidence) and recovered 3 recurring obligations, of which 3 fall due within 30.0 days totalling 0.037350 USDC; 1 within 3.0 days (or a tenth of their interval), which is when I pay.
+[0003] DECISION    BLOCK for 0x00000000000000000000000000000000000000a3. only obligation due; no ordering decision to make Basis: 0x00000000000000000000000000000000000000a3 has been paid 5 times every 5.0m, amounts varying by 0.0% and timing by 0.7%, so this reads as a subscription (confidence 0.80).
+== read the anchored root back off chain ==
+0xb30efdbd0171ecbbd9daeac83d5ddd090a096440c2a6df47dadf402b0d986b70
+wrote proof/arc-hedge-2026-10-13.txt
+chain exit 0
+
+## scripts/max_loss.sh on the new policy
+# max loss, read from chain 2026-10-13T11:59:02Z
+policy           : 0xad92baCbCd4e41E63C4b6E25DFfC09903c390dAB  (rpc https://rpc.testnet.arc.network, block 66985231)
+principal        : 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+operator         : 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+agent            : 0x80c195BE650FBfD55a9ffe059f397Db39f2fe881
+perActionCap     : 0.010000 USDC
+dailyCap         : 1.000000 USDC   (rolling 24 h; spent in window 0.007350, remaining 0.006200)
+reserveFloor     : 0.000000 USDC
+balance          : 0.006200 USDC
+mode             : Autopilot   (pay works only in Autopilot; lowering is instant, raising waits the delay)
+delay            : 60s = 0.0 h before a raised cap, lowered floor, higher mode or new payee takes effect
+pending change   : none
+attested payees  : 3
+                   0x00000000000000000000000000000000000000a3
+                   0x00000000000000000000000000000000000000a2
+                   0x00000000000000000000000000000000000000a1
+
+agent key        : <= min(dailyCap, balance - reserveFloor) = 0.006200 USDC per rolling 24 h, only to the 3 attested payees above, <= 0.010000 per call; stopped by one operator call (setAgent).
+operator key     : <= dailyCap per 24 h until a raise applies = 1.000000 USDC x 1 window(s) = 1.000000 USDC (a raise waits 60s and the principal can cancel it; agent rotation is instant but bound by the same caps). Cannot add a payee.
+principal key    : everything (0.006200 USDC). withdraw has no cap and no delay, by design (docs/14).
+venue wallet     : <= the margin placed on the venue = 0.0 USDC (clearinghouseState.accountValue for 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25). "Cannot withdraw" is documented by third parties, not proved by us; see docs/46.
+
+## scripts/verify.sh 2 3
+
+== 2/4 decision log: recompute the root from runtime/log and compare with the chain ==
+# audit runtime/log/0xb30efdbd0171ecbbd9daeac83d5ddd090a096440c2a6df47dadf402b0d986b70.events.jsonl
+[0000] HEDGE       ETH: spot 0.01 @ 2484.24 = 24.8424 USDC; hedge 0 -> target -0.01; drift 10000 bps, outside band; refused: NoCollateral; no order; equity 0
+[0001] PROPOSAL    claude-opus-5 proposes pause for ETH: The hedge was refused for NoCollateral with equity of 0 USDC and funding at -0.000626 hourly running against the short, so hedging ETH cannot be sustained until collateral is restored.unused. Recorded for a human; nothing changed.
+[0002] OBSERVATION Holding 0.006200 USDC. Read 17 transfers (2 of them my own payments, which are not evidence) and recovered 3 recurring obligations, of which 3 fall due within 30.0 days totalling 0.037350 USDC; 1 within 3.0 days (or a tenth of their interval), which is when I pay.
+[0003] DECISION    BLOCK for 0x00000000000000000000000000000000000000a3. only obligation due; no ordering decision to make Basis: 0x00000000000000000000000000000000000000a3 has been paid 5 times every 5.0m, amounts varying by 0.0% and timing by 0.7%, so this reads as a subscription (confidence 0.80).
+events          : 4
+recomputed root : 0xb30efdbd0171ecbbd9daeac83d5ddd090a096440c2a6df47dadf402b0d986b70
+file name       : 0xb30efdbd0171ecbbd9daeac83d5ddd090a096440c2a6df47dadf402b0d986b70   MATCH
+chain rootOf    : 0xb30efdbd0171ecbbd9daeac83d5ddd090a096440c2a6df47dadf402b0d986b70   (anchor 0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB, agent 0x80c195be650fbfd55a9ffe059f397db39f2fe881)   MATCH
+inclusion [0000]: leaf 0x98b7a3fda676b0a3e0e34090ad8e13955cc49b0c29d78856fe3443a2da350ded path 2 steps   VERIFIED
+  0: right 0x1107b127a2d667803053441c42d0e109b66b38113a3f626e8c69c8666d9837d5
+  1: right 0xe44458252a507a5c520b345d5bdb1e9ce5e28f52daba3e5797264e684c0eb673
+RESULT          : PASS
+
+== 3/4 hedge books: re-post runtime/hedge/journal.jsonl and compare with the venue ==
+# audit_books runtime/hedge/journal.jsonl vs venue 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+entries         : 5   trial balance debits 2455.757600 USDC = credits 2455.757600 USDC   BALANCED
+  asset:hedge:margin           0.000000 USDC
+  asset:hedge:mtm:ETH          0.000000 USDC
+  asset:treasury:spot:ETH      24.842400 USDC
+  asset:treasury:usdc          0.000000 USDC
+  expense:fees                 0.000000 USDC
+  expense:funding              0.000000 USDC
+  expense:hedge:loss           0.000000 USDC
+  expense:spot:loss            1215.457600 USDC
+  revenue:funding              0.000000 USDC
+  revenue:hedge:gain           0.000000 USDC
+  revenue:spot:gain            1240.300000 USDC
+
+line                                          books            venue         diff
+ETH unrealised (hedge:mtm vs upnl)                0                0            0   size 0
+margin + mtm vs accountValue                      0              0.0          0.0
+venue marginUsed / maintenance                  0.0              0.0
+venue snapshot  : t=1791892750159 ms   tolerance 0.50 USDC
+note            : books carry marks but no margin was ever deposited and the venue account is empty — a dry run; the mtm lines reconcile against zero positions.
+RESULT          : PASS
+
+verify: all requested steps passed
+verify exit 0

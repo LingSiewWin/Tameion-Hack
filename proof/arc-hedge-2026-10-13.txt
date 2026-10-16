@@ -1,0 +1,48 @@
+# 2026-10-13T11:57:26Z prove_arc.sh run HEDGE_SPOT=ETH=0.01 HEDGE_USER=0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+
+[1m== the agent reads Arc and decides ==[0m
+
+[1m链[0m
+─
+  chain id   5042002
+  history    ArcNative
+  agent      0x80c195BE650FBfD55a9ffe059f397Db39f2fe881
+  policy     0xad92baCbCd4e41E63C4b6E25DFfC09903c390dAB
+  anchor     0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB
+  单笔上限   0.010000 USDC
+  每日上限   1.000000 USDC  已花 0.007350 USDC
+  合约余额   0.006200 USDC
+  reasoner   claude-opus-5 (model)
+
+[1m读历史[0m
+───
+  链上读到 17 笔,其中 17 笔是付出去的
+
+[1m对冲[0m
+──
+  mode       dry-run
+  account    equity 0.0 margin 0.0 MM 0.0
+  ETH: spot 0.01 @ 2484.24 = 24.8424 USDC; hedge 0 -> target -0.01; drift 10000 bps, outside band; refused: NoCollateral; no order; equity 0
+  claude-opus-5 proposes pause for ETH: The hedge was refused for NoCollateral with equity of 0 USDC and funding at -0.000626 hourly running against the short, so hedging ETH cannot be sustained until collateral is restored.unused. Recorded for a human; nothing changed.
+
+[1m跑一轮[0m
+───
+  balance 0.006200 USDC · 3 obligations · 0 settled · 0 escalated · 1 blocked · 0 already paid
+  policy mode Autopilot
+  log root   0xb30efdbd0171ecbbd9daeac83d5ddd090a096440c2a6df47dadf402b0d986b70
+  anchored   0x509493757c3005028e22c706e7f256f0c9141e6865225bf9cf5e7def391dc7c3
+
+  拒绝的:
+    0x00000000000000000000000000000000000000a3 0.030000 USDC
+        [  FAIL] solvency                 balance 0.006200 USDC cannot cover 0.030000 USDC
+        [review] per-action-cap           0.030000 USDC over cap 0.010000 USDC
+
+[1m记录[0m
+──
+[0000] HEDGE       ETH: spot 0.01 @ 2484.24 = 24.8424 USDC; hedge 0 -> target -0.01; drift 10000 bps, outside band; refused: NoCollateral; no order; equity 0
+[0001] PROPOSAL    claude-opus-5 proposes pause for ETH: The hedge was refused for NoCollateral with equity of 0 USDC and funding at -0.000626 hourly running against the short, so hedging ETH cannot be sustained until collateral is restored.unused. Recorded for a human; nothing changed.
+[0002] OBSERVATION Holding 0.006200 USDC. Read 17 transfers (2 of them my own payments, which are not evidence) and recovered 3 recurring obligations, of which 3 fall due within 30.0 days totalling 0.037350 USDC; 1 within 3.0 days (or a tenth of their interval), which is when I pay.
+[0003] DECISION    BLOCK for 0x00000000000000000000000000000000000000a3. only obligation due; no ordering decision to make Basis: 0x00000000000000000000000000000000000000a3 has been paid 5 times every 5.0m, amounts varying by 0.0% and timing by 0.7%, so this reads as a subscription (confidence 0.80).
+
+[1m== read the anchored root back off chain ==[0m
+0xb30efdbd0171ecbbd9daeac83d5ddd090a096440c2a6df47dadf402b0d986b70
