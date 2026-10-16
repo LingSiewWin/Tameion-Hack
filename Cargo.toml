@@ -1,0 +1,50 @@
+# Workspace root.
+#
+# The split is deliberate. `ledger` is the part that decides: money, entries,
+# balances, obligations, the Action IR and its verifier. It performs no I/O,
+# has no async runtime, and carries one dependency. Everything in it is a pure
+# function of its inputs, which is what makes it exhaustively testable and what
+# keeps the surface a reviewer has to trust small.
+#
+# `arc` is the part that talks to a chain. It pulls in alloy, tokio and their
+# trees, and it is where timeouts, retries, reorgs and RPC lies live. Keeping
+# that out of `ledger` means a bug in a transport cannot reach the code that
+# decides whether money should move.
+[workspace]
+resolver = "3"
+members = ["crates/ledger", "crates/arc", "crates/operator", "crates/hedge", "crates/desk"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.90"
+license = "MIT"
+
+[workspace.dependencies]
+ledger = { path = "crates/ledger" }
+arc = { path = "crates/arc" }
+hedge = { path = "crates/hedge" }
+desk = { path = "crates/desk" }
+# default-features = false, then only what is actually used. `provider-http`
+# supplies the transport; `reqwest` and `reqwest-rustls-tls` supply the HTTP
+# client and TLS underneath it, which the Arc endpoint needs since it is https.
+alloy = { version = "2.4", default-features = false, features = [
+    "std",
+    "contract",
+    "provider-http",
+    "reqwest",
+    "reqwest-rustls-tls",
+    "signer-local",
+    "rpc-types-eth",
+    "sol-types",
+] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+# The Claude transport. `default-features = false` matters: reqwest's defaults
+# pull native-tls (and therefore OpenSSL), and because cargo unifies features
+# across the workspace that would drag a second TLS stack into `arc` as well.
+# rustls-tls is what alloy already selected, so this adds no new tree.
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+sha3 = "0.12"
+proptest = "1"
