@@ -1,0 +1,143 @@
+UAT U2 — the finance lead (careful, non-technical; signs off on vendor spend at a small company that runs AI agents)
+2026-10-16 20:46–21:30 +08. Plan: docs/110 §3 "U2". Environment: http://localhost:7880/ (service + console export), Arbitrum Sepolia.
+Browser: the Playwright MCP browser is shared with the other personas and holds the user's own tabs, so U2 worked only in its own
+fresh contexts (user-agent tag UAT-U2 at 1280x900, UAT-U2-PHONE = isMobile 390x844 @2x, UAT-U2-OWN = 1280 with a CDP virtual
+authenticator). No product code changed. No key printed.
+
+RESULT: 1 of 5 steps pass (step 4). Three worst findings:
+  1. One tap paid the same 30-day bill twice: after the owner paid it, the next check asked again and the contract accepted the
+     second payment (tx 0x06a344a5… and 0x20f53fac…, below). Every check asks again; a third ask was waiting at 21:20.
+  2. A finance lead cannot keep reading the account: the operator's first agent key (20:55) turned the read-only page into
+     "This account opens only to its keys … Paste the one you were given."; every read route answers 401, including the records
+     the page says "anyone can check".
+  3. Nothing on the page, in the two CSV exports or in the signed weekly statement says why a payment happened; the signed
+     statement says "paid 0" while the page and the chain show 2 payments (0.10 USDC).
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────
+STEP 0 — home page, before clicking (20:47)
+  URL http://localhost:7880/ ; tab title "Tameion Desk".
+  "The account your agents pay from." / "Your agents pay their bills around the clock in USDC — and can never spend past the mandate you signed."
+  Ten-second read as this persona: "an account my agents pay from, with a spending limit". Clear.
+  Hesitated at: "over x402", "the mandate the contract enforces", "any two of your three keys recover the account" (which three?),
+  "What it costs: nothing while Tameion runs on testnet", "Read any address", popover "reserves your account's address … The contract
+  is created when money can reach it; until then nothing is on chain", "More ways to set it up → Where your USDC is: Arbitrum Sepolia".
+  Screens: proof/uat-u2-home-1280-2026-10-16.png, proof/uat-u2-home-whatopening-1280-2026-10-16.png, proof/uat-u2-home-390-2026-10-16.png
+
+STEP 1 — open U1's account read-only (shared.json at 20:50: u1Policy 0x42463b314d392fe34abe1854b925f0f6e55fa555, "uat-u1-acme")
+  20:51:0x  /?policy=0x42463b…a555 → native confirm: "Open someone else's account read-only? uat-u1-acme (ends ••A555) No passkey on
+            this device owns it: you can look, but nothing can be paid, funded or approved from here. A link that asks you to fund or
+            approve it is not from its owner." → accepted → page in ~6 s.
+  Reserved state: "Your instruction to the agent: Pay the bills you find when due, up to 100.00 USDC a day, only to payees I approved;
+            ask me for anything else." + "A starting limit, sized from the bills it knows" (it knew 0 bills) + "Agents can spend now 0.00".
+  20:52:46  U1 funded 1 USDC; the open page updated WITHOUT a refresh: "Prepare the bills you find when due and wait for my tap, up to
+            100.00 USDC a day …", "90 days of bills covered" / "Every bill for the next 90 days is covered (0.00 USDC due)" (no bills
+            known), "Agents can spend now 1.00 — USDC: all the account holds above the 0.00 USDC you keep; each payment waits for your tap".
+  Page vs chain (cast, sepolia-rollup.arbitrum.io, 20:53): perActionCap 50.000000, dailyCap 100.000000, reserveFloor 0, delay 60 s,
+            balanceUsdc 1.000000, remainingAllowance 1.000000, mode 1 (Propose).
+            daily 100 = MATCH; can-spend-now 1.00 = MATCH; "Asks before paying" = Propose MATCH; the 50 USDC per-payment cap is
+            NOT shown anywhere on the read-only page; "raising waits 60 s" MATCH (the contract's own comment recommends 48 h).
+  What the page says the agents may spend at most today: "up to 100.00 USDC a day" and "1.00 now". Believable: NO — the 100 a day was
+            "sized from the bills it knows" while it knew none, the per-payment cap is missing, and "can spend now 1.00" sits beside
+            "each payment waits for your tap" (in Propose the agent's own payment reverts, BudgetPolicy.sol:338).
+  20:55     U1 minted its first agent key (tenant agentTokenCount 1). The same read-only page became:
+            "This account opens only to its keys / Its owner made keys for the agents that may look at it. Paste the one you were
+            given. [Agent key] [Use it]".
+            curl without a key, 20:57: /api/level1/inbox, /records, /statement, /statement?format=csv, /events → all
+            HTTP 401 {"error":"this account's owner requires an agent key: send Authorization: Bearer <token> (the owner mints one
+            on the account page)","scope":"read"}; only /api/level1/tenant/<policy> stays 200. Still 401 at 21:24.
+  20:57     wrote "u2Ask" into the shared file asking U1 for a read-only key; no answer by 21:24.
+  "The last check's record" (hero) opens https://sepolia.arbiscan.io/tx/0xf102afee1deacdfb03fb2bb44c4a733b8e2cb539379a9eb46f1f1d130c2ec5ef:
+            "Call Anchor Function", hex From/To, Gwei. Nothing a finance lead can read.
+  STEP 1 = FAIL. Screens: proof/uat-u2-step1-readonly-1280-2026-10-16.png, -keylimit-, -settings-, -checkit-, proof/uat-u2-step1-gated-1280-2026-10-16.png,
+            proof/uat-u2-step2-lastrecord-arbiscan-2026-10-16.png
+
+FALLBACK — own account (U1's account unreadable since 20:55; brief: open a uat-u2- account, fund ≤ 0.3 USDC)
+  21:03     name "uat-u2-fin" ("is free.") → "Open the account with my passkey" (virtual authenticator) → tenant saved,
+            policy 0x48274c7904edb23f75ea607c932d5c441c1a80e3, but the page body stayed on grey placeholders for > 60 s (two 30 s waits)
+            until a manual reload (then 0.56 s; curl inbox 0.85 s). Observed once. proof/uat-u2-own-opened-1280-2026-10-16.png
+  21:05:04  funded 0.3 USDC from the relayer (ERC-20 transfer, as proof/arbitrum-sepolia-accounts-2026-10-14.txt):
+            tx 0x72538df088954d3e883f60a8c7b4ccb283df5c4965d84e5b378d6f79205d85ef (block 319759638).
+            Page without refresh: 0.30 at +15 s; deployed and first check ("Last checked 39 s ago") at +53 s.
+  21:07     operator's setup (not a U2 step): typed a bill — payee 0x179dca89F69fAef5765D2E7445aa5452B8159520 (fresh address, key
+            discarded), 0.05 USDC every 30 days → "••9520 ends ••9520" (no name) → Save bill ~20 s → "Added 0.05 USDC every 30 days."
+            Payee approval tx 0x5c9e93effe0d457822fa76fb5675e012b90140177f4b00ee820014bd2158b1a9.
+  21:08:4x  Needs you: "The agent prepared these. Your tap decides. / Pay 0.05 USDC to Payee ••9520 [Pay]" — no reason on the row
+            (inbox needsYou[].why = ""). The agent suggests "A daily limit of 0.10 USDC — Twice your largest bill so far (0.05 USDC)".
+
+STEP 2 — "what is owed and why" for one payment; trace it to a transaction
+  21:09:26  tapped Pay → "Paying…" → "Paid 0.05 USDC." (~26 s) → Recent: "Paid Payee ••9520 [by you] 4 s ago · Receipt 0.05".
+            Receipt → https://sepolia.arbiscan.io/tx/0x06a344a58ef817491949a6ab49638a204f8414aad4322ba46d587e926d41067c
+            receipt: status 1, block 319760635, USDC Transfer 0.05 from 0x48274c…80e3 to 0x179dca89…9520,
+            SettledByPrincipal(actionHash 0x85dcc14b8c469d30b6e7edd45f28d92267583487c27c38111089a41008861969). Page = chain: MATCH.
+  Trace: YES (Receipt link, tx hash in both CSVs). Why: NO.
+            "Statement" CSV (tameion-0x48274c79-statement.csv):
+              date_utc,payee,amount_usdc,paid_by,transaction,explorer,account
+              2026-10-16T13:09:26.000Z,Payee ••9520 (0x179dca89f69faef5765d2e7445aa5452b8159520),0.05,owner,0x06a344a5…067c,https://sepolia.arbiscan.io/tx/0x06a344a5…067c,0x48274c79…80e3
+            "For Xero / QuickBooks" CSV: Description "USDC payment to 0x179dca89f69faef5765d2e7445aa5452b8159520 by the owner from
+              0x48274c7904edb23f75ea607c932d5c441c1a80e3" — no bill, no period, no reason; file names carry the address, not the name.
+            "Check it yourself" → Check: "Matches. Rebuilt here from 3 decisions; both public nodes hold the same fingerprint (put on
+              chain by the account's agent, in a transaction that succeeded)." The three decisions themselves are not shown.
+            Signed weekly statement (JSON + CSV from the same dialog, 21:11): totals paid {"amount":"0.000000 USDC","count":0},
+              needsYou {"amount":"0.100000 USDC","count":2}; both lines kind "needs-you", tx empty, detail "mode: policy is in Propose,
+              not Autopilot; the contract refuses the agent's payment and the owner's passkey settles it". The paid bill is missing.
+  21:10:28  NEXT CHECK ASKED AGAIN. Page: "Paid 1 — 0.05 USDC" beside "Needs you 1 — tap to decide — Pay 0.05 USDC to Payee ••9520".
+            Record 0xe6e381cc…068c: "ALLOW for 0x179dca89…9520. ranked 1 of 1: overdue by 0.0 days … has been paid 0 times every 30.0 days".
+            New settle hash 0xd160efeaea984549ffaa3620f39f0aa0d3f9243a754ccab50bf7b87e7ed444f7 ≠ the paid 0x85dc…;
+            executed(0x85dc…) = true, executed(0xd160…) = false → nothing on chain would refuse a second tap.
+  21:17:2x  Tapped Pay on the repeat ask (deliberately, test money) → second payment
+            tx 0x20f53fac615b6b15007c5d7e8a9a65507cbeeaf43cb0fd4d94dd99f1e74f1e84 (block 319762537): USDC Transfer 0.05 to the
+            same payee, SettledByPrincipal(actionHash 0xd160…44f7). Page: "Paid 2 — 0.10 USDC", two identical rows.
+  21:20:2x  "Check now" → 14 s later a THIRD ask: 0.05 USDC to ••9520, hash 0xde5b25316c033861cc7168b2b129b833017fc0d92e3670e8d246d76c239f5434,
+            why "" (not tapped).
+  Chain at 21:24:11: payee balance 0.100000 USDC; account balanceUsdc 0.200000; executed(0x85dc…) true, executed(0xd160…) true,
+            executed(0xde5b…) false.
+  Cause (code read): crates/operator/src/bin/tameion-app.rs:2713-2724 copies pendingSignature.actionHash (the per-pass action hash)
+            into needsYou and drops settlementKey; tameion-app.rs:2752-2755 binds the owner's settle to that hash
+            (arc::prepare_principal_settlement_bound(policy, to, amount, hash, …)). crates/operator/src/lib.rs:1760-1764: "Only the
+            second [the settlement key] is stable across runs, so only the second may be used where the chain is asked 'have we done
+            this already?'"; lib.rs:1206-1217 asks already_executed(settlement_key_for(cycle)) — never set by the owner's settle.
+  STEP 2 = FAIL. Screens: proof/uat-u2-step2-recent-row-1280-2026-10-16.png, -checkit-own-, -checkit-match-,
+            proof/uat-u2-step2-paid-and-asked-again-1280-2026-10-16.png, -asked-again-row-, -asked-third-time-, proof/uat-u2-own-needsyou-1280-2026-10-16.png
+
+STEP 3 — would I sign the mandate as written? NO.
+  Sentence: "Prepare this bill when due and wait for my tap, up to 100.00 USDC a day, only to payees I approved; ask me for anything else."
+            + "Signed with your passkey; the contract enforces the limits."
+  Hesitations, in order:
+   a. "up to 100.00 USDC a day" — my only bill is 0.05 USDC a month; the agent itself suggests 0.10 a day further down the page.
+   b. The cap on one payment (50.00) is not in the sentence; it appears only in the owner's "Change the limits" dialog ("One payment, at most").
+   c. "wait for my tap" — the tap did not stop the same bill being paid twice (step 2).
+   d. Nothing in it covers agents buying paid APIs, which is what the operator's agents do (the home page: "It pays around the clock in USDC over x402").
+   e. "the contract enforces the limits" — which contract? (a smart contract, not a legal one; never said).
+   f. "Raising waits 60 s" against the home page's "a raise to the mandate waits where anyone can see it coming" — 60 seconds is not seeing it coming.
+   g. Home page "Give an agent a key with a cap" — the key form has scopes, a label and days; a key has no cap of its own.
+   h. Keys tab: "1 of 3 keys set — add two guardians before raising a limit" (clear) but "Your email wallet, or a hardware wallet" (not my words).
+   i. "Add a phone, a co-founder or the CFO: … tap 'Ask to join'" — joining makes the CFO a co-owner (setCoOwners); there is no view-only seat.
+  STEP 3 = FAIL. Screens: proof/uat-u2-step3-change-limits-1280-2026-10-16.png, -settings-owners-, -settings-agents-, -settings-bills-
+
+STEP 4 — the same at 390 px
+  U1 read-only (isMobile 390x844): no horizontal scroll (scrollWidth = 390); content after ~16.6 s of grey placeholders (inbox ~2.1 s by curl).
+  Own account read-only (isMobile): content in 4.6 s; scrollWidth = 390; nothing cut or overlapping.
+  Own account as owner at 390 (desktop context, 15 px scrollbar): scrollWidth = 375 = viewport; the pay link is ellipsised with a copy
+  button; sr-only labels clip by design; the third stat tile wraps to ~8 short lines; Recent rows fit on one line each.
+  Full-page captures paint the sticky header mid-page — a capture artifact, not an overlap.
+  STEP 4 = PASS (notes above). Screens: proof/uat-u2-step4-account-390-2026-10-16.png, -readonly-own-390-, -readonly-own-390-top-,
+            -own-owner-390-, -recent-390-, -tiles-390-
+
+STEP 5 — count (9 captures: home, U1 read-only, dialogs ×2, own owner page, /agent, exports, signed statement)
+  Banned words: guarantee 0, locked 0, delta-neutral 0, yield 0. Near: "The first key you make locks the account to keys." (Agents tab).
+  Words from the brief on pages: calldata 0, nonce 0, relayer 0, root 0, mode 0. In the signed statement file: root 1, linesHash 1,
+  eip712 1, signer 1, "mode: policy is in Propose, not Autopilot" in every line.
+  Other words this persona would not understand (occurrences, 'on chain' not double-counted as 'chain'): passkey 20 (known-ish),
+  on chain 13, address 7, contract 6, fingerprint 5, Arbitrum Sepolia 5, chain (other) 4, public nodes 4, scripts/…sh 3, JSON 2,
+  testnet 2, explorer 2, signature 2, x402 1, autonomy 1, ENS 1; /agent: desk, exchange, venue, halt, tick, feed.
+  Bare 0x on the human surface: 1 full address in the "Check it yourself" dialog ("scripts/verify_tenant.sh http://localhost:7880 0x4827…80e3");
+  0 in the main page bodies (payees show as "Payee ••9520"); exports: 7 in the two CSVs + file names "tameion-0x48274c79-…csv";
+  8 in the signed statement CSV. Arbiscan pages (linked from "Receipt", "On chain", "The last check's record") are all hex.
+  /agent: "What the desk's agent sees and does on the exchange, live." · "Feed unavailable" · "Venue" · "Halt" (leftover desk surface).
+  STEP 5 = FAIL (bare 0x on the page, a jargon wall in every "check it" path). Screen: proof/uat-u2-agentpage-1280-2026-10-16.png
+
+The one sentence I could give my CEO: "The agents may spend up to 100 USDC a day, 50 per payment, only to vendors we approved — but
+the page cannot tell me why a payment happened, it asked me to pay the same bill three times, and I lose sight of the account as
+soon as the operator gives an agent a key."
+
+USDC spent by U2: 0.3 from the relayer into uat-u2-fin (0.10 paid to the test payee, 0.20 still in the account).
