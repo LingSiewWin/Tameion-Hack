@@ -1,0 +1,29 @@
+[package]
+name = "arc"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Reading and moving USDC on Arc, for the Tameion agent."
+
+[features]
+# Anvil cheat codes -- advancing the clock, minting balances.
+#
+# Cargo unifies features across a workspace build, so enabling this anywhere
+# turns on alloy's anvil RPC methods everywhere. The guarantee that matters is
+# narrower and holds regardless: `arc::dev` is `#[cfg]`-gated, so no code path
+# in a default build can call them, and they are methods no real node
+# implements in any case.
+dev-anvil = ["alloy/provider-anvil-api"]
+
+[dependencies]
+ledger.workspace = true
+alloy.workspace = true
+tokio = { workspace = true, features = ["sync", "rt", "time"] }
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "net", "io-util"] }
+serde_json.workspace = true
+proptest.workspace = true
+arc = { path = ".", features = ["dev-anvil"] }
