@@ -1,0 +1,125 @@
+UAT U3 — an external AI agent uses a Tameion account through its MCP server (docs/110 §3 U3)
+Written 2026-10-16 20:51 +0800. Environment: the service on :7880 (PID 46641, not restarted), Arbitrum Sepolia (421614), tameion-mcp
+built from the tree (target/debug/tameion-mcp), TAMEION_URL=http://localhost:7880. Every MCP request and answer, with its
+wall time: proof/uat-u3-mcp-2026-10-16.jsonl (JSON-RPC over stdio, driven like a host does; no key or token is in it —
+checked by string search against every key/token file used). Times are +08.
+
+== Setup (owner side, by the test helpers, as earlier proofs did) ==
+software passkey  ~/.tameion/test-keys/uat-u3.pem (new, mode 600, never printed)
+                  qx 0x0873a22724e3a284936fbb8f3ae364d06224c21d7393a5804564694b66122b20
+                  qy 0x073c6d60f98063142ffae8dacaa54baa6802060934ee10acf30d00ba70b35331
+20:35:02 POST /api/level1/deploy {chain arbitrum-sepolia, name uat-u3-agent, qx, qy, caps 0.003 / 0.008 / 0} -> HTTP 200 in 12 s
+  account (policy) 0xb32753851113869778fec66c51c3a13405edcfab   owner 0x801a044d98bcd82f08eaa8d0fbca85477e214819
+  agent            0xdb60650670496881a8ac8d094e8751a75f0a3446   mode Propose
+  owner tx  https://sepolia.arbiscan.io/tx/0x14427cde973ca55d8cfcf20ed3193734cfaf6b2c1dda3ff01ab8d0fda51b8b87
+  policy tx https://sepolia.arbiscan.io/tx/0xcf1fb2ca4f5b18e74d053ee95a8e073f283865df24bffe6eb0b6a4283a362613
+  agent gas https://sepolia.arbiscan.io/tx/0x1395156b54c4e4a099deec4f7c930b6efd951e0af874bdf8bbfa80fe2d2389d3
+20:35:39 fund 0.05 USDC from the relayer 0x6c1c…9A25 (spend limit 1 USDC):
+  https://sepolia.arbiscan.io/tx/0x8e0b0831e0dda32e826083eaa24144d46da57e01563f89f58993d509fd1e98b9  status 1, block 319752911; balanceOf(policy) = 50000
+20:36:34 soft_token.py -> agent key tok-548535da "uat-u3-buyer" scopes [buy, read], 7 days  (token kept in ~/.tameion/test-keys/uat-u3-buy.token, 600)
+20:36:43 soft_token.py -> agent key tok-76ded82a "uat-u3-ops"   scopes [read, run, prepare], 7 days (~/.tameion/test-keys/uat-u3-ops.token, 600)
+  reply: "from now on this account's read / run / prepare / import routes need an agent key; buying (x402) always did"
+x402 sellers (scripts/x402_seller.py, facilitator 0x805a6d4e58bb7e33ce58d54ab06c33fcfcb54dad, RPC Arbitrum Sepolia):
+  S1 :7931 PAY_TO A=0x6B5b461984505d9A9A6cBa93F6Ec8CD7ADbe0bA8 price 0.002 (PID 70134)
+  S2 :7932 PAY_TO A                                            price 0.005 (PID 70135)  — above the 0.003 per-payment cap
+  S3 :7933 PAY_TO B=0x108fA47C5bEfc672e16852677182588B543BFece price 0.001 (PID 70136)  — never approved
+  A and B are fresh random addresses (no key). All three stopped by PID (kill 70134 70135 70136) before 20:50; ports 7931-7933 free afterwards.
+
+== Step 1 — build tameion-mcp, point it at the service with an agent key ==
+20:32:55 cargo build -p operator --bin tameion-mcp -> "Finished `dev` profile … in 1.01s" (already fresh)
+initialize -> protocolVersion 2025-06-18, serverInfo tameion; tools/list (1 ms) -> 22 tools:
+  treasury_inbox, run_pass, pass_status, prepare_payees, prepare_limits, prepare_mode, prepare_fund, prepare_schedule, prepare_renew,
+  import_bills, buy_service, purchases, invoices, send_invoice, records, record_events, desk, send_milestone, desk_statements_all,
+  stop_counterparty, desk_statement, watch_address
+  (6 of them — desk, send_milestone, desk_statement, desk_statements_all, stop_counterparty, and the "trader's physical book"
+  wording — belong to the gold desk that docs/109 §10 dropped; descriptions cite docs/83, PLAN 5.7, PLAN 5.49, which an outside agent cannot read)
+Without a key (20:45:51): treasury_inbox -> isError, 401 "this account's owner requires an agent key: send Authorization: Bearer <token>
+  (the owner mints one on the account page)"; buy_service -> the same 401 (scope buy).
+RESULT: PASS.
+
+== Step 2 — treasury_inbox: is everything an agent needs there? ==
+20:37:08 (2.5 s, before any action): mode Propose, balance 0.050000 USDC, caps {perAction 0.003000, daily 0.008000, floor 0.000000},
+  protectedPerDay 0.008000, agentAuthority {daysLeft 89}, agentTokens (both keys, scopes), needsYou [], runway null, lastPass null,
+  holdingsElsewhere {"error": "no chain preset or bill wallet for this tenant"}, terms.dailyCap "8000" (minor units, no unit) beside caps.daily "0.008000 USDC".
+20:37:37 (3.2 s, after two buys from sellers nobody approved):
+  needsYou = []                                     <- the documented place (SKILL.md "needs-you (with the agent's reason)") is empty
+  sellersToApprove = [A 0.002 "ETH mid price…", B 0.001 "SOL mid price…"], each with a ready setPayeesIf call bound to the terms and ten minutes
+  (the page counts needsYou + sellersToApprove + invoices as waiting: apps/console/src/components/account/hero.tsx:97; neither the
+  tool description, tameion-mcp.rs:46, nor SKILL.md names sellersToApprove)
+20:40:32 (3.0 s, after the owner asked Autopilot): pending = {"mode": "Autopilot", "eta": 1792154473, "kinds": 2,
+  "perActionCap": "0.000000 USDC", "dailyCap": "0.000000 USDC", "reserveFloor": "0.000000 USDC"} — only the mode is pending; the zero caps read as "caps going to 0".
+20:45:50 (3.1 s, after the purchase and the pass): paid [0.002 to A, reason, tx], runway {days 90, idleCover 0.048000}, refused [] although
+  three purchases were refused (they are only in purchases), no field for what is spent in the trailing 24 h or left now, no list of approved
+  payees or when a new one becomes payable. The contract has all three: spentInWindow() = 2000, remainingAllowance() = 3000,
+  attestedPayee(A) = true, attestedSince(A) = 1792154400 (read 20:46 with cast).
+RESULT: FAIL — caps and runway are there; what waits for the owner is not where the agent is told to look; spent/left and payee state are missing (P-180, P-181).
+
+== Step 3 — buy_service: inside the cap, above the cap, an unapproved seller ==
+20:37:34 unapproved seller (S3, B) -> 0.59 s, isError, 409 {"error":"127.0.0.1 asks 0.001000 USDC per call, paid to 0x108fa47c…bfece, which is not
+  one of your approved payees. Approve it once on the account page and the agent buys from it inside your limits.","needsYou":{… status "needs-you",
+  reason "SOL mid price for the morning risk note (uat-u3, unapproved seller)" …}}
+  recorded for the owner: purchases (status needs-you), inbox sellersToApprove (one-tap call), and the anchored record [0000] ESCALATION needs-you.
+20:37:34 seller A before approval -> the same 409 needsYou (0.56 s).
+20:39:55 OWNER approves A: soft_passkey.py signs inbox.sellersToApprove[0] (setPayeesIf) -> https://sepolia.arbiscan.io/tx/0xb0fe5651bee5dfe3f0472e41d584453976e2ffa6c0c0b3557afbd08301d5c1f1 (5 s)
+20:40:08 OWNER asks Autopilot: soft_passkey.py signs prepare_mode's call -> https://sepolia.arbiscan.io/tx/0x7a8dd8287674cdf317165735787bbf3ca04399ea942d67336e2b57fefd706197
+20:40:28 buy from A while the raise waits -> 1.45 s, 409 "the account refuses: the account is not on Autopilot; the agent buys only when it may pay by itself"
+20:41:55 the service applied the raise by itself (eta 20:41:13): applyPending from the relayer
+  https://sepolia.arbiscan.io/tx/0x50aa38230bd0c7eebb0f8dca090b24e20d9042d76d2ffc9d517099c28891a562 ; mode() = 2
+20:42:27 INSIDE THE CAP: S1 0.002 (cap 0.003), maxUsdc 0.003 -> 8.3 s, isError false, paid true, body {"coin":"ETH","mid":"2473.15"}
+  https://sepolia.arbiscan.io/tx/0x7307b1cf1be2f02beaef94d763ccc416811f0734f14c630e6b57a2777674fef3
+  receipt read back: status 1, block 319754452, from the facilitator 0x805a…4dad (pays the gas) to the account, gasUsed 189356
+    log USDC Transfer(account -> A, 2000); log account Paid(A, 2000, actionHash 0x62dc51985a730b9e6292f2944cb7943990bbe82ec399015fc23b76c64dfaef18)
+  balanceOf(account) 50000 -> 48000; balanceOf(A) = 2000
+20:42:37 ABOVE THE PER-PAYMENT CAP: S2 0.005, maxUsdc 0.01 -> 1.5 s, 409 "the account refuses: the price is above the per-payment limit"
+  (the words carry neither the price nor the cap; purchase.amount says 0.005000 USDC)
+20:42:37 above the agent's own ceiling: S1 with maxUsdc 0.001 -> 8 ms, 409 "the price 0.002000 USDC is above the most you allowed for one call (0.001000 USDC)"
+Scopes: ops key (no buy) -> buy_service 403 {"error":"this agent key does not carry the scope this call needs","scope":"buy"}.
+RESULT: PASS (paid, refused in words, 409 needsYou recorded).
+
+== Step 4 — prepare_limits / prepare_payees: does it say plainly the agent cannot sign? ==
+buy key (no prepare scope): prepare_payees, prepare_limits -> 403 "this agent key does not carry the scope this call needs" (scope prepare).
+ops key, 20:38:02:
+  prepare_payees([A]) -> 60,002 ms, isError, "http://localhost:7880/api/level1/prepare-payees: error sending request for url (http://localhost:7880/api/level1/prepare-payees)"
+    the same request by curl at 20:39:22 -> HTTP 200 in 0.55 s; by MCP again at 20:40:28 -> 545 ms (P-184)
+  prepare_limits(0.004 / 0.008 / 0)  — a RAISE  -> 4 ms {"to": account, "data": "0x189ae5f2…0fa0…1f40…", "summary": "set the agent's limits: 0.004000 USDC per payment, 0.008000 USDC per day, keep 0.000000 USDC untouched"}
+  prepare_limits(0.002 / 0.008 / 0)  — a CUT    -> 3 ms {"to": account, "data": "0x189ae5f2…07d0…1f40…", "summary": "set the agent's limits: 0.002000 USDC per payment, 0.008000 USDC per day, keep 0.000000 USDC untouched"}
+  prepare_mode(2) -> 3 ms {"summary": "Autopilot: the agent pays approved payees inside the caps (waits the delay)"}
+  prepare_payees([B]) -> {"summary": "allow the agent to pay these 1 payees from now on"}
+The tool descriptions say "Cannot sign" / "This tool cannot sign"; the answers the agent reads and relays never say who signs, that the raise
+waits 60 s and can be cancelled while the cut is instant, or where the owner taps. Nothing the agent prepared appears for the owner: the inbox
+after these calls had pending null and no proposal; the page builds its own call (agent.tsx:215, mandate.tsx:107). The owner signed prepare_mode's
+data above only because this test fed it to the helper.
+RESULT: FAIL (P-182; plus the 60 s hang, P-184).
+
+== Step 5 — records / record_events: recompute one root yourself ==
+20:43:24 the service ran a pass by itself (6ad21bec-0003, rule-based) and anchored; run_pass at 20:44:21 answered cached ("a run for this policy started less than ten minutes ago").
+records -> root 0x0e48221a2f588c9ec193a9d1a80df4c3b98339faa9c293a158a557e15b533c0d, 7 events, agent 0xdb60…3446, anchor 0xe7c3…b8f5,
+  anchorTx 0x3cc3dd2f6d64a89419ead3d4028ff95ef2954ee0c7583b4c616862b8d100a82b
+record_events -> {"text": "<7 NDJSON lines>"} (saved: proof/uat-u3-record-0x0e48221a-2026-10-16.events.jsonl)
+  [0000] ESCALATION needs-you x402 :7933 SOL … [0001] ESCALATION needs-you :7931 … [0002] ESCALATION refused (not on Autopilot) …
+  [0003] SETTLEMENT bought x402 :7931 ETH … [0004] ESCALATION refused (per-payment) … [0005] ESCALATION refused (own ceiling) … [0006] OBSERVATION
+Recomputed independently (Python stdlib + cast keccak; written from crates/ledger/src/log.rs + codec.rs, not from the service's code path):
+  leaf = keccak256(0x00 || canonical), node = keccak256(0x01 || left || right), RFC 6962 split; each canonical decoded and its seq/at/kind/note compared with the shown fields
+  [0000] ESCALATION  leaf 0xfae1cadadcd4fde6…  shown words = committed bytes   … (all 7 equal)
+  recomputed root : 0x0e48221a2f588c9ec193a9d1a80df4c3b98339faa9c293a158a557e15b533c0d   MATCH (records + file name)
+  rootOf(agent) on https://sepolia-rollup.arbitrum.io/rpc (block 319755048):         0x0e48221a…3c0d  MATCH
+  rootOf(agent) on https://arbitrum-sepolia-rpc.publicnode.com (block 319755071):    0x0e48221a…3c0d  MATCH
+  anchor tx from the agent 0xdb60…3446 to the anchor, selector 0xeecdf927, root in calldata 0x0e48221a…3c0d  MATCH
+But nothing an outside agent is given says how: llms.txt:135 "recompute its root", openapi /api/level1/record "recompute the root with
+`operator --example audit`" (this repo), no hash, prefix or encoding anywhere; and the stock audit hashes canonical only — kind/note "are carried
+for humans and are not hashed" (crates/operator/src/audit.rs:13-15), so a root MATCH does not cover the words a reader acts on.
+RESULT: root recomputed and matched on two nodes; FAIL as an unaided first-time agent (P-183).
+
+== Step 6 — exceed the cap by calling the contract directly with the agent key (the service bypassed) ==
+The agent's chain key is the service's file runtime/app/tenants/0x801a…4819/agent.key (600; its address = 0xDB60…3446, checked). Read only inside the command.
+20:43:11 eth_call pay(A, 5000, 0xb63e…7ec5) from the agent -> reverted, data 0x97b81df2…1388…0bb8 = OverPerActionCap(5000, 3000)
+         eth_call pay(A, 2000, same hash) from the agent -> 0x (would succeed): the cap, not the caller, is what refuses
+20:43:33 cast send pay(A, 5000, …) with the agent key, gas limit fixed so it is mined:
+  https://sepolia.arbiscan.io/tx/0xe48609286af4eb9f6ceb61e009c657938833c7d7b41603c4dec09a6c60eb85a7  status 0 (reverted), block 319754690,
+  from 0xdb60650670496881a8ac8d094e8751a75f0a3446, gasUsed 40166; replayed at block 319754689 -> OverPerActionCap(5000, 3000); balanceOf(account) still 48000
+RESULT: PASS — the limit is in the contract.
+
+== Totals ==
+Steps passed as a first-time agent meets them: 3 of 6 (1, 3, 6). Steps 2, 4, 5 do the right thing on chain; what the agent is told fails.
+Spent: 0.05 USDC funded from the relayer, 0.002 USDC paid to seller A; gas from the relayer, the facilitator and the agent (one reverted tx).
+Problems: docs/60 P-180 … P-184.
