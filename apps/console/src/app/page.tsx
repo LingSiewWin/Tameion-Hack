@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Account } from "@/components/account/account";
@@ -13,7 +12,6 @@ import type { Tenant } from "@/lib/types";
 
 export default function Home() {
   const cfg = useQuery({ queryKey: ["config"], queryFn: fetchConfig, staleTime: 300_000 });
-  const router = useRouter();
   const [tenant, setTenant] = useState<Tenant | null | undefined>(undefined);
   const [partner, setPartner] = useState<string>();
 
@@ -104,11 +102,11 @@ export default function Home() {
           Read any address
         </a>
       </TopBar>
-      {/* `/` is the desk's entry (D11): a desk just opened goes to the desk, not the payments page. */}
+      {/* An account just opened shows here: the account is the product (docs/109 §10). */}
       <Start
         cfg={cfg.data}
         partner={partner}
-        onStarted={() => router.push("/desk")}
+        onStarted={(t) => setTenant(t)}
       />
     </>
   );
