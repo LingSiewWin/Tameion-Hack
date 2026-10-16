@@ -114,6 +114,9 @@ pub struct ClaudeReasoner {
     /// a 400 naming this header, so it is worth supporting rather than
     /// making the operator hold a differently-minted key.
     workspace: Option<String>,
+    /// [`MODEL`] unless a caller pins another in code ([`ClaudeReasoner::with_model`]);
+    /// never from the environment, for the reason [`MODEL`] gives.
+    model: &'static str,
 }
 
 impl ClaudeReasoner {
@@ -133,7 +136,15 @@ impl ClaudeReasoner {
             workspace: std::env::var("ANTHROPIC_WORKSPACE_ID")
                 .ok()
                 .filter(|w| !w.trim().is_empty()),
+            model: MODEL,
         }
+    }
+
+    /// Ask another model through the same transport: the decider pins the
+    /// current Sonnet (`decide::MODEL`) and records it in every decision.
+    pub fn with_model(mut self, model: &'static str) -> Self {
+        self.model = model;
+        self
     }
 
     /// Build from the environment, or `None` if no credential is present.
@@ -177,7 +188,7 @@ impl ClaudeReasoner {
 
     fn body_for(&self, system: &str, user: String, schema: serde_json::Value) -> serde_json::Value {
         serde_json::json!({
-            "model": MODEL,
+            "model": self.model,
             "max_tokens": 4096,
             // Adaptive is the only supported on-mode for this model; a fixed
             // budget_tokens is rejected with a 400.
@@ -520,7 +531,7 @@ impl Reasoner for ClaudeReasoner {
     }
 
     fn name(&self) -> &str {
-        MODEL
+        self.model
     }
 
     fn kind(&self) -> ActorKind {
