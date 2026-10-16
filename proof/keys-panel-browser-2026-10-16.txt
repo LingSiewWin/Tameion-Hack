@@ -1,0 +1,64 @@
+# The Keys panel in a browser — written 2026-10-16 17:02:25 +0800 (read back from chain at that time)
+# Console: next dev on :3000 (the PM's), opened as http://s1.localhost:3000 and http://s1b.localhost:3000 so this seat's
+# localStorage is apart from anyone using localhost:3000; /api rewritten to the PM's service on :7880 (no restart needed:
+# prepare-guardians, challenge and execute already existed). Playwright (Chromium) through the MCP server.
+
+## 1. The demo desk as it is today (proof/keys-panel-2026-10-16.png at 1280, -390.png at 390)
+tenant   desk-gold-2329  policy 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308  owner 0xc00a8891f8ab621ed0c1966fefbeadfa37dee03c (Arbitrum Sepolia)
+browser  holds the desk's public key (credentialId "secure-enclave", as scripts/desk_init.sh leaves it); nothing was signed
+panel    "1 of 3 keys set — add two guardians before raising a limit. This account's key lives in this Mac's chip: if the
+         Mac is lost, nobody can replace it." Daily key: "In this Mac's security chip…"; Guardian 1 / 2: not set.
+chain    guardianCount 0  guardianThreshold 0  recovery 0x0000000000000000000000000000000000000000
+(the page's inbox answered 401 — the desk's inbox wants its agent key — and the panel did not need it: it reads the chain.)
+
+## 2. A new account, guardians named from the page with one passkey tap
+passkey  made in the page by navigator.credentials.create on a CDP virtual authenticator (ctap2, internal, user verification
+         on), rpId s1b.localhost; the private key never left the authenticator
+account  s1-keys-mvaqif4l reserved through POST /api/level1/deploy {lazy:true}: policy 0x19ee2c4b1a9a87c950d161b5c55b090a42a70613,
+         owner 0x52d5cce11937031c8054556d73e0a70c4a880216, recovery 0x0
+wallet   window.ethereum = a test stand-in holding guardian A 0x5F48D8F887ADa7dA30228a2a236E49001E7E002a and guardian B
+         0x67B13190c7E25d98950FC3153623560e66c56E0F (keys in ~/.tameion/test-keys, signed by cast; its picker hands out A, then B)
+before   "1 of 3 keys set — add two guardians before raising a limit. If you lose your passkey today, nobody can replace it."
+connect  "Connect a wallet" ×2 → each wallet signed the guardian consent (personal_sign), checked in the page → "Wallet ••002A ·
+         connected, not named yet", "Wallet ••6E0F · connected, not named yet" (proof/keys-panel-2026-10-16-connected.png).
+         Nothing typed.
+tap      "Name both guardians — one passkey tap": POST /api/level1/prepare-guardians 200 → POST /api/level1/challenge 200 (the
+         first tap put the reserved account on chain) → passkey assertion → POST /api/level1/execute 200, 17 s in all
+tx       0x0ab2af0e8aa304dd3ea2742ef1d4f4e5df4cf89fcbe37f003a7bd758ccf1c042  https://sepolia.arbiscan.io/tx/0x0ab2af0e8aa304dd3ea2742ef1d4f4e5df4cf89fcbe37f003a7bd758ccf1c042
+receipt  status 0x1  block 319703550  from 0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25 (the relayer, gas only)  to 0x52d5cce11937031c8054556d73e0a70c4a880216
+         logs: 0x10350f3e, 0x721f414e  = GuardiansSet 0x10350f3e, Executed 0x721f414e
+after    "3 of 3 keys set. Any two can replace the third; a guardian cannot spend." Guardian 1 "Wallet ••002A · on chain",
+         Guardian 2 "Wallet ••6E0F · on chain" (proof/keys-panel-2026-10-16-set.png)
+chain    guardians 0x5F48D8F887ADa7dA30228a2a236E49001E7E002a 0x67B13190c7E25d98950FC3153623560e66c56E0F  threshold 2  recovery 0x0000000000000000000000000000000000000000
+         key 0 qx 0x2b2c6091fa8f8727280be3b1088cbf9c2b922099cb3191aef7a83dbac629cbe0  (the browser passkey's)
+
+## 3. Refusals in the page (nothing signed, nothing sent)
+same wallet  "Use another wallet" on guardian 2 while the picker handed back guardian 1's account →
+             "That wallet is already guardian 1. Pick a different wallet: two accounts of one wallet share one recovery phrase."
+our key      a wallet answering with Tameion's relayer 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25 →
+             "That is Tameion's own key. A guardian is a wallet you, or someone you trust, holds."
+             The panel still read "3 of 3 keys set" afterwards.
+
+## 4. The same refusal in the service (seat build, :7901, 17:00:26 +0800)
+POST /api/level1/prepare-guardians with the relayer in the list → HTTP 400
+{"error":"that is Tameion's own key; a guardian is a wallet you, or someone you trust, holds"}
+The same body with two wallets of the owner's → HTTP 200 with setGuardians calldata.
+
+## 5. An unwanted replacement, cancelled from the panel with one passkey tap (written 2026-10-16 17:14:11 +0800)
+The two guardians (both test wallets this seat holds) propose a stranger's key on the same account — the "guardians colluding or
+taken" case of docs/104 §A — and the owner cancels inside the delay:
+  17:11:43 start
+  guardian A approveRecovery tx 0x79b0c11e4b7763605ee51b2a67ab928ce8d0cd2cce16956d61ac26911f2ecdc6 status 0x1
+  guardian B approveRecovery tx 0x285e6870d9407ebecd8e3ef810d659cc97271d4b1ca3d2f4a18e0166edbf2a39 status 0x1
+  pending (qx, qy, eta): 0xbf79d8f392b196a0247f03fc6680418f2521d4e2dcd43cd8985e7b8fe11d9eea 0x85f0ead864db658544ca752a7ea78a0cabcb070e3cf39ed2b19f5e5d384dcaf1 1792141968 [1.792e9]
+  17:11:50 done
+panel    "A new key is waiting to replace yours at 05:12 PM. If you did not ask for it, cancel it before then. [Cancel it now]"
+         (proof/keys-panel-2026-10-16-pending.png; taken before the alert moved above the key slots at 17:14 — same words)
+tap      "Cancel it now" → the page builds cancelRecovery() itself (lib/guard.ts allows it on the owner contract only) → challenge →
+         passkey assertion → execute, 8 s from reload to "Cancelled. Your key stays; the guardians would have to start again."
+tx       0x39950ecd844379f315daa149a6f31f8d03ce62e2de05f88d1348955c7ea58d23  https://sepolia.arbiscan.io/tx/0x39950ecd844379f315daa149a6f31f8d03ce62e2de05f88d1348955c7ea58d23
+receipt  status 0x1  block 319706674  logs 0x8154b6c5, 0x721f414e = RecoveryCancelled 0x8154b6c5, Executed 0x721f414e
+chain    block time 1792142047 (the cancelled key's eta was 1792141968); pendingKey eta 0; recoveryEpoch 2 (was 1);
+         votes for the stranger's key under the new epoch: 0 (the old two no longer count);
+         key 0 still qx 0x2b2c6091fa8f8727280be3b1088cbf9c2b922099cb3191aef7a83dbac629cbe0;
+         applyRecovery() by anyone → refused, revert data: "0x175c1aea" = NothingPending 0x175c1aea

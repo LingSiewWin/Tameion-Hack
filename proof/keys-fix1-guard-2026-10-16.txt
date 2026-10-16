@@ -1,0 +1,17 @@
+# Fix round 1 — the relay refuses our key as a guardian — 2026-10-16 18:06:05 +0800, Arbitrum Sepolia, seat build on :7901
+account: drill account 0xb2B6E1471755b4C77f1D01b80d3aAD8d1A6baBd9 (key 0 = the drill's new key), guardians A 0x5F48D8F887ADa7dA30228a2a236E49001E7E002a, B 0x67B13190c7E25d98950FC3153623560e66c56E0F; relayer 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+  chain: guardians [0x5F48D8F887ADa7dA30228a2a236E49001E7E002a 0x67B13190c7E25d98950FC3153623560e66c56E0F] count 2 threshold 2 nonce 2 isGuardian(relayer) false
+
+1. the reviewer's call (docs/103 S1-4): the passkey signs setGuardians([relayer, A], 2); prepare is skipped; sent to /api/level1/execute
+  challenge from the service = the chain's challengeFor: 0xdb95a3dfb834d10b034c5f663b4b9cd95e61ea8351941621aaa55d97b5b510ed
+  the service answers: {"error":"that is Tameion's own key; a guardian or recovery address is a wallet you, or someone you trust, holds"} [HTTP 500]
+  the same signed call at eth_call: the contract WOULD accept it — so the refusal above is the service's guard, not the chain (not sent)
+  chain: guardians [0x5F48D8F887ADa7dA30228a2a236E49001E7E002a 0x67B13190c7E25d98950FC3153623560e66c56E0F] count 2 threshold 2 nonce 2 isGuardian(relayer) false
+
+2. prepare-guardians naming the account itself (docs/103 S1-5)
+  {"error":"that is this account itself; a guardian is a wallet that can sign"} [HTTP 400]
+  and the relayer: {"error":"that is Tameion's own key; a guardian or recovery address is a wallet you, or someone you trust, holds"} [HTTP 400]
+  two wallets of the owner's: {"data":"0xe94e9e990000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000020000000000000000000000005f48d8f887ada7da30228a2a236e49001e7e002a00000000000000000000000067b13190c7e25d98950fc3153623560e66c56e0f","summary":"name 2 guardian(s), 2 of whom may together propose a replacement passkey after the recovery delay; you can cancel until then","to":"0xb2b6e1471755b4c77f1d01b80d3aad8d1a6babd9"} [HTTP 200]
+
+3. a new account whose body names our relayer as its recovery address (deploy route)
+  {"error":"the recovery address is Tameion's own key; name a wallet you hold, or none"} [HTTP 400]

@@ -1,0 +1,79 @@
+# The lost-Mac drill — 2026-10-16 18:16:54 +0800, Arbitrum Sepolia (421614), scripts/prove_recovery.sh
+
+== 0. who is who ==
+  relayer    0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25  0.095529922216367127 ETH — pays gas, relays; no authority over the account
+  guardian A 0x5F48D8F887ADa7dA30228a2a236E49001E7E002a  (its own wallet; key file guardianA.key, never printed)
+  guardian B 0x67B13190c7E25d98950FC3153623560e66c56E0F  (its own wallet; key file guardianB.key)
+  service    http://127.0.0.1:7901  (prepare-guardians, challenge, execute — the Keys panel's routes)
+  guardian A holds 0.001990714182553628 ETH for its own gas
+  guardian B holds 0.001982384433157292 ETH for its own gas
+
+== 1. the old passkey owns a new account (recovery address 0x0: no one of ours can replace the key) ==
+  old key (this run's software passkey, ~/.tameion/test-keys/recovery/old-1792145814.pem)
+    qx 0x49102e7c9b9283005d2391e7b3c05f84b51a72dbd28025283015e2086200f2fa
+    qy 0xc6619f1d6fe62b1f09999f8a4e08577fa0bccb51827e16416a395a372e99e745
+  tx 0x4d25e10586a02665132a8596da67dc4cb681c2531488e211fc24ffad341e6da0  creates 0x0833fac9905f5b6b359d98066d407deee133fb0d  gas 0x22cf27
+  tx 0x3dc4dd2aa2f9d2b37afddeee82dbe984430352916419e7d19e527d34e3b5df90  creates 0x48a4b10f6bdb572287379e6e09699997475a09a7  gas 0x241472
+  PasskeyPrincipal  0x0833FaC9905F5b6b359d98066d407dEee133FB0D  https://sepolia.arbiscan.io/address/0x0833FaC9905F5b6b359d98066d407dEee133FB0D
+  BudgetPolicyToken 0x48A4b10f6bDb572287379e6E09699997475A09a7  https://sepolia.arbiscan.io/address/0x48A4b10f6bDb572287379e6E09699997475A09a7  (principal 0x0833FaC9905F5b6b359d98066d407dEee133FB0D)
+  recoveryDelay 60 s
+  key 0 qx 0x49102e7c9b9283005d2391e7b3c05f84b51a72dbd28025283015e2086200f2fa
+        qy 0xc6619f1d6fe62b1f09999f8a4e08577fa0bccb51827e16416a395a372e99e745
+  guardians []  threshold 0  epoch 0
+  recovery 0x0000000000000000000000000000000000000000  pending (qx, qy, eta) 0x0000000000000000000000000000000000000000000000000000000000000000 0x0000000000000000000000000000000000000000000000000000000000000000 0  nonce 0
+
+== 2. before any guardian: nobody of ours can touch the key ==
+guardian A approves a key before it is a guardian
+  refused: NotGuardian (0xef6d0f02)
+the relayer proposes a key of its own (the old testnet recovery path)
+  refused: NotRecovery (0x73c88591)
+
+== 3. one passkey signature names the two guardians, 2 of 2 (the Keys panel's tap) ==
+  prepare-guardians: name 2 guardian(s), 2 of whom may together propose a replacement passkey after the recovery delay; you can cancel until then
+  calldata checked against cast's own setGuardians([A,B],2): same
+  setGuardians tx 0x9af5f79c4cba880112a9cd9a6f1c82b8764281a6e28cc54aa91a3a8f39c0b9cd  https://sepolia.arbiscan.io/tx/0x9af5f79c4cba880112a9cd9a6f1c82b8764281a6e28cc54aa91a3a8f39c0b9cd
+  key 0 qx 0x49102e7c9b9283005d2391e7b3c05f84b51a72dbd28025283015e2086200f2fa
+        qy 0xc6619f1d6fe62b1f09999f8a4e08577fa0bccb51827e16416a395a372e99e745
+  guardians [0x5F48D8F887ADa7dA30228a2a236E49001E7E002a 0x67B13190c7E25d98950FC3153623560e66c56E0F]  threshold 2  epoch 1
+  recovery 0x0000000000000000000000000000000000000000  pending (qx, qy, eta) 0x0000000000000000000000000000000000000000000000000000000000000000 0x0000000000000000000000000000000000000000000000000000000000000000 0  nonce 1
+the relayer is not a guardian: it approves a key
+  refused: NotGuardian (0xef6d0f02)
+
+== 4. the Mac is gone: the old key is lost (from here on nothing uses it but the last refusal) ==
+  new key, made on the replacement device (~/.tameion/test-keys/recovery/new-1792145814.pem)
+    qx 0x2cc98c5802469c429b6d71895b7b311c7078ea66fd110818deca2d02a8c19818
+    qy 0xd3832bb483cf59703a0016507fb0485df1fed1dd0d324a009e7cb973c640f0bd
+  guardian A approveRecovery(new) tx 0x4231b89975fbb2f264fef7835b0c8fbe6d44f4763d9e2c8e0e0ad59c5bacec72  https://sepolia.arbiscan.io/tx/0x4231b89975fbb2f264fef7835b0c8fbe6d44f4763d9e2c8e0e0ad59c5bacec72
+  votes for the new key: 1 of 2; pending eta 0 (0 = nothing pending: one guardian alone changes nothing)
+guardian A votes again
+  refused: AlreadyApproved (0x101f817a)
+  guardian B approveRecovery(new) tx 0xbc19d6334c2f5882c755a01071db39e93d66d5e2c137344ef20da19b011d1e41  https://sepolia.arbiscan.io/tx/0xbc19d6334c2f5882c755a01071db39e93d66d5e2c137344ef20da19b011d1e41
+  votes: 2 of 2 → pending, applies at unix 1792145977 (18:19:37 +0800)
+applying before the delay ends
+  refused: TooEarly (0xd606d83f)
+
+== 5. the delay passes (the window in which a holder of the old key could cancel); anyone applies ==
+  applyRecovery tx 0x2e41da5e63cd0beaf0fe38518b929fe7d0bce1660e5eeb813d6482270acd2b42  https://sepolia.arbiscan.io/tx/0x2e41da5e63cd0beaf0fe38518b929fe7d0bce1660e5eeb813d6482270acd2b42  (sent by guardian B; anyone may)
+  key 0 qx 0x2cc98c5802469c429b6d71895b7b311c7078ea66fd110818deca2d02a8c19818
+        qy 0xd3832bb483cf59703a0016507fb0485df1fed1dd0d324a009e7cb973c640f0bd
+  guardians [0x5F48D8F887ADa7dA30228a2a236E49001E7E002a 0x67B13190c7E25d98950FC3153623560e66c56E0F]  threshold 2  epoch 2
+  recovery 0x0000000000000000000000000000000000000000  pending (qx, qy, eta) 0x0000000000000000000000000000000000000000000000000000000000000000 0x0000000000000000000000000000000000000000000000000000000000000000 0  nonce 1
+  key 0 is the new key; the guardians stay; recovery took 77 s from the first vote (60 s of it the delay)
+
+== 6. the new key signs a trust action: approve payee 0x1111111111111111111111111111111111111111 on the policy ==
+  attestedPayee before: false
+  setPayee tx 0x580e6d73369d8eed8c0129e1b50bc1da7b17b944a1538ace38501ea2bc7d2392  https://sepolia.arbiscan.io/tx/0x580e6d73369d8eed8c0129e1b50bc1da7b17b944a1538ace38501ea2bc7d2392
+  attestedPayee after:  true; owner nonce 2
+
+== 7. the old key is refused (a thief who kept it gets nothing) ==
+on chain: the old key signs setPayee(0x2222222222222222222222222222222222222222) as the next approval, eth_call execute
+  refused: BadPasskeySignature (0x4d5cfe7b)
+control: the new key signs that same challenge (eth_call only, not sent)
+  accepted — the refusal above is about the key, nothing else
+through the service: the old key's assertion sent to /api/level1/execute
+  refused by the service: That passkey is not this account's owner, so nothing happened.
+  attestedPayee(0x2222222222222222222222222222222222222222) = false
+
+== result ==
+  PASS — two guardians replaced a lost passkey on chain with no help from us; the new key signs, the old one cannot.
+  relayer now 0.095431309192939461 ETH; guardian A 0.001989170609036588; guardian B 0.001978797909428168

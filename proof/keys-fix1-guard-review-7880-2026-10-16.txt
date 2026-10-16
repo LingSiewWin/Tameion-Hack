@@ -1,0 +1,44 @@
+# S6b re-check of S1-4/S1-5 — 2026-10-16 19:41:02 +0800 — owner 0x0833FaC9905F5b6b359d98066d407dEee133FB0D (S1's fix-1 drill account, runtime/recovery/last.env), Arbitrum Sepolia, service http://127.0.0.1:7880
+  relayer 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25  guardian A 0x5F48D8F887ADa7dA30228a2a236E49001E7E002a  guardian B 0x67B13190c7E25d98950FC3153623560e66c56E0F  (keys in files, never printed)
+  owner nonce before: 2
+  guardians [0x5F48D8F887ADa7dA30228a2a236E49001E7E002a 0x67B13190c7E25d98950FC3153623560e66c56E0F]  count 2  threshold 2  epoch 2  pending eta 0  qx 0x2cc98c5802…
+
+== 1. prepare-guardians naming the relayer ==
+{"error":"that is Tameion's own key; a guardian or recovery address is a wallet you, or someone you trust, holds"}
+
+== 2. prepare-guardians naming the account itself, then its policy ==
+{"error":"that is this account itself; a guardian is a wallet that can sign"}
+{"data":"0xe94e9e9900000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000200000000000000000000000048a4b10f6bdb572287379e6e09699997475a09a70000000000000000000000005f48d8f887ada7da30228a2a236e49001e7e002a","summary":"name 2 guardian(s), 2 of whom may together propose a replacement passkey after the recovery delay; you can cancel until then","to":"0x0833fac9905f5b6b359d98066d407deee133fb0d"}
+
+== 3. the reviewer's call: key 0 signs setGuardians([relayer, A], 2), sent straight to /api/level1/execute (prepare skipped) ==
+  answer: {"error":"that is Tameion's own key; a guardian or recovery address is a wallet you, or someone you trust, holds"}
+
+== 4. key 0 signs setRecovery(relayer) ==
+  answer: {"error":"that is Tameion's own key; a guardian or recovery address is a wallet you, or someone you trust, holds"}
+
+== 5. key 0 signs setGuardians([policy, A], 2) ==
+  answer: {"explorer":"https://sepolia.arbiscan.io/tx/0xa5e625f414f7855500ed20665718044072588f299656b083424a92be19c42303","tx":"0xa5e625f414f7855500ed20665718044072588f299656b083424a92be19c42303"}
+  RELAYED — finding still open
+
+== after ==
+  owner nonce after: 3 (unchanged = nothing relayed)
+  guardians [0x48A4b10f6bDb572287379e6E09699997475A09a7 0x5F48D8F887ADa7dA30228a2a236E49001E7E002a]  count 2  threshold 2  epoch 3  pending eta 0  qx 0x2cc98c5802…
+  isGuardian(relayer): false
+# done 2026-10-16 19:41:45 +0800
+# S6b re-check of S1-4/S1-5 — 2026-10-16 19:42:11 +0800 — owner 0x0833FaC9905F5b6b359d98066d407dEee133FB0D (S1's fix-1 drill account, runtime/recovery/last.env), Arbitrum Sepolia, service http://127.0.0.1:7880
+  relayer 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25  guardian A 0x5F48D8F887ADa7dA30228a2a236E49001E7E002a  guardian B 0x67B13190c7E25d98950FC3153623560e66c56E0F  (keys in files, never printed)
+# S6b restore — 2026-10-16 19:42:11 +0800 — owner 0x0833FaC9905F5b6b359d98066d407dEee133FB0D back to guardians [A, B] 2 with key 0, through http://127.0.0.1:7880
+  guardians [0x48A4b10f6bDb572287379e6E09699997475A09a7 0x5F48D8F887ADa7dA30228a2a236E49001E7E002a]  count 2  threshold 2  epoch 3  pending eta 0  qx 0x2cc98c5802…
+  answer: {"explorer":"https://sepolia.arbiscan.io/tx/0x6380236f92b5ebd66c1333372d28b851de903760e80087351ac9976d387baa14","tx":"0x6380236f92b5ebd66c1333372d28b851de903760e80087351ac9976d387baa14"}
+  guardians [0x5F48D8F887ADa7dA30228a2a236E49001E7E002a 0x67B13190c7E25d98950FC3153623560e66c56E0F]  count 2  threshold 2  epoch 4  pending eta 0  qx 0x2cc98c5802…
+  isGuardian(policy): false
+
+# S6b note — 2026-10-16 19:43:11 +0800
+# Receipts (cast receipt, Arbitrum Sepolia): 0xa5e625f4…2303 status 1 (GuardiansSet 0x10350f3e + Executed 0x721f414e) = step 5, the policy
+# named as a guardian; 0x6380236f…aa14 status 1 (same topics) = the restore to [A, B] 2. Net: the account is as S1 left it (guardians A, B,
+# threshold 2), epoch 2 -> 4; relayer balance after: 0.095428111065028017 ETH (two relayed txs).
+# Why step 5 was relayed: level1::guardian_refusal builds "itself" from the owner plus the policies of THIS service's tenant records whose
+# owner is this owner (level1.rs guardian_refusal). The drill account was deployed by scripts/prove_recovery.sh with forge, so :7880 has no
+# tenant record for it and does not know its policy: the owner itself is refused (step 2a), its policy is not (steps 2b and 5).
+# For an account the service created (a tenant), the policy is in the records and the same call is refused (S1's unit test).
+# Steps 1, 3, 4: the relayer is refused as a guardian and as the recovery address before anything is sent (owner nonce 2 before step 5).

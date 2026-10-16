@@ -1,0 +1,42 @@
+# S6 extra drill — 2026-10-16 17:45:31 +0800 — on the account scripts/prove_recovery.sh recovered just before (0x196E6675D0BB2CfA65615CB9b466AB3C3F280625), Arbitrum Sepolia, service http://127.0.0.1:7880
+  relayer 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25  guardian A 0x5F48D8F887ADa7dA30228a2a236E49001E7E002a  guardian B 0x67B13190c7E25d98950FC3153623560e66c56E0F  (keys in files, never printed)
+  guardians [0x5F48D8F887ADa7dA30228a2a236E49001E7E002a 0x67B13190c7E25d98950FC3153623560e66c56E0F]  count 2  threshold 2  epoch 2  pending eta 0  qx 0x278a2c1b38…
+
+== A. one guardian alone ==
+  a third key (the stranger's) qx 0x208e652c8aad14735bba8905c5500b400597f701fdc1e970aaf4053b16de29fd
+  guardian A alone votes for it: tx 0xba4b9db4f86a05d1e69a6d1e46654d6135e8ed966dd198f9a01b559144013643
+  guardians [0x5F48D8F887ADa7dA30228a2a236E49001E7E002a 0x67B13190c7E25d98950FC3153623560e66c56E0F]  count 2  threshold 2  epoch 2  pending eta 0  qx 0x278a2c1b38…
+anyone applies after one vote
+  refused: NothingPending (0x175c1aea)
+guardian A cancels (a guardian is not the passkey and not the recovery address)
+  refused: NotPasskeyOrRecovery (0x174f1fc8)
+
+== B. the second guardian makes it pending; the lost OLD key cannot cancel; the NEW key can ==
+  guardian B votes: tx 0x9c36cb679d569d6da2f4e76674e0a192a2a0b661d3b1ec6d9e027625cfba77a8
+  guardians [0x5F48D8F887ADa7dA30228a2a236E49001E7E002a 0x67B13190c7E25d98950FC3153623560e66c56E0F]  count 2  threshold 2  epoch 2  pending eta 1792144018  qx 0x278a2c1b38…
+the OLD key (lost with the Mac; say a thief kept it) signs cancelRecovery() through the service
+  refused by the service: That passkey is not this account's owner, so nothing happened.
+the NEW key signs cancelRecovery() through the service
+  cancelRecovery tx 0x0732c90a52ff65c9ae89cb84075d42b93e94850f4139ae80cadb7f223ffbe053
+  guardians [0x5F48D8F887ADa7dA30228a2a236E49001E7E002a 0x67B13190c7E25d98950FC3153623560e66c56E0F]  count 2  threshold 2  epoch 3  pending eta 0  qx 0x278a2c1b38…
+the stranger's key is applied anyway
+  refused: NothingPending (0x175c1aea)
+
+== C. the relayer as a guardian ==
+prepare-guardians with the relayer in the list (the Keys panel's route)
+{"error":"that is Tameion's own key; a guardian is a wallet you, or someone you trust, holds"}
+a page that skips prepare: the passkey signs setGuardians([relayer, A], 2) and sends it to /api/level1/execute
+  RELAYED: tx 0x6eea528e18f4c1396786e2dabe2c9039a0df5fd998ef65945b0bbad79212f84d — the service relayed it and the contract accepted it
+  guardians [0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25 0x5F48D8F887ADa7dA30228a2a236E49001E7E002a]  count 2  threshold 2  epoch 4  pending eta 0  qx 0x278a2c1b38…
+  the relayer is now a guardian: true
+the relayer votes as a guardian (eth_call)
+  NOT REFUSED (the call succeeded)
+  (the extra drill stopped at 'NOT REFUSED' by design of its own check — the relayer IS a guardian here; restoring 17:48:12 +0800)
+restore [A, B] 2 with the new key
+  restore tx 0x518468da32d60ba28755dbaf80fa7b22bf391e5c86ad8b21851e70c1b6472c92
+  guardians [0x5F48D8F887ADa7dA30228a2a236E49001E7E002a 0x67B13190c7E25d98950FC3153623560e66c56E0F]  count 2  threshold 2  epoch 5  pending eta 0  qx 0x278a2c1b38…
+  the relayer is a guardian: false
+
+== result ==
+  A: one guardian alone changes nothing (NothingPending, and a guardian cannot cancel). B: the lost key cannot cancel a pending replacement, the new key can. C: prepare-guardians refuses the relayer, but /api/level1/execute relays an owner-signed setGuardians([relayer, A], 2) and the contract accepts it — the guard is advisory; the passkey is the authority. Restored.
+  relayer 0.095967028158136593 ETH; A 0.001993824331619756; B 0.001987644668351504

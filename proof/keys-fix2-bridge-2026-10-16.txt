@@ -1,0 +1,18 @@
+# Fix round 2 — the demo bridge refuses guardian and recovery calls while it runs unattended — 2026-10-16 19:24:19 +0800
+# bridge: PID 89093, started as scripts/dev.sh runs it: SE_BLOB=~/.tameion/se-owner.blob nohup python3 scripts/desk_se_bridge.py --unattended --clear-only >$TMPDIR/tameion-dev/bridge.log
+# (the previous bridge, PID 55421, was stopped with: kill $(cat $TMPDIR/tameion-dev/bridge.pid) — no pkill)
+bridge log line 1: desk-se bridge on http://127.0.0.1:7898 for ~/.tameion/se-owner.blob (UNATTENDED: no person asked); origins ['http://127.0.0.1:7880', 'http://localhost:7880']; guardian and recovery calls REFUSED (unattended)
+
+1. setGuardians([A, B], 2) for the demo desk's owner 0xc00a8891f8ab621ed0c1966fefbeadfa37dee03c as a call decision:
+   $ curl -X POST http://127.0.0.1:7898/sign -H 'Origin: http://localhost:7880' -d '{"decision":{"kind":"call","chainId":421614,"owner":"0xc00a8891f8ab621ed0c1966fefbeadfa37dee03c","nonce":"0","target":"0xc00a8891f8ab621ed0c1966fefbeadfa37dee03c","data":"0xe94e9e990000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000020000000000000000000000005f48d8f887ada7da30228a2a236e49001e7e002a00000000000000000000000067b13190c7e25d98950fc3153623560e66c56e0f"}}'
+   → {"error": "guardian and recovery changes need a key that asks for Touch ID"} [HTTP 403]
+2. cancelRecovery() the same way:
+   → {"error": "guardian and recovery changes need a key that asks for Touch ID"} [HTTP 403]
+3. a desk decision still signs (control text, issued = 1: a stale challenge the service would refuse, so this signature is useless if replayed; r/s not printed):
+   $ curl -X POST http://127.0.0.1:7898/sign -H 'Origin: http://localhost:7880' -d '{"decision":{"kind":"control","chainId":421614,"desk":"0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308","issued":1,"text":"S1 bridge probe, not sent anywhere"}}'
+   → HTTP 200; fields ["authenticatorData","challenge","challengeIndex","clientDataJSON","r","reason","s","typeIndex"]; challenge 0x390c6d522e40793724d9e22c065a26a3f894859f7158d68198d56a49c73c2c3a; reason "State on desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308: S1 bridge probe, not sent anywhere"
+4. bridge log after the three requests:
+   desk-se bridge: "POST /sign HTTP/1.1" 403 -
+   desk-se bridge: "POST /sign HTTP/1.1" 403 -
+   desk-se bridge: signed 0x390c6d52… saying: State on desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308: S1 bridge probe, not sent anywhere
+   desk-se bridge: "POST /sign HTTP/1.1" 200 -

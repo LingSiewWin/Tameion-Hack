@@ -1,0 +1,17 @@
+# Fix round 1 — the watcher tells the owner of a waiting replacement key — 2026-10-16 18:07:07 +0800
+# seat build on :7901 with TAMEION_LEVEL1_WATCH_SECS=10, app dir runtime/seat-S1; Arbitrum Sepolia
+1. an account on this service: s1-watch-1792145227, policy 0xcf6ab00b5c111bcebdf5a45e8509d7af988f245a, owner 0xf72eece02e8f88ccf13c06ff191fb64aeffaf96a (a software passkey made for this run, ~/.tameion/test-keys/recovery/watch-1792145227.pem)
+2. the passkey names guardians A and B, 2 of 2 (the first tap also puts the account on chain): tx 0xa0d386e0c541d104822510a052bd06267e6e38c42b82a0432624a46b0ae3e0a1
+   record deployed: true  chain: guardians 2 threshold 2
+3. an open page's event stream is listening (GET /api/level1/events?policy=…); both guardians now propose a stranger's key:
+   guardian A approveRecovery tx 0xc5e9bcd903920fc0f8b34d49688a26166a75947c1a0f2cad33ea2a3f590b5341
+   guardian B approveRecovery tx 0xaf5c46f92cc1893c0691222eddc2bbdf687759b62de183697e4f92c5164279f6
+   pending (qx, qy, eta): 0xbf79d8f392b196a0247f03fc6680418f2521d4e2dcd43cd8985e7b8fe11d9eea 0x85f0ead864db658544ca752a7ea78a0cabcb070e3cf39ed2b19f5e5d384dcaf1 1792145316 [1.792e9]
+4. the watcher, 7 s after the second vote (service log):
+   watcher: a new key is waiting for 0xcf6ab00b5c111bcebdf5a45e8509d7af988f245a (eta 1792145316, proposed by 0x67b13190c7e25d98950fc3153623560e66c56e0f); telling the owner
+   the page's event stream received:
+   event: keys
+   data: {"cause":"replacement pending","eta":1792145316}
+   the push text (push::tell → every browser of this account that turned on notifications; this run had none subscribed):
+   0 subscription file(s); the text built by level1::key_replacement_text is unit-tested
+5. the owner acts on it: the passkey cancels, tx 0x8bef8164f6ca8b853516afc25b9f8e95ff9194c252bacb2ba4881d86bc166e85; pending now 0, epoch 2

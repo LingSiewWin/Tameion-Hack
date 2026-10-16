@@ -1,0 +1,26 @@
+# Fix round 1 — the Mac's chip names guardians and cancels a replacement — 2026-10-16 18:12:39 +0800, Arbitrum Sepolia
+# throwaway Enclave key (made --no-presence: unattended proof, no Touch ID asked), patched bridge on :7912 (--unattended --clear-only), seat service :7901
+Enclave key qx 0x83072e8ad621923653059f99c5439111836af2464a3a1ba7af6478577a12be78
+            qy 0x60d45a566bc537536f78dd2b7a1af8ce18f259c3e308b037825b752660251b4f
+1. an account whose only key is the chip's: policy 0x4c214473c4d6567b59de08127933f26eb25b98a1, owner 0x866bcf889cadb872e71bf58777d07999dfe11626 (reserved; the first signature puts it on chain)
+2. the chip names guardians A and B, 2 of 2:
+   the bridge signed, Touch ID prompt words: "Name 2 guardians of account 0x866bcf889cadb872e71bf58777d07999dfe11626: 0x5f48d8f887ada7da30228a2a236e49001e7e002a, 0x67b13190c7e25d98950fc3153623560e66c56e0f; 2 of them together may replace its key after the delay"
+   challenge: service 0x509921d4b8993065b0362f6e377eccd6d0ba2d38bf6b23c5b8581892f12facf8 / chain challengeFor 0x509921d4b8993065b0362f6e377eccd6d0ba2d38bf6b23c5b8581892f12facf8 / bridge 0x509921d4b8993065b0362f6e377eccd6d0ba2d38bf6b23c5b8581892f12facf8
+   setGuardians tx 0x002e1cc9fa0361ad236a034d55ee55b9805dca665ab7495a0a21648852b9e1e7  https://sepolia.arbiscan.io/tx/0x002e1cc9fa0361ad236a034d55ee55b9805dca665ab7495a0a21648852b9e1e7
+   chain: key 0 qx 0x83072e8ad621923653059f99c5439111836af2464a3a1ba7af6478577a12be78; guardians 0x5F48D8F887ADa7dA30228a2a236E49001E7E002a 0x67B13190c7E25d98950FC3153623560e66c56E0F; threshold 2
+3. the bridge refuses what it cannot word or what is not the owner contract (nothing signed):
+   setPayee on the policy: {"error": "this bridge signs only calls on the account's own owner contract"} [HTTP 400]
+   a bare challenge: {"error": "this bridge signs only decisions it can put in words"} [HTTP 403]
+4. both guardians propose a stranger's key:
+   guardian A approveRecovery tx 0xb8f91cda32138f20d5c8e2ccf0a25a22a4a0a49b3e018461e680b61aa4779e81
+   guardian B approveRecovery tx 0xdd750e8b6393c179e543f1cac65e5fe5d10abb871f712df60c631e2e7bb54b60
+   pending eta 1792145650
+5. the chip cancels it:
+   the bridge signed, Touch ID prompt words: "Cancel the waiting replacement of the key of account 0x866bcf889cadb872e71bf58777d07999dfe11626"
+   challenge: service 0xb8e051b2ad9839868ce0c27b6a70383e59617391048730ca3129596936d7b70c / chain challengeFor 0xb8e051b2ad9839868ce0c27b6a70383e59617391048730ca3129596936d7b70c / bridge 0xb8e051b2ad9839868ce0c27b6a70383e59617391048730ca3129596936d7b70c
+   cancelRecovery tx 0xb6f3a2b4dcc7865c9bd3ee97354656fde7fcee29fea3350c5841e70568a44d35  https://sepolia.arbiscan.io/tx/0xb6f3a2b4dcc7865c9bd3ee97354656fde7fcee29fea3350c5841e70568a44d35
+   chain: pending eta 0, epoch 2, key 0 still the chip's: 0x83072e8ad621923653059f99c5439111836af2464a3a1ba7af6478577a12be78
+bridge log:
+   desk-se bridge on http://127.0.0.1:7912 for ~/.tameion/test-keys/recovery/se-fix1.blob (UNATTENDED: no person asked); origins ['http://127.0.0.1:7880', 'http://localhost:7880']
+   desk-se bridge: signed 0x509921d4… saying: Name 2 guardians of account 0x866bcf889cadb872e71bf58777d07999dfe11626: 0x5f48d8f887ada7da30228a2a236e49001e7e002a, 0x67b13190c7e25d98950fc3153623560e66c56e0f; 2 of them together may replace its key after the delay
+   desk-se bridge: signed 0xb8e051b2… saying: Cancel the waiting replacement of the key of account 0x866bcf889cadb872e71bf58777d07999dfe11626
