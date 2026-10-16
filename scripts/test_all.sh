@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Every offline test in the repository, in one command. No chain, no keys, no
+# network beyond what the toolchains themselves fetch.
+#
+#   scripts/test_all.sh
+#
+# What this does not run, because each needs a chain or a browser:
+# scripts/acceptance.sh (anvil, 38 checks), scripts/prove_*.sh (live chains),
+# and the passkey page in a browser. Those leave their output in proof/.
+# The console's static build (`next build`) is not run here; it takes a minute.
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+failed=()
+
+step() {
+  local name=$1; shift
+  printf '\n\033[1m== %s ==\033[0m\n' "$name"
+  if "$@"; then echo "  ok"; else echo "  FAILED"; failed+=("$name"); fi
+}
+
+# Each suite runs in its own shell with pipefail, so a failing tool is not
+# masked by the grep that trims its output.
+run() { bash -o pipefail -c "$1"; }
+
+step "contracts: forge test" run 'cd contracts && forge test 2>&1 | grep -E "Ran [0-9]+ test suites"'
+step "contracts: forge fmt --check" run 'cd contracts && forge fmt --check >/dev/null'
+step "contracts: forge lint (no findings)" run 'cd contracts && ! forge lint src 2>&1 | grep -qE "^(warning|note)"'
+step "rust: cargo test --locked" run 'cargo test --locked --workspace --quiet 2>&1 | awk "/test result/{p+=\$4; f+=\$6} /panicked|FAILED/{bad=1} END {print \"  \" p \" passed, \" f \" failed\"; exit (f>0||bad)}"'
+step "rust: clippy, warnings are errors" run 'cargo clippy --locked --workspace --all-targets --quiet -- -D warnings'
+step "rust: formatting" run 'cargo fmt --all --check'
+step "evidence desk: python unittest" run 'python3 -m unittest scripts/evidence/test_desk.py 2>&1 | tail -3'
+step "lender verifier: python unittest (offline)" run 'python3 -m unittest scripts/test_verify_desk.py 2>&1 | tail -3'
+step "passkey page: node --test" run 'node --test apps/classic/passkey/call.test.mjs 2>&1 | grep -E "^ℹ (pass|fail)"'
+step "clear-signing descriptors: ERC-7730" run 'python3 scripts/check_erc7730.py'
+# The console (CLAUDE.md: strict TypeScript, ESLint clean) and its own logic tests;
+# needs `npm ci` in apps/console once.
+step "console: tsc, eslint, node --test" run 'cd apps/console && { [ -d node_modules ] || { echo "  run: (cd apps/console && npm ci)"; exit 1; }; } && npx --no-install tsc --noEmit && npx --no-install eslint src test && node --test test/*.mts 2>&1 | grep -E "^ℹ (pass|fail)"'
+
+printf '\n'
+if [ ${#failed[@]} -eq 0 ]; then
+  echo "all suites passed"
+else
+  printf 'failed: %s\n' "${failed[@]}"
+  exit 1
+fi
