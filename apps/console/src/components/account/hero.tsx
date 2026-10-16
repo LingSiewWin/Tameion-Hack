@@ -133,7 +133,7 @@ export function Hero() {
         <Stats>
           <Stat label="Paid" value={String(inbox.paid.length)} sub={inbox.paid.length ? `${usd(inbox.paidTotal)} USDC` : "nothing yet"} />
           <Stat label="Needs you" value={String(waiting)} sub={waiting ? "tap to decide" : "all clear"} tone={waiting ? "attention" : undefined} />
-          <Protected />
+          {inbox.exposure?.hedge?.on ? <Protected /> : <AgentsCanSpend />}
         </Stats>
       </div>
     </section>
@@ -157,6 +157,31 @@ function ProtectionLine() {
       Your wallet&apos;s {eth.toLocaleString("en-US", { maximumFractionDigits: 4 })} ETH is exposed: a 30% fall would cost {days}. Protection turns on with a trade-only venue key.
     </>
   );
+}
+
+/** What an agent operator reads instead of a hedge tile (docs/109 §10): the most the agents can still spend now — the
+ *  smaller of the cap on one payment, what is left of the 24-hour cap, and what the account holds above the amount kept.
+ *  The contract's own 24-hour total is not served to the page, so "left" subtracts every payment this page lists from the
+ *  last 24 hours (as of when it read them): it can come out lower than the contract's figure, never higher. */
+function AgentsCanSpend() {
+  const { inbox } = useAccount();
+  if (!inbox) return null;
+  const label = "Agents can spend now";
+  if (inbox.keyless) return <Stat label={label} value="0.00" sub="USDC: no agent key, so every payment waits for your tap" />;
+  if (inbox.mode === "Watch") return <Stat label={label} value="0.00" sub="USDC: the agent pays nothing for now" />;
+  const since = inbox.readAt ? inbox.readAt / 1000 - 86_400 : 0;
+  const spent = inbox.paid.reduce((a, p) => ((p.at ?? 0) >= since ? a + num(p.amount) : a), 0);
+  const per = num(inbox.caps.perAction);
+  const left = Math.max(0, num(inbox.caps.daily) - spent);
+  const above = Math.max(0, num(inbox.balance) - num(inbox.caps.floor));
+  const can = Math.min(per, left, above);
+  const why =
+    above < Math.min(per, left)
+      ? `all the account holds above the ${usd(inbox.caps.floor)} USDC you keep`
+      : left < per
+        ? `${usd(left.toFixed(6))} of the ${usd(inbox.caps.daily)} a day is left`
+        : `the cap on one payment; ${usd(left.toFixed(6))} of the ${usd(inbox.caps.daily)} a day is left`;
+  return <Stat label={label} value={usd(can.toFixed(6))} sub={`USDC: ${why}${inbox.mode === "Propose" ? "; each payment waits for your tap" : ""}`} />;
 }
 
 /** docs/73 T2/T3. The number is shown only when the served data proves it: the bill
