@@ -1,0 +1,82 @@
+Pull mode (PLAN 5.26, docs/59 §3.2: the ERC-5827 idea) — Arc testnet, 2026-10-14
+
+What: the company's USDC never moves into Tameion. `BudgetPolicyPull` holds
+nothing; the bill wallet grants it an ERC-20 allowance and every payment is a
+`transferFrom` inside the same caps, payee list, modes, delays and `Paid`
+event as the holding policy. What the agent can reach is the smaller of the
+wallet's balance and the allowance, so the allowance is a second cap the
+treasurer holds in their own wallet and can cut to zero with one
+`approve(policy, 0)` from any wallet software, without Tameion.
+
+Contract: contracts/src/BudgetPolicyPull.sol (constructor takes usdc + source,
+then the base policy's arguments; `balanceUsdc()` = min(balance, allowance);
+`allowanceRemaining()`; `_send` = safeTransferFrom(source, to, amount); native
+coin refused; six decimals required). Tests: contracts/test/BudgetPolicyPull.t.sol,
+14 tests — the policy holds nothing and the wallet pays; reach is min(balance,
+allowance); approve(0) cuts the agent off (InsufficientBalance(25, 0)); the
+reserve floor means "leave that much in the wallet"; 18-decimal token and
+zero source refused; native refused; unattested payee, per-action cap,
+replay, over-reach, principal-only withdraw (pulls from the wallet),
+settleAsPrincipal, and the Paid event. forge: 103 tests (89 + 14).
+
+Service / page: `POST /api/level1/deploy {pull:true}` deploys BudgetPolicyPull
+with `watched` as the source (bytecode snapshot contracts/bytecode/BudgetPolicyPull.hex);
+the tenant records `kind: pull`; the inbox carries `pull {wallet, usdc,
+allowance, walletBalance, suggestedAllowance (30 days at the daily cap),
+approveData, revokeData}`; on `/` the Start form has "Keep the money in my
+wallet …" (checked by default when a browser wallet is present), the "Fund
+it" card is replaced by "Allow it" with "Allow from this browser" and "Cut it
+to zero" (eth_sendTransaction on USDC from the bill wallet) and the exact
+approve call in words for any other wallet. Agent key files are reused per
+owner, never overwritten (one passkey, several policies).
+
+Live, from the account page (real Chromium, CDP virtual passkey, a wallet
+stand-in for the bill wallet that runs `cast send` with the treasury key file;
+page code unchanged):
+  Start → passkey → deploy:
+    owner   0x603b7b6491302bca7ae96ae5cb47aa02dc55dd98  (via the EIP-7997 factory, owner_tx
+            0x8007fce8d50adff60fefa34d1baef5b850373317e8fc9a0da26c901c221594f0)
+    policy  0x075feefbcce89cc6b4ebae366d00b7ade3e27916  kind pull, source() = 0x6c1ce01B…9A25 (the bill wallet)
+    agent   0x524511aec2d76d9422e8550b9cb0014531005100  (gas 0xdb6057dc…7956)
+  Allow card: "The agent may pull up to 0.000000 USDC from your wallet 0x6c1c…9a25,
+    which holds 0.009255 USDC. Tameion holds nothing. That is less than one day's
+    limit: allow more for the agent to pay."  Fund card hidden.
+  "Allow from this browser" → approve(policy, 1.5 USDC) from the bill wallet →
+    https://explorer.testnet.arc.io/tx/0x03ec7fa18ec80a463754a5787c4840d7b0a5959632a55144a3df108980adcd8e
+    allowance(wallet → policy) on chain = 1,500,000; policy.balanceUsdc() = the wallet's
+    balance (7,807 minor at that moment: reach = min(balance, allowance)).
+  Bill wallet topped up by the owner from tenant 2's holding policy (withdraw 0.5 USDC
+    by passkey, 0x55c021ecb457850a9147c36b554e9bf04e0a69c13ec244528f11970260958117).
+  "Add bills" 0xeeee…eeee, 0.004, every 1 day → passkey attests the payee + import ("1 added"):
+    attestedPayee(0xEEEE) = true on chain; tenant bills = [{payee, 0.004, 1 day}].
+  "Turn autopilot on" → passkey → "asked · it turns on after the delay unless you cancel".
+  Autopilot applied (anyone, after the 60 s delay): 0x7599485f58f3edb70055374407e34c26e02d411a86d52cfb53e5cee9d8cbc28b, mode() = 2.
+
+THE PULL — pass 6acf1f65-0000 (06:21Z → 06:32Z; 60 transfers, 10 bills, rule-based;
+read the newest 15 days of the wallet's history within the 600 s scan budget,
+blocks 64515699–67115698, "older history is read on a later pass"):
+  settled: 0.004000 USDC to 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+           tx 0xfac272df84cec92cec1e852bd41c5dcc799942f3bf8c4fc8c6645a2b0b179526
+           https://explorer.testnet.arc.io/tx/0xfac272df84cec92cec1e852bd41c5dcc799942f3bf8c4fc8c6645a2b0b179526
+  root 0xde81b4e9d40807a5115146ad094a9a391f6a7b7af8c2c58b8dd55e8c96c960e8 anchored in
+  0xf10c63edf3f1378fc014d9b88c9c3a2ba4ea1f6e46244e4139ac30a2cc046e06
+  On chain afterwards: bill wallet 498,255 → 494,255 minor (−0.004 USDC, pulled by
+  transferFrom); allowance 1,500,000 → 1,496,000; policy contract balance 0 throughout.
+  The read-back confirmed the policy's Paid event (PLAN 5.21 is in this build).
+  The other nine bills (five-minute demo bills, 0x1111…, 0x3333…) were escalated with
+  reasons (not attested / thousands of cycles behind), as before.
+
+What a customer did, from the page: typed the wallet and a limit, ticked "keep the
+money in my wallet", Start (passkey), "Allow from this browser" (wallet signature),
+typed one bill line and tapped once (passkey), tapped autopilot (passkey). Money
+never left their wallet until the agent paid a bill they had named, inside the
+limit they approved; approve(policy, 0) from their wallet ends it without us.
+
+Found on the way and fixed in this build: the first pass of a 90-day tenant walked
+15M blocks chunk by chunk and tripped the public node's -32005 rate limit for every
+other call (the relayer's passkey transactions failed) — the scanner now reads
+newest-first within a time budget (TAMEION_PASS_SCAN_SECS, default 600), pauses
+400 ms between slices, bisects the node's history horizon on -32014, and the
+report says how many days it read; a pass the previous process was running is
+marked failed on restart instead of showing "checking" for ever; status read the
+policy address's own USDC (always 0 in pull mode) instead of balanceUsdc().

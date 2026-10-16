@@ -1,0 +1,46 @@
+Reviewed before paid: one tap pays every waiting bill (PLAN 5.39, docs/62 F1) — Arc testnet, 2026-10-14
+
+What: the owner reads every bill the agent prepared on the account page and pays all of them with
+one passkey approval. The contract call is `settleRunIf(to[], amounts[], actionHashes[], terms,
+deadline)` on the policy: principal only, bound to the terms fingerprint the page shows and to a
+ten-minute deadline (like one row), at most 32 rows, a row already settled is skipped (never paid
+twice, never an error), one `SettledByPrincipal` per paid row and one `RunSettled(paid, skipped,
+total)`. The inbox offers `run` only when the policy's code carries the selector, so policies
+deployed before tonight keep one tap per row (checked: 0x7839… has 8 rows and run: null).
+
+Code: contracts/src/BudgetPolicy.sol (BudgetPolicyBase.settleRunIf, MAX_RUN, RunLength,
+RunMismatch, RunSettled); contracts/test/BudgetPolicyRun.t.sol (6) + one pull-mode test; forge
+138. arc::{prepare_principal_run_bound, settle_run_selector, MAX_RUN, ArcClient::code_has_selector};
+calldata pinned to `cast calldata`. Inbox `run {to, data, summary, count, total, boundUntil}`. Page:
+"Pay all N — X USDC" above the rows; the confirm lists every row in words; the decoder
+(web/passkey/call.js) refuses a run whose arrays disagree; ERC-7730 entries for BudgetPolicy and
+BudgetPolicyPull. Anvil acceptance rule 13: the agent cannot run it; two new bills paid in one
+call; the bill already paid in rule 12 skipped (69/69).
+
+Live run — the account page, pull mode, owner 0x86cc…1a99:
+  Start (reserved, no tx) → policy 0x5d74363c6d599b334dfe3e601f576079436a4c37 (new bytecode)
+  Allow from this browser: https://explorer.testnet.arc.io/tx/0xff0e5bd120b3d369fc91f3adfac288f697bfff5e25fd98080d92418d4aa3f260
+  First check created the policy: https://explorer.testnet.arc.io/tx/0x59699fa32ce5fed234df24b6fe3635d435d14309840fe083533e184aa20c9d69
+  (that pass was interrupted by a service restart — docs/60 P-4 — and re-run; it read 73 transfers,
+   found the bills, and in Propose put 6 in Needs you)
+  Inbox: needsYou 6, run {count 6, total 0.015000 USDC, bound 10 min}.
+  The browser's original passkey had been lost with the browser session (docs/60 P-23); the owner
+  recovered through the guardians first — see proof/guardian-recovery-2026-10-14.txt.
+  "Pay all 6" → confirm in words:
+    "Pay 6 bills yourself, 0.015000 USDC in all:
+     0.003000 USDC to 0x4444…4444 · 0.002000 to 0x5555…5555 · 0.003000 to 0xaaaa…aaaa ·
+     0.002000 to 0xbbbb…bbbb · 0.003000 to 0xcccc…cccc · 0.002000 to 0xdddd…dddd
+     A bill already paid is skipped. Valid for ten minutes, and only while the terms you see hold."
+  → one passkey approval → the relayer submitted it:
+    https://explorer.testnet.arc.io/tx/0xa70fb45e49480be718377552368bfd26dd6f17475da6096e7f125768f34ed90e
+    block 67143093, status 1, gas 362,521 (six settlements + one passkey verification)
+    events: Executed on the owner 0x86cc…; SettledByPrincipal ×6 (0x4444 3000, 0x5555 2000,
+    0xaaaa 3000, 0xbbbb 2000, 0xcccc 3000, 0xdddd 2000 units); RunSettled(paid 6, skipped 0,
+    usdcUnits 15000) from the policy.
+  Page: "Paid 6 bills, 0.015000 USDC, with one approval · receipt". Inbox after: needsYou 0, run
+  null, paid 6 (all "by you"); policy reach (pull) 0.443702 USDC.
+  Screenshots: proof/home-pay-all-before-2026-10-14.png, proof/home-pay-all-after-2026-10-14.png
+
+Gas note: one row through settleAsPrincipalIf costs ~150k for the passkey check plus the transfer;
+six rows one at a time would have been six passkey taps and six verifications. The run is one tap
+and one verification for all of them.

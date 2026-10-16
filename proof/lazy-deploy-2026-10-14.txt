@@ -1,0 +1,99 @@
+Lazy deploy at a reserved address (PLAN 5.32, docs/59 §3.17–3.18: the ERC-6492 idea done
+with the EIP-7997 factory) — Arc testnet, 2026-10-14
+
+What: Start reserves the account instead of deploying it. The owner's address is
+CREATE2(factory, principal_salt(qx, qy), PasskeyPrincipal initcode) and the policy's is
+CREATE2(factory, policy_salt(owner, bill wallet, kind), BudgetPolicy initcode); the agent
+key is minted; nothing is sent. The tenant file carries deployed:false and the passkey
+key. Money can be sent to — or allowed for — the policy's address before it exists. The
+first pass (level1::run) or the first passkey challenge (level1_challenge for that owner)
+materialises both contracts at the reserved addresses, then gases the agent. Each step
+is saved as it lands, so a failure on the next step keeps the hashes and the retry is
+idempotent (the factory returns the existing address with no transaction when code is
+already there).
+
+Code: level1::{reserve, ensure_deployed, policy_salt, principal_initcode, policy_initcode};
+deploy = reserve + ensure_deployed; route POST /api/level1/deploy {lazy:true}; inbox
+`deployed`; status for a reserved tenant reads what the address can already reach (hold:
+USDC sent to it; pull: min(wallet balance, allowance)); the page's Start reserves and
+starts the first pass by itself the moment that is > 0. Unit tests: policy_salt is per
+(owner, wallet, kind); a tenant file without `deployed` loads as deployed.
+
+Run 1 — API, hold mode, a fresh software P-256 key (never used before on this chain):
+  qx 0x66dae5b21633e0a5ac3b42facc63140157aa4d51685b2d37022c5cd8adb26bec
+  qy 0x6ad5abfa72412cc3f4c5324734133f67c090519d6238ae6c72d40ac4031f8318
+  POST /api/level1/deploy {chain arc-testnet, watched 0x6c1c…9a25 (treasury), caps 0.005/0.05/0,
+    days 90, lazy true}
+    → owner  0x7b84433e19b9a4647d139586ca381bd974082e17
+      policy 0x7839d74d424dd14ad7147d11bc26745a82ed0df9
+      agent  0x83455f9bb68690ede8bccd779e948ca807077859
+      deployed false; owner_tx / policy_tx / agent_gas_tx all null
+  cast code owner  → 0x (nothing on chain)
+  cast code policy → 0x
+  GET /api/level1/inbox?policy=0x7839… → deployed false, mode Propose, balance 0.000000 USDC
+  Money first, contract later: treasury sends 0.02 USDC to the reserved policy address
+    https://explorer.testnet.arc.io/tx/0x8613c823de2b47634beccbc8190c2a8e06c39bb68b8b9aff27cc6fbfd68d049c
+    USDC.balanceOf(0x7839…) = 20000 (0.02);  cast code 0x7839… still 0x
+    inbox → deployed false, balance 0.020000 USDC  (the reserved address's money, read without a contract)
+  First pass, attempt 1 (POST /api/level1/run): the PasskeyPrincipal landed through the factory
+    https://explorer.testnet.arc.io/tx/0xdb1d7df2267dec745e0d582d9b4d09ecf8ccd4c0a55223cad9c7720c349a7006
+    then the BudgetPolicy deploy failed: "-32003: insufficient funds for gas * price + value:
+    have 78969324617593585 want 82827450000000000" — the relayer had 0.079 native left after a
+    day of proofs (docs/60 P-14). Fixed: 0.15 native moved back to the relayer from the service's
+    own agent key (0xf073ea9258a24a199acae2e5b2061665c04abc69a6ce963b30b5a75dfc84a401);
+    ensure_deployed now saves after each step (the owner hash above had been lost; recovered from
+    the explorer and written into the tenant file).
+  First pass, attempt 2: owner already there (factory: no transaction), then
+    policy  https://explorer.testnet.arc.io/tx/0xa7e916314d2b9e1214a3f43aca979371789d0923e1b04c2c5ca2db9329e3db74
+    agent gas https://explorer.testnet.arc.io/tx/0x86a24edf9ce141fb950df70b0bc2f6a9ee1d4457f947018fcb7fabdb1956a8c9
+    tenant file: deployed true (saved at t+80 s of the pass, before the history scan).
+  After:
+    cast code owner  → 8032 bytes;  owner.qx() = 0x66da…6bec (the key above)
+    cast code policy → 7505 bytes;  policy.principal() = 0x7B84…2E17 (the reserved owner)
+                                    policy.agent() = 0x8345…7859; policy.mode() = 1 (Propose)
+    policy.balanceUsdc() = 20000 — the 0.02 USDC sent before the contract existed is inside it.
+    Blockscout: creator of both addresses = 0x4e59b44847b379578588920cA78FbF26c0B4956C (the factory).
+    inbox → deployed true, mode Propose, balance 0.020000 USDC; the pass went on to read history.
+
+Run 2 — the account page, pull mode, the browser's passkey (owner 0x86cc…1a99 already on chain
+from tenant 9: one passkey, many policies), wallet stand-in = test-only window.ethereum shim →
+local signer (cast with the treasury key file; page code unchanged):
+  Start (bill wallet 0x6c1c…9a25, daily 0.05, "Keep the money in my wallet" checked) → the home
+    view in 832 ms, no transaction: policy reserved at 0x2ecdabed2b8c48a8ce37fcb56bfee94c4991e8a3,
+    agent 0x2b3f…e38c (the owner's existing agent key, reused), deployed false.
+    cast code 0x2ecd… → 0x.  Page: "Nothing is on chain yet. The moment money can be reached, the
+    agent's first check creates your account and runs." · tiles 0 / 0 / 0.000000 · "Propose · holds
+    0.000000 USDC" · Allow card: "approve(0x2ecd…e8a3, 1.500000 USDC) on USDC 0x3600…0000".
+    Screenshot: proof/home-lazy-reserved-2026-10-14.png
+  "Allow from this browser" → the wallet approves the address that does not exist yet:
+    https://explorer.testnet.arc.io/tx/0x3d0fce6db4aa60649b1deb9645c1c66824c18461eedf36a95736a3cdc6c6da44
+    (block 67130987; allowance treasury → 0x2ecd… = 1.500000 USDC)
+  Nobody tapped anything else. The page's next refresh saw money reachable (min(wallet, allowance)
+    > 0) and started the first check by itself; the pass materialised the policy through the factory:
+    https://explorer.testnet.arc.io/tx/0xf9e13e2fab931cebae17b0d4ba0f31126610bd41316c08f5fb2be2797a74148b
+    (block 67131010, 23 blocks after the approval; gasUsed 1,973,675; to the factory 0x4e59…956C)
+    agent gas: none sent — the agent key already held 0.048 ≥ the 0.02 floor (top_up_agent_gas reused).
+    tenant file: deployed true, policy_tx above, agent_gas_tx null.
+  After:
+    policy.principal() = 0x86Cc…1A99 (the passkey's owner contract); policy.agent() = 0x2b3F…e38C
+    policy.mode() = 1 (Propose); policy.balanceUsdc() = 82477 = min(wallet 0.082477, allowance 1.5)
+    Page: "Checking your bills…" · "Propose · holds 0.082477 USDC" · Allow card now "may pull up to
+    1.500000 USDC … which holds 0.082477 USDC. Tameion holds nothing."
+    Screenshot: proof/home-lazy-first-check-2026-10-14.png
+  The first check finished (job 6acf3daa-0000, done): 54 transfers read (the newest 9 days within
+    the time budget, blocks 65531026–67131025), 7 recurring bills inferred, root anchored
+    https://explorer.testnet.arc.io/tx/0x4e62797b669a4b662bbf4e69022dfd55b352eb6711cda16afb6726a7e2aeabe2
+    inbox: deployed true, mode Propose, balance 0.082477 USDC, 6 rows in Needs you (Propose: every
+    payment comes to the owner first). Reserved → allowed → materialised → proposing, three taps.
+  (One `cast code` read during this run was refused "429 rate limit exceeded" by the public node
+   while the pass scanned — docs/60 P-12; the receipt reads above came from the same node a
+   moment later.)
+
+Chain of custody: Start writes a file, not a transaction. The owner's and the policy's addresses
+are a function of the passkey, the bill wallet and the kind, so money can go to them first — a
+transfer (run 1) or an allowance (run 2). The first check creates the contracts at exactly those
+addresses (the factory would land anywhere else only if the salt or the initcode differed, and
+ensure_deployed refuses a mismatch) and the money is already inside or already reachable. The
+treasurer did three things: typed two facts, tapped Start, tapped Allow. Deploy cost moved from
+onboarding to the first moment it is needed, and a tenant that never funds costs the relayer
+nothing.

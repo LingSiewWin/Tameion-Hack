@@ -1,0 +1,48 @@
+Unified balance (PLAN 5.14, docs/56 #2) — proved on Arc testnet, 2026-10-14
+
+What: the bill wallet's USDC held in Circle Gateway, on every chain Gateway
+serves, read with no key (POST https://gateway-api-testnet.circle.com/v1/balances,
+body {"token":"USDC","sources":[{"depositor":<address>}]}; the Gateway OpenAPI
+declares no security on this path) and shown as one line "Elsewhere" on `/`
+and beside the balance on `/watch`. Never counted as the policy's balance:
+the depositor's own signature moves it, not the agent's.
+
+Source read first: developers.circle.com/openapi/gateway.yaml (POST /v1/balances,
+GetBalancesRequest {token enum [USDC], sources[{domain?, depositor}]},
+BalancesResponse {balances[{domain, depositor, balance}]}), the contract
+addresses page (GatewayWallet 0x0077777d7EBA4688BDeF3E311b846F25870A19B9 on
+every EVM testnet, Arc = domain 26) and the unified-balance-evm quickstart
+(approve USDC to the wallet contract, then deposit(address,uint256); never a
+plain ERC-20 transfer). Live probe of the API before coding returned every
+domain with "balance":"0","pendingBatch":"0" for the treasury.
+
+Deposit (scripts/gateway_deposit.sh deposit 0.05; depositor = treasury
+0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25 = tenant 2's bill wallet):
+  approve  0x9fb6c8e4b37854d61837f96156b31ae8b60ad59889b9f6880af21574c5902ed4  status 0x1
+  deposit  0x6a4b68be2c15357227d1e121fa6b8d758cf95ad493f5472b85f380c440d76a8b  status 0x1
+  https://explorer.testnet.arc.io/tx/0x6a4b68be2c15357227d1e121fa6b8d758cf95ad493f5472b85f380c440d76a8b
+Gateway API right after:  domain 26  0.050000 USDC   total 0.05 USDC
+
+Inbox (GET /api/level1/inbox?policy=0x1645951793f7ca2ae36d7a3eeae90ef93e1932ab),
+service restarted on the new build:
+  "balance": "0.043000 USDC",
+  "holdingsElsewhere": {"source":"Circle Gateway","total":"0.050000 USDC",
+                        "chains":[{"domain":26,"chain":"Arc Testnet","balance":"0.050000 USDC"}]}
+
+Page `/` (real Chromium, tenant 2), card "Elsewhere" visible:
+  "0.050000 USDC of your bill wallet's USDC sits in Circle Gateway on Arc Testnet.
+   Arc Testnet 0.050000 — spendable on any of Gateway's chains with your wallet's
+   signature; the agent does not count it until it reaches the policy."
+  Runway unchanged: "0 days — the first bill at risk is 0.003000 USDC to 0xcccc…cccc"
+  (the Gateway USDC is not the policy's; that is the point).
+  Screenshot: proof/home-elsewhere-2026-10-14.png
+
+Also on: GET /api/watch report ("holdingsElsewhere"), the Watch page's balance
+line, tameion-mcp treasury_inbox / watch_address descriptions, OpenAPI.
+Unit test: operator/src/watch.rs gateway_balances_keep_only_what_is_there_and_total_it
+(zero balances dropped, total summed, unknown domain named, over-precise
+balance refused, testnet vs mainnet host).
+
+Not done here: moving it. Spending the Gateway balance on another chain needs
+the depositor's EIP-712 burn intent (POST /v1/transfer → gatewayMint); that
+is the treasurer's wallet, and PLAN 5.15 (fund the policy from any chain).

@@ -1,0 +1,29 @@
+A pass when money moves, not only on a clock (PLAN 5.6) — Arc testnet, 2026-10-14
+
+What: with TAMEION_LEVEL1_WATCH_SECS set, the service checks every tick which tenant wallets or
+policies sent or received USDC in the new blocks since the last tick — two eth_getLogs per chain
+(sender side, receiver side) over Arc's all-USDC emitter 0xffff…fffe, the new range only, never a
+backfill — and starts a pass for each account touched, through the same rate-limited job path a
+button press takes (a pass in the last ten minutes answers instead of starting another). At most 3
+watcher passes per chain per tick, so a wallet many accounts watch cannot start a pass storm on a
+public node (on this machine a dozen demo accounts watch the same treasury); the rest wait for the
+clock scheduler.
+
+Code: arc::ArcClient::touched_among(wallets, from, to); the watcher loop in tameion-app (env
+TAMEION_LEVEL1_WATCH_SECS; first tick starts at the head; range capped at 2,000 blocks).
+
+Live run:
+  Service restarted with TAMEION_LEVEL1_WATCH_SECS=30 → "watcher: a pass on new transfers, checked every 30 s".
+  A wallet no account watches (the 7579 test wallet) sent 0.002 USDC to the co-owner account's policy
+  0x489dbd3dfc2985a65c9b5d555e2b42986c151661 at 19:30:13:
+    https://explorer.testnet.arc.io/tx/0xaa8b17987e6677d0f5a539f5cb46b77dc53bd7c893b562804d2319ffb88cee6f (block 67152303)
+  At 19:30:37 the service log said:
+    "watcher: USDC moved for 0x489dbd3dfc2985a65c9b5d555e2b42986c151661 in blocks 67152287–67152346 → pass 202"
+  and job 6acf67db-0000 started for that policy — no clock, no button, 24 s after the money moved.
+  The pass finished: 3 recurring bills found, 1 waiting for the owners (this is the 2-of-2 co-owner
+    account), root anchored:
+    https://explorer.testnet.arc.io/tx/0x1a1269349fd4ca1ff98f6c1b2213f479d46eb01236c80618e272c559b313dda7
+  While that pass scanned history, the watcher's own two reads per tick were refused by the public node
+  ("-32005: rate limit exceeded", docs/60 P-12); the watcher keeps its last block on failure, so the
+  next tick re-read the same range (blocks 67152989–… twice in the log) and nothing was skipped. On a
+  public node use a 60 s tick (fly.toml) or, better, a keyed RPC.

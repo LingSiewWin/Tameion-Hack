@@ -1,0 +1,48 @@
+PLAN 5.56 — the agent pays a bill early when its invoice gives a discount, only from money no bill needs
+Arc testnet, 2026-10-14T14:42:50Z. Account 0xf799a85496580af9a63c35223443688f8693635d (Autopilot; owner 0xc7a9…, software passkey — test only).
+
+1. The owner's import (agent key with scope import): payee 0x805a…4dAD (already approved), 0.002 USDC every 30 days, due in 8 days,
+   invoice terms 2% off when paid 10 days early:
+   POST /api/level1/bills -> {"bills":[{"amount":"0.002","discount_bps":200,"early_days":10,"every_days":30,"next_due":1792678988,"payee":"0x805a6d4e58bb7e33ce58d54ab06c33fcfcb54dad"}],"policy":"0xf799a85496580af9a63c35223443688f8693635d","refused":[]}  HTTP 200
+
+2. The pass (6acf904c-0000) took the discount: the bill was inside its 10-day window, not yet due by the normal 3-day lead, and the
+   balance above the floor (0.005) covered every bill in the 30-day horizon at full price (0.002).
+   Paid 1960 units (0.002 − 2%) in tx 0x4910091b42c816f90f6243107d14ca74fd6477876f2eebff13b128dca85c085f
+   receipt: status 0x1 from 0xb227c2a801d02e99bc7052255dd8b4279a41bd55 (the agent) to 0xf799a85496580af9a63c35223443688f8693635d
+   Paid(to 805a6d4e58bb7e33ce58d54ab06c33fcfcb54dad , units 1960 , actionHash 0x4d9debf4e0c68dbbac4d0d5b35a3c1076116ee7d1caaa94798c4473ff099cf84 )
+
+3. Then the pass failed to anchor (agent gas below what a pay + an anchor need; docs/60 P-35): no report, record 0x7902… unanchored.
+   Fixed the same hour: the outcome survives an anchor failure, the next pass anchors any record left unanchored first, the inbox
+   lists every Paid event on chain (by tx or action hash). The next pass (6acf9277-0000):
+   caughtUp [{"root": "0x7902ff5204e463115800f3cac1e4b339c94a10c65c5be48097410fc9bfadc3bc", "tx": "0xf9c7a98da85927a2fb190ca34f6b30dbb191177537f26628632bdad4b57250ca"}]
+   own root 0x37ec939772d061a9c247a7be6467f01ff078692e597c6690dfe537d5d6b148b6 anchored in 0xd2d26f023a451436fa3597df87624270949879fd0c8491fa071bfd506e0b28a5
+
+4. The recovered record, audited from the chain (rootOf holds only the latest root, so the auditor checks the anchoring
+   transaction itself: sent by the agent, to the anchor, succeeded, the root in its calldata), on both RPCs:
+   events  5 lines downloaded
+   [0000] SETTLEMENT  bought x402 http://127.0.0.1:7907/v1/mid?coin=BTC: BTC price for the treasury report
+   [0001] OBSERVATION Holding 0.005000 USDC. Read 7 transfers (2 of them my own payments, which are not evidence) and recovered 1 recurring obligations, of which 1 fall due within 30.0 days totalling 0.002000 USDC; 1 within 3.0 days (or a tenth of their interval), which is when I pay.
+   [0002] OBSERVATION Paying 0x805a6d4e58bb7e33ce58d54ab06c33fcfcb54dad early: its invoice takes 0.000040 USDC off when paid at least 10.0 days before the due date (1792678988). Every bill due within 30.0 days is covered with the floor kept, so I pay 0.001960 USDC now instead of 0.002000 USDC later.
+   [0003] DECISION    ALLOW for 0x805a6d4e58bb7e33ce58d54ab06c33fcfcb54dad. ranked 1 of 1: due in 8.0 days, confidence 1.00, 0.001960 USDC covered Basis: 0x805a6d4e58bb7e33ce58d54ab06c33fcfcb54dad has been paid 0 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 1.00).
+   [0004] SETTLEMENT  Paid 0.001960 USDC to 0x805a6d4e58bb7e33ce58d54ab06c33fcfcb54dad, settled in 0x4910091b42c816f90f6243107d14ca74fd6477876f2eebff13b128dca85c085f. Read back from the receipt: the policy's Paid event matches.
+   events          : 5
+   recomputed root : 0x7902ff5204e463115800f3cac1e4b339c94a10c65c5be48097410fc9bfadc3bc
+   file name       : 0x7902ff5204e463115800f3cac1e4b339c94a10c65c5be48097410fc9bfadc3bc   MATCH
+   chain rootOf    : 0x37ec939772d061a9c247a7be6467f01ff078692e597c6690dfe537d5d6b148b6   (anchor 0xdab65a5380bcc2eebc3a3a91d0ad11eec95994db, agent 0xb227c2a801d02e99bc7052255dd8b4279a41bd55)   LATER ROOT ON CHAIN — this root was anchored in 0xf9c7a98da85927a2fb190ca34f6b30dbb191177537f26628632bdad4b57250ca: checked on chain (sent by the agent to the anchor, succeeded, the root in its calldata)
+   RESULT          : PASS
+   [0000] SETTLEMENT  bought x402 http://127.0.0.1:7907/v1/mid?coin=BTC: BTC price for the treasury report
+   [0001] OBSERVATION Holding 0.005000 USDC. Read 7 transfers (2 of them my own payments, which are not evidence) and recovered 1 recurring obligations, of which 1 fall due within 30.0 days totalling 0.002000 USDC; 1 within 3.0 days (or a tenth of their interval), which is when I pay.
+   [0002] OBSERVATION Paying 0x805a6d4e58bb7e33ce58d54ab06c33fcfcb54dad early: its invoice takes 0.000040 USDC off when paid at least 10.0 days before the due date (1792678988). Every bill due within 30.0 days is covered with the floor kept, so I pay 0.001960 USDC now instead of 0.002000 USDC later.
+   [0003] DECISION    ALLOW for 0x805a6d4e58bb7e33ce58d54ab06c33fcfcb54dad. ranked 1 of 1: due in 8.0 days, confidence 1.00, 0.001960 USDC covered Basis: 0x805a6d4e58bb7e33ce58d54ab06c33fcfcb54dad has been paid 0 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 1.00).
+   [0004] SETTLEMENT  Paid 0.001960 USDC to 0x805a6d4e58bb7e33ce58d54ab06c33fcfcb54dad, settled in 0x4910091b42c816f90f6243107d14ca74fd6477876f2eebff13b128dca85c085f. Read back from the receipt: the policy's Paid event matches.
+   events          : 5
+   recomputed root : 0x7902ff5204e463115800f3cac1e4b339c94a10c65c5be48097410fc9bfadc3bc
+   file name       : 0x7902ff5204e463115800f3cac1e4b339c94a10c65c5be48097410fc9bfadc3bc   MATCH
+   chain rootOf    : 0x37ec939772d061a9c247a7be6467f01ff078692e597c6690dfe537d5d6b148b6   (anchor 0xdab65a5380bcc2eebc3a3a91d0ad11eec95994db, agent 0xb227c2a801d02e99bc7052255dd8b4279a41bd55)   LATER ROOT ON CHAIN — this root was anchored in 0xf9c7a98da85927a2fb190ca34f6b30dbb191177537f26628632bdad4b57250ca: checked on chain (sent by the agent to the anchor, succeeded, the root in its calldata)
+   RESULT          : PASS
+   verify_tenant: MATCH on both RPCs
+   The same audit handed a different anchoring transaction (0xd2d2…, another root) answers RESULT: FAIL.
+
+5. Unit tests (operator::early_payment_tests, 5): inside the window and covered → discounted amount, same cycle key; outside the
+   window or no terms → nothing; never spends money a later bill needs; a bill already due is paid once, in full; terms of 0 or
+   above 10% ignored. Import refuses terms above 10% or a window not shorter than the interval.

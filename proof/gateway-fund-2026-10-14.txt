@@ -1,0 +1,125 @@
+Fund the policy from Circle Gateway (PLAN 5.15, docs/56 #3) — proved on Arc testnet, 2026-10-14
+
+What: the bill wallet's USDC held in Circle Gateway (on any chain Gateway
+serves) moves into the policy in one signed intent. The service prepares the
+EIP-712 burn intent with Circle's fee and expiry (POST /v1/estimate); the
+bill wallet signs it (on the page: eth_signTypedData_v4 in the browser
+wallet; here: `cast wallet sign --data --from-file` with the treasury key
+file); the service hands it to Gateway (POST /v1/transfer) and relays
+GatewayMinter.gatewayMint(attestation, signature) on Arc with the relayer
+key, which only pays gas. The service refuses an intent whose
+destinationRecipient is not that tenant's policy on its chain.
+
+Sources read first (2026-10-14): developers.circle.com/gateway/quickstarts/unified-balance-evm
+(domain {name:"GatewayWallet",version:"1"} with no chainId; BurnIntent /
+TransferSpec types and field order; bytes32 left-padded addresses;
+destinationCaller zero = anyone may mint), /openapi/gateway.yaml (field
+types, /v1/transfer answers {attestation, signature, transferId, fees,
+expirationBlock}), /gateway/references/contract-addresses (one wallet
+0x0077…19B9 and one minter 0x0022…475B on every EVM testnet; Arc = 26).
+
+Learned by running it, not in the docs we read:
+- /v1/estimate on testnet answers a bare array [{burnIntent:{maxBlockHeight,
+  maxFee, spec}}], not the OpenAPI's {body, fees}; the parser takes both.
+- Cloudflare in front of the API refused a client with no User-Agent
+  ("error sending request"); with a User-Agent it answers.
+- The fee is charged on top of the value: "Insufficient balance for
+  depositor …: available 0.050000, required 0.0535" (maxFee 3850 minor;
+  actual fee 0.0035). "All of it" therefore = balance - maxFee (`all:true`).
+
+Run 1 (Arc Gateway → policy on Arc, same domain 26 → 26):
+  scripts/gateway_fund.sh 0x1645951793f7ca2ae36d7a3eeae90ef93e1932ab 0.04 26
+  1. prepare: maxFee 3850 minor; maxBlockHeight 68482204
+     "Move 0.040000 USDC of your USDC in Circle Gateway on Arc Testnet to the
+      policy 0x1645…32ab on Arc testnet. Circle keeps a fee of at most
+      0.003850 USDC. This signature authorises nothing else."
+  2. sign (EIP-712, bill wallet 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25): 0x2905479bf46724e4…
+  3. transfer + mint:
+     transferId c1bbb637-0df2-46f0-ab1d-8e0d231c8a21
+     fees {"total":"0.0035","token":"USDC","perIntent":[{"baseFee":"0.0035","domain":26,
+            "transferSpecHash":"0xd9fb582188d3c6ab3e480926c8d13558bb59dcf78346a53a6b9d791a5977e76d"}]}
+     expirationBlock 67101006
+     mintTx 0x2eb9d1381a8370e456c32b3f3a972294ca2c95e5ee4ddfa1738ea354b51ed2e7
+     https://explorer.testnet.arc.io/tx/0x2eb9d1381a8370e456c32b3f3a972294ca2c95e5ee4ddfa1738ea354b51ed2e7
+  Policy USDC balance (cast call balanceOf): 43000 → 83000 minor (+0.04 USDC).
+  Gateway balance of the bill wallet on domain 26 before: 0.05 (deposit
+  0x6a4b…6a8b, proof/gateway-unified-balance-2026-10-14.txt).
+
+Run 1 earlier attempt, refused by Gateway (kept as evidence the signature
+and the balance check are real): value 0.05 with 0.05 available →
+"Insufficient balance … required 0.0535". Nothing moved.
+
+Run 2 (Arbitrum Sepolia → Arc, cross-chain): see below once the deposit is
+attested (Arbitrum Sepolia deposits wait ~65 Ethereum blocks, 13–19 min).
+  deposit on Arbitrum Sepolia (domain 3): approve 0xb6d7477411fa9a19484b9b329556a119c3dd9eee17454580edc351cc43e9a472,
+  deposit 0x764bd741ce89aaa17c013b580a5d5147f4a50e31e73f13410ec69dca979ae161 (1 USDC, block 318967330, 03:56:16Z)
+
+Run 1b ("all": the balance less Circle's fee cap; the page's button uses this):
+  scripts/gateway_fund.sh 0x1645951793f7ca2ae36d7a3eeae90ef93e1932ab all 26
+  Gateway balance on domain 26 before: 0.006500 USDC (0.05 - 0.04 - 0.0035).
+  1. prepare: maxFee 3850; "Move 0.002650 USDC … fee of at most 0.003850 USDC."
+  2. sign: 0x72dff1434a99ce45…
+  3. transferId 41986594-06e4-4f65-b95d-ec633a240630, fee 0.0035,
+     mintTx 0xfc01a53120da2d09d479fd8115a2ab815b65ab6e8b5e6220bc7b132c2a8dd9e2
+     https://explorer.testnet.arc.io/tx/0xfc01a53120da2d09d479fd8115a2ab815b65ab6e8b5e6220bc7b132c2a8dd9e2
+  Policy balance 83000 → 85650 minor (+0.00265). Gateway balance on 26 now 0.
+  First attempt of "all" failed in the service ("nothing in Gateway on domain
+  26") because the balance string carries " USDC"; fixed, re-run above.
+
+Run 2 (cross-chain: Arbitrum Sepolia Gateway → policy on Arc), 04:18Z:
+  Deposit became available at ~04:17Z (21 min after the deposit block; Circle
+  waits ~65 Ethereum blocks for rollup deposits). While it waited, the inbox
+  and `/` listed it under "Elsewhere" as arriving:
+    "arriving":[{"amount":"1.000000 USDC","chain":"Arbitrum Sepolia","domain":3,
+                 "since":"2026-10-14T03:56:16.000Z","tx":"0x764b…e161"}]
+    page: "1.000000 from Arbitrum Sepolia still confirming (Circle waits about
+           15 minutes for deposits from Ethereum rollups)."  (proof/home-elsewhere-arriving-2026-10-14.png)
+  scripts/gateway_fund.sh 0x1645951793f7ca2ae36d7a3eeae90ef93e1932ab all 3
+  1. prepare: maxFee 11000 minor; maxBlockHeight 11968411 (an Ethereum L1
+     height, as the technical guide says for Arbitrum sources)
+     "Move 0.989000 USDC of your USDC in Circle Gateway on Arbitrum Sepolia to
+      the policy 0x1645…32ab on Arc testnet. Circle keeps a fee of at most
+      0.011000 USDC. This signature authorises nothing else."
+  2. sign (EIP-712, bill wallet): 0xfdadb5ea89d31cb7…
+  3. transferId 23ea6d3c-2e32-4ed4-9d8b-a482cdce8a24
+     fees {"total":"0.01","perIntent":[{"baseFee":"0.01","domain":3,
+            "transferSpecHash":"0x58cdc03ee85c9e27cb2f3d9292e7fbdf253f71f9d813bb90e1ef49b00b8c7dea"}]}
+     expirationBlock 67102345
+     mintTx 0x777ce6c79e6bf39b1a22521f4400bfae1724ccec46ee78efcfa75a5cf84897ab
+     https://explorer.testnet.arc.io/tx/0x777ce6c79e6bf39b1a22521f4400bfae1724ccec46ee78efcfa75a5cf84897ab
+  Policy USDC balance: 85650 → 1074650 minor (+0.989 USDC). USDC that sat on
+  Arbitrum Sepolia at 03:56 is inside the Arc policy's caps at 04:18, with
+  one signature from the bill wallet and no bridge UI.
+
+Costs seen: same-chain (26→26) fee 0.0035 USDC; Arbitrum→Arc fee 0.01 USDC;
+the relayer paid Arc gas for three gatewayMint calls.
+
+After run 2, the account page (proof/home-after-fund-2026-10-14.png):
+  balance 1.074650 USDC; Elsewhere "0.001350 USDC … on 2 chains. Arbitrum
+  Sepolia 0.001000 · Arc Testnet 0.000350" (what the fee caps left behind:
+  maxFee 0.011 vs fee 0.01; 0.00385 vs 0.0035); arriving: none.
+  Runway still "0 days": the six five-minute demo bills (0.003 each) spend
+  1.07 USDC within hours — billsInHorizon 1.074 USDC; the page now says
+  "about N hours" instead of "0 days" when the first bill at risk is today.
+
+Run 3 — from the account page itself ("Bring it to the policy"), 04:23Z:
+  Setup: 0.03 USDC deposited into Gateway on Arc (approve 0xa4385503448fe491377fa74984c85b4b57698730e74867a6b3917effcc99427d,
+  deposit 0xbc726a2ea1ea614527e1312dbbc0987ac2ad697a553ddb10f823ee3a799dd0a8); the page's Elsewhere card read
+  "0.031350 USDC … on 2 chains. Arbitrum Sepolia 0.001000 · Arc Testnet 0.030350".
+  No browser-wallet extension in the test browser, so a test-only stand-in
+  for one: `window.ethereum` with eth_requestAccounts → the bill wallet, and
+  eth_signTypedData_v4 → a local HTTP signer (scratch, not in the repo) that
+  runs `cast wallet sign --data --from-file` with the treasury key file. The
+  page code is the real one; only the wallet is a shim.
+  Click "Bring it to the policy" → the page picked the chain with the most
+  (Arc Testnet) and asked `all` → confirm dialog, in words:
+    "Move 0.026500 USDC of your USDC in Circle Gateway on Arc Testnet to the
+     policy 0x1645951793f7ca2ae36d7a3eeae90ef93e1932ab on Arc testnet. Circle
+     keeps a fee of at most 0.003850 USDC. This signature authorises nothing else."
+  → accept → eth_signTypedData_v4 → POST /api/level1/fund → "arrived · receipt"
+    https://explorer.testnet.arc.io/tx/0x85501c5db486fd360106e8f3296b98d0492a1d1eeef2e863bd23c9afbdd1c34a
+  Policy USDC balance 1074650 → 1101150 minor (+0.0265). Elsewhere afterwards:
+  "Arbitrum Sepolia 0.001000 · Arc Testnet 0.000350". Screenshot proof/home-bring-it-2026-10-14.png.
+  One tap, one signature, the words before the signature; no bridge UI, no
+  calldata on the page. (Found on the way: a shell variable named CHAIN is
+  read by foundry's cast as --chain; the deposit script now uses GW_CHAIN.)

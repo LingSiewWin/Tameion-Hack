@@ -1,0 +1,57 @@
+From the Circle Developer Grants cohort scan (docs/62) — the four items that fit an evening,
+built and checked 2026-10-14
+
+5.37 — The trust line on the front of `/`, in the market's register (RebelFi's "you sign, we hold
+  no spend key", ours stronger). Start view, under the headline:
+    "The agent's key can pay payees you approved, under a cap, and nothing else. It cannot add a
+     payee, raise its own limit, or withdraw. You sign; Tameion holds no key that can take your money."
+  Pinned by operator/tests/app_http.rs beside the mechanism-word rule (the same test now also
+  checks the three illustrations are inlined). Screenshot proof/home-start-trust-line-2026-10-14.png
+
+5.40 — Named accounts (BuFi's workspaces, the cheap half): "Name this account" in the footer →
+  a prompt → the name becomes the page title and the entry in "Your accounts"; kept in this
+  browser only (localStorage `tameion.label.<policy>`); the chain and the service never see it.
+  Live: the lazy pull account named "Ops payroll" — title "Ops payroll", switcher
+  "Ops payroll (0x2ecd…e8a3)", link reads "Rename". Screenshot proof/home-named-account-2026-10-14.png
+
+5.42 — Agent API hygiene (DZap's page): every `tameion-mcp` tool now carries MCP annotations —
+  title, readOnlyHint, destructiveHint (always false: nothing can sign), idempotentHint,
+  openWorldHint. readOnlyHint true on treasury_inbox, pass_status, records, record_events and every
+  prepare_* (they compute calldata, change nothing); false on run_pass, import_bills, watch_address.
+  Unit test `every_tool_declares_read_only_or_not` (tameion-mcp) pins it. Idempotency-Key and
+  llms-full.txt not done (no public docs site yet; run_pass already dedups by policy/ten minutes).
+
+5.36 — The idle number: inbox `runway.idleCover` = what the policy holds above the floor minus
+  every bill in the 90-day horizon, 0 when any bill is at risk; the Runway card appends
+  "· not needed for those bills: X USDC" when it is > 0. A number only — whether it may earn is
+  the founder's decision (docs/62 §4.6, docs/47). Live values:
+    0x2ecd… (pull, 0.079 reachable, 7 bills): runway 0 days, first bill at risk 0.002 → idleCover 0
+    0xa494… (orders, 0.079): runway 19 days → idleCover 0
+    0x7839… (hold, 0.51 USDC after the Gateway mint): see below once its first pass has read history.
+
+Later the same night (after the restart onto the final build):
+
+5.41 — Start view, live: "What it costs. Nothing while Tameion runs on testnet. After that, a flat
+  monthly fee per protected account: Watch stays free, and Tameion takes nothing per payment."
+  (`TAMEION_PRICE_MONTHLY` unset; with it set the sentence carries the founder's number.) The clause
+  "never earns on your money" was drafted and removed: it would have pre-empted the founder's open
+  decision on idle money (docs/62 §4.6).
+
+5.42b — live on :7880:
+  POST /api/level1/prepare-withdraw with Idempotency-Key: live-check-1 → HTTP/1.1 200 OK
+  the same again                                                      → HTTP/1.1 200 OK + Idempotent-Replayed: true
+  the same key, a different amount                                    → 422
+  GET /llms.txt → "# Tameion / > A treasury account for onchain companies that keeps itself solvent…"
+
+Headline (docs/62 §3.8, Jobs: a second line from the buyer's own numbers) — live under the title:
+  run account 0x5d74…: "Covered for less than a day; the first bill at risk is 0.002000 USDC to
+    0xdddd…dddd. And the agent's key can never move more than 0.050000 USDC a day."
+  hold account 0x7839…: "Covered for less than a day; the first bill at risk is 0.003000 USDC to
+    0xaaaa…aaaa. And the agent's key can never move more than 0.050000 USDC a day."
+  (The demo treasury's history is minutes-cadence test bills, so "less than a day" is the truth for
+  it; an account with weekly bills reads "Every bill for the next 90 days is covered, and …".)
+  Screenshot proof/home-headline-2026-10-14.png
+
+Refused-by-the-checks line: inbox `refused` (the last pass's blocked items with the reason); the
+page lists them under Needs you, "nothing for you to do". Neither live account had a refusal
+tonight, so the line is not on the screenshots (not verified live).

@@ -1,0 +1,27 @@
+Partners bring their clients (PLAN 5.45, docs/62 §3.5 — the business-partner seat) — 2026-10-14
+
+What: an accounting firm or a payments company gets a link (`/?partner=<id>`) and a key. A client who
+starts from the link sees "Set up with <partner>. They see that your account exists and how it is
+doing — never a key, never your money." The account is attributed to the partner (an attribution,
+not a permission: an unknown partner id is ignored). With its key the partner lists the accounts it
+brought — owner, kind, keyless, live or reserved, last pass (bills found, waiting, paid) — read from
+files, no chain reads, no keys, no balances it could move. The count of live accounts is the billing
+basis for "priced per tenant" (docs/62 §4.2). Only the sha256 of a partner key is stored;
+`scripts/partner.sh add` prints the key once.
+
+Code: level1::{Partner, partners, partner_for_key}; Tenant.partner; deploy attribution; GET
+/api/partner/public?id= (name), GET /api/partner/accounts (Bearer partner key); scripts/partner.sh;
+home.html partner line.
+
+Live (local service):
+  scripts/partner.sh add ledger-co "Ledger & Co (test partner)" → key written to a scratch file (600),
+    not shown here; runtime/app/partners.json holds the sha256 (mode 600).
+  GET /api/partner/public?id=ledger-co → {"id":"ledger-co","name":"Ledger & Co (test partner)"}
+  A client starts (lazy, keyless) with partner "ledger-co" → account 0x380b38e73f2c2108a72ab6f5cce0a57214fa3072,
+    partner ledger-co.
+  GET /api/partner/accounts without a key → 401.
+  With the key → partner ledger-co, accounts [0x380b… (reserved, keyless)], live 0.
+  A made-up partner id ("nobody") → the account is created with partner null (that reserved demo
+    account was then removed; nothing had been sent).
+  Page: /?partner=ledger-co → "Set up with Ledger & Co (test partner). They see that your account exists
+    and how it is doing — never a key, never your money." Screenshot proof/home-partner-2026-10-14.png

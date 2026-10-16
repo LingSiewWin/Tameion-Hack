@@ -1,0 +1,30 @@
+Post-pay read-back (PLAN 5.21, docs/59 §3.15) — anvil acceptance, 2026-10-14
+
+What: after every `pay`, the operator fetches the receipt and requires exactly
+one `Paid(to, usdcUnits, actionHash)` from the policy naming what it sent
+(`arc::ArcClient::confirm_paid`, pure matcher `arc::paid_log_matches`). The
+Settlement record carries the verdict. A mismatch writes HALT beside the
+audit log, records an Escalation, stops paying for the rest of the pass, and
+every later pass runs in propose-only until a human removes the file. The
+hedge layer's "no order is done until the position is read back" rule,
+applied to payments.
+
+Unit test (arc): a Paid log is matched field by field — a different amount,
+payee or action hash is a mismatch; another contract's log, or a USDC
+Transfer from the policy, is not a Paid and is ignored.
+
+Live on anvil, scripts/acceptance.sh (53/53 checks after the change):
+  event log log-anvil/0xdded3cbdc19095a2e921b6feebf157819b809f36dfdd8967982d1f9ff44ff402.events.jsonl:
+    Paid 20.000000 USDC to 0x1111111111111111111111111111111111111111, settled in 0xa5e54bc5a15a4eceb0f368bfc1370ce56da11bd0a55bd9bb4a491f8875124060. Read back from the receipt: the policy's Paid event matches.
+
+Not yet seen live: a mismatch (the contract has never emitted a Paid that
+differs from the call that caused it; the path is exercised by the unit
+test). The Arc tenants pick the check up on their next paying pass.
+
+Surface check (local, no chain): writing a HALT file beside the probe tenant's
+log made GET /api/level1/inbox answer
+  "halted": {"reason": "1791955000 read-back mismatch after 0xtest: probe of the surface only",
+             "clear": "a human removes runtime/app/tenants/0x800d…665c/log/HALT"}
+and `/` prefixes its status with "Paused by a safety check: a payment's receipt
+did not match what the agent sent. Nothing more is paid until a human clears
+it."; removing the file cleared it.

@@ -1,0 +1,48 @@
+The company's own wallet becomes the account (PLAN 5.28, EIP-7702) — Arc testnet, 2026-10-14
+
+What: no new address, no money moved, no allowance. The wallet the company already pays from signs
+ONE EIP-7702 authorization pointing its code at TameionDelegate (the same policy code every Tameion
+account runs) and, in the same transaction, calls `initialize` on itself: owner = the passkey's
+account, agent = the agent key, the caps, the floor, the delay, Propose. From then on the agent key
+calls `pay` on the wallet's own address; the contract inside the wallet holds it to attested payees,
+the caps, the floor and Autopilot. The owner's passkey attests, asks for Autopilot, withdraws.
+Said plainly in the contract and on the page: 7702 bounds the agent, not the wallet's own key.
+
+Code: contracts/src/TameionDelegate.sol (BudgetPolicyNative + initialize, self-call only);
+BudgetPolicyBase constructor → _init (immutables → storage, `initialized`); forge 6 tests with
+real `signAndAttachDelegation`; anvil acceptance rule 14 with a real type-4 tx. Service: deploy
+{wallet7702:true} → kind "wallet", policy = the wallet; reserve deploys the delegate once per
+chain first (an empty delegation target would make `initialize` a silent no-op); ensure_deployed
+checks the wallet's code and principal; inbox `delegation`; page Start option + waiting card;
+ERC-7730 descriptor contracts/erc7730/calldata-TameionDelegate.json.
+
+Live run:
+  Test wallet 0xc0111f35F9A8FaF4A19dEd77C6F457A7AfBBBE7C (fresh key, scratch file mode 600), funded:
+    https://explorer.testnet.arc.io/tx/0xa80e7ba5c8c6b0cd76b11eca8ce841bb11ca2b616f6db6c236f010b7b5cc0e7f (0.06 USDC)
+  POST /api/level1/deploy {watched: <wallet>, wallet7702: true, lazy: true, caps 0.01/0.03/0.005,
+    the passkey of owner 0x7b84…2E17} → kind wallet, policy = the wallet, agent 0x8345…7859;
+    the delegate TameionDelegate deployed through the EIP-7997 factory at
+    0xf0b3bfbd0713a3f24caf140b49d12b75a3554c6b (8,497 bytes).
+  Inbox `delegation`: {implementation 0xf0b3…6c4b, initializeData 0xaddc516b…, active false}.
+  The wallet's one transaction (type 4: authorization + initialize on itself):
+    https://explorer.testnet.arc.io/tx/0xae2cca13b3f29913789dd34a25c21096e9da8263d506b1a7a98cbdf6d0d99e34
+    wallet code now 0xef0100f0b3bfbd0713a3f24caf140b49d12b75a3554c6b; principal() = 0x7B84…2E17;
+    agent() = 0x8345…7859; initialized() true; perActionCap 10000; balanceUsdc 50685 — the money stayed.
+  Owner's passkey attests the payee 0x…a77020 (through the owner's PasskeyPrincipal, target = the wallet):
+    https://explorer.testnet.arc.io/tx/0x2759b1b982d5c590bdb4860471f39ba1fe8a514eb381c22dae21669ad821e3a3
+  (The bill import before that was refused: "payee is not attested on the policy; approve it with the
+   passkey first" — then accepted.)
+  Owner's passkey asks for Autopilot (waits the 60 s delay):
+    https://explorer.testnet.arc.io/tx/0x36da36bcc1a801c9a6a3c148be1a14a1a5e7c41473ffb9e428a4c86c82f365f4
+  Anyone applies it after the delay:
+    https://explorer.testnet.arc.io/tx/0x26cec89bdf49b3d5295241efac3b1012c0c3bf2c63c40e2f070f91eac9ba86c2 → mode 2
+  One pass: the service saw the delegation (deployed true), and the agent paid the bill FROM THE WALLET:
+    https://explorer.testnet.arc.io/tx/0x0254ff98cd1094d6709eed6ca47c781442a3af012282fcd4c772114af79fa54f
+    from the agent 0x8345…7859 to the wallet 0xc011…be7c; Paid(to 0x…a77020, 2000 units) emitted by the
+    WALLET's address; gas 168,021; payee +0.002 USDC; wallet 50685 → 48685 units.
+    Root anchored https://explorer.testnet.arc.io/tx/0x4778b70700e9657bf439c843fc71afdb03956a9650c0e9b7cff00843e39d2df5
+  Audit: scripts/verify_tenant.sh http://localhost:7880 <wallet> → chain rootOf MATCH, RESULT PASS, MATCH on both RPCs.
+
+Chain of custody: the company's existing wallet, one signature, same address; the agent's key paid
+an approved bill from that wallet inside limits that live in the wallet's own code; the owner's
+passkey did everything that widened trust; anyone can audit the record.

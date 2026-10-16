@@ -1,0 +1,41 @@
+First check speed (docs/60 P-38) — before / after, same account, same window
+==========================================================================
+Date: 2026-10-14 (session 5). Service: local tameion-app on :7880, public RPCs only (no keys).
+
+Account: browser-QA account on Arbitrum Sepolia, created from the page with a virtual passkey
+  policy 0x7ebc3894ec793fa6c9225841992001e580da9273, owner 0xf6731ff8b53c6a2cd808b592dab898a530257ddf
+  window: 90 days = 29.9 M blocks of the bill wallet's USDC history
+
+BEFORE (old binary: 10,000-block log walk, 200k-block slices, 400 ms pause, 600 s budget)
+  job 6acf9a38-0000: status done, elapsedSecs 788 at the deciding phase
+  historyNote: "read the newest 23 days of the wallet's history within the time budget
+                (blocks 311124139–319124138); older history is read on a later pass"
+  page showed "about 78 min left" (earlier "150 min") while it ran
+  anchorTx 0x87f57e7e343aba854c328cb15d1f7d62e0fd203ca5d920831b81ef2ce4b86188
+
+AFTER (log_span 5,000,000 on Arbitrum, history cache, 60 s budget, ETA capped)
+  POST /api/level1/run {"policy":"0x7ebc…9273"} -> job 6acf9e08-0000
+  progress at the deciding phase: elapsedSecs 15, scannedBlocks 29934503 / 29934503, transfersSoFar 17
+  historyNote: null (the whole 90 days read), historyReadFromBlock 289192658
+  report: transfers 17, obligations 2, anchorError null
+  anchorTx 0xb554c05ded652ecc3e77d7e3a643127e9d6352189b60f2604e0954404ae62101
+    https://sepolia.arbiscan.io/tx/0xb554c05ded652ecc3e77d7e3a643127e9d6352189b60f2604e0954404ae62101
+  cache written: runtime/app/tenants/0x7ebc3894ec793fa6c9225841992001e580da9273.history.json
+
+Arc (explorer index path), read-only report, no gas spent
+  POST /api/watch {"chain":"arc-testnet","address":"0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25","days":90}
+  job 6acf9ed2-0001: done, elapsedMs 11659, transfers 120, counterparties 39, 6 due now
+  cross-check: explorer.testnet.arc.io tokentx from block 51818628 -> 120 rows (the node's tail rows deduped)
+  before: Arc's public node answers -32014 for blocks older than ~5 days, so 90 days were never readable
+
+Measurements behind the windows (curl, same night)
+  arb1.arbitrum.io/rpc            eth_getLogs 5,000,000 blocks, USDC, topic1=wallet: 0.50 s
+  sepolia-rollup.arbitrum.io/rpc  same: 0.58 s ; above 10,000,000: -32602 "only 10000000 are allowed"
+
+ROUND 2 (2026-10-15, docs/60 P-42): block times from the logs where the node gives them (Arc), the rest read 8 at a
+time (Arbitrum sends blockTimestamp 0x0); watch() reads chain/head/clock together and the scan, Gateway and exposure together.
+  POST /api/watch {"chain":"arbitrum-sepolia","address":"0x6c1c…9a25","days":90}: wall 6.4 s, 21 transfers,
+      bills 0x1111… 0.20 / 0x3333… 0.15 (unchanged)                                  [was 17 s]
+  POST /api/watch {"chain":"arc-testnet", same wallet, 90 days}: wall 5.2 s, 120 transfers, 6 bills   [was 11.7 s]
+  Start view: pasting the wallet shows the bills and fills the daily limit (2x the largest bill) before any key is
+  made: measured 17.2 s before round 2 (proof/start-preview-2026-10-14.png).

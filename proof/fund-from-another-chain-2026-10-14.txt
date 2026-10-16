@@ -1,0 +1,60 @@
+Fund it from another chain, one tap (PLAN 5.33, docs/59 §3.19: EIP-5792 wallet_sendCalls) —
+Arbitrum Sepolia → Circle Gateway → Arc testnet policy, 2026-10-14
+
+What: the account page lists the chains a browser wallet can deposit into Circle Gateway from
+(`GET /api/level1/config` → gatewaySources: Ethereum Sepolia, OP Sepolia, Arbitrum Sepolia, Base
+Sepolia, Arc Testnet — domain, EVM chain id, USDC contract, the Gateway wallet contract
+0x0077777d7EBA4688BDeF3E311b846F25870A19B9, one address on every chain). The owner picks a chain and
+an amount. The wallet switches to that chain and sends approve(gateway, amount) + deposit(usdc,
+amount) as ONE wallet_sendCalls batch (version 2.0.0, atomicRequired:false; the page polls
+wallet_getCallsStatus until status 200), or as two eth_sendTransaction calls when the wallet has no
+EIP-5792. The deposit shows on the Elsewhere card as "arriving" until Circle credits it; then
+"Bring it to the policy" (PLAN 5.15) mints it into the Arc policy. Tameion never touches the money:
+it goes from the wallet into Circle's Gateway contract under the owner's own address; the page only
+encodes two calls and names Circle's contract.
+
+Code: watch::gateway_sources (pinned by a unit test: five rows, real names, one wallet);
+config → gatewaySources; home.html card "Fund it from another chain" (#park, #parkChain, #parkAmt,
+#parkGo), encodeCall for approve 0x095ea7b3 and deposit 0x47e7ef24, sendCalls-then-fallback.
+
+Run 1 — tenant 10 (the lazily deployed hold policy 0x7839d74d424dd14ad7147d11bc26745a82ed0df9,
+holding 0.02 USDC), wallet stand-in = test-only window.ethereum shim v2 → local signer (cast with
+the treasury key file). The shim answers wallet_getCapabilities with atomic: unsupported and runs
+wallet_sendCalls as sequential transactions — what EIP-5792 prescribes for such a wallet — so the
+batch path is the one exercised, not the fallback.
+  Page before: "Propose · holds 0.020000 USDC"; Elsewhere 0.001350 USDC on 2 chains; the card lists
+    Ethereum Sepolia / OP Sepolia / Arbitrum Sepolia / Base Sepolia (Arc, the policy's own chain,
+    left out). Screenshot proof/home-park-before-2026-10-14.png
+  From: Arbitrum Sepolia · Amount: 0.5 · "Park it in Gateway" → 6 seconds later:
+    "0.5 USDC deposited into Gateway on Arbitrum Sepolia (one batch, two transactions: 0xe811446a…,
+     0x907b7c6e…). It shows above as arriving until Circle credits it; then "Bring it to the policy"."
+    approve  https://sepolia.arbiscan.io/tx/0xe811446a9a11cb287c93db27e9d6259116c82de7afe07b931bfb18045806e3ff
+             (block 319035197, to USDC 0x75fa…AA4d, gas 55,425, status 1)
+    deposit  https://sepolia.arbiscan.io/tx/0x907b7c6e94d8ff1332e42fc04750b7a323481fcb3d7141c4d4d0f218c21b049f
+             (block 319035208, to the Gateway wallet 0x0077…19B9, gas 68,933, status 1)
+    wallet USDC on Arbitrum Sepolia 13.900000 → 13.400000; the wallet was switched back to Arc
+    (eth_chainId 0x4cef52 = 5042002) by the page afterwards.
+    Screenshot proof/home-park-after-2026-10-14.png
+  Circle's view, POST gateway-api-testnet.circle.com/v1/deposits {domain 3}:
+    {"transactionHash":"0x907b…049f","amount":"500000","status":"pending","blockHeight":"319035208",
+     "blockTimestamp":"2026-10-14T08:47:22.000Z"}
+  Page after one refresh: Elsewhere card — "0.500000 from Arbitrum Sepolia still confirming (Circle
+    waits about 15 minutes for deposits from Ethereum rollups)."
+  Leg 2 — Circle credited the deposit 20 minutes after the block (08:47 → ~09:05 UTC; balances
+    domain 3: 0.001000 → 0.501000). The Elsewhere card switched from "arriving" to
+    "0.501350 USDC … on 2 chains"; "Bring it to the policy" (PLAN 5.15) → confirm in words:
+    "Move 0.490000 USDC of your USDC in Circle Gateway on Arbitrum Sepolia to the policy 0x7839… on
+     Arc testnet. Circle keeps a fee of at most 0.011000 USDC. This signature authorises nothing else."
+    → the wallet signed the burn intent (eth_signTypedData_v4) → the relayer minted on Arc:
+    https://explorer.testnet.arc.io/tx/0x5d89ac50661ca410530892590387b5e56d6cd21f770892868c4ba901422337eb
+    (gatewayMint, 09:07:32 UTC)
+    policy.balanceUsdc() 20000 → 510000 (0.02 → 0.51 USDC; Circle's fee 0.01 on the 0.5);
+    Gateway domain 3 back to 0.001000. Page: "arrived · receipt", "Propose · holds 0.510000 USDC".
+    Screenshot proof/home-park-brought-2026-10-14.png
+
+Chain of custody: USDC on Arbitrum Sepolia, in the owner's wallet → (one tap, one wallet batch of
+two calls) Circle Gateway, still under the owner's address → (Circle's attestation, ~20 min) →
+(one tap, one wallet signature naming only this policy) the Arc policy, inside the caps. Tameion's
+relayer paid the Arc gas for the mint and could not redirect it. Three taps, two chains, no bridge
+UI, no key leaving the wallet.
+

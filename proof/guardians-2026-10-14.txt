@@ -1,0 +1,64 @@
+Guardians (PLAN 5.30, docs/59 §3.13: the ERC-7093 idea) — Arc testnet, 2026-10-14
+
+What: "if you lose your phone". The owner names up to sixteen guardian
+addresses on their PasskeyPrincipal — a co-founder, a hardware wallet in a
+drawer, a lawyer — and a threshold. Each guardian calls approveRecovery(qx, qy)
+for the same replacement key; the threshold-th agreement makes it pending for
+the recovery delay, exactly as the single recovery address can; the passkey
+cancels it until then; anyone applies it after. A cancel, an apply, or a
+change of guardians bumps `recoveryEpoch`, so earlier partial approvals are
+void. Guardians can only propose a key; they can never spend. The single
+`recovery` address keeps working beside them.
+
+Contract: contracts/src/PasskeyPrincipal.sol — guardians[], guardianThreshold,
+recoveryEpoch, guardianApproved / guardianApprovals (by ballot =
+keccak(epoch, qx, qy)), setGuardians (only the passkey, through execute),
+approveRecovery (guardians), isGuardian, guardianCount, recoveryBallot.
+Tests: contracts/test/PasskeyGuardians.t.sol, 7 — only the passkey sets them
+and the list is checked (threshold bounds, no duplicates); two of three make
+a replacement pending and the passkey cancels it, after which the same two
+must agree again; guardians disagreeing on the key never reach the threshold;
+after the delay anyone applies and the key rotates; changing the guardians
+voids partial approvals; the recovery address still works; an empty list
+removes them. forge: 131. `forge lint src`: no findings.
+
+Service / page: inbox `guardians {list, threshold, pendingEta}`;
+`POST /api/level1/prepare-guardians {owner, guardians[], threshold}` → calldata
+for the passkey; card "If you lose your phone" on `/` (addresses, how many must
+agree, "Set with my key"); the decoder describes `setGuardians` in words
+("Name 2 guardians; 2 of them may together propose a replacement for your
+passkey … they cannot spend"). `scripts/guardian_approve.sh <owner> <qx> <qy>`
+for a guardian; `… status` to read.
+
+Live run below.
+
+Tenant 9 (service deploy with the browser's passkey key; the PasskeyPrincipal
+bytecode changed, so the deterministic owner address is new):
+  owner  0x86cc86a33e2b30f03b1a890132dd7e9fd5f71a99 (factory deploy
+         0x14e91771f92a42568c1e95e0297a0261eb8c8270dfbd8af6d558b17d0f952403)
+  policy 0x11a16695a27747feb2ef9d4ec372422a7fd92dec (pull; agent 0x2b3f…e38c)
+  guardianCount() = 0 at deploy.
+  From the page, card "If you lose your phone": two addresses (the treasury key 0x6c1c…9a25 and the
+  tenant's agent key 0x2b3F…e38C), "How many must agree" 2, "Set with my key" → passkey →
+    https://explorer.testnet.arc.io/tx/0x50435dd42473740e66f43492fe1fbbe3e0c35b9f880b9f27dc8dbd452846db17
+    status: guardians 2, threshold 2, epoch 1; pending key none.
+  Guardian 2 (the agent key, no other role on this contract) approves replacement key 2G
+  (x 0x7cf2…9978, y 0x0777…73d1):
+    tx 0x443ea40ed0073cde5139891e2f570b936185f9c662ada7b8b451f13161e9a4d8 → "approvals so far: 1 of 2",
+    pending key none (one of two is not enough).
+  Guardian 1 (the treasury key) approves the same key:
+    tx 0x9f61f68a2f2bc95f7f2b5f96895c134596a1c0896a1b4b8d468378497b5d4637 →
+    pending key = (0x7cf2…9978, 0x0777…73d1), eta 1791963626 (the 60 s recovery delay).
+  (The first attempt of guardian 1's approval returned no JSON — the public node, rate-limited
+   while a pass scanned; retried once, landed.)
+  The passkey notices and cancels (the page's decoder: "Cancel the pending replacement of your
+  passkey"):
+    https://explorer.testnet.arc.io/tx/0xfc8847a8cb4e37d52a05c275fecb5b860d7253087aabe1ee150554a951bb4575
+    after the cancel: pending key none, recoveryEpoch 1 → 2 (the two approvals are void; the same
+    two guardians must agree again from scratch), qx() unchanged = the browser's passkey
+    0x0c5d…b1c0. Screenshot: proof/home-guardians-2026-10-14.png.
+
+Chain of custody: the owner names guardians with one tap → two guardians, each a plain key with
+no spending power, agree on a replacement → the contract makes it pending for the delay and the
+page shows it → the owner cancels with one tap. Had the owner lost the phone, waiting out the
+delay and calling applyRecovery would have rotated the key to the guardians' choice.

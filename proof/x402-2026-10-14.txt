@@ -1,0 +1,108 @@
+PLAN 5.54 — the agent buys a paid API (x402) from the account, inside its limits
+Arc testnet (chain 5042002), 2026-10-14T13:20:32Z
+
+Account: policy 0xf799a85496580af9a63c35223443688f8693635d (BudgetPolicy with redeemDelegations), owner 0xc7a9c8f13973336e63cafa35b2114704041e41b1 (PasskeyPrincipal, software passkey lazy_key.pem — test only),
+agent 0xb227c2a801d02e99bc7052255dd8b4279a41bd55. Caps at the purchase: 0.002 per payment, 0.005 per 24 h, floor 0.
+Seller: scripts/x402_seller.py (Python, x402 v2 HTTP transport, its own ERC-7710 facilitator), payTo/facilitator 0x805a6d4e58bb7e33ce58d54ab06c33fcfcb54dad, price 0.001 USDC, resource = Hyperliquid mid price.
+
+1. Setup (passkey taps relayed by the service; anyone applies the delay):
+   approve the seller as a payee  0x72c50a7e215d1d7d089f03582711b6b1bd3965c900f5dd8c92a99a1a7008d499
+   ask for Autopilot              0xfd17c6c31312a7e53683b45f34b9b33ba3b28739bcd58ee5cc11476d3eccfbef
+   applyPending after 60 s        0x0ae4b6dc45e754c41243e2607c58b54196ff4824da482ec82c5d11375dbd2eb6
+   fund the account 0.008 USDC    0x569373abd3099975264499cc3a1ed9d5360792d42b2dfb6d9753b0893593f80c
+   agent key with scope buy,read minted by the passkey (tok-6a08b6b7; the token itself is not recorded)
+
+2. Buying is closed without that key:
+   POST /api/level1/buy (no Authorization) -> HTTP 401 {"error":"buying a service needs an agent key with the \"buy\" scope; the owner mints one with the passkey on the account page","scope":"buy"}
+
+3. While the account was still on Propose the chain refused, said in words (dry run before the seller is involved):
+   HTTP 409 "the account refuses: the account is not on Autopilot; the agent buys only when it may pay by itself"
+
+4. THE PURCHASE (Autopilot): GET http://127.0.0.1:7902/v1/mid?coin=ETH -> 402 PAYMENT-REQUIRED -> agent signs Purchase(payTo, 1000, nonce, deadline)
+   -> PAYMENT-SIGNATURE (exact, assetTransferMethod erc7710, delegationManager = delegator = the policy) -> seller dry-runs and sends redeemDelegations:
+   tx 0x792c8f3fc7737ddc29b01ef5132914e3eae6973b283fad4412ecaf981fa49af6
+   receipt: status 0x1 from 0x805a6d4e58bb7e33ce58d54ab06c33fcfcb54dad (the seller pays the gas) to 0xf799a85496580af9a63c35223443688f8693635d gasUsed 151103
+   log 0xfffffffffffffffffffffffffffffffffffffffe topic0 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef topics ['0x000000000000000000000000f799a85496580af9a63c35223443688f8693635d', '0x000000000000000000000000805a6d4e58bb7e33ce58d54ab06c33fcfcb54dad'] data 0x00000000000000000000000000000000000000000000000000038d7ea4c68000
+   log 0xf799a85496580af9a63c35223443688f8693635d topic0 0x035f6e75c72a95350cabcd5914215a5f5a5e96c779308f343cae5da3f13a7f01 topics ['0x000000000000000000000000805a6d4e58bb7e33ce58d54ab06c33fcfcb54dad', '0xd9af917445b6332cb66fdb00c33da0a89a3d5f2425a84bd759491785841f8ff5'] data 0x00000000000000000000000000000000000000000000000000000000000003e8
+   Paid(address,uint256,bytes32) topic0 = 0x035f6e75c72a95350cabcd5914215a5f5a5e96c779308f343cae5da3f13a7f01
+   executed(0xd9af…f8ff5) = true  (the purchase digest is the action hash: redeemable once)
+   service reply:
+   {"body":"{\"coin\": \"ETH\", \"mid\": \"2464.55\", \"source\": \"hyperliquid allMids\"}","contentType":"application/json","paid":true,"purchase":{"actionHash":"0xd9af917445b6332cb66fdb00c33da0a89a3d5f2425a84bd759491785841f8ff5","amount":"0.001000 USDC","at":1791983929,"explorer":"https://explorer.testnet.arc.io/tx/0x792c8f3fc7737ddc29b01ef5132914e3eae6973b283fad4412ecaf981fa49af6","host":"127.0.0.1","minor":"1000","policy":"0xf799a85496580af9a63c35223443688f8693635d","reason":"ETH price before the weekly hedge check","seller":"0x805a6d4e58bb7e33ce58d54ab06c33fcfcb54dad","status":"paid","tx":"0x792c8f3fc7737ddc29b01ef5132914e3eae6973b283fad4412ecaf981fa49af6","url":"http://127.0.0.1:7902/v1/mid?coin=ETH"},"status":200}
+   HTTP 200
+   The service read the payment back from the receipt (PLAN 5.21) before saying paid:true.
+
+5. Refusals, live, each written to the account's purchase log with its reason:
+   A) a seller asking 0.003 when one payment may be 0.002 -> HTTP 409
+      "the account refuses: the price is above the per-payment limit"   (the chain's dry run, OverPerActionCap)
+   B) a seller nobody approved (payTo 0xe379…21d6) -> HTTP 409, recorded as needs-you:
+      "127.0.0.1 asks 0.001000 USDC per call, paid to 0xe379…, which is not one of your approved payees. Approve it once on the account page and the agent buys from it inside your limits."
+   C) a price above the caller's own ceiling (maxUsdc 0.0005) -> HTTP 409
+      "the price 0.001000 USDC is above the most you allowed for one call (0.000500 USDC)"
+   D) A COMPROMISED AGENT, Tameion's service bypassed: the agent key signs a 0.003 purchase itself and hands it straight to the seller
+      (scratch rogue_buy.py). The seller's facilitator dry-runs redeemDelegations and the contract says no:
+      402 PAYMENT-RESPONSE {"success": false, "errorReason": "... execution reverted, data: 0x97b81df2 ...0bb8 ...07d0"}
+      = OverPerActionCap(3000, 2000). The limit is in the contract, not in the service.
+   E) The owner tightens the limits with the passkey (instant, trust-shrinking): setLimits(0.001, 0.0015, 0)
+      tx 0xc6e096d2f8576e9a0b5bea40391173fea2e12ac2ccb9a54328f3a1bf20883e36; spent in the window 0.001.
+      The agent's next purchase -> HTTP 409 "the account refuses: the price is above what is left of the 24-hour limit".
+
+6. Same digest three ways: Rust (arc::purchase_digest), Solidity (purchaseDigest) and cast over the EIP-712 encoding
+   agree on the vector 0xeaefdc74…65b0 (operator/src/x402.rs test, contracts/test/BudgetPolicyX402.t.sol
+   test_digest_matches_the_service_vector); on chain the policy accepted the Rust-signed digest 0xd9af…f8ff5.
+
+Cost, measured: the facilitator's redeem used 151,103 gas = 0.0038 USDC at Arc's 25 gwei — more than the 0.001 call.
+Per-call x402 on Arc fits calls worth ~0.01 and up; sub-cent calls want Circle's batched Gateway settlement (later).
+
+7. The loop on the account page (proof/x402-needs-you-2026-10-14.png): the refused seller of 5B appears under Needs you as
+   "Let the agent buy from 127.0.0.1 — 0.001000 USDC a call, paid to 0xe379…21d6 / It wanted it for: SOL price for the treasury report."
+   The owner's Approve signs the call the inbox prepared (setPayeesIf, bound to the terms and ten minutes):
+   approve  0x62e31fbdc6868081091f58393dd98a611050478da1e0b4b289a8f64c388a8dde
+   limits back to 0.002 / 0.005 (a raise: waits the 60 s delay)  0x2edfc1f7ac3f64539411ddb5de66effc60fdd2050762ed8d4059c68ddcaa96c1, applied 0x07b858b80928d1e3a52dc69b07f886c4899bd5a97086814d1bd1276aaf957e3a
+   The agent then bought from that seller by itself:
+   {"body":"{\"coin\": \"SOL\", \"mid\": \"105.135\", \"source\": \"hyperliquid allMids\"}","contentType":"application/json","paid":true,"purchase":{"actionHash":"0x8acace41b7b564903f8cfe1ca067e21f6d8069f6db34cb8135be3c5405b5a3c2","amount":"0.001000 USDC","at":1791984531,"explorer":"https://explorer.testnet.arc.io/tx/0x844cbfad91106b61c867bb314ae7db3bd94670a196ec190d8c1a258aa530fabf","host":"127.0.0.1","minor":"1000","policy":"0xf799a85496580af9a63c35223443688f8693635d","reason":"SOL price for the treasury report","seller":"0xe379c8a282c3e33ce080de42a37e81daf58b21d6","status":"paid","tx":"0x844cbfad91106b61c867bb314ae7db3bd94670a196ec190d8c1a258aa530fabf","url":"http://127.0.0.1:7904/v1/mid?coin=SOL"},"status":200}
+   Paid shows "Bought from 127.0.0.1 — 0.001000 USDC / ETH price before the weekly hedge check · receipt" (inbox paid[].bought + reason).
+
+8. Every purchase and every refusal is in the anchored decision log (the next pass carries what was bought since the last root):
+   pass 6acf890b-0000 anchored root 0x0f60fe5d855ebf44bb33ac8ef64dcff0ee6c06b0a963b42cca385fc8898ab661 in 0x3739eefdbfdba784d00db499c40ba37ad729ccedc7d5ca2ce0f006234bcdc96e
+   TAMEION_TOKEN=<read key> scripts/verify_tenant.sh http://127.0.0.1:7880 0xf799a85496580af9a63c35223443688f8693635d:
+   events  9 lines downloaded
+   # audit /var/folders/g4/1m9xkbrd2cv9js0zzsrn5gfh0000gn/T/tmp.7wCGuLCcju/0x0f60fe5d855ebf44bb33ac8ef64dcff0ee6c06b0a963b42cca385fc8898ab661.events.jsonl
+   [0000] ESCALATION  refused x402 http://127.0.0.1:7902/v1/mid?coin=ETH: ETH price before the weekly hedge check
+   [0001] ESCALATION  refused x402 http://127.0.0.1:7902/v1/mid?coin=ETH: ETH price before the weekly hedge check
+   [0002] SETTLEMENT  bought x402 http://127.0.0.1:7902/v1/mid?coin=ETH: ETH price before the weekly hedge check
+   [0003] ESCALATION  refused x402 http://127.0.0.1:7903/v1/mid?coin=BTC: BTC price for the treasury report
+   [0004] ESCALATION  needs-you x402 http://127.0.0.1:7904/v1/mid?coin=SOL: SOL price for the treasury report
+   [0005] ESCALATION  refused x402 http://127.0.0.1:7902/v1/mid?coin=ETH: ETH price, cheap only
+   [0006] ESCALATION  refused x402 http://127.0.0.1:7902/v1/mid?coin=ETH: ETH price again
+   [0007] SETTLEMENT  bought x402 http://127.0.0.1:7904/v1/mid?coin=SOL: SOL price for the treasury report
+   [0008] OBSERVATION Holding 0.006000 USDC. Read 6 transfers (1 of them my own payments, which are not evidence) and recovered 0 recurring obligations, of which 0 fall due within 30.0 days totalling 0.000000 USDC; 0 within 3.0 days (or a tenth of their interval), which is when I pay.
+   events          : 9
+   recomputed root : 0x0f60fe5d855ebf44bb33ac8ef64dcff0ee6c06b0a963b42cca385fc8898ab661
+   file name       : 0x0f60fe5d855ebf44bb33ac8ef64dcff0ee6c06b0a963b42cca385fc8898ab661   MATCH
+   chain rootOf    : 0x0f60fe5d855ebf44bb33ac8ef64dcff0ee6c06b0a963b42cca385fc8898ab661   (anchor 0xdab65a5380bcc2eebc3a3a91d0ad11eec95994db, agent 0xb227c2a801d02e99bc7052255dd8b4279a41bd55)   MATCH
+   RESULT          : PASS
+   # audit /var/folders/g4/1m9xkbrd2cv9js0zzsrn5gfh0000gn/T/tmp.7wCGuLCcju/0x0f60fe5d855ebf44bb33ac8ef64dcff0ee6c06b0a963b42cca385fc8898ab661.events.jsonl
+   [0000] ESCALATION  refused x402 http://127.0.0.1:7902/v1/mid?coin=ETH: ETH price before the weekly hedge check
+   [0001] ESCALATION  refused x402 http://127.0.0.1:7902/v1/mid?coin=ETH: ETH price before the weekly hedge check
+   [0002] SETTLEMENT  bought x402 http://127.0.0.1:7902/v1/mid?coin=ETH: ETH price before the weekly hedge check
+   [0003] ESCALATION  refused x402 http://127.0.0.1:7903/v1/mid?coin=BTC: BTC price for the treasury report
+   [0004] ESCALATION  needs-you x402 http://127.0.0.1:7904/v1/mid?coin=SOL: SOL price for the treasury report
+   [0005] ESCALATION  refused x402 http://127.0.0.1:7902/v1/mid?coin=ETH: ETH price, cheap only
+   [0006] ESCALATION  refused x402 http://127.0.0.1:7902/v1/mid?coin=ETH: ETH price again
+   [0007] SETTLEMENT  bought x402 http://127.0.0.1:7904/v1/mid?coin=SOL: SOL price for the treasury report
+   [0008] OBSERVATION Holding 0.006000 USDC. Read 6 transfers (1 of them my own payments, which are not evidence) and recovered 0 recurring obligations, of which 0 fall due within 30.0 days totalling 0.000000 USDC; 0 within 3.0 days (or a tenth of their interval), which is when I pay.
+   events          : 9
+   recomputed root : 0x0f60fe5d855ebf44bb33ac8ef64dcff0ee6c06b0a963b42cca385fc8898ab661
+   file name       : 0x0f60fe5d855ebf44bb33ac8ef64dcff0ee6c06b0a963b42cca385fc8898ab661   MATCH
+   chain rootOf    : 0x0f60fe5d855ebf44bb33ac8ef64dcff0ee6c06b0a963b42cca385fc8898ab661   (anchor 0xdab65a5380bcc2eebc3a3a91d0ad11eec95994db, agent 0xb227c2a801d02e99bc7052255dd8b4279a41bd55)   MATCH
+   RESULT          : PASS
+   verify_tenant: MATCH on both RPCs
+
+9. A DISHONEST SELLER (scripts/x402_seller.py with ANSWER_FAILED=1 on :7907): it redeemed the purchase and then answered 402 "failed".
+   The service does not take the seller's word: it read executed(digest) on the account and recorded the purchase as paid —
+   HTTP 502 {"error":"the seller answered 402 (...) but the account shows this purchase paid; ask the seller for the response",
+             "purchase":{"actionHash":"0xa82c5729d5be1025ce7e3606d41bf37f6744637e7f2906fba9bf368cb0738e1b","status":"paid",...}}
+   The payment itself: tx 0xe9a7e57846bb6d6aa1c1ac4bfac20262cd3fc58987c7a5cbde29bf7cc93111be (one Paid log with topic2 = the digest,
+   found with `cast logs ... Paid(address,uint256,bytes32) "" "" 0xa82c…`); since this run the service finds that transaction
+   itself (arc::paid_tx_for, the last 2,000 blocks) and links it on the account page.
+   Also hardened: response bodies are read at most 64 KiB (a seller cannot make the service hold an unbounded body).

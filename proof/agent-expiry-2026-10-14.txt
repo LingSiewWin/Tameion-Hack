@@ -1,0 +1,56 @@
+Agent authority that lapses (PLAN 5.24, docs/59 §3.4: the EIP-8130 shape) — Arc testnet, 2026-10-14
+
+What: the agent's key may pay for 90 days from deploy (`agentExpiry`); after
+that `pay` is refused with `AgentLapsed(expiry)` until the owner renews with
+`renewAgent(until)` — principal only, instant, at most a year ahead, and an
+earlier date than today's expiry is the owner's brake. A key nobody
+re-confirms in a quarter is one nobody is watching. Standing orders and the
+owner's own settlements never depend on it: they are the owner's instructions,
+not the agent's. Operator: a lapsed agent proposes and does not try to pay.
+Inbox: `agentAuthority {lapsesAt, lapsed, daysLeft, renewSuggested (inside 14
+days), renewUntil}`. Page: a card in the last fourteen days, loud when lapsed,
+one tap "Renew for 90 days" (passkey). `POST /api/level1/prepare-renew`.
+The page's decoder describes `renewAgent` in words ("Let the agent keep paying
+until <date> … an earlier date is your brake").
+
+Tests: contracts/test/BudgetPolicyAgentExpiry.t.sol, 6 — term starts at 90
+days and the agent pays inside it; after the term the agent is refused by
+name; the principal renews instantly and nobody else can; renewal is bounded
+to a year and must be in the future; shortening is the brake and renewing
+restores payment; a lapsed agent stops neither a standing order nor the owner.
+forge: 118 tests.
+
+Live run below.
+
+Tenant 6 (deployed through the service with the browser's passkey public key,
+pull mode, 7-day window): owner 0x603b7b6491302bca7ae96ae5cb47aa02dc55dd98 again
+(deterministic; no principal deploy), policy 0x4e0b97f70ee0b49cbedbb8e328866fa3c41a339d,
+agent 0x5245…5100 (same key file), agent gas 0x2794fbf04b43c83e829afdb95e83ac4a712d4568b4048937e4e38af3d1a1504e.
+  agentExpiry() on chain = 1799736576 = deploy (1791960576) + 90 days.
+  inbox agentAuthority = {lapsesAt 1799736576, lapsed false, daysLeft 89, renewSuggested false}.
+  The owner's brake, from the page: prepare-renew {until: now + 150 s} → sign. First
+  attempt: the tab still ran the decoder from before renewAgent existed and refused —
+  "not signing: this page cannot describe the call (0x3f85555c)". Exactly the rule the
+  page lives by (a selector it cannot put into words is not signed). Page reloaded,
+  second attempt below.
+  Second attempt, reloaded page: the decoder put the call into words —
+    "Let the agent keep paying until 2026-10-14 … an earlier date is your brake" —
+  and the passkey signed renewAgent(1791960798) (now + 150 s):
+    https://explorer.testnet.arc.io/tx/0xd0c3927efe37a3dab81dbfdd0dd72aa6b98a8417bac5c46e9384fe9b356a7015
+  Page switched to tenant 6 → card "The agent's authority lapses soon. On 10/14/2026
+  (0 days) it stops paying by itself unless you renew." (proof/home-agent-lapses-soon-2026-10-14.png)
+  06:53:19Z, past the shortened expiry: inbox agentAuthority = {lapsed true, daysLeft 0,
+  renewSuggested true}; card "The agent's authority has lapsed. Since 10/14/2026 it
+  proposes and pays nothing by itself. Renew to let it pay again; standing orders and
+  your own payments were never affected." (proof/home-agent-lapsed-2026-10-14.png)
+  agentExpiry() on chain = 1791960798.
+  "Renew for 90 days" (passkey) →
+    https://explorer.testnet.arc.io/tx/0x52803a515152fa47153dd79727d75d3f9beb84f87119ddc2fdea646a86859e2b
+    agentExpiry() on chain = 1799736841 (now + 90 days); inbox agentAuthority = {lapsed false,
+    daysLeft 89, renewSuggested false}; the card hid itself ("renewed · receipt").
+
+Chain of custody: deploy (90-day term) → owner shortens to two minutes (brake) → the
+inbox and the page say "lapses soon", then "has lapsed" → one tap renews. The agent's
+own `pay` is refused by the contract in between (forge: AgentLapsed), standing orders and
+the owner's own payments are not (forge). Gate at this point: forge 118, Rust 289, clippy,
+fmt, python, node, ERC-7730, cargo deny green.

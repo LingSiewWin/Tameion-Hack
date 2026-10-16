@@ -1,0 +1,48 @@
+The Tameion limits as an ERC-7579 executor module (PLAN 5.29) — Arc testnet, 2026-10-14
+
+What: for a company already on a modular smart account (Safe7579, Kernel, Nexus, OpenZeppelin's
+AccountERC7579), Tameion is a module it installs, not an account it moves to. `TameionExecutor`
+keeps per-account terms — agent key, token, per-payment cap, trailing-24 h cap, reserve floor,
+delay — and moves money only through the account's `executeFromExecutor`, which the account
+allows only for installed executors. Payees are payable after the delay; Autopilot only after the
+delay; narrowing is instant, widening waits; the agent's term lapses; a replay guard per account.
+To prove it with nothing but a wallet and a chain, the wallet runs OpenZeppelin's ERC-7579 account
+(`TameionModularAccount` = AccountERC7579 + SignerEIP7702) by EIP-7702 and installs the module with
+a self-call — no bundler, no EntryPoint.
+
+Code: contracts/src/TameionExecutor.sol, contracts/src/TameionModularAccount.sol;
+contracts/test/TameionExecutor.t.sol (8 tests on a real 7702 + 7579 account: pays inside every
+limit; every limit refuses; reserve floor; only the account changes its terms and widening waits;
+uninstalling ends its power at the account; an account that never installed it is out of reach;
+pause and revoke are instant). forge 152. ERC-7730 descriptor calldata-TameionExecutor.json.
+scripts/prove_module_7579.sh (reproducible; addresses are the factory's, the same on any chain
+with the EIP-7997 factory).
+
+Live run (scripts/prove_module_7579.sh <wallet key> <agent key> 0x…a75790):
+  TameionExecutor deployed through the factory at 0x78a3d354eDe27EDDc13D3c28433117cbc07b2aCf:
+    https://explorer.testnet.arc.io/tx/0xd4784211e99ed6ee24ee043878c59e89c5b674bd1b4c43f0c9724ac7091fef14
+  TameionModularAccount at 0xfb07aF918586bB3b01D48211b3f7bc1118C67C09:
+    https://explorer.testnet.arc.io/tx/0x1cee6b01618f8175947b6520d57b681f2bd57d976b2abb4dc0292fb66333cfd5
+    (the first attempt ran out of relayer gas and the script, unhardened, went on to delegate the wallet
+     to the empty address — docs/60 P-24; fixed, refuelled, re-run)
+  Wallet 0xE379c8a282C3E33cE080DE42A37e81dAF58b21d6 (fresh test key) — one type-4 tx: authorization to
+  the account code + installModule(2, executor, terms) on itself:
+    https://explorer.testnet.arc.io/tx/0xc55a957eb9081cf2cf4c0c389c63d000506c82b513819624d11008b28443f736
+    wallet code 0xef0100fb07af…c67c09; isModuleInstalled(2, executor) = true
+    configOf(wallet) = agent 0x8345…7859, token 0x3600…0000, delay 60, agentExpiry 1799752012,
+    autopilot true (after the next steps), perActionCap 5000, dailyCap 20000, reserveFloor 5000
+  The wallet (its own calls) attests the payee and asks for Autopilot:
+    https://explorer.testnet.arc.io/tx/0x771c2b206c41cc4f495f56e5daf5e7b9598661e8428b980821d18ec7def47cec
+    https://explorer.testnet.arc.io/tx/0x9299be409d08f5b8c2f1d972e7a2571b84913e6d0961cb5e4d8dd80be5e775e5
+  Anyone applies Autopilot after the delay:
+    https://explorer.testnet.arc.io/tx/0x3ab4200c4266851a7c4c5d9f836299eb3175193bb35ed97309a9a5c8521aa57b
+  The agent above the cap (5001 units): refused — revert data 0x97b81df2 = OverPerActionCap(uint256,uint256).
+  The agent inside the cap (5000 units):
+    https://explorer.testnet.arc.io/tx/0x32f36afd92e4211be71abe79003deb52f75be6ec4d3af301f2d702f6df932bf9
+    from the agent to the module; Transfer of USDC (0x3600 facade, and Arc's native mirror 0xff…fe)
+    FROM THE WALLET to the payee, 5000 units; Paid(account = the wallet, to = the payee) emitted by the
+    module; gas 176,562; spentInWindow(wallet) = 5000.
+
+Chain of custody: the company's account (here a wallet running a standard 7579 account) installed a
+module; the module's terms live in its storage, keyed by the account; the agent's key paid from the
+account only through the account's own executor gate, refused above the cap, inside it paid.

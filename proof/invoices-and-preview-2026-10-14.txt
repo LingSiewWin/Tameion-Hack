@@ -1,0 +1,50 @@
+Preview before funding + signed invoices from vendors (docs/65 §5.1, §5.4; PLAN 5.59, 5.60)
+=========================================================================================
+Date: 2026-10-14 (session 5). Local tameion-app on :7880, Arbitrum Sepolia, public RPC.
+Client: Playwright page, CTAP2 virtual authenticator (the passkey), window.ethereum shim that
+forwards eth_sendTransaction to the local test signer (:7899, the bill wallet 0x6c1c…9a25's key file).
+Vendor: a throwaway key generated for this test (address 0x87b1dd75d498997c4ea7e726be4ec0e5f6a3d6d8).
+
+A. Preview before funding (PLAN 5.59)
+  Start (pull mode, daily limit 0.2) -> account reserved 0xf1c78d0b940ee10a683e3ba899c5a829890004a8, nothing on chain.
+  First inbox read started the read-only report of the bill wallet; tenants/<policy>.preview.json:
+    status done, readMs 16490, transfers 19, bills 2, next30 0.350000 USDC, fundMinor 350000, suggestedLimit 0.400000 USDC
+  The page, before any money moved:
+    "Nothing is paid without a limit: the agent's key will never move more than 0.20 USDC a day."   (was 0.000000, F1)
+    "The agent read your wallet's last 90 days (19 payments) and found 2 recurring bills. The next 30 days of them
+     come to 0.35 USDC. / 0.20 USDC to 0x1111…1111, every 3 minutes / 0.15 USDC to 0x3333…3333, every 3 minutes /
+     Your daily limit (0.20 USDC) is under twice your largest bill; the agent will suggest 0.40 after its first check."
+  Account created by the agent's first check: owner tx https://sepolia.arbiscan.io/tx/0xb35e42dbdf0d11e7a63cc699891915925515ececddfb92c7007d783cea0b32f0
+    policy tx https://sepolia.arbiscan.io/tx/0x27b745846bfeae821519258d900a9a110eede0ffb47cf7d7be6787841a6d6b11 (pull mode)
+  Tapped "Allow from this browser" -> allowance tx
+    https://sepolia.arbiscan.io/tx/0xdc88bf7fde71907967731aa0b9577e9dc564ed23f9117a1554680dd130e253fc
+  t+12 s the first check started by itself; t+84 s "2 recurring bills found", Needs you 2, "Pay all 2 — 0.35 USDC".
+  (The 3-minute bills are this test wallet's demo cadence; a real wallet shows "every 30 days".)
+
+B. Signed invoices (PLAN 5.60)
+  Vendor signs EIP-712 Invoice(address payee,address policy,uint256 amount,uint64 dueAt,uint32 everyDays,
+  uint16 discountBps,uint16 earlyDays,bytes32 ref,uint64 issuedAt), domain "Tameion Invoice"/"1"/421614/policy:
+    cargo run -p operator --example sign_invoice -- <vendor-key-file> 421614 <policy> 50000 2 30 200 10 INV-2026-1014-R1
+    cargo run -p operator --example sign_invoice -- <vendor-key-file> 421614 <policy> 10000 1 0 0 0 INV-2026-1014-O1
+  POST /api/level1/invoice (open; the signature authenticates; nothing is paid on receipt):
+    R1 -> 201 received, 0.050000 USDC every 30 days, approvedPayee false, notes:
+          "Not one of your approved payees yet: accepting it approves this payee with your key." /
+          "No payment to this payee in the history the agent read." / "Repeats every 30 days." /
+          "2% off when paid 10 days early."
+    O1 -> 201 received, 0.010000 USDC, "One payment, not a repeating bill."
+    same body again   -> {"error":"this invoice was received already"}
+    amount tampered   -> {"error":"not signed by the payee: the signature is 0xa3a2…f20a's, the money would go to 0x87b1…d6d8"}
+  Owner, on the page:
+    R1 "Approve & accept" -> payee approved by passkey
+         https://sepolia.arbiscan.io/tx/0x290dc3a6359fae233d9d87b1cd2b01e9b860651652fee2e21ccd8c6f6d2d2882
+       -> bill added {payee 0x87b1…, 0.050000, every 30 days, 2%/10}; the agent's next check proposed
+          "Pay 0.05 USDC to 0x87b1…d6d8" (approved payee: one tap "Pay").
+    O1 "Approve & pay" -> (re-approval, see docs/60 P-41) https://sepolia.arbiscan.io/tx/0x06f227b6896b51a369b1d45811864fe7b169b6c67027bf9aab95d5be2c0cd01b
+       -> paid by the owner, action hash = the invoice's ref (paid once whoever taps twice)
+          https://sepolia.arbiscan.io/tx/0x5cb1d03e976f3dc6ba3dff2d0ab645debe07f3907c3845981c865b80dbf52cb6
+  After the P-41 fix (approval read live) a third invoice O2 (0.012 USDC, one-off):
+    received with approvedPayee true and the history check
+      "This payee usually bills 0.050000 USDC; this invoice asks 0.012000 USDC."
+    one tap "Pay" -> https://sepolia.arbiscan.io/tx/0x8937f3c056badce6aa7dceeb71149990060820b60f5071aef4549ffbd3166607
+    (that execution went through the relayer with the per-key send lock of docs/60 P-39 live)
+  tenants/<policy>.invoices.jsonl: R1 received → accepted; O1 received → accepted; O2 received → accepted.

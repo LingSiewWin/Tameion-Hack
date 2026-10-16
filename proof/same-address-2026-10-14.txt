@@ -1,0 +1,45 @@
+Same address on every chain for the owner's contract (PLAN 5.22, docs/59 §3.10) — Arc testnet, 2026-10-14
+
+What: the hosted service now deploys a tenant's PasskeyPrincipal through the
+EIP-7997 keyless CREATE2 factory (0x4e59b44847b379578588920cA78FbF26c0B4956C,
+present on Arc testnet) with salt = keccak256("tameion.principal.v1" || qx || qy).
+The owner's contract address is a function of the passkey alone: the same on
+every chain that has the factory, and deploying twice is a no-op (code already
+there → address returned, nothing sent). `arc::ArcClient::deploy_deterministic`,
+`arc::predict_create2`, `level1::principal_salt`; the tenant records `owner_tx`.
+The policy still deploys with CREATE: its constructor names chain-specific
+contracts (the ERC-8004 registry, on Base the USDC token), so its address
+cannot be chain-independent without an initializer pattern — recorded, not
+done.
+
+Probe tenant (a software P-256 key generated for the proof; not a real user):
+  qx 0xb3bed25ddc418e53f83bbab940a1d948e799af41e925f2204192ee925fd7d77a
+  qy 0x241abda8529b2441e1843ec290ec172ff32bc84c9285dec86ceeaa240d205d63
+  POST /api/level1/deploy (chain arc-testnet, watched = treasury, recovery = treasury,
+  caps 0.005 / 0.05 / 0, days 7) →
+    owner     0x1ad50892566d8c914d3ef741f0cf216e7e46d45c
+    owner_tx  0x98440f05d8bf1ad2f5017fc24bab5246548adc401b453fc4edfeea47c679e11a
+    policy    0x800d8171813bcfff6fccd40bcd90656af6f4665c
+    agent     0x82f2e000946fa871767ff03c2552c49d9566a2a0
+    agent gas 0x11b02ce750702b499e50958dbd35560d64536890ce0e58105b1d559b7b1c51ce
+
+Independent recomputation with foundry's cast (no Tameion code):
+  salt          = cast keccak(0x<"tameion.principal.v1" as bytes> || qx || qy)
+                = 0x11fc7ea8695d40b6fbab8c12a135678d81fd7d5614488bddf08cb46ff9ace204
+  initcode      = contracts/bytecode/PasskeyPrincipal.hex || abi.encode(qx, qy, recovery, 60)
+  initcode hash = 0x3a7104dfd18a12931c99e17e33d90e4673e522379c3c6c74765bbcf89ea87ead
+  cast create2 --deployer 0x4e59…956C --salt <salt> --init-code-hash <hash>
+                = 0x1ad50892566d8c914D3ef741f0CF216e7E46D45C          == owner  MATCH
+
+On chain (Arc testnet):
+  owner_tx 0x9844…e11a: to = 0x4e59b44847b379578588920ca78fbf26c0b4956c (the factory),
+           status 0x1, block 67106739, gasUsed 1,456,920
+  code at owner: 12,251 hex chars (the PasskeyPrincipal runtime)
+  qx() = 0xb3be…d77a (the probe key); recovery() = 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+  policy.principal() = 0x1ad5…D45C
+
+What the customer gets: one address for their key's contract wherever
+Tameion runs. On Base (PLAN 5.9) the same passkey lands at 0x1ad5…D45C too,
+because the factory is the same contract there. Unit test: the predicted
+address depends only on factory, salt and initcode and equals the spelled-out
+keccak256(0xff || factory || salt || keccak256(initcode))[12..].

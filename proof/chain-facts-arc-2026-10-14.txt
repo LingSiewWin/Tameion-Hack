@@ -1,0 +1,63 @@
+Chain facts, Arc testnet (PLAN 5.20, from docs/59 §3.9 / §3.10 / §3.12) — measured 2026-10-14
+
+Arc testnet: chainId 5042002; RPC https://rpc.testnet.arc.network; a second,
+independent JSON-RPC at https://explorer.testnet.arc.io/api/eth-rpc (Blockscout;
+eth_chainId → 0x4cef52 = 5042002, eth_blockNumber answers).
+
+1. EIP-7910 `eth_config`: NOT supported.
+   cast rpc eth_config → "error code -32601: method not supported: eth_config"
+
+2. EIP-7951 / RIP-7212 secp256r1 precompile at 0x…0100: LIVE on Arc testnet.
+   Method: a fresh P-256 key (python `cryptography`), sha256 of a probe message,
+   ECDSA signature normalised to low-s, input = hash || r || s || x || y (160 bytes),
+   `cast call 0x0000000000000000000000000000000000000100 <input>`:
+     Arc testnet        → 0x…0001  (valid)
+     Base Sepolia       → 0x…0001
+     Arbitrum Sepolia   → 0x…0001
+   (`cast code 0x100` is 0x on every chain: precompiles have no code; the call
+   is the probe.) docs/59 §3.9 assumed Arc lacked it; it does not. OpenZeppelin's
+   P256 library tries the precompile first and falls back to Solidity, so our
+   PasskeyPrincipal verifies on the precompile on Arc. No ask to Circle needed.
+
+3. Gas of one passkey-approved action on Arc (PasskeyPrincipal.execute wrapping a
+   BudgetPolicy call, WebAuthn assertion verified on chain):
+     tx 0xff534ad315d37f82ce42c560392128a176e1fda06756ac032a28eb95094bb341
+     to 0x7d1a44b84a176ffa1599eb25fe953c9f73ff8af3 (tenant 2's PasskeyPrincipal)
+     block 67042066, gasUsed 150410, status 1
+   Forge (no precompile in the test EVM, Solidity fallback): see the gas report
+   line appended below.
+
+4. EIP-7997 deterministic factory at 0x4e59b44847b379578588920cA78FbF26c0B4956C:
+   PRESENT on Arc testnet (cast code returns the 69-byte factory runtime
+   0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f580…).
+   Same-address policies on Arc and Base (PLAN 5.22) are therefore possible.
+
+5. EIP-7708-style transfer logs: Arc's native USDC emits ERC-20 `Transfer` logs
+   from 0x3600000000000000000000000000000000000000 (the facade our scanner and
+   the Gateway deposit script already use; `approve`/`deposit` proved today in
+   proof/gateway-unified-balance-2026-10-14.txt).
+
+   Forge gas report, PasskeyPrincipal.execute in the test EVM (no secp256r1
+   precompile there, so OpenZeppelin's Solidity fallback runs): min 39,626
+   (reverts), avg 318,322, median 408,213, max 466,580 over 14 calls
+   (`forge test --match-contract PasskeyPrincipal --gas-report`, 2026-10-14).
+   On Arc, with the precompile: 150,410 for the whole execute + inner call.
+   Roughly a third of the fallback: Arc's precompile is what makes a passkey
+   per action affordable.
+
+6. Safe (Gnosis Safe) contracts are deployed on Arc testnet at the canonical addresses
+   (checked 2026-10-14 by `cast code`): SafeL2 1.4.1 0x41675C099F32341bf84BFc5382aF534df5C7461a,
+   Safe 1.4.1 0x29fcB43b46531BcA003ddC8FCB67FFE91900C762, SafeProxyFactory 1.4.1
+   0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67, SafeL2 1.3.0 0x3E5c63644E683549055b9Be8653de26E0B4CD36E,
+   Safe 1.3.0 0xd9Db270c1B5E3Bd161E8c8503c55cEABeE709552, SafeProxyFactory 1.3.0
+   0xa6B71E26C5e0845f74c812102Ca7114b6a896AB2. docs/59 §3.1 listed "Safe on Arc" as unverified;
+   it is there. PLAN 5.27 is unblocked: a company whose money sits in a Safe can run Tameion in
+   pull mode with the Safe as the bill wallet — one Safe transaction approves the allowance.
+
+7. EIP-7702 (set code for EOAs) is live on Arc testnet: a type-4 transaction from the treasury
+   EOA carrying a signed authorization (delegating to the zero address — a no-op that leaves the
+   account's code empty) was accepted and mined:
+     tx 0xa439aa0da00f769b3db7d518dd166535d9894d94c970d04e0c6e104174725406, block 67126927,
+     type 0x4, status 0x1; `cast code <treasury>` = 0x afterwards (the delegation cleared).
+   docs/59 §3.5 gated PLAN 5.28 on this; the gate is open. (Probed with `cast wallet sign-auth`
+   + `cast send --auth`, 2026-10-14.)

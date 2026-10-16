@@ -1,0 +1,29 @@
+One passkey, many accounts, any device (PLAN 5.35) — 2026-10-14
+
+What: lazy deploy (5.32) makes a second policy under the same passkey cheap, so the account page
+now (1) lists every account this browser knows — "Your accounts: 0x7839…0df9 (holds money) ·
+0x2ecd…e8a3 (from your wallet) · …" — and switches with one tap (`tameion.tenants` in localStorage,
+`accountsLine()`); (2) opens an existing account from a link that carries only the policy address
+(`/?policy=0x…` → `GET /api/level1/tenant/<policy>` → remembered → shown), for a phone or a fresh
+browser — the passkey, synced by the platform, is what signs there; (3) "Open on another device"
+in the footer copies that link.
+
+Found on the way (docs/60 P-17, security): `GET /api/level1/tenant/<policy>` served the whole tenant
+file, including `notify_secret` (the HMAC key of the owner's webhook) and the agent-key hashes.
+Fixed before shipping the link: `Tenant::public()` strips both (adds `notifySet`,
+`agentTokenCount`); the deploy reply and the admin list use it too; unit test
+`a_public_tenant_carries_no_secret`.
+  curl /api/level1/tenant/0x1645951793f7ca2ae36d7a3eeae90ef93e1932ab (a tenant with a webhook):
+    before: notify_secret present (True)   after: notify_secret in body False, agent_tokens False,
+    notifySet True.
+
+Live, the Playwright tab with the browser passkey:
+  localStorage "tameion.tenant" removed (another device), navigate to
+    /?policy=0x7839d74d424dd14ad7147d11bc26745a82ed0df9
+    → the home view for 0x7839… (the lazily deployed hold policy); URL rewritten to /; the stored
+      tenant carries no secret (checked).
+    → "Your accounts:" line with nine accounts, the current one bold.
+  Tap "0x2ecd…e8a3 (from your wallet)" → the page reloads on the lazy pull account.
+  Tap "Open on another device" → "Link copied — open it on your phone" (clipboard:
+    http://localhost:7880/?policy=0x2ecd…e8a3).
+  Screenshot proof/home-accounts-2026-10-14.png

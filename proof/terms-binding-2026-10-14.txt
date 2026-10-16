@@ -1,0 +1,85 @@
+Approvals bound to the terms the owner saw, and to a deadline (PLAN 5.23, docs/59 §3.11:
+the ERC-5646 state-fingerprint and EIP-5081 expiring-transaction ideas) — Arc testnet, 2026-10-14
+
+What: an approval is a decision about a state — these caps, this autonomy level,
+this agent key, this operator, this delay, this agent expiry, this pending change.
+The policy exposes `fingerprint()` = keccak256(abi.encode(perActionCap, dailyCap,
+reserveFloor, uint8 mode, agent, operator, delay, agentExpiry, pending.eta,
+pending.kinds)). `settleAsPrincipalIf(to, amount, actionHash, terms, deadline)` and
+`setPayeesIf(payees, attested, terms, deadline)` do what the plain calls do, but
+revert `TermsChanged(signed, current)` if the fingerprint moved between reading
+and landing, and `ApprovalExpired(deadline)` after the deadline. The service
+binds every Needs-you row to the live fingerprint for ten minutes; the page
+recomputes the fingerprint from the fields the service hands it (`terms`) and
+refuses to sign a call bound to anything else; the contract refuses again if the
+terms move before the transaction lands. The plain calls stay for older policies.
+
+Tests: contracts/test/BudgetPolicyTerms.t.sol, 6 — the fingerprint moves with every
+term (pending raise, mode, caps, agent expiry) and not with a payment; a bound
+settlement pays while the terms hold; is refused by name once the operator raised
+the limits in between; is refused after its deadline; bound payee approval holds
+the same line; only the principal, and the plain settle still works. forge: 124.
+arc: `Terms::recompute` pinned to `cast abi-encode … | cast keccak` =
+0x95a4f8627252855cd26640bbeec95e9a4d924e1c6bceef775d858778547ad43c; the page's
+`termsFingerprint` pinned to the same vector; decoder words for both bound calls.
+
+Live run below.
+
+Tenant 7 (service deploy with the browser's passkey key; pull mode; owner 0x603b…dd98
+again, same agent key): policy 0xb19f130d30ab1cf00188bbc749bce1d7005474de,
+agent gas 0xf5090078e7eb41ea09149a4d3ce2e36718c001286f80c9efcc62a646b8a71f1e.
+  inbox terms = {perActionCap 5000, dailyCap 50000, reserveFloor 0, mode 1 (Propose),
+    agent 0x5245…5100, operator 0x6c1c…9a25, delay 60, agentExpiry 1799737402,
+    pendingEta 0, pendingKinds 0,
+    fingerprint 0xe87d591d257eabb9258e1b455aacc84123e3785122cdf287436760128d88315a,
+    recomputed  0xe87d591d257eabb9258e1b455aacc84123e3785122cdf287436760128d88315a, consistent true}
+  — the service's own recomputation equals the contract's fingerprint().
+  "Allow from this browser" → approve(policy, 1.5 USDC):
+    https://explorer.testnet.arc.io/tx/0x8bfa788960b7f82517af672cfe7bd68ffcf5c0bd2603c2c73f66f66c6b60e682
+  "Add bills" 0xeeee…eeee 0.004 every 1 day → passkey attests + imports ("1 added"):
+    https://explorer.testnet.arc.io/tx/0xd1deb5c9f23ee56cd6adb369864e247f4ca4c314520e4a4d1951674b8ecd0a3f
+  A pass in Propose mode follows: the agent prepares the settlement for the owner's tap;
+  the inbox binds it to the live fingerprint for ten minutes.
+
+The pass (6acf298b-0000, Propose): eight bills; the agent prepared every one for the owner's
+tap; the inbox bound each row — settle = settleAsPrincipalIf (selector 0xad118e8b), attest =
+setPayeesIf (0x3948f4ff) — to fingerprint 0xe87d…315a with boundUntil ten minutes out.
+The imported bill: "settle 0.004000 USDC to 0xEeee…EEeE, marking action 0x7f37822b…415f
+executed; valid only while the terms hash to 0xe87d591d…315a and until unix 1791962582".
+
+THE TERMS MOVE between reading and signing: the owner's passkey tightened the limits
+(prepare-limits perAction 0.004, instant) —
+  https://explorer.testnet.arc.io/tx/0x5d6b17d9ac5cf6e45e2fe11c9e041028465ceddf2efab0e416f8c8794111cc93
+  fingerprint() on chain → 0x93a84403ea6f6ff6af238845562ee245b78d407849a77ead5f12b4e4adcd7320
+  the page recomputed the same 0x93a8…7320 from the inbox's terms (perActionCap now 4000).
+
+Layer 1, the page: signing the STALE approval (still bound to 0xe87d…315a) is refused before
+  any passkey prompt — "not signing: the call is bound to different terms than the ones on
+  this page".
+Layer 2, the contract: the stale call simulated from the principal (eth_call, --from the owner
+  contract) reverts with
+    0xedc2f1c3 e87d591d…315a 93a84403…7320
+  = TermsChanged(signed 0xe87d…315a, current 0x93a8…7320).
+Layer 3, the fresh approval: after a refresh the row is re-bound to 0x93a8…7320 with a new
+  deadline (1791962634), and the owner's tap pays it — below.
+  "Pay" on the 0xEEEE row (fresh binding to 0x93a8…7320) → passkey → settleAsPrincipalIf landed:
+    
+    executed(0x7f37822b…415f) = true on chain; 0xEEEE 20,219,000 → 20,223,000 minor (+0.004,
+    pulled from the bill wallet — pull mode and terms binding compose); the row left Needs-you;
+    Paid tile counts it.
+
+Anvil acceptance after today's contract changes (scripts/acceptance.sh): 66 passed, 0 failed —
+rules 10 (standing orders: principal sets, operator cannot, a stranger triggers the due payment,
+not-due refused, operator ends it), 11 (owner shortens the term, lapsed agent refused by name,
+operator cannot renew, renewed agent pays again) and 12 (stale terms refused, fingerprint moved
+with the limits, current terms settle, expired approval refused). Found by the suite: seeding
+months of history on anvil moved the clock past the agent's ninety-day term and the agent
+lapsed before rule 1 — the owner now renews after seeding, which is also what a real owner
+does once a quarter.
+  The settlement transaction (found through the policy's SettledByPrincipal event, since the
+  inbox's Paid tile counted only the agent's payments until the fix that followed):
+    https://explorer.testnet.arc.io/tx/0x5444c745f08cdd950d7812557f9fa044e1250cea6279dec8642b7f118f6312b0
+    block 67121988, usdcUnits 0xfa0 = 4000 minor, to 0xEEEE…, actionHash 0x7f37…415f.
+  After the fix, the inbox for tenant 7: paid = [{0xeeee…, 0.004000 USDC, by "you",
+  tx 0x5444c745…12b0, at block 67121988's time}], paidTotal 0.004, paidByAgent 0, paidByYou 1;
+  the page's Paid tile: "1 — 0.004000 USDC — 0 by the agent, 1 by you".

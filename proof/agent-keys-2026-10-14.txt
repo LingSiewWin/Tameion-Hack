@@ -1,0 +1,54 @@
+Agent keys (PLAN 5.31, docs/59 §3.16: the SIWE + ReCaps idea, done with the passkey) — 2026-10-14
+
+What: the company's other agents (Claude Code, OpenClaw, a cron job) reach the
+account through `tameion-mcp`. Until today anyone who knew the policy address
+could read the inbox or start a pass. Now the owner's passkey mints a
+capability token for an agent — scopes among read / run / prepare / import, a
+label, an expiry of at most a year — and the first key locks the account: from
+then on the read / run / prepare / import routes require
+`Authorization: Bearer <token>` carrying the scope. The service keeps only
+sha256(token). Revoking the last key reopens the account. Routes the passkey
+signs anyway (execute), the chain bounds (pay-due, apply), or that are the
+token flow itself stay open. `tameion-mcp` sends `TAMEION_TOKEN`. The page
+keeps the key it minted so the owner's own browser keeps working; a fresh
+browser is asked to paste a key.
+
+Code: `level1::{AgentToken, TOKEN_SCOPES, scope_for, token_hash, token_challenge,
+token_revoke_challenge, token_allows}`; routes `prepare-token`, `token-signed`
+(passkey assertion verified against the owner's on-chain key, fresh, unused),
+`prepare-token-revoke`, `token-revoke-signed`; `App::token_gate` in front of the
+dispatcher; inbox `agentTokens` (ids, labels, scopes, expiries — never secrets)
+and `gated`. Unit tests: an open tenant stays open; once a token exists the
+bearer is required; unknown, wrong-scope and expired keys are refused;
+whitespace around a key is ignored; the scope table (inbox/records → read,
+run → run, prepare-* and fund → prepare, bills → import; token routes, execute,
+pay-due, watch → open). Card "Your other agents" on `/`: scopes, label, days,
+"Mint with my key"; the minted key shown once; the list with one-tap Revoke.
+
+Live run, tenant 8 (the Safe tenant, policy 0x1ea18505a2b7be40def78d4b2ad53f2e004ce488):
+  Before any key: tameion-mcp treasury_inbox → ok (mode Autopilot). The account is open.
+  Page: scopes read + run checked, label "ops bot", 30 days, "Mint with my key" →
+    confirm in words: "Give an agent (ops bot) a key to this account that may: read, run —
+    for 30 days. It can never sign; your passkey stays the only key that moves authority."
+    → passkey → "key for ops bot (shown once; this browser kept a copy): f047…"
+    tenant file: agent_tokens = [{id tok-82690193, label ops bot, scopes [read, run],
+    expires 1794556289}] — a sha256, no secret.
+  WITHOUT the key, after minting:
+    tameion-mcp treasury_inbox → isError, "401 Unauthorized: this account's owner requires an
+      agent key: send Authorization: Bearer <token> (the owner mints one on the account page)"
+    tameion-mcp run_pass → the same 401
+    GET /api/level1/inbox?policy=… → HTTP 401
+    POST /api/level1/pay-due → not gated (HTTP 502 from the contract: no such order), as designed.
+  WITH the key (TAMEION_TOKEN=f047… on tameion-mcp):
+    treasury_inbox → ok (mode Autopilot, paid 0.004 USDC, gated true, agentTokens [tok-82690193])
+    records → ok (1 anchored root)
+    prepare_payees → isError, "403 Forbidden: this agent key does not carry the scope this
+      call needs" (scope prepare; the key has read + run only)
+  Revocation below.
+  Revoke, from the page (one tap, passkey over the revoke challenge): "revoked tok-82690193 · no
+  keys left: the account is open again" — tenant file agent_tokens = []; GET /api/level1/inbox
+  without a key → HTTP 200 again. Screenshot: proof/home-agent-keys-2026-10-14.png.
+
+Chain of custody: nothing on chain; the passkey's WebAuthn assertion, verified by the service
+against the key the owner's contract holds, is what mints and revokes; the agent that holds a
+key can look, run and prepare inside its scopes, for its term, and can never sign.

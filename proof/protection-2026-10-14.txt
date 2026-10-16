@@ -1,0 +1,35 @@
+Protection on the account page (PLAN 5.49) — the one-liner's "holdings hedged against the bills", per account — 2026-10-14
+
+What: the inbox's `exposure` reads what the bill wallet holds outside dollars — ETH on Ethereum, Base
+and Arbitrum One from public RPCs — prices it at Hyperliquid's public mid (read-only, no key), and
+says what a 30% fall would cost, in dollars and in days of the account's own bills (from Runway). It
+says whether the hedge engine keeps books for that wallet (runtime/hedge/<wallet>). The "Protection"
+card puts it in the founder's allowed words: protected up to a printed maximum; the venue key "can
+trade on that account and cannot withdraw"; no "delta-neutral", no "guarantee" (checked by grep on
+the page). The read-only Watch report carries the same line for any address. Cached 10 minutes per
+wallet (three RPC reads and one price per refresh is too many for a public node).
+
+Code: watch::wallet_exposure; inbox `exposure {holdings, ethTotal, ethMark, notionalUsd, fall30Usd,
+fall30Days, hedge}`; App.exposure_cache; Watch report `exposure`; home.html "Protection" card;
+index.html balance line.
+
+Live:
+  The testnet treasury 0x6c1c…9a25 holds 0 ETH on the three mainnets (cast balance: 0, 0, 0), so on
+  every demo account the card correctly stays hidden — nothing to protect.
+  On real holdings: a reserved demo account (lazy — nothing sent, file removed afterwards) watching a
+  public organisation's treasury (ENS DAO, 0xFe89cc7aBB2C4183683ab71653C4cdc9B02D44b7):
+    exposure: 4,499.789208 ETH on Ethereum, 0.000136 on Base, 0.000096 on Arbitrum One;
+    ETH mark $2,500.75 (Hyperliquid); notional $11,252,848.44; a 30% fall $3,375,854.53;
+    hedge {on: false}.
+    Card: "Your bill wallet also holds 4,499.7894 ETH ($11,252,848.44 at $2,500.75). A 30% fall would
+    cost $3,375,854.53." / "Protection is off for this account: it needs a trade-only Hyperliquid key
+    (it can trade on that account and cannot withdraw). Until then the agent reports the exposure and
+    nothing else." (fall in days of bills absent: that account had no pass, so no bills yet.)
+    Screenshot proof/home-protection-2026-10-14.png (taken before the thousands separators were added).
+  Watch on Ethereum for the same address failed with the service's own message: "Ethereum's public RPC
+  refuses log scans at this volume … Set TAMEION_RPC_ETHEREUM to a keyed endpoint" — a known limit, the
+  founder's keyed-RPC item.
+
+Not done: turning protection on per account — that needs a trade-only Hyperliquid API wallet per
+customer (the founder's call, and docs/43's per-tenant books); today the engine runs for the operator's
+own treasury on testnet (proof/hedge-testnet-live-open-2026-10-13.txt).

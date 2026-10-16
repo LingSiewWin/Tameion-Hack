@@ -1,0 +1,73 @@
+Where the agent reports, set by the owner's passkey (PLAN 5.3, the "treasurer-set
+address" half) — proved on the hosted service against Arc testnet, 2026-10-14
+
+What: until today only the host's admin token could point a tenant's
+after-pass reports (signed webhook, Telegram) somewhere. Now the owner does
+it from `/` with the same passkey that moves money: the service issues a
+32-byte challenge = keccak256("tameion.notify.v1" || chainId || policy ||
+url || telegramChatId || issued); the browser signs it with
+navigator.credentials.get; the service verifies the WebAuthn assertion
+itself — `webauthn.get`, the exact challenge in clientDataJSON, P-256 over
+sha256(authenticatorData || sha256(clientDataJSON)) — against the key the
+tenant's PasskeyPrincipal holds on chain (`qx()`, `qy()` read live), refuses
+stale (>10 min) or reused challenges, then stores the address and mints the
+webhook secret, shown once to the setter. A different receiver URL gets a
+different secret. Nothing on chain; no admin.
+
+Code: `level1::notify_challenge`, `level1::verify_passkey_assertion` (p256
+0.13, sha2), `level1::apply_notify`, `arc::ArcClient::passkey_key`,
+`POST /api/level1/prepare-notify`, `POST /api/level1/notify-signed`; card
+"Where the agent reports" on `/`. Unit tests: a P-256 assertion over the
+right challenge verifies, a different challenge or one flipped bit in
+authenticatorData does not, an off-curve key is refused; base64url vectors;
+secret minted on first URL, kept for the same URL, re-minted for a new one.
+
+Live, tenant 2 (policy 0x1645951793f7ca2ae36d7a3eeae90ef93e1932ab, owner
+0x7d1a44b84a176ffa1599eb25fe953c9f73ff8af3), real Chromium with the CDP
+virtual passkey that deployed the tenant:
+  prepare-notify → {"challenge":"0xb914c1e89defeefc717c8a6a7b4b5bd33700cd9421bc4dade5759c0a639ae73f",
+                    "issued":1791952276,
+                    "summary":"Send the agent's reports for policy 0x1645…32ab to http://127.0.0.1:7898/hook."}
+  page: URL typed, "Set with my key" → passkey prompt → notify-signed 200 →
+    "set · your receiver checks each report with this secret (shown once): <64 hex>"
+    "— reports to http://127.0.0.1:7898/hook"
+  tenant file: notify_url = http://127.0.0.1:7898/hook, notify_secret present, telegram none.
+  Screenshot: proof/home-notify-passkey-2026-10-14.png (the secret redacted
+  in the DOM before the shot; it was shown in full to the setter).
+
+Then a pass was started (POST /api/level1/run) so the agent reports to that
+address; the receiver (a scratch HTTP server, not in the repo) logs headers
+and body. Result below.
+
+Pass 1 after the passkey set the address (POST /api/level1/run, 04:34Z →
+done 04:44Z; 43 transfers, 7 bills, rule-based reasoner, root
+0x620fa67a249534b4a388efd736914c45b9bb63ca224a918412b01bb46d8c255d anchored in
+0x7631d5ccdcf1aafcad6f57be0318203a85f7fbae68845854770cf9be4e0bf971):
+  the receiver logged, at 04:44:32Z, POST /hook with
+    X-Tameion-Timestamp: 1791953072
+    X-Tameion-Signature: sha256=cf09935e36a4acd67801d1329faefa7d9c6d89dc4b6d6668727bd89faaed38ae
+    body keys: anchorTx, at, chain, error, escalated, kind, mode, needsYou, paid, policy, reasoner, root, status
+    body.anchorTx = 0x7631…f971 (the pass's anchor), escalated = four bills with the
+    agent's reasons (not attested / cycles behind / confidence 0.62 below 0.75).
+  The agent reported to the address the passkey set, signed with the secret the
+  passkey's request minted. (This receiver re-serialised the body before
+  recomputing the HMAC, so its own check was inconclusive; pass 2 below keeps
+  the raw bytes.)
+
+Pass 2 (04:47Z → 04:57Z; root 0x824588878f9227850730784ee1f33cbb4789475afd778163b1d7cc27db00242a,
+anchorTx 0x4ff438493eaf7e890ba42df59903f231a45058ea007b430c8b61dd873f28bf02, mode Autopilot,
+status done), receiver keeping the raw bytes this time:
+  POST /hook at 04:57:15Z, 3230 bytes
+  X-Tameion-Timestamp: 1791953835
+  X-Tameion-Signature: sha256=5eb43bdf84d2f8a1e145afb5c4fa5858346371a01e286d4a193edf09615602c8
+  recomputed HMAC-SHA256(key = the 32 bytes the hex secret encodes, msg = timestamp || "." || raw body)
+           = sha256=5eb43bdf84d2f8a1e145afb5c4fa5858346371a01e286d4a193edf09615602c8   VALID
+  (the ASCII-hex string as key gives 412c15c8…; a receiver must hex-decode the
+   secret — the recipe text in the service reply and the OpenAPI now says so.)
+  body.kind = tameion.pass, body.anchorTx = the pass's anchor, body.escalated = the
+  agent's reasons, body.paid = none (every demo bill is cycles-behind).
+
+Chain of custody, end to end: passkey tap on `/` → service verified the
+assertion against the key the contract holds → address + secret stored →
+the agent's next two passes reported there, signed → the receiver verified
+the signature with the secret the setter was shown. No admin token anywhere.

@@ -1,0 +1,60 @@
+Several devices, several people: co-owner passkeys and M-of-N approvals (PLAN 5.7) — Arc testnet, 2026-10-14
+
+What: the owner contract now holds more than one passkey — a second phone, a co-founder, the CFO —
+and a threshold of how many must approve every change. Key 0 is the first passkey (the one recovery
+and guardians rotate); keys 1..n are co-owners. At threshold one any key approves alone; at two or
+more, one key is refused by the contract (`NeedsMoreApprovals`) and the service collects approvals
+from distinct keys over the same challenge, then relays them together (`executeWith`). Only the
+account changes its owners, through a call its current owners approved; recovery returns a stranded
+2-of-2 to one key (whoever can recover could already replace the key). A new device asks to join
+from the account link; the owners add it from their page. The page decodes "add an owner" in words
+before anyone signs: "Owners: your passkey and 1 more device; 2 of 2 must approve every change".
+
+Code: contracts/src/PasskeyPrincipal.sol (coQx/coQy, approvalThreshold, setCoOwners, keyAt,
+executeAs, executeWith, `_run`; applyRecovery resets); contracts/test/PasskeyCoOwners.t.sol (5:
+second device alone at threshold 1; 2-of-2 refuses one key and runs with both; the same key twice,
+the wrong key and unordered indexes refused; only the account changes its owners and the set is
+checked; recovery returns a 2-of-2 to one key); forge 157. arc: owner_signers, execute_as_key,
+execute_with_keys, set_co_owners_calldata. level1: execute_by_key (assertion verified off-chain
+against the claimed key before anything is stored), PendingApproval in tenants/<owner>/approvals.json
+(stale when the nonce moves). Service: execute takes keyIndex and answers 202 {pending, have, need}
+until the threshold is met; POST /api/level1/join-request (open: the device holds no key yet);
+POST /api/level1/prepare-coowners; inbox owners {threshold, keys}, approvals, joinRequests. Page:
+"Who owns this account" card (ask to join, add as owner with a threshold choice, approve what waits),
+sign() sends this device's key index. Decoder + test; ERC-7730 entries (setCoOwners, executeAs,
+executeWith). New owner contracts get this code; owners deployed before keep theirs (one key).
+
+Live run — two fresh software P-256 keys standing in for two devices (test-only, scratch files):
+  Key A reserves a keyless account (lazy): owner 0x917a2e14376f6898e3e450377ba1ee5b6b48f8ac,
+    policy 0x489dbd3dfc2985a65c9b5d555e2b42986c151661.
+  Key B: POST /api/level1/join-request {label "CFO's phone"} → stored on the tenant.
+  Key A adds B, 2 of 2 must approve (A alone may: the threshold is still 1). The page's decoder:
+    "Owners: your passkey and 1 more device; 2 of 2 must approve every change". This first passkey
+    action also created the account (owner_tx 0x9053…5894, policy_tx 0x5496…6db4):
+    https://explorer.testnet.arc.io/tx/0xf92458cc75eea40d51fd1bdf0d849f14a87452f8e628b7b73f0e753d0c3e7b45
+    on chain: approvalThreshold 2, coOwnerCount 1, keyAt(1) = key B.
+  Approve payee 0x…c00002:
+    key A → 202 {pending: true, have 1, need 2}; attestedPayee still false; inbox approvals [(1 of 2, keys [0])].
+    key A again → still {have 1, need 2} (the same device twice is one approval).
+    key B → threshold met, relayed with both:
+    https://explorer.testnet.arc.io/tx/0x913b9e67cf62288d9d5d14b282e085fac32e4ef1b91adffdf5d78109ebe23c73
+    method 0x890b134a = executeWith; attestedPayee now true; inbox approvals waiting 0.
+  Refusals:
+    key B claiming to be owner 1 (keyIndex 0) → 500 "the signature does not verify against the
+      owner's key" (checked before anything is stored or sent).
+    the contract itself, execute() with one key at 2-of-2 → revert 0xf8da3002 =
+      NeedsMoreApprovals(1, 2).
+  Page: the account opened by its link, this browser posing as owner 1 (no signing):
+    "Who owns this account — 2 passkeys; 2 must approve every change. This device is owner 1."
+    Screenshot proof/home-owners-2026-10-14.png
+
+Chain of custody: two devices, two keys in the owner contract, a threshold of two. One person's
+approval moved nothing; the second person's approval of the same call, at the same nonce, ran it
+once. The service only carried the two signatures; it could neither forge one nor run the call with one.
+
+Later the same night — pairing codes (docs/60 P-27): a test key asked to join the same account as
+"Your CFO". The owner's card: "Your CFO asks to become an owner · Pairing code F4C-5B6: add it only
+if the device in front of you shows the same code. Anyone with the link can ask; only you can add."
+The asking device's code, from the page's own hash over its key: F4C-5B6 — the same.
+Screenshot proof/home-pairing-code-2026-10-14.png
+

@@ -1,0 +1,40 @@
+PLAN 5.18 two-source verify and 5.19 ERC-7730 descriptors (from docs/59 §6) — 2026-10-14
+
+5.18 — the audit against two independent Arc RPCs
+  scripts/verify_tenant.sh http://127.0.0.1:7880 0x1645951793f7ca2ae36d7a3eeae90ef93e1932ab
+  -- against https://rpc.testnet.arc.network (block 67105171)
+     recomputed root 0x620fa67a249534b4a388efd736914c45b9bb63ca224a918412b01bb46d8c255d  MATCH
+     chain rootOf    0x620fa67a…255d (anchor 0xdab6…94db, agent 0x93f2…9ea8)                MATCH
+     RESULT PASS
+  -- against https://explorer.testnet.arc.io/api/eth-rpc (block 67105179)   [Blockscout's own node]
+     recomputed root 0x620fa67a…255d  MATCH;  chain rootOf 0x620fa67a…255d  MATCH;  RESULT PASS
+  verify_tenant: MATCH on both RPCs
+  (The run before this one ended "a source disagreed or failed (exit 1)" with
+  both audits printing PASS: a transient on one node's response; the script
+  reports the first failing exit code. Run again before trusting an exit 1 —
+  and never trust a single PASS alone; that is the point of two sources.)
+  scripts/verify.sh step 2 does the same two-RPC loop (RPC_URL, RPC_URL_2).
+
+5.19 — ERC-7730 clear-signing descriptors for the three contracts
+  contracts/erc7730/calldata-BudgetPolicy.json      (settleAsPrincipal, setPayees, setPayee,
+                                                      setLimits, setMode [enum], applyPending,
+                                                      cancelPending, withdraw, setOperator, setAgent, pay)
+  contracts/erc7730/calldata-PasskeyPrincipal.json  (execute with `calldata` format on `data`,
+                                                      calleePath target; setRecovery, proposeRecovery,
+                                                      cancelRecovery, applyRecovery)
+  contracts/erc7730/calldata-MemoryAnchor.json      (anchorByAddress, anchor)
+  Deployments: Arc testnet 5042002 — policy 0xad92…0dAB (demo), 0x1645…32ab, 0x224f…991a;
+  principals 0x7d1a…8af3, 0xd439…f654; anchor 0xDAb6…94dB. Amounts as tokenAmount
+  against Arc's USDC facade 0x3600…0000; mode as an enum with the three levels in words.
+  Validated with python-jsonschema against the official schema
+  https://eips.ethereum.org/assets/eip-7730/erc7730-v2.schema.json (fetched 2026-10-14,
+  vendored as contracts/erc7730/erc7730-v2.schema.json):
+    calldata-BudgetPolicy.json      -> VALID
+    calldata-PasskeyPrincipal.json  -> VALID
+    calldata-MemoryAnchor.json      -> VALID
+  (First draft carried `required` / `excluded` per format; the v2 schema rejects
+  both — removed. The descriptors say in a wallet what the page already says.)
+
+5.20 — chain facts: proof/chain-facts-arc-2026-10-14.txt (P-256 precompile live on Arc;
+  150,410 gas per passkey action vs 318k–466k in forge's fallback; EIP-7997
+  factory present; eth_config absent; Blockscout as the second RPC).

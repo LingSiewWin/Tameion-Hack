@@ -1,0 +1,41 @@
+Keyless account (PLAN 5.38, docs/62 F3b: RebelFi's "holds no spend key" taken to the end) — Arc testnet, 2026-10-14
+
+What: an account for which the service mints NO agent key at all. The policy's agent is
+0x000000000000000000000000000000000000dEaD — an address nobody holds a key for, so `pay` can never
+be called on that policy. The account stays in Propose: every payment is the owner's passkey tap (5.39
+pays everything waiting with one), standing orders pay themselves (anyone may trigger them). Passes
+are signed and anchored by the relayer key, which has no authority over the policy; the anchor log
+records the real signer, so the audit script works unchanged. Autopilot is refused (prepare-mode 409;
+the page hides the button); no gas is ever sent to an agent.
+
+Code: level1::KEYLESS_AGENT; Tenant.keyless; DeployRequest.keyless; reserve() skips agent_signer;
+ensure_deployed() skips the agent's gas; run() signs with the relayer and skips top-up; service:
+deploy {keyless:true}, prepare-mode guard, inbox `keyless`, recommendAutopilot off; page: Start
+option "No agent key at all", Autopilot hidden; /level1 audit command uses the operator address.
+
+Live run — a fresh software P-256 key (owner 0x190312f4d3b584b36c489a361d8c8324da39aa03):
+  POST /api/level1/deploy {…, lazy:true, keyless:true} → policy 0xb011f7e71ec90fcc7632e7e1f243853d0221b5b9,
+    agent 0x…dEaD, deployed false; runtime/app/tenants/<owner>/ does not exist — no agent key was minted.
+  Funded the reserved address with 0.03 USDC:
+    https://explorer.testnet.arc.io/tx/0xb32a560e5c8cea932615954374c3a1af5899f4f5814e84ca2c48f9e935500d86
+  First pass created the owner and the policy (owner_tx 0x9a69…6a88, policy_tx 0xe317…68be), sent no
+    agent gas (agent_gas_tx null), then died on the public node's rate limit (-32005; docs/60 P-12) —
+    the scan, not the contracts. Re-run with the browser tab parked: done — 3 bills found, 2 waiting
+    for the owner, mode Propose, agentGasTopUpTx null; root anchored by the RELAYER:
+    https://explorer.testnet.arc.io/tx/0xd46714b6b872c6d7c6ff80e853c6b46354c1b42ab7ecf0b8cc4a143d70d36713
+    (anchors.jsonl: "agent": "0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25" — the signer, recorded as such)
+  On chain: policy.agent() = 0x000000000000000000000000000000000000dEaD, mode() = 1 (Propose).
+  POST /api/level1/prepare-mode {mode:2} → 409 "this account has no agent key, so there is nothing to
+    put on autopilot: you approve every payment (one tap pays all that wait), and standing orders pay
+    themselves".
+  Inbox: keyless true, needsYou 2, run {count 2, total 0.005000 USDC}, recommendAutopilot false.
+  The owner's passkey (software, test-only) approved the run — one approval, both bills:
+    https://explorer.testnet.arc.io/tx/0xb03ce4ab0e09cbcd06c66aab1080df2bdbd5e212ce44aa11b34a08cd84630d98
+    RunSettled(paid 2, skipped 0, 5000 units), block 67147318.
+  Audit from the records route, on two independent RPCs:
+    scripts/verify_tenant.sh http://localhost:7880 0xb011… → file name root MATCH, chain rootOf MATCH
+    (anchor 0xdab6…0dAB, agent 0x6c1c…9a25), RESULT PASS, "MATCH on both RPCs".
+
+Chain of custody: no agent key exists anywhere for this account. The service read history, inferred
+the bills, put two in front of the owner and anchored what it did under its own (powerless) key; the
+owner's passkey paid both with one tap; anyone can recompute the record and find it on chain.

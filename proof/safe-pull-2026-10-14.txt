@@ -1,0 +1,51 @@
+Connect your Safe (PLAN 5.27, docs/59 §3.1: the Zodiac idea, taken the cheap way) — Arc testnet, 2026-10-14
+
+What: onchain companies keep their money in a Safe. With pull mode (PLAN 5.26)
+nothing else is needed: the Safe is the bill wallet, one Safe transaction
+approves the policy an allowance, and the agent pulls each payment from the
+Safe inside the caps, payee list, modes and delays — the Safe's signers can
+cut it to zero with another approve(policy, 0) at any time, without Tameion.
+No module, no new trust path into the Safe: the policy can take exactly what
+the allowance says and nothing else. (A Zodiac-style module that calls the
+Safe directly is the fuller form; this is the form that works today, on Arc,
+with the Safe contracts Safe itself deployed there.)
+
+Facts first (proof/chain-facts-arc-2026-10-14.txt §6): Safe 1.4.1 and 1.3.0
+singletons and proxy factories are deployed on Arc testnet at their canonical
+addresses — docs/59 had this unverified.
+
+Live run:
+  1. A real Safe: SafeProxyFactory 1.4.1 (0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67)
+     .createProxyWithNonce(SafeL2 1.4.1 0x41675C099F32341bf84BFc5382aF534df5C7461a,
+     setup([treasury], threshold 1, …, CompatibilityFallbackHandler 0xfd0732Dc…), 20261014)
+       tx 0x259825a597e0b360b03b55c04134c13609c41e819be7bc244360a98d8145e499 (gasUsed 258,931)
+       Safe 0xb9760d2a0aa8b093335d5ce50d004b4b534eff0b; getOwners() = [0x6c1c…9a25]; getThreshold() = 1
+     funded with 0.1 USDC: 0x19cd5ae80ea154f32b70d02fcf413e6feea5ba3993b951174312be37d471d7b8
+  2. Tenant 8 through the service (the browser's passkey as principal, pull mode,
+     watched = the Safe): policy 0x1ea18505a2b7be40def78d4b2ad53f2e004ce488, source() = the Safe,
+     owner 0x603b…dd98 (same passkey, deterministic), agent 0x5245…5100.
+  3. The Safe approves the policy: execTransaction(USDC 0x3600…, 0, approve(policy, 1.5 USDC),
+     Call, 0, 0, 0, 0x0, 0x0, <owner pre-validated signature r=owner, s=0, v=1>)
+       tx 0x4f08ffd76324481a3242de0ff7cddd73b0e1e447df92fcaafdef33aad34ca8e1 (gasUsed 99,653)
+       allowance(Safe → policy) = 1,500,000; policy.balanceUsdc() = 100,000 (the Safe's balance:
+       reach = min(balance, allowance)).
+  4. Page switched to tenant 8: "The agent may pull up to 1.500000 USDC from your wallet
+     0xb976…ff0b, which holds 0.100000 USDC. Tameion holds nothing." Protected 0.05.
+     "Add bills" 0xeeee…, 0.004, every 1 day → passkey attests + imports:
+       https://explorer.testnet.arc.io/tx/0x40a1d3799f673a43daea04303ba0c47de1dae58eaee70b4bda1b5d684f5a69a6
+     "Turn autopilot on" → passkey → "asked · it turns on after the delay unless you cancel".
+  5. Autopilot asked by passkey, applied after the 60 s delay (mode() = 2).
+  6. THE PULL FROM THE SAFE — pass 6acf307f-0000 (done 07:41:45Z; 1 transfer in the Safe's
+     history, 1 bill — the imported one; rule-based reasoner):
+       settled 0.004000 USDC to 0xeeee…eeee
+         https://explorer.testnet.arc.io/tx/0x53cc4386c58d02acabd4feeeed5007ed44e73757503f8ba2f36cd9e78c50e181
+       root 0x0bcda0b25c0c575e55618f43c8b1cdb2866d61dda8b3f9b7bc9c44816dd3ec19 anchored in
+         0x74b89bbe561f8631c6bea207e0957bf0eaaf4f73b98643e0c84db5560f251f16
+       Safe USDC 100,000 → 96,000 minor (−0.004, pulled by the policy's transferFrom);
+       0xEEEE 20,223,000 → 20,227,000; allowance 1,500,000 → 1,496,000; the policy held nothing.
+
+What the company did: created nothing new to trust. Its Safe signed one transaction — an
+allowance to the policy, revocable by another — and the agent paid a bill the treasurer named
+from the Safe, inside the limits, with the receipt read back and the decision anchored. The
+Zodiac-style module (policy calls the Safe directly, Safe owners as principal) remains the
+fuller form for later; this form needs nothing deployed into the Safe.

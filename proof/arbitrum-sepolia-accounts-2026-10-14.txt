@@ -1,0 +1,53 @@
+PLAN 5.58 — accounts on a second chain: Arbitrum Sepolia (ERC-20 USDC, ETH for gas), through the hosted service
+2026-10-14T14:57:05Z. Software passkey multichain_key.pem (test only): qx 0xf80820621c852939135d7fa96a75bf5b6ce696e6506216a3a8dcdda452f3791a
+
+1. The same owner address on both chains (EIP-7997 factory; creation code now free of metadata, docs/60 P-33):
+   Arc testnet, reserved (nothing sent):  owner 0xdf983d800d54c8eed577b007d3a1a1602ff0c64b  policy 0x2fbb8f65c1923b1f5ce80747a04baebcb937b927
+   Arbitrum Sepolia, deployed (13.6 s):  owner 0xdf983d800d54c8eed577b007d3a1a1602ff0c64b  policy 0x35a2e2701d4d72be257bf7708c67d1433c60342f (BudgetPolicyToken)
+     owner tx  https://sepolia.arbiscan.io/tx/0x09212d803970ccb8d21a7825de91212700f34a6bd327ed05630718c262a32af1
+     policy tx https://sepolia.arbiscan.io/tx/0x74495917188356aded8c1c3775d3489d7260a3bc8e21dcf011ce332ca5a4b5c6
+     agent gas https://sepolia.arbiscan.io/tx/0xd30ca1cd439c7897a19b2f6f52e0173acbc519797a30d8cb73ac30d4492ffd88 (0.0003 ETH; the Arc default would be 0.05)
+   On chain: owner qx = the passkey's; policy principal() = the owner; usdcToken() = 0x75faf114…AA4d (Arbitrum Sepolia USDC); mode Propose.
+
+2. Funded 1 USDC (ERC-20 transfer) https://sepolia.arbiscan.io/tx/0xa257d7232cf500844db97dfd88ab9f81adbd52604fd333a84021fc15f04ba942
+   Passkey taps relayed on Arbitrum Sepolia: approve payee 0x…5eed 0x604af47e242410726097c1fe1765a0749ae02d93b22390c669ed71f58f839ea3,
+   ask Autopilot 0x78694ba69660e2e4ac3afe5870a523702973bcef86bfd2add79a61e382ab7679, applied after 60 s 0xeec88ad1ce40aa64a99e1f3c49d070b3882ed0683bc6e733d4b9ab324bf95e25
+
+3. Imported a 0.1 USDC bill due in 2 days; the pass (6acf96ff-0000) paid it by itself:
+   https://sepolia.arbiscan.io/tx/0xe276d41cc1f2c9631c37f26fc6cc3da0fecb58fc042d379b939405e0af22e646 (USDC Transfer 100000 + Paid 100000, from the agent 0x18fa…2b77)
+   record anchored on Arbitrum Sepolia's MemoryAnchor 0xe7C3…B8F5 in 0xb4e2fc9dba4262b38f4945870963bb9ee39ea1d9b85356edd58ca3b9153f60dd
+
+4. Audit, two independent Arbitrum Sepolia RPCs (Arbitrum's own and publicnode):
+   [0000] OBSERVATION Holding 1.000000 USDC. Read 2 transfers (0 of them my own payments, which are not evidence) and recovered 1 recurring obligations, of which 1 fall due within 30.0 days totalling 0.100000 USDC; 1 within 3.0 days (or a tenth of their interval), which is when I pay.
+   [0001] DECISION    ALLOW for 0x0000000000000000000000000000000000005eed. ranked 1 of 1: due in 2.0 days, confidence 1.00, 0.100000 USDC covered Basis: 0x0000000000000000000000000000000000005eed has been paid 0 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 1.00).
+   [0002] SETTLEMENT  Paid 0.100000 USDC to 0x0000000000000000000000000000000000005eed, settled in 0xe276d41cc1f2c9631c37f26fc6cc3da0fecb58fc042d379b939405e0af22e646. Read back from the receipt: the policy's Paid event matches.
+   recomputed root : 0xee6768d68bac8b276241b85e87ac97e1ce0b043ca05d42c737f9f5ba74406d5e
+   file name       : 0xee6768d68bac8b276241b85e87ac97e1ce0b043ca05d42c737f9f5ba74406d5e   MATCH
+   chain rootOf    : 0xee6768d68bac8b276241b85e87ac97e1ce0b043ca05d42c737f9f5ba74406d5e   (anchor 0xe7c381aafa077cc99359e8b297d2125efd76b8f5, agent 0x18fac1d75013bd54f1aa1e005577f24ec4c12b77)   MATCH
+   RESULT          : PASS
+   [0000] OBSERVATION Holding 1.000000 USDC. Read 2 transfers (0 of them my own payments, which are not evidence) and recovered 1 recurring obligations, of which 1 fall due within 30.0 days totalling 0.100000 USDC; 1 within 3.0 days (or a tenth of their interval), which is when I pay.
+   [0001] DECISION    ALLOW for 0x0000000000000000000000000000000000005eed. ranked 1 of 1: due in 2.0 days, confidence 1.00, 0.100000 USDC covered Basis: 0x0000000000000000000000000000000000005eed has been paid 0 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 1.00).
+   [0002] SETTLEMENT  Paid 0.100000 USDC to 0x0000000000000000000000000000000000005eed, settled in 0xe276d41cc1f2c9631c37f26fc6cc3da0fecb58fc042d379b939405e0af22e646. Read back from the receipt: the policy's Paid event matches.
+   recomputed root : 0xee6768d68bac8b276241b85e87ac97e1ce0b043ca05d42c737f9f5ba74406d5e
+   file name       : 0xee6768d68bac8b276241b85e87ac97e1ce0b043ca05d42c737f9f5ba74406d5e   MATCH
+   chain rootOf    : 0xee6768d68bac8b276241b85e87ac97e1ce0b043ca05d42c737f9f5ba74406d5e   (anchor 0xe7c381aafa077cc99359e8b297d2125efd76b8f5, agent 0x18fac1d75013bd54f1aa1e005577f24ec4c12b77)   MATCH
+   RESULT          : PASS
+   verify_tenant: MATCH on both RPCs
+
+5. The account page's inbox for it answers (4.3 s): Autopilot, balance 0.9, Paid 0.1 (0xe276…).
+   Making the wallet itself the account is refused off Arc in words (its code pays native USDC).
+
+6. Browser-QA account (created from the page with a virtual passkey, 2026-10-14) — written 2026-10-15 01:50 +08
+   policy 0x7ebc3894ec793fa6c9225841992001e580da9273, owner 0xf6731ff8b53c6a2cd808b592dab898a530257ddf (passkey qx 0x5cea…ef1e),
+   agent 0x601b5a193c974b9dc696b4bb22fe43dfba98f051; owner tx 0x20f94133f6e811e975c385bdae2b9eab4b81f2e8238812a3a71ab14ce11c0314,
+   policy tx 0x7c4939c45b378983449ea57a2bae52c4be72b5607377e37aedfd327d70a6cba8, agent gas 0xa4dcf3b59f67bca95ce6a839ccf71b11d066689fb8726b8f48756026dfae58ce.
+   Its passes ran and anchored by themselves: 6 roots in runtime/app/tenants/0x7ebc…/log/anchors.jsonl (23:18 → 00:50),
+   latest 0xaf187d11cf4816d307d30104b6bdadc604d7d48f584134ce4e80fca7be4d97cb in anchor tx 0x6ac221401aacbfa961ea83186efb7c7dcd7e9f83ecdf211dffbf51f64f528efb.
+   The latest record, as the agent wrote it: holding 0.50 USDC; read 26 transfers over 90 days; found 2 bills (0.20 + 0.15 USDC
+   every 3 min); account in Propose mode, payees not approved, so both REVIEW + ESCALATION to the owner (nothing paid by the agent).
+   `scripts/verify_tenant.sh http://127.0.0.1:7888 0x7ebc…9273` (rebuilt service, P-52):
+     chain   arbitrum-sepolia
+     -- against https://sepolia-rollup.arbitrum.io/rpc        recomputed = file = rootOf = 0xaf187d11…97cb  MATCH  RESULT PASS
+     -- against https://arbitrum-sepolia-rpc.publicnode.com (block 319157363)  same  MATCH  RESULT PASS
+     verify_tenant: MATCH on both RPCs
+   Before the fix the same command checked Arc's nodes and failed ("rootOf returned no data"): docs/60 P-52.

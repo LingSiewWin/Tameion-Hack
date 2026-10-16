@@ -1,0 +1,72 @@
+Standing orders (PLAN 5.25, docs/59 §3.3: the EIP-7833 idea) — Arc testnet, 2026-10-14
+
+What: a bill the owner confirmed is written into the policy contract as a
+standing order — payee, amount, cadence, next due date. When it falls due,
+ANYONE may call payDue(id): the agent on its pass, the treasurer from the
+page, a cron job, a stranger. The contract checks the payee is still approved
+and cooled off, the per-action and daily caps, the balance and the floor;
+pays one cycle; advances the order by one interval; emits the same Paid event
+with scheduleActionHash(id, dueAt) as the replay key. Refused while the policy
+is paused (Watch). Ending an order is instant for the principal or the
+operator. Tameion's server being down no longer means a bill goes unpaid.
+
+Contract: contracts/src/BudgetPolicy.sol — Schedule struct and schedules[],
+addSchedule (principal; payee attested, amount ≤ per-action cap, cadence ≥ 1 h),
+removeSchedule (principal or operator), payDue (anyone), scheduleActionHash;
+the agent's own checks factored into _payChecked and shared. Tests:
+contracts/test/BudgetPolicySchedule.t.sol, 9 — only the principal adds and
+the payee must be attested; anyone pays a due order in Propose and the order
+advances; not-due is refused by name; missed cycles pay one call at a time;
+paused refuses and a removed order never pays; the daily cap still bounds six
+orders of 100 at 500 (and a refused call does not advance the order); a
+revoked payee stops its order; the agent cannot replay a cycle an order paid;
+the agent's own pay still needs Autopilot. forge: 112 tests.
+
+Operator: on every pass, due standing orders are paid first (Propose too — the
+owner already said yes to exactly this), read back like any payment (HALT on
+mismatch), recorded as Settlement with cycle_key schedule:<id>:<dueAt>; bills an
+order covers are skipped, not proposed again. Service: inbox standingOrders and
+standingOrderCandidates (confirmed or imported bills, cadence ≥ 1 h, no order
+yet); routes prepare-schedule (passkey calldata; refused in words when the
+payee is not approved), prepare-unschedule, pay-due (relayer's gas). Page:
+"Standing orders" card — the agent's candidates with "Make it standing" (one
+passkey tap), each order with "Pay now" when due and "End it". scripts/pay_due.sh
+<policy> <id|list>. MCP: prepare_schedule. The page's clear-signing decoder
+describes addSchedule and removeSchedule in words (and refuses to describe
+payDue: that is anyone's call, never the passkey's).
+
+Live run below.
+
+Tenant 5 from the page (Start, pull mode ticked, the same passkey as the pull
+proof): owner 0x603b7b6491302bca7ae96ae5cb47aa02dc55dd98 again — no new principal
+deploy (owner_tx none: the factory address already had code), the same agent key
+file reused; policy 0xa4942884e7a36ce2aad53492c82ce0459d1144b0 on the new
+bytecode (scheduleCount() answers 0; source() = the bill wallet; principal() =
+the owner). Agent gas 0x9482c84af464bc982a900a407222968f18bd3209deda6e56c5856b4df6ae8050.
+  "Allow from this browser" → approve(policy, 1.5 USDC) from the bill wallet:
+    https://explorer.testnet.arc.io/tx/0x6041f1385eb38061d94ac33464562e00cf51f4dc6254a18e057b321dd9dd5591
+    allowance on chain = 1,500,000.
+  "Add bills" 0xeeee…eeee, 0.004, every 1 day → passkey attests + imports ("1 added").
+  Standing orders card: "The agent suggests making these standing orders — one tap each,
+    your key signs: 0.004 USDC to 0xeeee…eeee every 1 day · you imported this bill ·
+    confidence 1.00 · [Make it standing]"
+  "Make it standing" → passkey (the page described the call in words before signing:
+    "Set a standing order: 0.004000 USDC every 1 day, first on 2026-10-14, to 0xeeee…") →
+    https://explorer.testnet.arc.io/tx/0x902b1be3c676ae1534eba3f37cdb39a28b21e726fe8c73fc60a7789038484009
+    schedules(0) on chain = (0xEEEE…, 4000, 86400, 1791959835, active)
+  ANYONE pays it: scripts/pay_due.sh 0xa4942884e7a36ce2aad53492c82ce0459d1144b0 0 signed by the tenant's AGENT key
+    0x524511aec2d76D9422e8550b9cB0014531005100 — a caller with no role on payDue —
+    tx 0x9ac1276ff5675a5b55ca3a2ed6945901cb59fa0c242b6a5c126b8516631fd476, status 0x1, gasUsed 187,016
+    0xEEEE 20,215,000 → 20,219,000 minor (+0.004); bill wallet 385,364 → 381,364 (−0.004,
+    pulled through the pull policy's allowance: standing order + pull mode compose);
+    scheduleActionHash(0, 1791959835) = 0x994eff50ed7b815f4d0ba19ea869c0d6a93a341e2dc1620bbf10ce675cb79d94, executed() = true;
+    schedules(0).nextDue advanced to 1792046235 (10/15). The page: "0.004000 USDC to
+    0xeeee…eeee every 1 day · next on 10/15/2026 · [End it]"; the suggestion is gone.
+  What this means: the bill is now paid on its day by whoever is awake — the agent's
+  pass, the owner's tap, a cron job — and the agent's own inference skips it as covered.
+
+Runway reads standing orders (later the same day): for tenant 5, with no pass report on file
+after the restarts, the inbox projected from the order alone —
+  "days 36 — the first bill at risk is 0.004 USDC to 0xeeee… on 1795156635 (in 886 hours)";
+  billsInHorizon 0.144 USDC against a reach of 0.147616 USDC (the bill wallet's balance in pull
+  mode); basis: "the bills the last pass recovered and the standing orders you set …".

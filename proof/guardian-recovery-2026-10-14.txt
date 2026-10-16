@@ -1,0 +1,29 @@
+Lost passkey, recovered by guardians, live (PLAN 5.30 completed end to end) — Arc testnet, 2026-10-14
+
+What happened: the browser's virtual passkey (qx 0x0c5d…b1c0) for owner
+0x86cc86a33e2b30f03b1a890132dd7e9fd5f71a99 was lost when the browser session was reset
+(docs/60 P-23) — a real "lost phone". Earlier the same day (proof/guardians-2026-10-14.txt) that
+owner had named two guardians, 2 of 2: the treasury key 0x6c1c…9a25 and an agent key 0x2b3f…e38c.
+That proof only showed a cancel. Tonight the whole path ran:
+
+  New passkey created on the device: qx 0x90c6eee3ca8c7a81d3dc3f9366a0de3f50260e47609441be79950efa64f03476
+                                     qy 0x4e08f441d0a80fba65eeddd9131d504cdb4252469641d8453afb51e63f0f554d
+  Guardian 1 (treasury key) approveRecovery(new key):
+    https://explorer.testnet.arc.io/tx/0x70f1d033fa816fd6192a7711760b43ac825b222b6bbfa1c85bb43a1d21875770
+    → approvals 1 of 2, nothing pending
+  Guardian 2 (agent key 0x2b3f) approveRecovery(same key):
+    https://explorer.testnet.arc.io/tx/0x7c4eeae3b0bd445f3e29d720a7142d8ff6cfbd5cdf7d48cfed9ce2d363ea38c9
+    → approvals 2 of 2 → pending key = the new key, eta 1791972707 (the 60 s recovery delay)
+  After the delay, anyone applies (here the treasury key, which holds no other authority over it):
+    https://explorer.testnet.arc.io/tx/0x59dcbaa8bcbd7282b14c6eb6d0c53c55ce9c3207d52b67609ab9977c540be1f4
+    → qx() = 0x90c6…3476, qy() = 0x4e08…554d, recoveryEpoch 2 → 3
+  The new passkey then signed the owner's reviewed run (proof/reviewed-run-2026-10-14.txt,
+  0xa70f…d90e) — the account kept working: same owner address, same policies, new key.
+
+Chain of custody: two guardians, each a plain key with no spending power, agreed on one replacement;
+the contract held it for the delay (the old passkey could have cancelled, as the earlier proof
+showed); after the delay anyone applied it; the first thing the new key did was pay six bills in one
+approval. Lost phone → working account in three transactions and one minute of waiting.
+
+This time the new credential was exported from the virtual authenticator to a mode-600 file in the
+session scratch directory (never into the repo), so a browser reset no longer loses the test key.
