@@ -61,3 +61,5 @@ S4-2, S4-3, S4-4 IN THE BROWSER (Playwright on :3094 -> :3000; sample frames now
 
 NOT DONE: the :7880 browser re-check of the Events panel (needs the PM's restart); a real frame whose venue reading freezes (the service nulls a reading older
 than 2 s, so only the sample can produce that state); the info item S4-i (the fresh-tab redirect) stays the founder's call.
+
+AFTER THE PM'S RESTART (:7880 listening on the binary with the guard when I looked, pid 46641 at 20:18 by this Mac's clock; the PM's message says 20:22; browser re-check 20:19 +08, Playwright on http://localhost:7880/agent, the service's own export, the demo desk desk-gold-2329 with its real device token): GET /api/level1/events -> 200 text/event-stream with x-tameion-device sent and no Authorization header; GET /api/desk/live -> 200; the Events panel lists a real row (20:18:44 Stream Connected), no paste sentence, no "cannot read" sentence, no page error; curl on :7880: events without a token 401, with the owner's token 200 + `event: hello`. -> design-agent-view-fix1-real-7880-gold-events-after-restart-1280-dark.png
