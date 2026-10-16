@@ -1,0 +1,53 @@
+# Secrets. Nothing in these patterns ever belongs in a commit.
+.env
+.env.*
+*.key
+*.pem
+*.keystore
+.keystore/
+recovery_file*.dat
+secrets/
+
+# Runtime state
+runtime/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+
+# Rust build output (root workspace and scripts/research probes)
+target/
+
+# Browser automation logs (local console output)
+.playwright-mcp/
+
+# Markdown (founder, 2026-10-15): the root README.md is the only Markdown file
+# that goes to GitHub for now. Docs, plans, notes, CLAUDE.md, RESUME.md and every
+# other *.md stay local until the founder says otherwise.
+*.md
+!/README.md
+
+# The console (Next.js): dependencies and build output are made, not committed.
+apps/console/node_modules/
+apps/console/.next/
+apps/console/out/
+
+# Claude Code local state
+.claude/*.lock
+
+# Local only (founder, 2026-10-16): notes, sources and tool state never go to GitHub.
+/docs/
+/archive/
+.claude/
+.DS_Store
+nohup.out
+*.new
+# Foundry run from the repo root by mistake, and per-crate leftovers from `cargo new`.
+/out/
+/cache/
+crates/*/Cargo.lock

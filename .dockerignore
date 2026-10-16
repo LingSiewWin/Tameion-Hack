@@ -1,0 +1,20 @@
+target/
+runtime/
+# proof/: the text and JSON evidence ships (served at /proof/<name>); screenshots and
+# per-run folders stay out of the image.
+proof/*.png
+proof/*/
+docs/
+archive/
+cache/
+out/
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+.playwright-mcp/
+.git/
+*.key
+# The console is built inside the image (Dockerfile stage "console"), never copied in.
+apps/console/node_modules/
+apps/console/.next/
+apps/console/out/
