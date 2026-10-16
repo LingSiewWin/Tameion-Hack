@@ -1,0 +1,28 @@
+[package]
+name = "hedge"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Keeps the treasury delta-neutral on Hyperliquid and books every step into the ledger."
+
+[dependencies]
+ledger.workspace = true
+# Community Rust SDK listed in Hyperliquid's own API docs. Chosen over the
+# official hyperliquid_rust_sdk because that one pins alloy 1 + native-tls,
+# which would drag a second TLS stack into the workspace (see root Cargo.toml).
+hypersdk = "0.3.0"
+# The same alloy hypersdk builds on: for signing the HALT clearing (halt.rs).
+alloy.workspace = true
+# Same crate hypersdk re-exports `Decimal` from; named directly for
+# `RoundingStrategy` and `ToPrimitive`.
+rust_decimal = { version = "1", features = ["macros"] }
+# hypersdk's client returns `anyhow::Result`; we convert at the boundary.
+anyhow = "1"
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
