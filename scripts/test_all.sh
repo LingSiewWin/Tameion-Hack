@@ -33,7 +33,10 @@ step "rust: formatting" run 'cargo fmt --all --check'
 step "evidence desk: python unittest" run 'python3 -m unittest scripts/evidence/test_desk.py 2>&1 | tail -3'
 step "lender verifier: python unittest (offline)" run 'python3 -m unittest scripts/test_verify_desk.py 2>&1 | tail -3'
 step "passkey page: node --test" run 'node --test apps/classic/passkey/call.test.mjs 2>&1 | grep -E "^ℹ (pass|fail)"'
-step "clear-signing descriptors: ERC-7730" run 'python3 scripts/check_erc7730.py'
+step "chip bridge: python unittest" run 'python3 -m unittest scripts/test_desk_se_bridge.py 2>&1 | tail -3'
+# The descriptor check validates against the ERC-7730 JSON schema: run it with a Python that has `jsonschema`
+# (Homebrew's python3 can move ahead of the one it is installed for — docs/60).
+step "clear-signing descriptors: ERC-7730" run 'py=$(for p in python3 python3.14 python3.13; do command -v "$p" >/dev/null && "$p" -c "import jsonschema" 2>/dev/null && { echo "$p"; break; }; done); [ -n "$py" ] || { echo "  no python with jsonschema (pip install jsonschema)"; exit 1; }; "$py" scripts/check_erc7730.py'
 # The console (CLAUDE.md: strict TypeScript, ESLint clean) and its own logic tests;
 # needs `npm ci` in apps/console once.
 step "console: tsc, eslint, node --test" run 'cd apps/console && { [ -d node_modules ] || { echo "  run: (cd apps/console && npm ci)"; exit 1; }; } && npx --no-install tsc --noEmit && npx --no-install eslint src test && node --test test/*.mts 2>&1 | grep -E "^ℹ (pass|fail)"'
