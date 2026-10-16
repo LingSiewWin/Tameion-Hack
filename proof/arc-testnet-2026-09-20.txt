@@ -1,0 +1,35 @@
+
+[1m链[0m
+─
+  chain id   5042002 (真 Arc 测试网)
+  agent      0x80c195BE650FBfD55a9ffe059f397Db39f2fe881
+  policy     0xb15fdfa066DeE5Ab070789251Ef999f405B23bf1
+  anchor     0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB
+  单笔上限   1.000000 USDC
+  每日上限   10.000000 USDC  已花 8.300000 USDC
+  合约余额   6.700000 USDC
+
+[1m读历史[0m
+───
+  链上读到 16 笔,其中 15 笔是付出去的
+
+[1m跑一轮[0m
+───
+  balance 6.700000 USDC · 2 obligations · 1 settled · 1 escalated · 0 blocked · 0 already paid
+  log root   0xdb8414eccde64fa5869468763ba5c8468afd8b7736212f50b7085be66a9da685
+  anchored   0xee55206c702f0a71b6f8a6e120666d013407a55d049a3d449b716cb20dd5bd0e
+
+  付掉的:
+    0xd444444444444444444444444444444444444444 0.200000 USDC  0x2f62f3f957f821d0fa9b13035aea216a5da2dae9b647577dffd4d1b8f64ae5fc
+
+  交给人的:
+    0xc333333333333333333333333333333333333333 1.500000 USDC
+        [review] per-action-cap           1.500000 USDC over cap 1.000000 USDC
+
+[1m记录[0m
+──
+[0000] OBSERVATION Holding 6.700000 USDC. Read 16 transfers and recovered 2 recurring obligations, of which 2 fall due within 30.0 days totalling 1.700000 USDC.
+[0001] DECISION    REVIEW for 0xc333333333333333333333333333333333333333. ranked 1 of 2: overdue by 0.0 days, confidence 0.62, 1.500000 USDC covered Basis: 0xc333333333333333333333333333333333333333 has been paid 3 times every 0.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.62).
+[0002] ESCALATION  Stopping and asking a human: per-action-cap: 1.500000 USDC over cap 1.000000 USDC. This is outside the authority delegated to me, so I will not proceed on my own.
+[0003] DECISION    ALLOW for 0xd444444444444444444444444444444444444444. ranked 2 of 2: overdue by 0.0 days, confidence 0.67, 0.200000 USDC covered Basis: 0xd444444444444444444444444444444444444444 has been paid 4 times every 0.0 days, amounts varying by 0.0% and timing by 7.7%, so this reads as a subscription (confidence 0.67).
+[0004] SETTLEMENT  Paid 0.200000 USDC to 0xd444444444444444444444444444444444444444, settled in 0x2f62f3f957f821d0fa9b13035aea216a5da2dae9b647577dffd4d1b8f64ae5fc.

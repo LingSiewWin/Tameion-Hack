@@ -1,0 +1,123 @@
+# Treasury scan, 2026-09-30. Arbitrum One, native USDC, Safes among the top 4,000 holders.
+# Detector: ledger/src/obligations.rs, unmodified. Scripts: scripts/research/treasury-scan/
+
+## analyse.py
+safes sampled 133 | with zero outgoing native-USDC transfers 12 | truncated at 500: 6
+safes with >=3 outgoing transfers (detector can run at all): 96
+safes with any detected pattern: 27
+safes with >=1 bill-like obligation (6-100d, conf>=0.75, payee not a protocol, >=$50): 2
+  of which still live (last payment within 2.5 cycles): 2
+bill-like obligations total 13 live 11
+per-safe count of bill-like: median 6.5 max 10
+amount median $ 2800  p25 1362  p75 5000
+cadence {'monthly(27-32d)': 13}
+kind Counter({'recurring payment': 9, 'subscription': 4})
+payee class Counter({'eoa': 13})
+monthly-equivalent $ across bill-like obligations: 46492
+USDC balance held by safes with bill-like obligations: $ 701003  of $ 51938062
+patterns detected but not bill-like: {'protocol payee': 6, 'confidence<0.75': 93, 'too frequent (<6d)': 12}
+
+TOP examples (safe, balance, obligations)
+0xF11D98a183237BA41F27e7208Bd22fd7AFd6e252 bal $144015 outgoing 500 payees 104 bills 10
+    0x386bb16f  $5000.00 every 31.0d  n=9 conf=0.76 recurring payment eoa LIVE
+    0x2de81940  $5000.00 every 31.0d  n=9 conf=0.78 recurring payment eoa LIVE
+    0xb80b8c7f  $4200.00 every 30.9d  n=6 conf=0.76 subscription eoa LIVE
+    0xb584abc6  $2850.00 every 30.4d  n=9 conf=0.78 recurring payment eoa LIVE
+0x3cB75845FE24338431E81931447a64bf7408d925 bal $556987 outgoing 128 payees 34 bills 3
+    0x61180735  $10000.00 every 30.8d  n=9 conf=0.81 subscription eoa LIVE
+    0x9ff45999  $10000.00 every 30.8d  n=9 conf=0.81 subscription eoa LIVE
+    0xf1718b07  $2000.00 every 30.8d  n=9 conf=0.78 recurring payment eoa LIVE
+
+## deeper.py
+outgoing transfers per safe: median 13 p75 43.0
+history span days per safe: median 198
+safes with a non-protocol payee paid >=3 times: 68  >=5 times: 51  (of 121 with any outgoing)
+payee relationships with >=3 payments: 440  >=5: 261
+  of those with median gap 6-100d: 349
+  timing regularity among them: {'cv 0.35-0.7': 70, 'cv>0.7': 150, 'cv<=0.35': 129}
+  regular ones by sample count: {3: 28, 4: 18, 5: 17, 6: 11, 7: 12, 8: 43} (8 = 8+)
+  safes having >=1 regular 6-100d payee at n>=3: 21  n>=4: 17  n>=5: 11
+  cadence of regular ones: {'other': 25, 'monthly': 87, 'quarterly': 5, 'biweekly': 3, 'weekly': 9}
+safes with >=3 batch payouts (one tx paying >=3 non-protocol payees): 8
+  of which batch cadence regular (cv<=0.35, median gap 6-100d): 3
+    0x1dF7f673 runs 14 every 29.8d cv 0.17 payees/run 9.0 $/run 114866 bal 376421
+    0x3cB75845 runs 11 every 28.9d cv 0.27 payees/run 9 $/run 51750 bal 556987
+    0x6b19BFba runs 20 every 30.2d cv 0.27 payees/run 4.0 $/run 36475 bal 70259
+    0x9237c025 runs 9 every 12.0d cv 0.52 payees/run 6 $/run 104500 bal 587950
+    0xF11D98a1 runs 17 every 31.0d cv 1.17 payees/run 5 $/run 15966 bal 144016
+    0xC5E346b3 runs 19 every 8.3d cv 1.37 payees/run 12 $/run 300 bal 117465
+    0xF2A26c73 runs 6 every 31.5d cv 1.37 payees/run 5.0 $/run 12421 bal 103099
+    0x6F19feE3 runs 8 every 14.5d cv 1.56 payees/run 4.0 $/run 28486 bal 429009
+outgoing by destination class (count): {'protocol': 1177, 'contract-unnamed': 1703, 'eoa': 3456, 'safe': 351, 'contract-other': 455}
+outgoing by destination class ($M): {'protocol': 90.5, 'contract-unnamed': 30.6, 'eoa': 120.5, 'safe': 46.4, 'contract-other': 47.4}
+
+## score.py (walk-forward backtest, end=2026-09-30T00:00Z)
+predictions scored: 272 across 22 treasuries
+all                          n= 272  paid on schedule 66.2%  and within 10% of amount 41.2%  payee paid again at all 84.6%  median date error 1.7d
+confidence >= 0.75 (floor)   n=  10  paid on schedule 70.0%  and within 10% of amount 50.0%  payee paid again at all 80.0%  median date error 2.3d
+confidence 0.60-0.75         n= 123  paid on schedule 81.3%  and within 10% of amount 52.8%  payee paid again at all 88.6%  median date error 1.2d
+confidence 0.45-0.60         n=  92  paid on schedule 68.5%  and within 10% of amount 43.5%  payee paid again at all 87.0%  median date error 2.5d
+confidence < 0.45            n=  47  paid on schedule 21.3%  and within 10% of amount  4.3%  payee paid again at all 70.2%  median date error 1.8d
+
+samples 3                    n=  77  paid on schedule 46.8%  and within 10% of amount 35.1%  payee paid again at all 79.2%  median date error 2.1d
+samples 4-5                  n=  74  paid on schedule 68.9%  and within 10% of amount 35.1%  payee paid again at all 82.4%  median date error 2.9d
+samples 6+                   n= 121  paid on schedule 76.9%  and within 10% of amount 48.8%  payee paid again at all 89.3%  median date error 1.2d
+
+$ predicted 2,846,954; $ where payment arrived on schedule within 10%: 593,097; $ predicted but no payment came: 1,347,314
+
+fixed amount                                 n=  56 safes=11  on schedule 73.2%  +within 10% 55.4%  +exact amount 53.6%
+variable amount                              n= 216 safes=20  on schedule 64.4%  +within 10% 37.5%  +exact amount 25.9%
+fixed amount, 5+ samples, timing cv<=0.15    n=  15 safes= 2  on schedule 86.7%  +within 10% 66.7%  +exact amount 66.7%
+timing cv<=0.15, 5+ samples                  n=  90 safes= 7  on schedule 78.9%  +within 10% 57.8%  +exact amount 50.0%
+timing cv 0.15-0.35, 5+ samples              n=  60 safes= 9  on schedule 63.3%  +within 10% 25.0%  +exact amount 10.0%
+predictions from the four busiest treasuries: 205 of 272
+
+## idle.py
+--- trailing 90 days: 124 of 133 safes with full coverage
+   balance today $49.3M; sum of each safe's lowest balance in the window $33.3M = 68%
+   never below 50% of today's balance: 84 | never below 90%: 73
+   no movement at all in the window: 45 holding $20.0M
+   untouched floor >= $10k: 100 (81%)
+   median lowest balance $112140; median outflow in window $8650
+   forgone on the floor alone at an assumed 4% a year: $328550
+--- trailing 180 days: 124 of 133 safes with full coverage
+   balance today $49.3M; sum of each safe's lowest balance in the window $26.5M = 54%
+   never below 50% of today's balance: 59 | never below 90%: 52
+   no movement at all in the window: 28 holding $8.0M
+   untouched floor >= $10k: 77 (62%)
+   median lowest balance $72978; median outflow in window $34424
+   forgone on the floor alone at an assumed 4% a year: $522149
+
+## poison.py (address poisoning in the same histories)
+treasuries with history: 130
+treasuries with at least one look-alike of a real payee planted in their history: 64 (49%)
+look-alike addresses in total: 247
+real payees imitated: 168
+planted as a fake OUTGOING transfer (zero value, looks like the treasury paid them): 116
+planted as incoming dust: 237
+zero-value outgoing transfers overall: 389 of 7142
+  0x6F19feE3 genuine payees 46 look-alikes 29
+     fake 0x17e4b7…3f257f  imitates 0x17e402…e3257f  fake-outgoing 4  dust-in 10
+     fake 0x1030df…72ec7f  imitates 0x10305d…46ec7f  fake-outgoing 1  dust-in 1
+     fake 0x66a51f…ffefaa  imitates 0x66a5e1…c0efaa  fake-outgoing 1  dust-in 1
+  0x86650d35 genuine payees 14 look-alikes 19
+     fake 0x65c33a…79ab0d  imitates 0x65c398…c5ab0d  fake-outgoing 1  dust-in 3
+     fake 0x0cdadb…00f90b  imitates 0x0cdab4…25f90b  fake-outgoing 1  dust-in 2
+     fake 0x9b19a6…c7b8fd  imitates 0x9b19c9…f4b8fd  fake-outgoing 1  dust-in 3
+  0x9e9de8E9 genuine payees 13 look-alikes 12
+     fake 0x1d3dc9…4574b0  imitates 0x1d3d6c…1c74b0  fake-outgoing 3  dust-in 5
+     fake 0x84e380…85bf67  imitates 0x84e37f…79bf67  fake-outgoing 2  dust-in 5
+     fake 0x2bd9d6…553718  imitates 0x2bd9ec…843718  fake-outgoing 3  dust-in 4
+  0xF11D98a1 genuine payees 92 look-alikes 12
+     fake 0xbe9d2a…5e6e6c  imitates 0xbe9d77…146e6c  fake-outgoing 1  dust-in 1
+     fake 0x088225…7eb011  imitates 0x0882d7…18b011  fake-outgoing 1  dust-in 1
+     fake 0xcf34e4…00199c  imitates 0xcf3420…9f199c  fake-outgoing 1  dust-in 1
+  0xd8640ad9 genuine payees 12 look-alikes 10
+     fake 0x87eb41…762dfe  imitates 0x87eb9f…722dfe  fake-outgoing 1  dust-in 1
+     fake 0xd2ca4d…8898fa  imitates 0xd2caf7…f298fa  fake-outgoing 2  dust-in 2
+     fake 0x6bc812…eb1121  imitates 0x6bc896…3c1121  fake-outgoing 1  dust-in 1
+  0x6b19BFba genuine payees 12 look-alikes 9
+     fake 0x82ccea…82861f  imitates 0x82cc75…61861f  fake-outgoing 2  dust-in 1
+     fake 0x3d0d44…abbcfe  imitates 0x3d0d8f…c4bcfe  fake-outgoing 1  dust-in 2
+     fake 0x15781b…1f7862  imitates 0x157875…237862  fake-outgoing 1  dust-in 1
+look-alikes that sit in the OUTGOING history an agent reads as "who we pay": 116

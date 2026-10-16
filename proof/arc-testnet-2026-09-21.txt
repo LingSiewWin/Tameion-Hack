@@ -1,0 +1,58 @@
+Arc testnet, live, Claude-driven. 2026-09-21.
+chain 5042002 · https://rpc.testnet.arc.network · explorer testnet.arcscan.app
+
+CONTRACTS
+  BudgetPolicy   0xF1f4Faeb9561AFAEb9D0B8ac7e23E6bB25776C5a   (role split + settleAsPrincipal)
+  MemoryAnchor   0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB   (unchanged, reused)
+  history from   block 63256411
+
+THE CORE CLAIM, ON THE REAL CHAIN
+  15 payments were written from the policy at a ~45s cadence, then the
+  agent was pointed at the chain and told nothing else. It read them
+  back with eth_getLogs from 0xffff...fffe and recovered the pattern
+  from addresses, amounts and timestamps alone.
+
+  [1m读历史[0m
+  ───
+    链上读到 18 笔,其中 17 笔是付出去的
+  
+  [1m跑一轮[0m
+  ───
+    balance 0.506200 USDC · 3 obligations · 2 settled · 1 escalated · 0 blocked · 0 already paid
+    log root   0x80cf8ce398ac15bd7ddb0e1890d7f2f4054abbac55b867ac6b86316d05e0f748
+    anchored   0xa0fd2eae4247a505c88902a3b56316132e63c29a6bb3dcfae73b9f79c85ca300
+  
+    付掉的:
+      0x00000000000000000000000000000000000000a2 0.005350 USDC  0xfb68ef423da104be754617753910b91102c20f94e5f85ce2a4e64fbfdc73a4dc
+      0x00000000000000000000000000000000000000a1 0.002000 USDC  0xa8e9c054ff1ed02a0219a046055904b4ab883d671d2fa973a4ad87a1bd9c7ff9
+  
+    交给人的:
+      0x00000000000000000000000000000000000000a3 0.030000 USDC
+          [review] per-action-cap           0.030000 USDC over cap 0.010000 USDC
+  
+  [1m记录[0m
+  ──
+  [0000] OBSERVATION Holding 0.506200 USDC. Read 18 transfers and recovered 3 recurring obligations, of which 3 fall due within 30.0 days totalling 0.037350 USDC.
+  [0001] DECISION    REVIEW for 0x00000000000000000000000000000000000000a3. Highest confidence (0.77) with zero amount variation and 3.4% timing variation, the most firmly established subscription of the three and the largest single claim. Basis: 0x00000000000000000000000000000000000000a3 has been paid 5 times every 50s, amounts varying by 0.0% and timing by 3.4%, so this reads as a subscription (confidence 0.77).
+  [0002] ESCALATION  Stopping and asking a human: per-action-cap: 0.030000 USDC over cap 0.010000 USDC. This is outside the authority delegated to me, so I will not proceed on my own. If unanswered for 7.0 days I will report it as overdue.
+  [0003] DECISION    ALLOW for 0x00000000000000000000000000000000000000a2. Moderate confidence recurring payment, but 13.6% amount variation means the settled figure may reflect a changed arrangement rather than a fixed due amount, so it ranks below the exact-amount subscription. Basis: 0x00000000000000000000000000000000000000a2 has been paid 6 times every 48s, amounts varying by 13.6% and timing by 18.8%, so this reads as a recurring payment (confidence 0.60).
+  [0004] SETTLEMENT  Paid 0.005350 USDC to 0x00000000000000000000000000000000000000a2, settled in 0xfb68ef423da104be754617753910b91102c20f94e5f85ce2a4e64fbfdc73a4dc.
+  [0005] DECISION    ALLOW for 0x00000000000000000000000000000000000000a1. Lowest confidence (0.57) and loosest timing (22.9%), and at 0.002 USDC the smallest exposure if deferred; no signal beyond the numbers distinguishes this counterparty's tolerance for lateness. Basis: 0x00000000000000000000000000000000000000a1 has been paid 6 times every 49s, amounts varying by 0.0% and timing by 22.9%, so this reads as a subscription (confidence 0.57).
+  [0006] SETTLEMENT  Paid 0.002000 USDC to 0x00000000000000000000000000000000000000a1, settled in 0xa8e9c054ff1ed02a0219a046055904b4ab883d671d2fa973a4ad87a1bd9c7ff9.
+  
+  [1m== read the anchored root back off chain ==[0m
+  0x80cf8ce398ac15bd7ddb0e1890d7f2f4054abbac55b867ac6b86316d05e0f748
+
+BALANCES AFTER
+  treasury 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25  2.990753 USDC
+  agent    0x80c195BE650FBfD55a9ffe059f397Db39f2fe881  0.940532 USDC
+  policy   0xF1f4Faeb9561AFAEb9D0B8ac7e23E6bB25776C5a  0.498850 USDC
+
+WHAT THIS ADDS OVER THE ANVIL SUITE
+  - Native Transfer events from 0xffff...fffe, not an ERC-20 stand-in.
+  - Real block times and real network jitter: timing variation came out
+    at 3.4%, 18.8% and 22.9%, all under the 35% threshold, so detection
+    held without a fast-forwarded clock.
+  - The model ranked the over-cap obligation FIRST and the contract
+    refused it anyway. Judgment bounded by something it cannot argue
+    with, demonstrated rather than asserted.

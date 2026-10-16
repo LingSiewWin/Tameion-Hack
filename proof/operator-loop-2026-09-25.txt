@@ -1,0 +1,49 @@
+Connection to 127.0.0.1 port 8545 [tcp/*] succeeded!
+
+[1m== deploy ==[0m
+BudgetPolicy  0x5FbDB2315678afecb367f032d93F642f64180aa3
+MemoryAnchor  0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
+limits        per-action 100 USDC / daily 500 / reserve floor 50
+funded        1000000000 [1e9] USDC minor units
+
+[1m== run the loop ==[0m
+agent      0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+policy     0x5FbDB2315678afecb367f032d93F642f64180aa3
+anchor     0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
+(no ANTHROPIC_API_KEY set -- using the deterministic control)
+
+seeded 18 historical transfers across 3 counterparties
+
+── outcome ──
+balance 1000.000000 USDC · 3 obligations · 2 settled · 1 escalated · 0 blocked · 0 already paid
+reasoner   rule-based
+log root   0x09ccb27c84a7c659159852e41934fd0b089571f5037faf896099dae764052e3f
+anchored   0x44081e58d525e40ce89ce70f017fc2751a9d0949ac3593c644eea050732860f2
+
+── paid ──
+  0x1111111111111111111111111111111111111111 20.000000 USDC  0x067413666e0f1edf5a993a496a7d4a4fdb564ebc548f2a63d1f0292dbffde77e
+  0x2222222222222222222222222222222222222222 35.000000 USDC  0x7c8a4040ccc02fb92771aaa809470fe1796b55672c0be912a4e7891e294a5e2c
+
+── escalated to a human ──
+  0x3333333333333333333333333333333333333333 150.000000 USDC
+      [review] per-action-cap           150.000000 USDC over cap 100.000000 USDC
+
+── the record ──
+[0000] OBSERVATION Holding 1000.000000 USDC. Read 18 transfers and recovered 3 recurring obligations, of which 3 fall due within 30.0 days totalling 205.000000 USDC.
+[0001] DECISION    ALLOW for 0x1111111111111111111111111111111111111111. ranked 1 of 3: overdue by 1.0 days, confidence 0.85, 20.000000 USDC covered Basis: 0x1111111111111111111111111111111111111111 has been paid 6 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.85).
+[0002] SETTLEMENT  Paid 20.000000 USDC to 0x1111111111111111111111111111111111111111, settled in 0x067413666e0f1edf5a993a496a7d4a4fdb564ebc548f2a63d1f0292dbffde77e.
+[0003] DECISION    ALLOW for 0x2222222222222222222222222222222222222222. ranked 2 of 3: overdue by 1.0 days, confidence 0.85, 35.000000 USDC covered Basis: 0x2222222222222222222222222222222222222222 has been paid 6 times every 14.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.85).
+[0004] SETTLEMENT  Paid 35.000000 USDC to 0x2222222222222222222222222222222222222222, settled in 0x7c8a4040ccc02fb92771aaa809470fe1796b55672c0be912a4e7891e294a5e2c.
+[0005] DECISION    REVIEW for 0x3333333333333333333333333333333333333333. ranked 3 of 3: overdue by 1.0 days, confidence 0.85, 150.000000 USDC covered Basis: 0x3333333333333333333333333333333333333333 has been paid 6 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.85).
+[0006] ESCALATION  Stopping and asking a human: per-action-cap: 150.000000 USDC over cap 100.000000 USDC. This is outside the authority delegated to me, so I will not proceed on my own. If unanswered for 7.0 days I will report it as overdue.
+
+── record vs chain ──
+  0x1111111111111111111111111111111111111111@1799913600  0x55f9a587b6efdbaed51e4b4e5ed807c2ede88b837e56e8b3bd858bcc840bc4f8  spent on chain: true
+  0x2222222222222222222222222222222222222222@1799913600  0x56f0deb2f117dcc968b1862395f7e3b47f942f6198828c9d8f987c81db492dc2  spent on chain: true
+  every settlement in the record is spent on chain.
+
+[1m== the root the agent anchored, read back off chain ==[0m
+anchored root  0x09ccb27c84a7c659159852e41934fd0b089571f5037faf896099dae764052e3f
+
+The log root printed above and this value are the same number, held in
+two places: the agent's own record, and a contract the agent cannot edit.

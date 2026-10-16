@@ -1,0 +1,116 @@
+
+========================================================================
+STEP 1  Chain and treasury setup
+========================================================================
+  rpc            http://127.0.0.1:8545
+  chain id       5042002
+  block          62574928
+  memory anchor  0xBF52caf40b7612bEd0814A09842c14BAB217BaD5
+  usdc token     0x0232fCaE1cFA5FD6C14094E0Be6966d2857DD8D8
+  funder         0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+  treasury       0x4097f4B4db6D9ab43f95D80FFddC5c5348a50014
+  funded         20000.000000 USDC  tx 0x396a9280b7a7dfe36653d85febe0ccc06316f7280df6a45f5b51a3c5271cf3aa
+  balance now    20000.000000 USDC
+
+========================================================================
+STEP 2  Building real payment history on-chain
+========================================================================
+  subscription  cycle 1/6  20.000000 USDC -> 0x11111111...  0x6a858e1a86f534d7e30a2a13deceeacb621aad2602356c3ad5d8e58fbbeb1538
+  subscription  cycle 2/6  20.000000 USDC -> 0x11111111...  0x83b554115a27780a791be91b678254fd85d83ff015e83f9324d35b8e83d860db
+  subscription  cycle 3/6  20.000000 USDC -> 0x11111111...  0x820f36223c7beade6db881185fdde9e92dbf16aa30a897bd739d6b950cbe84c9
+  subscription  cycle 4/6  20.000000 USDC -> 0x11111111...  0x2aba273dea80f7632f8a8d4b6a5cd86793fcb1a9cf6ab333f46ee6ced0200628
+  subscription  cycle 5/6  20.000000 USDC -> 0x11111111...  0x2a137e290efc6a3472f47d74bb46642413a3e3f8e26658a8df46e106a36606e5
+  subscription  cycle 6/6  20.000000 USDC -> 0x11111111...  0x1476beaca95c4637f1294bd4e6c4d7b1a7d04709940953e3d81583d7a3e0503b
+  contractor    cycle 1/5  500.000000 USDC -> 0x22222222...  0x8aedd86069ce75d8eb9834bf22902f8848b1939a20de7c1be894b21826108917
+  contractor    cycle 2/5  620.000000 USDC -> 0x22222222...  0xf7a186b644024e901dbe22cf068cf5c8504eeda4f0df51efc23034ab5e355f67
+  contractor    cycle 3/5  410.000000 USDC -> 0x22222222...  0x15415ad83f711d66c3a8e2795fec363bdf61c80b83a6a9fc307081926ee96caa
+  contractor    cycle 4/5  580.000000 USDC -> 0x22222222...  0xbf98361151eaea949193296e7bedb5bb8e49ae413352a9e5c7a8d70687c638d6
+  contractor    cycle 5/5  535.000000 USDC -> 0x22222222...  0x7c267fbb9130a08da969050162d0271e62c421cc9e0da14230885d9f7ee6e398
+  big vendor    cycle 1/3  1500.000000 USDC -> 0x33333333...  0x35183b564f0b1f0342ed5a2a362a50874103bb627c144fe94006aa0e5be5d340
+  big vendor    cycle 2/3  1500.000000 USDC -> 0x33333333...  0xa2e904afdf94fff601e403c938316ecc8152378ebca5156f7ab1e65e3e1eabf7
+  big vendor    cycle 3/3  1500.000000 USDC -> 0x33333333...  0x4725d600e8e3cf88a7cf8fe46fc3f8b741763d059b9409cd321359aa2d2d3878
+
+========================================================================
+STEP 3  Agent reads its own history off-chain-of-record
+========================================================================
+  policy         per-transaction cap 1000.000000 USDC, daily cap 2000.000000 USDC, reserve floor 100.000000 USDC, minimum confidence 0.60
+  transfers read 14 outgoing USDC transfers from chain logs
+  obligations    3 recovered with no labels, no metadata
+
+    - 0x1111111111111111111111111111111111111111 has been paid 6 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.85).
+      next due 20.000000 USDC, evidence 6 txs
+    - 0x2222222222222222222222222222222222222222 has been paid 5 times every 14.0 days, amounts varying by 15.2% and timing by 0.0%, so this reads as a recurring_payment (confidence 0.78).
+      next due 535.000000 USDC, evidence 5 txs
+    - 0x3333333333333333333333333333333333333333 has been paid 3 times every 90.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.62).
+      next due 1500.000000 USDC, evidence 3 txs
+
+========================================================================
+STEP 4  Deciding and paying under policy
+========================================================================
+  balance 12735.000000 USDC · 3 obligations · 2 paid · 0 held · 1 escalated · 0 skipped as already settled
+
+  PAID       20.000000 USDC -> 0x1111111111111111111111111111111111111111
+             tx 0x31039be43228c567f14e0d1a8d49c58da9e58bb2d5a6e1d45f233ccc824e9aec
+  PAID       535.000000 USDC -> 0x2222222222222222222222222222222222222222
+             tx 0xb2abfda359c9db3833b0f7267d5ed700885f0d492a96782d9738842cb1defcd6
+  ESCALATED  0x3333333333333333333333333333333333333333  [per_tx_cap] 1500.000000 USDC to 0x3333333333333333333333333333333333333333 exceeds the 1000.000000 USDC per-transaction limit, so this is not mine to authorise.
+
+========================================================================
+STEP 5  Decision log anchored on-chain
+========================================================================
+  events logged  7
+  merkle root    0x92e854597594df727feb13aa9bd86c08a239a8a98605fc1acb36e3128234444d
+  anchor tx      0x0823b44fd48b72bb6c90a9e75285633d21f0f7d81691a919073766bff20afeb2
+  root on-chain  0x92e854597594df727feb13aa9bd86c08a239a8a98605fc1acb36e3128234444d
+  roots match    YES
+
+========================================================================
+STEP 6  Tamper evidence and selective disclosure
+========================================================================
+  merkle proofs  7/7 events provable against the anchored root
+                 one decision can be shown to an auditor without
+                 revealing the others, which is why only the root
+                 goes on-chain and the detail stays off it
+
+  tamper test    flipped one logged PAY to HOLD in the file
+  original root  0x92e854597594df727feb13aa9bd86c08a239a8a98605fc1acb36e3128234444d
+  tampered root  0xd334cf970138e1c6cdf67cfd63bc28af2bf411fdaeb44c8b1f643c7e303b8ffe
+  detected       YES
+
+========================================================================
+STEP 7  Replay: what a reviewer reads instead of bank statements
+========================================================================
+  [0000] OBSERVATION Holding 12735.000000 USDC. Read 14 outgoing transfers and recovered 3 recurring obligations, of which 3 fall due within 120 days totalling 2055.000000 USDC.
+  [0001] DECISION    0x1111111111111111111111111111111111111111 is due, 20.000000 USDC clears every limit, and 12715.000000 USDC remains after paying. Basis: 0x1111111111111111111111111111111111111111 has been paid 6 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.85).
+  [0002] SETTLEMENT  Paid 20.000000 USDC to 0x1111111111111111111111111111111111111111, settled in 0x31039be43228c567f14e0d1a8d49c58da9e58bb2d5a6e1d45f233ccc824e9aec.
+  [0003] DECISION    0x2222222222222222222222222222222222222222 is due, 535.000000 USDC clears every limit, and 12180.000000 USDC remains after paying. Basis: 0x2222222222222222222222222222222222222222 has been paid 5 times every 14.0 days, amounts varying by 15.2% and timing by 0.0%, so this reads as a recurring_payment (confidence 0.78).
+  [0004] SETTLEMENT  Paid 535.000000 USDC to 0x2222222222222222222222222222222222222222, settled in 0xb2abfda359c9db3833b0f7267d5ed700885f0d492a96782d9738842cb1defcd6.
+  [0005] DECISION    1500.000000 USDC to 0x3333333333333333333333333333333333333333 exceeds the 1000.000000 USDC per-transaction limit, so this is not mine to authorise. Basis: 0x3333333333333333333333333333333333333333 has been paid 3 times every 90.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.62).
+  [0006] ESCALATION  Stopping and asking a human: 1500.000000 USDC to 0x3333333333333333333333333333333333333333 exceeds the 1000.000000 USDC per-transaction limit, so this is not mine to authorise. This is outside the authority delegated to me, so I will not proceed on my own.
+
+========================================================================
+STEP 8  Second run: no double payment
+========================================================================
+  Agents and Ledgers puts duplicate payment first among the errors
+  a balanced ledger misses. Running the identical pass again, with
+  nothing changed, is the retry-after-timeout case.
+
+  balance 12180.000000 USDC · 3 obligations · 0 paid · 0 held · 1 escalated · 2 skipped as already settled
+  balance before 12180.000000 USDC
+  balance after  12180.000000 USDC
+  spent again    0.000000 USDC
+  SKIPPED    0x1111111111111111111111111111111111111111  cycle 0x1111111111111111111111111111111111111111@1984916082
+  SKIPPED    0x2222222222222222222222222222222222222222  cycle 0x2222222222222222222222222222222222222222@1990964083
+  no obligation paid twice, balance unchanged
+
+========================================================================
+RESULT
+========================================================================
+  treasury       0x4097f4B4db6D9ab43f95D80FFddC5c5348a50014
+  final balance  12180.000000 USDC
+  paid           2 obligations settled autonomously
+  escalated      1 referred to a human
+  anchor tx      0x0823b44fd48b72bb6c90a9e75285633d21f0f7d81691a919073766bff20afeb2
+  log            runtime/decisions.jsonl
+
+completed in 0.9s

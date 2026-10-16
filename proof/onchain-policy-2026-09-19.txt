@@ -1,0 +1,35 @@
+Connection to 127.0.0.1 port 8545 [tcp/*] succeeded!
+anvil chainId 31337
+
+== the verifier decides, off chain ==
+decision     ALLOW
+action hash  0xf9085b3cf70ebfe1ad5e82782cc1b5a2050f9a8a69b900901d16e4fff4ada874
+amount       20000000 USDC minor units
+
+== deploy the policy ==
+policy       0x5FbDB2315678afecb367f032d93F642f64180aa3
+agent        0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+limits       per-action 100 USDC / daily 500 / reserve floor 50
+funded       1000000000 [1e9] USDC minor units
+
+== pay, on the authority of that hash ==
+status       0x1
+tx           0x4b71687a90b9ef639bbeb54e67ca65f5476ec9133f4a371ff1e57c6e97f83bd9
+gas used     115878
+vendor       20000000000000000000 wei
+policy       980000000 [9.8e8] USDC minor units
+spentToday   20000000 [2e7]
+recorded     true
+
+== what it refuses ==
+replay the same hash          -> AlreadyExecuted(0xf9085b3cf70ebfe1ad5e82782cc1b5a2050f9a8a69b900901d16e4fff4ada874)
+over the per-action cap       -> OverPerActionCap(150000000 [1.5e8], 100000000 [1e8])
+agent raising its own cap     -> NotPrincipal
+a stranger paying             -> NotAgent
+
+== state after the refusals ==
+policy       980000000 [9.8e8] USDC minor units
+spentToday   20000000 [2e7]
+perActionCap 100000000 [1e8]
+
+Nothing moved. The agent asked four times and was refused four times.

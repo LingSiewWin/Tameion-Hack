@@ -1,0 +1,22 @@
+Escalation handover, verified end to end. 2026-09-21.
+
+The agent composed calldata for a payment it is forbidden to send
+(120.000000 USDC, over the 100 USDC per-action cap), and the principal
+signed it. pay() would have reverted NotAgent; withdraw() is the call a
+principal can actually send.
+
+  cycle        0x4444444444444444444444444444444444444444@1786512974
+  counterparty 0x4444444444444444444444444444444444444444
+  amount       120.000000 USDC
+  stale        True
+  to           0x5fbdb2315678afecb367f032d93f642f64180aa3
+  data         0xf3fef3a300000000000000000000000044444444444444444444444444444444444444440000000000000000000000000000000000000000000000000000000007270e00
+  summary      withdraw 120.000000 USDC to 0x4444444444444444444444444444444444444444 (principal only; does not mark the cycle settled)
+
+  principal tx  0x4daf10ff25c460ce6fa5c75489af0c6682503f1e0b3e1062ab10147e841d54b4
+  status        1 (success)
+  payee balance 0 -> 120000000000000000000 wei (120.000000 USDC)
+
+KNOWN GAP (task #9): withdraw takes no action hash, so
+executed[actionHash] stays false and the agent will escalate this same
+cycle again next run. The bill is paid; the agent does not know.

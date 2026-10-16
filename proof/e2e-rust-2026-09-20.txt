@@ -1,0 +1,70 @@
+Connection to 127.0.0.1 port 8545 [tcp/*] succeeded!
+[1mdeployed[0m
+  TestUSDC      0x5FbDB2315678afecb367f032d93F642f64180aa3   (stand-in: a plain anvil emits no ERC-20 event for a native transfer)
+  BudgetPolicy  0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512  (per-action 1000 USDC / daily 5000 / floor 50)
+  MemoryAnchor  0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
+  treasury      0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+  policy funded 5000000000 [5e9] USDC minor units
+
+[1mSTEP 1  Fund the treasury[0m
+─────────────────────────
+  treasury 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+  holding  20000.000000 USDC
+
+[1mSTEP 2  Build six months of real payment history on chain[0m
+─────────────────────────────────────────────────────────
+  Each line below is a mined transaction with a receipt and a log.
+  Between each one the chain clock moves forward.
+
+  subscription  cycle 1/6   20.000000 USDC -> 0x1111…  0xec992992d1a460329926c8981a36c7559b26fa62183ffcae778e0f14911bf3fb
+  subscription  cycle 2/6   20.000000 USDC -> 0x1111…  0x39aada4c55a8010b5b116be1579de0a0e2e63b512e623c2a149f8d90a935f79d
+  subscription  cycle 3/6   20.000000 USDC -> 0x1111…  0xe38f87c8b80d09447cf6db64cd2483d49ef0fc2536307453c09c857686a57fe5
+  subscription  cycle 4/6   20.000000 USDC -> 0x1111…  0x15e8df8bbfba794a1e01401554e25e32ff25a2b139dfc38b948663449ed7f4d7
+  subscription  cycle 5/6   20.000000 USDC -> 0x1111…  0x21b8285f3e4fd65519f71ee1cc590fb5201aaf5bc15bd1353194550a27375d69
+  subscription  cycle 6/6   20.000000 USDC -> 0x1111…  0x4bff17a4e7b3e8d43877ca66bf70c5b1ad9a748067cc7b5deac6fb399aaa2940
+  contractor    cycle 1/5  500.000000 USDC -> 0x2222…  0x7e39688b826d04c4f6398bcd1506b00d4b7321831d6dbbd9562fe05ae793d8d1
+  contractor    cycle 2/5  620.000000 USDC -> 0x2222…  0x1956c4d6b60a5f4eb93d241334e68e3f9907d9a5fa76f58df34c85f6a325fe61
+  contractor    cycle 3/5  410.000000 USDC -> 0x2222…  0x9a38d6102fc6d04c4cd8603c9ece5c4fdd61e95c5ae2b190b596499fe76bf707
+  contractor    cycle 4/5  580.000000 USDC -> 0x2222…  0xe3a4008fabe0c45f840067f2e9bdab9581ca77e6e5425d590c0fa74c3046df64
+  contractor    cycle 5/5  535.000000 USDC -> 0x2222…  0xf9b37bfae9f4f444a58b45bd8a6f58ff86b7d941e2cedb12c2763d79947283b9
+  big vendor    cycle 1/3  1500.000000 USDC -> 0x3333…  0x1b17b3c3980fe8eb72826d5a416beb26918e296fb6866ac531d2661979bcd0a0
+  big vendor    cycle 2/3  1500.000000 USDC -> 0x3333…  0xcce0b4398664ad9c7ef92f0d02caa75c1eb4a4210626a88f6412489f1700d144
+  big vendor    cycle 3/3  1500.000000 USDC -> 0x3333…  0x39985c9c0562b95084d661ef37a6e98036488c3e0bdb957df58f4bef5f499915
+
+  chain clock is now t=1834816579, about 15 months after it started
+
+[1mSTEP 3  The agent reads that history back off the chain[0m
+───────────────────────────────────────────────────────
+  eth_getLogs returned 15 transfers touching the treasury
+  14 of them outgoing; the inbound one is the mint that funded it
+  the agent was not told what any of them were for
+
+[1mSTEP 4  One pass of the loop[0m
+────────────────────────────
+balance 5000.000000 USDC · 3 obligations · 2 settled · 1 escalated · 0 blocked · 0 already paid
+log root   0x9476b333efc8e860bbfa2e3a4f19a66d378ea4821595faebb50a87009855bbb4
+anchored   0x1877b6f603def56396bb0ee0e13617013e591a0e98b7c8c6710aada8f71d80e2
+
+  paid:
+    0x1111111111111111111111111111111111111111 20.000000 USDC  0xeae7098657c137ef0f2fe2b0ad4dc16dad630ae874117473f0518f7830aff22f
+    0x2222222222222222222222222222222222222222 535.000000 USDC  0x687848add5ff3167d3c6d29f2e1288caf03f6bbde5a90ca5e44f61f275d2b61b
+
+  escalated to a human:
+    0x3333333333333333333333333333333333333333 1500.000000 USDC
+        [review] per-action-cap           1500.000000 USDC over cap 1000.000000 USDC
+
+[1mSTEP 5  What the agent inferred, from addresses alone[0m
+─────────────────────────────────────────────────────
+  0x1111111111111111111111111111111111111111 has been paid 6 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.85).
+  0x2222222222222222222222222222222222222222 has been paid 5 times every 14.0 days, amounts varying by 15.2% and timing by 0.0%, so this reads as a recurring payment (confidence 0.78).
+  0x3333333333333333333333333333333333333333 has been paid 3 times every 90.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.62).
+
+[1mSTEP 6  The record[0m
+──────────────────
+[0000] OBSERVATION Holding 5000.000000 USDC. Read 15 transfers and recovered 3 recurring obligations, of which 3 fall due within 120.0 days totalling 2055.000000 USDC.
+[0001] DECISION    ALLOW for 0x1111111111111111111111111111111111111111. ranked 1 of 3: overdue by 340.0 days, confidence 0.85, 20.000000 USDC covered Basis: 0x1111111111111111111111111111111111111111 has been paid 6 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.85).
+[0002] SETTLEMENT  Paid 20.000000 USDC to 0x1111111111111111111111111111111111111111, settled in 0xeae7098657c137ef0f2fe2b0ad4dc16dad630ae874117473f0518f7830aff22f.
+[0003] DECISION    ALLOW for 0x2222222222222222222222222222222222222222. ranked 2 of 3: overdue by 270.0 days, confidence 0.78, 535.000000 USDC covered Basis: 0x2222222222222222222222222222222222222222 has been paid 5 times every 14.0 days, amounts varying by 15.2% and timing by 0.0%, so this reads as a recurring payment (confidence 0.78).
+[0004] SETTLEMENT  Paid 535.000000 USDC to 0x2222222222222222222222222222222222222222, settled in 0x687848add5ff3167d3c6d29f2e1288caf03f6bbde5a90ca5e44f61f275d2b61b.
+[0005] DECISION    REVIEW for 0x3333333333333333333333333333333333333333. ranked 3 of 3: overdue by 0.0 days, confidence 0.62, 1500.000000 USDC covered Basis: 0x3333333333333333333333333333333333333333 has been paid 3 times every 90.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.62).
+[0006] ESCALATION  Stopping and asking a human: per-action-cap: 1500.000000 USDC over cap 1000.000000 USDC. This is outside the authority delegated to me, so I will not proceed on my own.

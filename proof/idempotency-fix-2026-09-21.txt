@@ -1,0 +1,31 @@
+Idempotency fix + split roles + principal settlement. 2026-09-21.
+Local chain, Claude-driven, cycle pinned to 1790000000 so the same bill recurs.
+
+--- run 1 ---
+  reasoner   claude-opus-5 divergence 3 / 4
+  paid       0x2222222222 35.000000 USDC 0x83005fc7919a778373...
+  paid       0x1111111111 20.000000 USDC 0xfdee5d9995027deeb6...
+  escalated  0x4444444444 120.000000 USDC ['per-action-cap']
+  escalated  0x3333333333 150.000000 USDC ['per-action-cap']
+  action hash    0x27b6ed82df6039795ad1c7899fd66cc3c024d28e07d5eaa68e867daef3bc8ea9
+  settlement key 0xbe50dc0048af3599daa8bfc82209966c936dc922f0c11bf3eaa0a93fbb719727   <- what the chain records
+
+--- run 2, identical cycle: the replay guard must bite ---
+  settled    0 (was 2)
+  reasoner   claude-opus-5 -- different prose, same settlement key
+   [0003] SKIPPED     Skipping 0x2222222222222222222222222222222222222222: this billing cycle is already settled on chain
+   [0006] SKIPPED     Skipping 0x1111111111111111111111111111111111111111: this billing cycle is already settled on chain
+
+--- principal settles the escalated 120 USDC by hand ---
+  executed[key] before: false
+  executed[key] after : true
+  payee balance       : 120000000000000000000
+
+--- run 3: the agent must now leave it alone ---
+  escalated now: ['0x3333333333']
+   [0001] SKIPPED     Skipping 0x4444444444444444444444444444444444444444: this billing cycle is already settled on chain
+
+--- final balances: each bill paid exactly once ---
+  0x1111111111  20000000000000000000
+  0x2222222222  35000000000000000000
+  0x4444444444  120000000000000000000

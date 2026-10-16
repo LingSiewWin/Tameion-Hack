@@ -1,0 +1,75 @@
+Connection to 127.0.0.1 port 8545 [tcp/*] succeeded!
+Connection to 127.0.0.1 port 7879 [tcp/*] succeeded!
+
+[1m0. the core claim: obligations recovered from raw chain data[0m
+  [32mPASS[0m  history came from the chain
+  [32mPASS[0m  eth_getLogs returned the payments
+  [32mPASS[0m  obligations inferred, unlabelled
+  [32mPASS[0m  declined the counterparty with no rhythm
+
+[1m1. the agent does the work[0m
+  [32mPASS[0m  pays what is inside the cap
+  [32mPASS[0m  a model made the ordering
+  [32mPASS[0m  divergence is measured
+  [32mPASS[0m  escalates what is outside it
+  [32mPASS[0m  flags ignored escalations
+  [32mPASS[0m  anchors the log root
+
+[1m2. the record and the chain agree[0m
+  [32mPASS[0m  anchored root == computed root
+
+[1m3. the same bill cannot be paid twice[0m
+  [32mPASS[0m  second run settles nothing
+  [32mPASS[0m  0x1111 paid once, not twice
+  [32mPASS[0m  0x2222 paid once, not twice
+  [32mPASS[0m  settlement key is stable across runs
+  [32mPASS[0m  action hash still tracks the reasoning
+
+[1m4. the contract refuses the agent[0m
+  [32mPASS[0m  agent cannot withdraw
+  [32mPASS[0m  agent cannot raise its own cap
+  [32mPASS[0m  agent cannot replace itself
+  [32mPASS[0m  a stranger cannot pay
+  [32mPASS[0m  over-cap payment refused on chain
+
+[1m5. the split roles hold[0m
+  [32mPASS[0m  operator cannot withdraw
+  [32mPASS[0m  principal cannot change limits
+  [32mPASS[0m  operator cannot appoint its successor
+
+[1m6. a human can settle, and the agent notices[0m
+  [32mPASS[0m  cycle unsettled before
+  [32mPASS[0m  principal settlement recorded
+  [32mPASS[0m  payee received the escalated amount
+  [32mPASS[0m  agent stops escalating it
+
+[1m7. limits other than the per-action cap[0m
+  [32mPASS[0m  reserve floor is enforced
+  [32mPASS[0m  daily cap is enforced
+
+[1m8. duplicate settlement is refused at the contract, not just in the agent[0m
+  [32mPASS[0m  first payment lands
+  [32mPASS[0m  the same key cannot execute twice
+
+[1m9. a model outage does not stop the agent[0m
+scripts/acceptance.sh: line 166: 21355 Terminated: 15          PORT=$PORT cargo run -p operator --quiet --example serve > /tmp/acceptance-srv.log 2>&1
+Connection to 127.0.0.1 port 7879 [tcp/*] succeeded!
+  [32mPASS[0m  falls back to the deterministic rule
+  [32mPASS[0m  still completes the loop
+  [32mPASS[0m  records that it fell back
+
+[1mnot covered here[0m
+  These are real gaps, stated rather than implied:
+    - History is real on-chain data, but written by this script rather than
+      by a live treasury, and read through a TestUSDC stand-in because a
+      local EVM emits nothing for a native transfer.
+    - Runs on anvil, so Arc's own behaviour is untested here: the two
+      Transfer emitters, getLogs chunking above 1,000 blocks, and 429
+      backoff. Those are covered only by proof/arc-testnet-*.txt, which was
+      recorded against the PREVIOUS contract (before the role split).
+    - One scenario, four counterparties. No zero-obligation case, no
+      balance-exhaustion case, no reorg.
+
+[1mresult[0m
+  35 passed, 0 failed
+

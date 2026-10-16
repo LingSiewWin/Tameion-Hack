@@ -1,0 +1,54 @@
+Arc testnet, live. 2026-09-20.
+chain id 5042002 · https://rpc.testnet.arc.network · explorer testnet.arcscan.app
+
+CONTRACTS DEPLOYED
+  BudgetPolicy   0xb15fdfa066DeE5Ab070789251Ef999f405B23bf1
+    deploy tx    0x468ba39d52c3f701a946828aba4306f2a77c80aee751cbc2cfb0894c25ae1373
+  MemoryAnchor   0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB
+    deploy tx    0xadee20e6e9e91382e63cc214b8a31d6d2f2a62e94cdba221f1b57b5e6795aed7
+
+KEYS
+  principal      0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25   (~/.tameion/treasury.key)
+  agent          0x80c195BE650FBfD55a9ffe059f397Db39f2fe881   (~/.tameion/agent.key)
+  The agent key cannot withdraw and cannot change limits. Proven below.
+
+ONE PASS OF THE LOOP
+  read           16 transfers off chain, 15 outgoing
+  inferred       2 recurring obligations, from addresses alone
+  paid           0xd444…  0.200000 USDC
+                 tx 0x2f62f3f957f821d0fa9b13035aea216a5da2dae9b647577dffd4d1b8f64ae5fc
+  escalated      0xc333…  1.500000 USDC
+                 per-action-cap: 1.500000 over cap 1.000000
+  anchored       tx 0xee55206c702f0a71b6f8a6e120666d013407a55d049a3d449b716cb20dd5bd0e
+
+THE RECORD AND THE CHAIN AGREE
+  log root, computed locally by the agent
+    0xdb8414eccde64fa5869468763ba5c8468afd8b7736212f50b7085be66a9da685
+  MemoryAnchor.rootOf(agent), read back off chain
+    0xdb8414eccde64fa5869468763ba5c8468afd8b7736212f50b7085be66a9da685
+  identical
+
+  action hash of the settlement
+    0xcb616a2f0a22555ab0ad450d9eb16f12e86277a3bb36728516549773234b30fc
+  BudgetPolicy.executed(hash)  =  true
+
+WHAT THE CONTRACT REFUSED, ON CHAIN
+  replay the same action hash
+    AlreadyExecuted(0xcb616a2f0a22555ab0ad450d9eb16f12e86277a3bb36728516549773234b30fc)
+  pay above the per-action cap
+    OverPerActionCap(1500000, 1000000)
+  agent raising its own cap
+    NotPrincipal
+  The cap was tightened from 2.000000 to 1.000000 by the principal mid-run.
+  The agent attempted to raise it back and was refused; the on-chain value
+  did not move.
+
+WHAT THE AGENT REFUSED TO INFER
+  0xa111…  paid 3 times, gaps 20s and 8s, interval CV 0.61 against a 0.35
+           threshold. No obligation was reported. It declined to invent a
+           schedule that was not in the data rather than report a weak one.
+  0xb222…  detected at 3 samples, then rejected once later payments were
+           interleaved with another vendor's and the rhythm broke.
+
+COST
+  gas for everything above, including two deployments: about 0.13 USDC.

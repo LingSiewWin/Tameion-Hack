@@ -1,0 +1,24 @@
+=== run 1 · 2026-09-21T02:49:25Z ===
+balance 2.500000 USDC, 3 obligations totalling 2900000 USDC minor units
+the balance covers 86% of what is owed
+  - 0xa11ce has been paid 6 times every 30.0 days, amounts varying by 0.0% and timing by 2.0%, so this reads as a subscription (confidence 0.95).
+  - 0xb0b has been paid 5 times every 30.0 days, amounts varying by 0.0% and timing by 2.0%, so this reads as a subscription (confidence 0.88).
+  - 0xca101 has been paid 3 times every 30.0 days, amounts varying by 0.0% and timing by 2.0%, so this reads as a subscription (confidence 0.62).
+
+rule-based (deterministic control)
+----------------------------------
+  1. 0xa11ce 0.400000 USDC   ranked 1 of 3: overdue by 4.0 days, confidence 0.95, 0.400000 USDC covered
+  2. 0xca101 0.700000 USDC   ranked 2 of 3: due in 1.0 days, confidence 0.62, 0.700000 USDC covered
+  3. 0xb0b 1.800000 USDC   ranked 3 of 3: due in 2.0 days, confidence 0.88, 1.800000 USDC not covered by remaining cash
+
+claude-opus-5 (model)
+---------------------
+  1. 0xa11ce 0.400000 USDC   Already four days overdue on a tight six-cycle subscription pattern with 0.95 confidence, so it is the only obligation currently in arrears and the cheapest to clear.
+  2. 0xb0b 1.800000 USDC   Highest-value recurring commitment with five consistent cycles and 0.88 confidence; a miss here is the most likely to interrupt service, and I have no signal on this counterparty's grace period beyond the regularity of the schedule.
+  3. 0xca101 0.700000 USDC   Due sooner than 0xb0b but rests on only three samples at 0.62 confidence, so the weaker evidence places it last despite the earlier date; I have no information on whether this counterparty chases late payment.
+
+divergence 2 of 3 positions
+  rank 2: rule chose 0xca101, model chose 0xb0b -- Highest-value recurring commitment with five consistent cycles and 0.88 confidence; a miss here is the most likely to interrupt service, and I have no signal on this counterparty's grace period beyond the regularity of the schedule.
+  rank 3: rule chose 0xb0b, model chose 0xca101 -- Due sooner than 0xb0b but rests on only three samples at 0.62 confidence, so the weaker evidence places it last despite the earlier date; I have no information on whether this counterparty chases late payment.
+
+note: this is ordering only. Every item above is still checked by the verifier and by BudgetPolicy before any USDC moves.

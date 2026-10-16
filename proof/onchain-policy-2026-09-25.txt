@@ -1,0 +1,39 @@
+Connection to 127.0.0.1 port 8545 [tcp/*] succeeded!
+anvil chainId 31337
+
+== the verifier decides, off chain ==
+decision     ALLOW
+action hash  0xf9085b3cf70ebfe1ad5e82782cc1b5a2050f9a8a69b900901d16e4fff4ada874
+amount       20000000 USDC minor units
+
+== deploy the policy ==
+policy       0x5FbDB2315678afecb367f032d93F642f64180aa3
+agent        0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+operator     0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+principal    0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+limits       per-action 100 USDC / daily 500 / reserve floor 50
+funded       1000000000 [1e9] USDC minor units
+
+== pay, on the authority of that hash ==
+status       0x1
+tx           0x315b6782d4e6676a1143d670d6e12cdc6e4b1f36640da82a4f3fcda446f615b2
+gas used     115879
+vendor       20000000000000000000 wei
+policy       980000000 [9.8e8] USDC minor units
+spentToday   20000000 [2e7]
+recorded     true
+
+== what it refuses ==
+replay the same hash          -> AlreadyExecuted(0xf9085b3cf70ebfe1ad5e82782cc1b5a2050f9a8a69b900901d16e4fff4ada874)
+over the per-action cap       -> OverPerActionCap(150000000 [1.5e8], 100000000 [1e8])
+agent raising its own cap     -> NotOperator
+a stranger paying             -> NotAgent
+operator withdrawing          -> NotPrincipal
+principal rotating the agent  -> NotOperator
+
+== state after the refusals ==
+policy       980000000 [9.8e8] USDC minor units
+spentToday   20000000 [2e7]
+perActionCap 100000000 [1e8]
+
+Nothing moved. Six attempts, six named refusals.
