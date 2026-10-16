@@ -1,0 +1,39 @@
+# Detector dust filter, 2026-10-01: before and after, on the 2026-09-30 scan data (130 Arbitrum Safes)
+
+## Obligations inferred to planted look-alikes (probe over transfers.tsv)
+before: 124 obligations, 2 pointing at look-alikes (confidence 0.43 and 0.61)
+after:  145 obligations, 0 pointing at look-alikes
+
+## Walk-forward backtest (walk end = 1790759040), scored by score.py
+
+### before (as quoted in docs/21 §3b)
+predictions scored: 272 across 22 treasuries
+all                          n= 272  paid on schedule 66.2%  and within 10% of amount 41.2%  payee paid again at all 84.6%  median date error 1.7d
+confidence >= 0.75 (floor)   n=  10  paid on schedule 70.0%  and within 10% of amount 50.0%  payee paid again at all 80.0%  median date error 2.3d
+confidence 0.60-0.75         n= 123  paid on schedule 81.3%  and within 10% of amount 52.8%  payee paid again at all 88.6%  median date error 1.2d
+confidence 0.45-0.60         n=  92  paid on schedule 68.5%  and within 10% of amount 43.5%  payee paid again at all 87.0%  median date error 2.5d
+confidence < 0.45            n=  47  paid on schedule 21.3%  and within 10% of amount  4.3%  payee paid again at all 70.2%  median date error 1.8d
+
+samples 3                    n=  77  paid on schedule 46.8%  and within 10% of amount 35.1%  payee paid again at all 79.2%  median date error 2.1d
+samples 4-5                  n=  74  paid on schedule 68.9%  and within 10% of amount 35.1%  payee paid again at all 82.4%  median date error 2.9d
+samples 6+                   n= 121  paid on schedule 76.9%  and within 10% of amount 48.8%  payee paid again at all 89.3%  median date error 1.2d
+
+$ predicted 2,846,954; $ where payment arrived on schedule within 10%: 593,097; $ predicted but no payment came: 1,347,314
+
+fixed amount                                 n=  56 safes=11  on schedule 73.2%  +within 10% 55.4%  +exact amount 53.6%
+
+### after (detector ignores transfers of one unit or less)
+predictions scored: 351 across 22 treasuries
+all                          n= 351  paid on schedule 68.7%  and within 10% of amount 44.4%  payee paid again at all 86.0%  median date error 1.9d
+confidence >= 0.75 (floor)   n=  11  paid on schedule 63.6%  and within 10% of amount 45.5%  payee paid again at all 81.8%  median date error 2.3d
+confidence 0.60-0.75         n= 179  paid on schedule 81.6%  and within 10% of amount 53.6%  payee paid again at all 89.9%  median date error 1.9d
+confidence 0.45-0.60         n= 112  paid on schedule 68.8%  and within 10% of amount 46.4%  payee paid again at all 86.6%  median date error 2.6d
+confidence < 0.45            n=  49  paid on schedule 22.4%  and within 10% of amount  6.1%  payee paid again at all 71.4%  median date error 1.7d
+
+samples 3                    n=  93  paid on schedule 49.5%  and within 10% of amount 36.6%  payee paid again at all 79.6%  median date error 2.6d
+samples 4-5                  n= 109  paid on schedule 75.2%  and within 10% of amount 45.9%  payee paid again at all 87.2%  median date error 2.9d
+samples 6+                   n= 149  paid on schedule 75.8%  and within 10% of amount 48.3%  payee paid again at all 89.3%  median date error 1.5d
+
+$ predicted 3,490,082; $ where payment arrived on schedule within 10%: 881,303; $ predicted but no payment came: 1,549,095
+
+fixed amount                                 n=  76 safes=11  on schedule 75.0%  +within 10% 60.5%  +exact amount 56.6%

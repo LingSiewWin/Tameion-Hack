@@ -1,0 +1,143 @@
+# Passkey principal, 2026-10-02: a browser passkey is the only key that can name a payee
+
+What this shows: a policy whose principal is `PasskeyPrincipal` (contracts/src/
+PasskeyPrincipal.sol). Its only key is a P-256 passkey created by Chrome through
+the real WebAuthn API (web/passkey/index.html), signed into a CDP virtual
+authenticator (ctap2, internal transport, user verification on). The relayer
+pays gas and holds no authority. Driven by scripts/prove_passkey.sh.
+
+Not shown here, and not claimed:
+- A physical device. The authenticator is Chrome's virtual one: the page,
+  the browser's WebAuthn encoding, the DER signature and Chrome's
+  clientDataJSON are real; Touch ID / Face ID is not. That run needs the
+  founder's hand.
+- Arbitrum Sepolia deployment. Treasury and agent hold 0 ETH there
+  (checked 2026-10-02). Section 4 does verify this exact signature with
+  Arbitrum Sepolia's P-256 precompile, read-only.
+
+Passkey (created in the page, 2026-10-01):
+  qx 0xe8d08e6f2293cb4c5f3d3a4432421642784991b679859e4dfdb306e817202dbb
+  qy 0x04b1ca27beba212d4f1a83567e31d293d4169507ed11b2ba7db4c6625d0c31aa
+
+## 1. Native policy (Arc-style), anvil :8546
+
+Owner 0x5FbDB2315678afecb367f032d93F642f64180aa3, policy 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512.
+setPayee(0x1111…, true), approval #0, challenge 0x9600b75bcf01f5db016e5443a0d6af2500d67c0f9b5410523e227d5d0e8e8efa
+
+before: attestedPayee=false nonce=0
+  executed with approval 0
+ONCHAIN EXECUTION COMPLETE & SUCCESSFUL.
+after: attestedPayee=true nonce=1
+--- replay the same approval:
+Error: script failed: BadPasskeySignature()
+--- same approval re-pointed at a different payee:
+Error: script failed: BadPasskeySignature()
+--- relayer (not the passkey) calls setPayee directly:
+reverted: custom error 0x789a70b0          (NotPrincipal())
+0x4444 attested: false
+
+## 2. ERC-20 policy (BudgetPolicyToken), anvil :8546, six-decimal test token
+
+$ scripts/prove_passkey.sh local deploy <qx> <qy>
+== chain 31337 ==
+  test token 0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9 (six decimals)
+== deploy: the passkey owns the policy ==
+  PasskeyPrincipal  0x5FC8d32690cc91D4c39d9d3abcBD16989F875707  (qx 0xe8d08e6f…, qy 0x04b1ca27…)
+  BudgetPolicyToken 0x0165878A594ca255338adfa4d48449f69242Eb8F
+  principal()       0x5FC8d32690cc91D4c39d9d3abcBD16989F875707
+  operator()        0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266  (the relayer: limits, not payees)
+  agent()           0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+  agentId()         0
+  usdc()            0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9
+  minted 20 test USDC to the policy
+
+$ scripts/prove_passkey.sh local challenge 0x1111111111111111111111111111111111111111
+approve: setPayee(0x1111111111111111111111111111111111111111, true) on 0x0165878A594ca255338adfa4d48449f69242Eb8F, approval #0
+challenge (paste into the page): 0x54f32e4c3fccc9d715f02c8d04d48f8c582784dffd55f04b5dc9459b08a7d32b
+
+(page) clientDataJSON {"type":"webauthn.get","challenge":"VPMuTD_MydcV8CyNBNSPjFgnhN_9VfBLXclFmwin0ys","origin":"http://localhost:8787","crossOrigin":false}
+       authenticatorData flags 0x05 (UP | UV), signCount 3
+
+$ scripts/prove_passkey.sh local submit runtime/passkey/local-auth.json
+== relay the passkey's approval ==
+  before: attestedPayee(0x1111111111111111111111111111111111111111) = false
+  after:  attestedPayee(0x1111111111111111111111111111111111111111) = true
+  tx 0xb26b426f77fba4a8e43bfb78c0a4716d4de96b9eff219f858de769cb9435265a
+  approvals used: 1
+
+$ scripts/prove_passkey.sh local refuse
+== every way around the passkey, against live state ==
+the same approval, submitted again
+  refused: BadPasskeySignature
+the same approval, pointed at a different payee
+  refused: BadPasskeySignature
+the relayer, which pays the gas, calls setPayee itself
+  refused: NotPrincipal
+the agent calls setPayee itself
+  refused: NotPrincipal
+the agent pays an address the passkey never approved
+  refused: PayeeNotAttested
+the relayer withdraws
+  refused: NotPrincipal
+  0x000000000000000000000000000000000000dEaD attested: false
+
+$ scripts/prove_passkey.sh local pay 0x1111… 1500000
+== the agent pays 1.500000 USDC to 0x1111111111111111111111111111111111111111 ==
+  attested: true · room: 2.000000 USDC
+  payee USDC 0.000000 -> 1.500000
+  policy USDC 18.500000 · spent in window 1.500000
+  tx 0x68abd2ce36be67390cd3754ddcddc8c5da1f49288dc564dfa9adc955f7437903
+
+## 3. Second approval, through the link, with Chrome's anti-template key
+
+Chrome sometimes appends a key to clientDataJSON precisely so that verifiers
+do not compare it against a template. The contract locates "type" and
+"challenge" by index (OpenZeppelin WebAuthn), so this must still verify.
+
+$ scripts/prove_passkey.sh local challenge 0x2222222222222222222222222222222222222222
+approve: setPayee(0x2222222222222222222222222222222222222222, true) on 0x0165878A594ca255338adfa4d48449f69242Eb8F, approval #1
+challenge: 0xe9ff4f33afc246070f6470a88bc58baccb47826f470f32b2f4ed3fb96fca5f3f
+open http://localhost:8787/?c=0xe9ff4f33…  (page pre-filled the challenge from the link)
+
+(page) clientDataJSON {"type":"webauthn.get","challenge":"6f9PM6_CRgcPZHCoi8WLrMtHgm9HDzKy9O0_uW_KXz8","origin":"http://localhost:8787","crossOrigin":false,"other_keys_can_be_added_here":"do not compare clientDataJSON against a template. See https://goo.gl/yabPex"}
+
+$ scripts/prove_passkey.sh local submit runtime/passkey/local-auth.json
+== relay the passkey's approval ==
+  before: attestedPayee(0x2222222222222222222222222222222222222222) = false
+  after:  attestedPayee(0x2222222222222222222222222222222222222222) = true
+  tx 0xedd16d318040101004fca785994650c23b1249d13c96a03dd1a08b6165b3ab56
+  approvals used: 2
+
+$ scripts/prove_passkey.sh local pay 0x2222… 500000
+== the agent pays 0.500000 USDC to 0x2222222222222222222222222222222222222222 ==
+  attested: true · room: 2.000000 USDC
+  payee USDC 0.000000 -> 0.500000
+  policy USDC 18.000000 · spent in window 2.000000
+  tx 0x0c005b23d56f2a99c1bd6a91b09fa6d2d182d8574476d088d3ae7967040092ff
+
+$ scripts/prove_passkey.sh local pay 0x2222… 2500000
+== the agent pays 2.500000 USDC to 0x2222222222222222222222222222222222222222 ==
+  attested: true · room: 2.000000 USDC
+  refused: OverPerActionCap(2500000 [2.5e6], 2000000 [2e6])
+
+## 4. The same signature, verified by Arbitrum Sepolia's P-256 precompile
+
+RIP-7212 precompile at 0x100 on chain 421614, eth_call, read-only. Input is
+sha256(authenticatorData || sha256(clientDataJSON)) || r || s || qx || qy for
+the section-1 approval.
+
+valid sig   -> 0x0000000000000000000000000000000000000000000000000000000000000001
+flipped bit -> 0x                                   (empty: not valid)
+gas for valid: 30811                                (whole call, incl. 21000 base)
+
+## 5. Circle USDC on Arbitrum Sepolia, read from chain
+
+0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d (developers.circle.com/stablecoins/usdc-contract-addresses)
+  chain 421614 · symbol "USDC" · name "USD Coin" · decimals 6 · code 1798 bytes
+
+## 6. Contract suites after the split into BudgetPolicyBase / BudgetPolicy / BudgetPolicyToken
+
+Ran 4 test suites: 67 tests passed, 0 failed (BudgetPolicy 41, PasskeyPrincipal 9,
+BudgetPolicyToken 14, BudgetPolicyInvariant 3). forge lint src: no findings.
+scripts/acceptance.sh against the rebuilt bytecode: 38 passed, 0 failed.
+Native BudgetPolicy ABI: unchanged by the split (48 entries, none added or removed).

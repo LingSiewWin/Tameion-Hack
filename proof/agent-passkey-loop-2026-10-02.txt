@@ -1,0 +1,201 @@
+# The agent asks the passkey, and stops paying itself forward — local chain, 2026-10-02
+
+Anvil :8546, chain 31337. A `BudgetPolicyToken` whose principal is a
+`PasskeyPrincipal` (Chrome passkey, virtual authenticator, UV on); a six-decimal
+test token; the agent is anvil key 1, the relayer anvil key 0, and the owner's
+old wallet anvil key 2. Driven by `scripts/prove_passkey.sh local …`; the agent
+is `operator/examples/run_arc.rs` (rule-based reasoner, no model). Final build:
+Rust 198/198, acceptance 38/38.
+
+What it shows, in order:
+1. The agent learns two monthly bills from the owner's OLD WALLET
+   (`Config::also_history`), pays the one the passkey attested, and for the
+   one it never attested hands over a passkey approval link. That link's
+   challenge, computed in Rust (`arc::passkey_challenge`), equals the one the
+   contract computes (`challengeFor`).
+2. One approval in the browser; the next pass pays the new payee.
+3. An immediate re-run pays nothing; a month later, exactly one cycle of each,
+   "due in 1.0 days", on the owner's schedule; the re-run after that, nothing.
+
+Point 3 is the fix of a defect this loop found. On the build before it, pass 2
+paid 0x1111 a second time ("due in 30.0 days"): the agent's own payment had
+become the newest data point, the next cycle was projected from the day the
+agent paid, it landed inside the 30-day horizon, and it was paid at once -- and
+would have been again on every pass, bounded only by the daily cap. That pass,
+on the old build:
+
+  balance 18.500000 USDC · 2 obligations · 2 settled · 0 escalated · 0 blocked · 0 already paid
+    0x3333333333333333333333333333333333333333 1.200000 USDC  0xca2305393ab126e964ea2e1d8ce2d0a669069907ea62888a4b98125228180664
+    0x1111111111111111111111111111111111111111 1.500000 USDC  0x316d7c75808bd146fb5540371eedb1c520887e3511fb3d02edb4006455e7f2fe
+  [0003] DECISION    ALLOW for 0x1111… ranked 2 of 2: due in 30.0 days, … has been paid 7 times every 30.0 days
+
+The fix (operator/src/lib.rs): the policy's `Paid` events are read
+(`ArcClient::agent_payments`) and those transactions are not evidence; each
+obligation steps past cycles already `executed` on chain
+(`step_past_settled_cycles`); and a bill is paid only once it falls due within
+`pay_lead` (3 days), capped at half its interval (`within_pay_lead`, 4 tests).
+Everything below is that build, from a fresh deployment.
+
+Later on 10-02 the cap became a tenth of the interval (the fork rehearsal
+showed half was too generous; see arbitrum-fork-rehearsal-2026-10-02.txt). On
+this loop's monthly cadence both caps give the same 3-day lead -- min(3 d,
+15 d) then, min(3 d, 3 d) now -- so every decision below is unchanged.
+
+## deploy
+  PasskeyPrincipal  0x09635F643e140090A9A8Dcd712eD6285858ceBef  (qx 0xe8d08e6f…, qy 0x04b1ca27…)
+  BudgetPolicyToken 0xc5a5C42992dECbae36851359345FE25997F5C42d
+  principal()       0x09635F643e140090A9A8Dcd712eD6285858ceBef
+  agent()           0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+  usdc()            0x7a2088a1bFc9d81c55368AE168C2C02570cB814F
+  MemoryAnchor      0x67d269191c92Caf3cD7723F116c85e6E9bf55933
+  minted 20 test USDC to the policy
+
+## approval #0: attest the subscription 0x1111, relayed
+  after:  attestedPayee(0x1111111111111111111111111111111111111111) = true
+  tx 0x86063b57d57ebad7a35a9e6c5f14c7be7ade912cc6d849dcd5c0b2558d35e55e
+
+## history
+== six months of bills from the owner's old wallet 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC ==
+  Monthly, on block time fast-forwarded 30 days at a time. 0x1111111111111111111111111111111111111111 is attested on
+  the policy; 0x3333333333333333333333333333333333333333 never was -- the owner paid it by hand.
+  month 1  2027-10-24  1.500000 -> 0x1111…  1.200000 -> 0x3333…
+  month 2  2027-11-23  1.500000 -> 0x1111…  1.200000 -> 0x3333…
+  month 3  2027-12-23  1.500000 -> 0x1111…  1.200000 -> 0x3333…
+  month 4  2028-01-22  1.500000 -> 0x1111…  1.200000 -> 0x3333…
+  month 5  2028-02-21  1.500000 -> 0x1111…  1.200000 -> 0x3333…
+  month 6  2028-03-22  1.500000 -> 0x1111…  1.200000 -> 0x3333…
+  chain time now 2028-04-20 21:02 UTC, a day before month 7
+
+## pass 1
+跑一轮
+  balance 20.000000 USDC · 2 obligations · 1 settled · 1 escalated · 0 blocked · 0 already paid
+  log root   0x8e0ad37fbe4bccf3259625b01716acd34827d337e2a450ecbfb5c45f51028c46
+  anchored   0xa18bb74bba84444d01170fc0dc8ded2e5fcf6463d7a3bbb0483c7fb78bbbbe36
+
+  付掉的:
+    0x1111111111111111111111111111111111111111 1.500000 USDC  0x51161f921de8318d8ec8a5cb6bdfb518f4432f1b660c8f7d6573c487a1f053ab
+
+  交给人的:
+    0x3333333333333333333333333333333333333333 1.200000 USDC
+        [review] payee-attested           0x3333333333333333333333333333333333333333 is not attested on chain, so the contract would refuse it. The principal can attest it or settle by hand
+
+等主人批准的
+  principal  0x09635F643e140090A9A8Dcd712eD6285858ceBef (passkey)
+  #1 allow the agent to pay 0x3333333333333333333333333333333333333333 from now on
+      http://localhost:8787/?c=0x77c733dea39c9449e4ddfe6a5de5b3d97e46d14b24319f923b4a4ba6abc56192
+
+记录
+[0000] OBSERVATION Holding 20.000000 USDC. Read 14 transfers (0 of them my own payments, which are not evidence) and recovered 2 recurring obligations, of which 2 fall due within 30.0 days totalling 2.700000 USDC; 2 within 3.0 days (or half their interval), which is when I pay.
+[0001] DECISION    ALLOW for 0x1111111111111111111111111111111111111111. ranked 1 of 2: due in 1.0 days, confidence 0.85, 1.500000 USDC covered Basis: 0x1111111111111111111111111111111111111111 has been paid 6 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.85).
+[0002] SETTLEMENT  Paid 1.500000 USDC to 0x1111111111111111111111111111111111111111, settled in 0x51161f921de8318d8ec8a5cb6bdfb518f4432f1b660c8f7d6573c487a1f053ab.
+[0003] DECISION    REVIEW for 0x3333333333333333333333333333333333333333. ranked 2 of 2: due in 1.0 days, confidence 0.85, 1.200000 USDC covered Basis: 0x3333333333333333333333333333333333333333 has been paid 6 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.85).
+[0004] ESCALATION  Stopping and asking a human: payee-attested: 0x3333333333333333333333333333333333333333 is not attested on chain, so the contract would refuse it. The principal can attest it or settle by hand. This is outside the authority delegated to me, so I will not proceed on my own. If unanswered for 7.0 days I will report it as overdue.
+
+## the contract's own challenge for the same approval
+approve: setPayee(0x3333333333333333333333333333333333333333, true) on 0xc5a5C42992dECbae36851359345FE25997F5C42d, approval #1
+challenge: 0x77c733dea39c9449e4ddfe6a5de5b3d97e46d14b24319f923b4a4ba6abc56192
+   (= the agent's link above)
+
+## approval #1 in the browser, relayed
+  after:  attestedPayee(0x3333333333333333333333333333333333333333) = true
+  tx 0x2ea93a9ad218d0133d5d5819575de878e4fe7e20b3e1fffbed1e80af2f4bd4a5
+
+## pass 2
+跑一轮
+  balance 18.500000 USDC · 2 obligations · 1 settled · 0 escalated · 0 blocked · 0 already paid
+  log root   0x5a0ee4d909ce32a8f8c402f96849e989f7300dd2832172ca86e7476f807e370a
+  anchored   0xabcd36d0da3fa1d81aa50cb1e4b6e6a0e07173838945a1b1db07fef3b5ff4372
+
+  付掉的:
+    0x3333333333333333333333333333333333333333 1.200000 USDC  0x218b23a55fd9187bda07f5511078e36e3c00d3ff0cf9b1fb109e6f349c0cdc8c
+
+记录
+[0000] OBSERVATION Holding 18.500000 USDC. Read 15 transfers (1 of them my own payments, which are not evidence) and recovered 2 recurring obligations, of which 1 fall due within 30.0 days totalling 1.200000 USDC; 1 within 3.0 days (or half their interval), which is when I pay.
+[0001] DECISION    ALLOW for 0x3333333333333333333333333333333333333333. ranked 1 of 1: due in 1.0 days, confidence 0.85, 1.200000 USDC covered Basis: 0x3333333333333333333333333333333333333333 has been paid 6 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.85).
+[0002] SETTLEMENT  Paid 1.200000 USDC to 0x3333333333333333333333333333333333333333, settled in 0x218b23a55fd9187bda07f5511078e36e3c00d3ff0cf9b1fb109e6f349c0cdc8c.
+
+## pass 3
+跑一轮
+  balance 17.300000 USDC · 2 obligations · 0 settled · 0 escalated · 0 blocked · 0 already paid
+  log root   0x1c906244705ab74078c84448660b25785c776d5983682db7bae33fc14112da0f
+  anchored   0xd6a03c914c7a02722ab6621496b8a5e43f5d93946cde88425ed9e549f22015a6
+
+记录
+[0000] OBSERVATION Holding 17.300000 USDC. Read 16 transfers (2 of them my own payments, which are not evidence) and recovered 2 recurring obligations, of which 0 fall due within 30.0 days totalling 0.000000 USDC; 0 within 3.0 days (or half their interval), which is when I pay.
+
+## 30 days later (evm_increaseTime 2592000)
+
+## pass 4
+跑一轮
+  balance 17.300000 USDC · 2 obligations · 2 settled · 0 escalated · 0 blocked · 0 already paid
+  log root   0x272395f55acc4652ad6655c7ede33ea572fc88533f713b647ad5f14c66bc194e
+  anchored   0x602267fb3f221be8e806d21479295e721bb1564c62314933ef56c9e0631d6e4f
+
+  付掉的:
+    0x1111111111111111111111111111111111111111 1.500000 USDC  0xf37535e5e150ab0d7645012afbb154b94704b18a1c95ca091eacdc8e41540c06
+    0x3333333333333333333333333333333333333333 1.200000 USDC  0x0bbc05b505973e2b012c729d71079ea65321b19699e9848de803ea431c826af4
+
+记录
+[0000] OBSERVATION Holding 17.300000 USDC. Read 16 transfers (2 of them my own payments, which are not evidence) and recovered 2 recurring obligations, of which 2 fall due within 30.0 days totalling 2.700000 USDC; 2 within 3.0 days (or half their interval), which is when I pay.
+[0001] DECISION    ALLOW for 0x1111111111111111111111111111111111111111. ranked 1 of 2: due in 1.0 days, confidence 0.85, 1.500000 USDC covered Basis: 0x1111111111111111111111111111111111111111 has been paid 6 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.85).
+[0002] SETTLEMENT  Paid 1.500000 USDC to 0x1111111111111111111111111111111111111111, settled in 0xf37535e5e150ab0d7645012afbb154b94704b18a1c95ca091eacdc8e41540c06.
+[0003] DECISION    ALLOW for 0x3333333333333333333333333333333333333333. ranked 2 of 2: due in 1.0 days, confidence 0.85, 1.200000 USDC covered Basis: 0x3333333333333333333333333333333333333333 has been paid 6 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.85).
+[0004] SETTLEMENT  Paid 1.200000 USDC to 0x3333333333333333333333333333333333333333, settled in 0x0bbc05b505973e2b012c729d71079ea65321b19699e9848de803ea431c826af4.
+
+## pass 5
+跑一轮
+  balance 14.600000 USDC · 2 obligations · 0 settled · 0 escalated · 0 blocked · 0 already paid
+  log root   0x12f4cb9405201b527e7541ccd2ed919e88e6dde57aad1b5aeffd9f440ce51c26
+  anchored   0x07adc8bd52550b9919ba2eb23032e102c919d86e8fce4d9f667d257be67009cd
+
+记录
+[0000] OBSERVATION Holding 14.600000 USDC. Read 18 transfers (4 of them my own payments, which are not evidence) and recovered 2 recurring obligations, of which 0 fall due within 30.0 days totalling 0.000000 USDC; 0 within 3.0 days (or half their interval), which is when I pay.
+
+## Onboarding: a fresh policy with no payee approved, one tap for both (contract with setPayees)
+
+  PasskeyPrincipal  0x1613beB3B2C4f22Ee086B2b38C1476A3cE7f78E8  (qx 0xe8d08e6f…, qy 0x04b1ca27…)
+  BudgetPolicyToken 0x851356ae760d987E095750cCeb3bC6014560891C
+
+### pass 1
+跑一轮
+  balance 20.000000 USDC · 2 obligations · 0 settled · 2 escalated · 0 blocked · 0 already paid
+  log root   0xb2121d2b86a94122f5ee9f367858062dbf378e95055e1f0403c2e35a265d82d7
+  anchored   0x2390bcdb21bd39c8bead96315b7a50bee32d9425bf6984bd473ca748798e62a7
+
+  交给人的:
+    0x1111111111111111111111111111111111111111 1.500000 USDC
+        [review] payee-attested           0x1111111111111111111111111111111111111111 is not attested on chain, so the contract would refuse it. The principal can attest it or settle by hand
+    0x3333333333333333333333333333333333333333 1.200000 USDC
+        [review] payee-attested           0x3333333333333333333333333333333333333333 is not attested on chain, so the contract would refuse it. The principal can attest it or settle by hand
+
+等主人批准的
+  0x1111111111111111111111111111111111111111
+  0x3333333333333333333333333333333333333333
+  principal  0x1613beB3B2C4f22Ee086B2b38C1476A3cE7f78E8 (passkey), approval #0
+  allow the agent to pay these 2 payees from now on
+  http://localhost:8787/?c=0x8278912013449540498663f98f66e049f088feeb4840504753a2abbfec8b0812
+  calldata   0x48a5650300000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000011111111111111111111111111111111111111110000000000000000000000003333333333333333333333333333333333333333
+
+
+### the contract's challenge for the printed calldata
+approve: allow 0x1111111111111111111111111111111111111111,0x3333333333333333333333333333333333333333 on 0x851356ae760d987E095750cCeb3bC6014560891C, approval #0
+challenge: 0x8278912013449540498663f98f66e049f088feeb4840504753a2abbfec8b0812
+
+### one approval in the browser, relayed
+  before: attestedPayee(0x1111111111111111111111111111111111111111) = false
+  before: attestedPayee(0x3333333333333333333333333333333333333333) = false
+  after:  attestedPayee(0x1111111111111111111111111111111111111111) = true
+  after:  attestedPayee(0x3333333333333333333333333333333333333333) = true
+  tx 0x49e8a902de262dabd01a316054f8faef45e170599e615cfbc1cd245008a55d4d
+  approvals used: 1
+
+### pass 2
+跑一轮
+  balance 20.000000 USDC · 2 obligations · 2 settled · 0 escalated · 0 blocked · 0 already paid
+  log root   0x81ceb547db694e80b52e862d9fca2508739406e269226f38543660b9c672338a
+  anchored   0x78b52fc2d952bcc79bd995550f598408958e653814b1f2030ce2477d67f73401
+
+  付掉的:
+    0x1111111111111111111111111111111111111111 1.500000 USDC  0xc9222dbc6726662cdcf92419c206960d53f49bfa27380b10ab9df57ea651ff04
+    0x3333333333333333333333333333333333333333 1.200000 USDC  0xf444937886582e04eda9451e26348fca7a98b2600b2090faf15bf04a06bb029c
+

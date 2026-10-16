@@ -1,0 +1,166 @@
+# Arbitrum Sepolia, REHEARSED ON A FORK, 2026-10-02
+
+NOT a live deployment. `anvil --fork-url https://sepolia-rollup.arbitrum.io/rpc`
+(fork block 314,713,619, chain id 421614). What is real: Circle's USDC contract
+code and state (0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d), the ERC-8004
+IdentityRegistry, the treasury and agent addresses, the scripts, the page and a
+real Chrome WebAuthn signature. What is not: the ETH (anvil_setBalance), the
+10 USDC (impersonated transfer from holder 0x6ED0C4AD…cd36), every tx hash and
+address below, the agent id (255), and P-256 verification, which on anvil runs
+OpenZeppelin's Solidity fallback -- the live chain's RIP-7212 precompile was
+verified separately against this page's signatures (passkey-local-2026-10-02.txt §4).
+
+Purpose: every command the founder will run on the live chain, in order, with
+`RPC_URL` pointed at the fork, so the only steps left untried are funding and a
+real Touch ID / Face ID.
+
+## 1. scripts/register_agent.sh arbsep
+registering on arbsep as 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25 ...
+agent 255 on arbsep, owned by 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+
+## 2. scripts/prove_passkey.sh arbsep deploy <qx> <qy>
+== chain 421614 ==
+  ERC-8004 agent 255, owned by the treasury
+== deploy: the passkey owns the policy ==
+  PasskeyPrincipal  0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB  (qx 0xe8d08e6f…, qy 0x04b1ca27…)
+  BudgetPolicyToken 0xbA1C878a1adeB0cf52C533dA15Ab403c742e80Ca
+  operator()        0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25  (the relayer: limits, not payees)
+  agent()           0x80c195BE650FBfD55a9ffe059f397Db39f2fe881
+  agentId()         255
+  usdc()            0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d
+  (policy funded with 3 USDC from the treasury)
+
+## 3. challenge 0x1111… → page → submit, then refuse
+  after:  attestedPayee(0x1111111111111111111111111111111111111111) = true
+the same approval, submitted again                      refused: BadPasskeySignature
+the same approval, pointed at a different payee          refused: BadPasskeySignature
+the relayer, which pays the gas, calls setPayee itself   refused: NotPrincipal
+the agent calls setPayee itself                          refused: NotPrincipal
+the agent pays an address the passkey never approved     refused: PayeeNotAttested
+the relayer withdraws                                    refused: NotPrincipal
+
+## 4. scripts/prove_passkey.sh arbsep history   (real time, 60 s apart, from the treasury wallet)
+== 6 rounds of bills from 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25, 60s apart ==
+  round 1  0.200000 -> 0x1111… 0x31306385…   0.150000 -> 0x3333… 0x349d9fc3…
+  round 2  0.200000 -> 0x1111… 0x9bd0fb24…   0.150000 -> 0x3333… 0x9a1b6c78…
+  round 3  0.200000 -> 0x1111… 0xd7fa5fe3…   0.150000 -> 0x3333… 0xa3f4002f…
+  round 4  0.200000 -> 0x1111… 0xd40f671e…   0.150000 -> 0x3333… 0x44df2111…
+  round 5  0.200000 -> 0x1111… 0x6b78b929…   0.150000 -> 0x3333… 0xd5bb2a25…
+  round 6  0.200000 -> 0x1111… 0x471f0803…   0.150000 -> 0x3333… 0x69a1e655…
+
+## 5. scripts/prove_passkey.sh arbsep run
+First attempt paid nothing, correctly for its inputs: an idle anvil fork mines
+no blocks, so the chain clock stood at the last history payment and the next
+bill was exactly one interval out. A live chain produces blocks continuously.
+One `evm_mine`, then:
+
+跑一轮
+  balance 3.000000 USDC · 2 obligations · 1 settled · 1 escalated · 0 blocked · 0 already paid
+  log root   0x90ce4e8553ad713c383e95d75aee536a0ce40a7d203b72f5421fe3b81006425b
+  anchored   0x872846d0ad2726e68129d01450615e857cc8964cbd94ff92f5cbee02f1ad4fe6
+
+  付掉的:
+    0x1111111111111111111111111111111111111111 0.200000 USDC  0x82858e000def1f3eb74a48ed0927978b1b9dd2eb0d294a077691595931923d78
+
+  交给人的:
+    0x3333333333333333333333333333333333333333 0.150000 USDC
+        [review] payee-attested           0x3333333333333333333333333333333333333333 is not attested on chain, so the contract would refuse it. The principal can attest it or settle by hand
+
+等主人批准的
+  principal  0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB (passkey)
+  #1 allow the agent to pay 0x3333333333333333333333333333333333333333 from now on
+      http://localhost:8787/?c=0xbe2f5d1060914483827804d5b984572f28cb7bc9c1b852021d9aea2711887774
+
+记录
+[0000] OBSERVATION Holding 3.000000 USDC. Read 12 transfers (0 of them my own payments, which are not evidence) and recovered 2 recurring obligations, of which 2 fall due within 30.0 days totalling 0.350000 USDC; 2 within one billing interval, which is when I act.
+[0001] DECISION    ALLOW for 0x1111111111111111111111111111111111111111. Both are due now and the balance covers both; this one ranks first only on marginally higher confidence (0.85) and perfectly regular timing, with no service-withdrawal signal distinguishing them. Basis: 0x1111111111111111111111
+[0002] SETTLEMENT  Paid 0.200000 USDC to 0x1111111111111111111111111111111111111111, settled in 0x82858e000def1f3eb74a48ed0927978b1b9dd2eb0d294a077691595931923d78.
+[0003] DECISION    REVIEW for 0x3333333333333333333333333333333333333333. Equally due and equally well-evidenced at 0.83 confidence with 1.4% timing drift; placed second on numbers alone, as no qualitative signal separates these two counterparties. Basis: 0x3333333333333333333333333333333333333333 h
+[0004] ESCALATION  Stopping and asking a human: payee-attested: 0x3333333333333333333333333333333333333333 is not attested on chain, so the contract would refuse it. The principal can attest it or settle by hand. This is outside the authority delegated to me, so I will not proceed on my own. If unan
+
+## 6. the link → page → submit; the contract's challenge matched the agent's (0xbe2f5d10…)
+  after:  attestedPayee(0x3333333333333333333333333333333333333333) = true
+
+## 7. next pass (a minute stands for a month; the next cycle of 0x1111 had also come due)
+跑一轮
+  balance 2.800000 USDC · 2 obligations · 2 settled · 0 escalated · 0 blocked · 0 already paid
+  log root   0xb5286297f36e86369cf8af7301b1d1b8f738a952579494a888900b5d436a9a40
+  anchored   0x52f8af0d847e0b5de263120ecc05d9c4aea37b8cca106dce8dd380af89ba52ec
+
+  付掉的:
+    0x3333333333333333333333333333333333333333 0.150000 USDC  0x80d7664b57dd7334778abcadbbc78a5503916181a2e9fbbe278534d2dc4eed71
+    0x1111111111111111111111111111111111111111 0.200000 USDC  0x2905829f033bb9311757ddc4940bcb3401e51dc3ac73f8d09f558df2f1719149
+
+记录
+[0000] OBSERVATION Holding 2.800000 USDC. Read 13 transfers (1 of them my own payments, which are not evidence) and recovered 2 recurring obligations, of which 2 fall due within 30.0 days totalling 0.350000 USDC; 2 within one billing interval, which is when I act.
+[0001] DECISION    ALLOW for 0x3333333333333333333333333333333333333333. Due slightly earlier than the other and already at or just past its due point, so it is the more overdue of two otherwise equivalent regular subscriptions. Basis: 0x3333333333333333333333333333333333333333 has been paid 6 times
+[0002] SETTLEMENT  Paid 0.150000 USDC to 0x3333333333333333333333333333333333333333, settled in 0x80d7664b57dd7334778abcadbbc78a5503916181a2e9fbbe278534d2dc4eed71.
+[0003] DECISION    ALLOW for 0x1111111111111111111111111111111111111111. Stable six-sample subscription due now with no late-payment or service-withdrawal signal to distinguish it, so it ranks second only on the marginally later due time. Basis: 0x1111111111111111111111111111111111111111 has been pa
+[0004] SETTLEMENT  Paid 0.200000 USDC to 0x1111111111111111111111111111111111111111, settled in 0x2905829f033bb9311757ddc4940bcb3401e51dc3ac73f8d09f558df2f1719149.
+
+---
+
+# Second fork rehearsal (same fork, later on 10-02): the runbook as written in RESUME.md
+
+Fresh `BudgetPolicyToken` with `setPayees` (PasskeyPrincipal
+0x9e757e6E5323d33aEEad8b914dc9bb3fF0D456A6, policy
+0xE3225DC2eB584c17419118CA918308DaE6C031a7, agent 255), no payee approved.
+
+## history (6 rounds, 60 s apart, from the treasury)
+== 6 rounds of bills from 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25, 60s apart ==
+  round 1  0.200000 -> 0x1111… 0xc0873cd3…   0.150000 -> 0x3333… 0x54ac30e6…
+  round 2  0.200000 -> 0x1111… 0xbbde9cf4…   0.150000 -> 0x3333… 0xb18662d3…
+  round 3  0.200000 -> 0x1111… 0x8c39e8de…   0.150000 -> 0x3333… 0xa5218959…
+  round 4  0.200000 -> 0x1111… 0x99291569…   0.150000 -> 0x3333… 0x83099b1f…
+  round 5  0.200000 -> 0x1111… 0x282be289…   0.150000 -> 0x3333… 0xc09b6874…
+  round 6  0.200000 -> 0x1111… 0x592cfec2…   0.150000 -> 0x3333… 0x7326aa20…
+
+## run: nothing due yet, but ONE link for both payees (onboarding)
+跑一轮
+  balance 3.000000 USDC · 2 obligations · 0 settled · 0 escalated · 0 blocked · 0 already paid
+  log root   0x1fddfc70ab4e91911b01e5afe854ae332eb555d4ac896d442d36fb9acbeadd51
+  anchored   0x0b3d504ccefbc4b08e531de31669c4ba75c0e5373094d4f2e997e4937cf1d9e6
+
+等主人批准的
+  0x1111111111111111111111111111111111111111
+  0x3333333333333333333333333333333333333333
+  principal  0x9e757e6E5323d33aEEad8b914dc9bb3fF0D456A6 (passkey), approval #0
+  allow the agent to pay these 2 payees from now on
+  http://localhost:8787/?c=0xc6ffcf27012cb811e4afcf9fa746de71a045624ef042eff46f1d2ced431ab36d
+  calldata   0x48a56503000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000
+
+
+## challenge from the printed calldata; relay
+approve: allow 0x1111111111111111111111111111111111111111,0x3333333333333333333333333333333333333333 on 0xE3225DC2eB584c17419118CA918308DaE6C031a7, approval #0
+challenge: 0xc6ffcf27012cb811e4afcf9fa746de71a045624ef042eff46f1d2ced431ab36d
+  before: attestedPayee(0x1111111111111111111111111111111111111111) = false
+  before: attestedPayee(0x3333333333333333333333333333333333333333) = false
+  after:  attestedPayee(0x1111111111111111111111111111111111111111) = true
+  after:  attestedPayee(0x3333333333333333333333333333333333333333) = true
+  tx 0x487a0cc22e13644b9e8c566511f2d4c360191e6a02dc344464a6a096def1a40c
+  approvals used: 1
+
+## refuse (after the batch)
+  refused: BadPasskeySignature
+  refused: BadPasskeySignature
+  refused: NotPrincipal
+  refused: NotPrincipal
+  refused: PayeeNotAttested
+  refused: NotPrincipal
+  0x000000000000000000000000000000000000dEaD attested: false
+
+## passes, and a defect they exposed
+
+The first paying pass ran 40 s after its cycle was due and paid it (cycle 748,
+at 788). The next pass, 8 s later, paid cycle 808 -- about 15 s early. Under the
+then cap (half the interval) that was allowed; on a monthly bill the same
+proportion is fifteen days early. The cap is now a tenth of the interval (the
+proportion three days is of a month): `within_pay_lead`, 5 tests, Rust 200/200,
+acceptance 38/38. Re-run on the same fork with the fixed build, owner's
+schedule 748, 808, 868, 928, 988, …:
+
+pass 1: chain now 1790878934 · 2 settled · paid at 1790878947 (cycle 868, overdue)
+pass 2: chain now 1790878947 · 2 settled · paid at 1790878953 (cycle 928, overdue)
+pass 3: chain now 1790878954 · 0 settled  (cycle 988 is 34 s away; lead is 6 s)
+
+Caught up one cycle per pass, then stopped; nothing paid ahead of its lead.

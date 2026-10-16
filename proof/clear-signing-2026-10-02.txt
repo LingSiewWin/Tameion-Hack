@@ -1,0 +1,77 @@
+# Clear signing: the page shows the call, computes its challenge, signs only that — 2026-10-02
+
+Before: web/passkey/index.html signed whatever 32-byte challenge it was given.
+A relayer -- the party that holds no authority by design -- could hand the
+owner a challenge for "allow 0xAttacker" and the owner would approve a hash
+they could not read. Now a link carries the call (?owner=&chain=&n=&to=&data=),
+the page decodes it into words, computes PasskeyPrincipal.challengeFor itself
+(web/passkey/call.js: Keccak-256 + ABI encoding, no dependencies), and signs
+that. A bare challenge is labelled a blind approval; an unrecognised call
+disables the button.
+
+## The page's arithmetic, pinned (node --test web/passkey/call.test.mjs)
+✔ keccak256 matches published vectors (1.543833ms)
+✔ keccak256 is right at the padding edge (135, 136, 137 bytes) (0.870667ms)
+✔ function selectors match cast sig (0.584084ms)
+✔ challengeFor matches what the deployed contract computed (0.813125ms)
+✔ a batch: the contract's challenge, and the words shown for it (1.646916ms)
+✔ settlement and withdrawal are described with their amounts (0.36275ms)
+✔ anything unrecognised is unknown, never described (1.241292ms)
+ℹ pass 7
+ℹ fail 0
+
+The challenge vectors are ones the deployed contract produced and then
+accepted signatures for (passkey-local and agent-passkey-loop proofs).
+
+## End to end, local chain, fresh deployment, nothing approved
+  PasskeyPrincipal  0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf  (qx 0xe8d08e6f…, qy 0x04b1ca27…)
+  BudgetPolicyToken 0x0E801D84Fa97b50751Dbf25036d067dCf18858bF
+
+### the agent's pass prints a link carrying the call
+等主人批准的
+  0x1111111111111111111111111111111111111111
+  0x3333333333333333333333333333333333333333
+  principal  0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf (passkey), approval #0
+  allow the agent to pay these 2 payees from now on
+  http://localhost:8787/?owner=0x99bba657f2bbc93c02d617f8ba121cb8fc104acf&chain=31337&n=0&to=0x0e801d84fa97b50751dbf25036d067dcf18858bf&data=0x48a565030000000000000000000000000000000000000000000000000
+  signs      0x521f09292286058357ff670c200d8aa4e09e9e0de924fc080a0617ba29f77f7e
+  calldata   0x48a56503000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000
+
+### what the page showed for that link (Chrome, read from the DOM)
+  Allow the agent to pay:
+    0x1111111111111111111111111111111111111111
+    0x3333333333333333333333333333333333333333
+  On a local test chain. Your agent's budget limits still apply to every payment.
+  policy 0x0e801d84… · owner 0x99bba657… · approval #0 · signs 0x521f09292286058357ff670c200d8aa4e09e9e0de924fc080a0617ba29f77f7e
+  (= the agent's "signs" line, computed independently in the page)
+
+### relayed; next pass
+  after:  attestedPayee(0x1111111111111111111111111111111111111111) = true
+  after:  attestedPayee(0x3333333333333333333333333333333333333333) = true
+  tx 0x92bd75fd81b2fe74df52d9dc8c971dab24a159386644b3d6d9d90c110b6ca09d
+  balance 20.000000 USDC · 2 obligations · 2 settled · 0 escalated · 0 blocked · 0 already paid
+    0x1111111111111111111111111111111111111111 1.500000 USDC  0xe398107f8a0b435b215126e466c86fcd40cbd2eafd1a9624d449f064d301adbf
+    0x3333333333333333333333333333333333333333 1.200000 USDC  0x536f558af0be36a82e51898b3b988f76b84fdc3f5af9bc819619345339a08e3e
+
+## A disguised call
+A link whose data is an ERC-20 transfer(0x4444…, 100 USDC) (selector 0xa9059cbb):
+  "This link asks you to approve a call this page does not recognise (0xa9059cbb). Do not approve it."
+  approve button disabled; section styled as a warning.
+
+## Found on the way
+call.js first declared its helpers at top level; loaded as a classic script
+next to the page's own, `const hex` collided ("Identifier 'hex' has already
+been declared") and the page's whole script stopped -- the clear-signing block
+never ran and the page silently fell back to the blind input. call.js now
+lives in one function scope and exports only TameionCall.
+
+## Later: the page remembers which policy each owner controls (trust on first use)
+
+Chrome, Arc testnet owner 0x760d06df…, setPayee link, read from the DOM:
+- nothing stored:           "… First approval for this owner on this device: check the policy address below."
+- after approving for 0x9b07bd5c… (the real policy), same link: no warning.
+- same owner, link to 0x…bad00:
+    "Careful: this owner has only ever approved calls to 0x9b07bd5c91db55e6a692eb2431d8ede25e570439
+     on this device. This link targets 0x00000000000000000000000000000000000bad00. Do not approve
+     unless you moved your budget there yourself."   (section styled as a warning)
+- storage holding "{not json": treated as empty -- the page still shows the call and the first-approval note.

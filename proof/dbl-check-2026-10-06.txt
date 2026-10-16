@@ -1,0 +1,93 @@
+PART A - closed forms vs brute force (paper's 5-asset example)
+
+  ok  A1 Prop 1 conditional drift, t=0.1                             max err 2.2e-12
+  ok  A1 Prop 1 conditional drift, t=0.5                             max err 1.1e-11
+  ok  A1 Prop 1 conditional drift, t=0.9                             max err 8.6e-12
+  ok  A2 Prop 4 bridge covariance, t=0.3                             max err 3.5e-18
+  ok  A2 Prop 4 bridge covariance, t=0.8                             max err 2.8e-17
+
+  hitting times T~_i (years; T = 1). Larger = view pulls weaker:
+    alpha=0.1  A:   3.96  B:   1.40  C:   1.13  D:  45.10  F:   1.17
+    alpha=0.4  A:   5.04  B:   1.78  C:   1.44  D:  57.41  F:   1.49
+    alpha=0.8  A:   6.48  B:   2.29  C:   1.86  D:  73.81  F:   1.91
+    alpha=2.0  A:  10.80  B:   3.82  C:   3.09  D: 123.01  F:   3.18
+  ok  A3 Prop 5 (T~ > T, increasing in Omega) for alpha 0.1..2.0
+
+  ok  A3 Example 1 one-asset hitting time                            max err 2.2e-16
+  ok  A4 Riccati eq.30 residual of closed form, t=0.1                max err 1.5e-09
+  ok  A4 A(t) symmetric, t=0.1                                       max err 1.8e-15
+  ok  A4 A(t) = alternative form (p.21), t=0.1                       max err 3.6e-15
+  ok  A4 Riccati eq.30 residual of closed form, t=0.5                max err 5.6e-10
+  ok  A4 A(t) symmetric, t=0.5                                       max err 1.8e-15
+  ok  A4 A(t) = alternative form (p.21), t=0.5                       max err 2.2e-15
+  ok  A4 Riccati eq.30 residual of closed form, t=0.9                max err 1.0e-09
+  ok  A4 A(t) symmetric, t=0.9                                       max err 2.2e-16
+  ok  A4 A(t) = alternative form (p.21), t=0.9                       max err 1.3e-15
+  note A(t) eigenvalues at t=0.5: [-10.4269  -6.1029  -5.4336   0.       0.    ] (rank K=3: zero in directions no view touches)
+  ok  A5 eq.31 residual of closed-form b(t), t=0.2                   max err 1.3e-10
+  ok  A5 d(alpha)/dt = -Sigma eta (alpha - diag/2), t=0.2            max err 5.2e-12
+  note p.ec23 prints d(alpha)/dt = -eta(alpha - diag/2): off by 9.06e-01 (missing Sigma; typo only, next line is right)
+  ok  A5 eq.31 residual of closed-form b(t), t=0.6                   max err 1.0e-10
+  ok  A5 d(alpha)/dt = -Sigma eta (alpha - diag/2), t=0.6            max err 6.0e-12
+  note p.ec23 prints d(alpha)/dt = -eta(alpha - diag/2): off by 2.04e+00 (missing Sigma; typo only, next line is right)
+  ok  A6 Corollary 1 Sigma_DBL identity, t=0.0                       max err 2.8e-17
+  ok  A6 Corollary 1 Sigma_DBL identity, t=0.5                       max err 4.2e-17
+  M(0) eigenvalues, alpha=0.4, gamma=3: [0.909 0.909 0.909 0.    0.   ]
+  M(0) eigenvalues, alpha=0.8, gamma=3: [ 0.588  0.588  0.588  0.    -0.   ]
+  M(0) eigenvalues, alpha=2.0, gamma=3: [ 0.286  0.286  0.286  0.    -0.   ]
+  ok  A7 M(T) = 0 (hedge vanishes at horizon)                        max err 0.0e+00
+  ok  A7 M = 0 when gamma = 1 (log utility)                          max err 0.0e+00
+  ok  A8 Example 3 aged-view covariance, t=0.25                      max err 2.8e-17
+  ok  A8 Example 3 aged-view covariance, t=0.75                      max err 6.9e-18
+
+PART B - §7.1 Monte Carlo, 40000 paths, T=1y, 252 steps, same paths for all
+  CER = certainty-equivalent annual log return. Turnover = traded value / wealth, summed over the year.
+  'none' = Merton portfolio ignoring views. ruined = paths with terminal wealth <= 0 (floored at 1e-4).
+
+  alpha gamma   rebal |  CER DBL CER RCBL CER none | turn DBL turn RCBL | ruined D/R
+    0.4   2.0   daily |    1.228   -2.503    0.035 |    148.8     348.6 | 0/43
+    0.4   2.0  weekly |   -1.881   -6.207    0.035 |     71.3     305.4 | 25/1960
+    0.4   2.0 monthly |   -4.466   -7.025    0.035 |     42.5     225.0 | 346/4490
+        DBL mean gross exposure at t=0: 6.2x wealth
+
+    0.4   3.0   daily |    0.925    0.403    0.033 |     99.2     171.2 | 0/0
+    0.4   3.0  weekly |    0.900   -6.486    0.033 |     46.8      95.7 | 0/171
+    0.4   3.0 monthly |   -5.815   -7.408    0.033 |     25.0      62.3 | 45/1087
+        DBL mean gross exposure at t=0: 5.1x wealth
+
+    0.4   5.0   daily |    0.632    0.497    0.032 |     60.9      81.7 | 0/0
+    0.4   5.0  weekly |    0.625    0.435    0.032 |     29.0      39.3 | 0/0
+    0.4   5.0 monthly |   -6.836   -7.585    0.032 |     14.8     422.2 | 3/60
+        DBL mean gross exposure at t=0: 3.7x wealth
+
+    0.8   2.0   daily |    0.752    0.585    0.035 |     88.1     137.0 | 0/0
+    0.8   2.0  weekly |    0.738   -2.685    0.035 |     42.0      72.2 | 0/56
+    0.8   2.0 monthly |   -2.947   -5.316    0.035 |     48.0      59.6 | 74/810
+        DBL mean gross exposure at t=0: 4.9x wealth
+
+    0.8   3.0   daily |    0.548    0.476    0.033 |     56.6      74.2 | 0/0
+    0.8   3.0  weekly |    0.543    0.455    0.033 |     27.2      35.9 | 0/0
+    0.8   3.0 monthly |   -4.717   -6.057    0.033 |     14.2      21.4 | 5/73
+        DBL mean gross exposure at t=0: 3.8x wealth
+
+    0.8   5.0   daily |    0.363    0.336    0.032 |     33.9      38.9 | 0/0
+    0.8   5.0  weekly |    0.361    0.332    0.032 |     16.5      19.0 | 0/0
+    0.8   5.0 monthly |    0.350   -6.561    0.032 |      8.7      10.2 | 0/1
+        DBL mean gross exposure at t=0: 2.5x wealth
+
+PART C - same experiment with weaker views, gamma = 3
+  RCBLa = eq. 40 with the arithmetic drift instead of the log drift.
+   alpha corr(view,outcome) M(0) eig   rebal |  CER DBL CER RCBL CER RCBLa CER none | ruined D/R/Ra
+     0.4              0.845    0.909   daily |    0.925    0.403     0.549    0.033 | 0/0/0
+     0.4              0.845    0.909  weekly |    0.900   -6.486    -6.397    0.033 | 0/171/144
+     0.8              0.745    0.588   daily |    0.548    0.476     0.508    0.033 | 0/0/0
+     0.8              0.745    0.588  weekly |    0.543    0.455     0.495    0.033 | 0/0/0
+     9.0              0.316    0.071   daily |    0.087    0.074     0.087    0.033 | 0/0/0
+     9.0              0.316    0.071  weekly |    0.087    0.074     0.087    0.033 | 0/0/0
+    99.0              0.100    0.007   daily |    0.038    0.026     0.038    0.033 | 0/0/0
+    99.0              0.100    0.007  weekly |    0.038    0.026     0.038    0.033 | 0/0/0
+
+PART D - toy price lock, S0 = K = 100, sigma 40%/y, 6 months, zero rates
+  no view                      fair premium  11.25
+  view +30%, noise = market    fair premium  17.29   (corr(view, outcome) = 0.71)
+  view +30%, noise = 9x market fair premium  12.20   (corr(view, outcome) = 0.32)

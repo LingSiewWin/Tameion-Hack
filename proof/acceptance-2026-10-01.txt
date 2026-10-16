@@ -1,0 +1,79 @@
+Connection to 127.0.0.1 port 8545 [tcp/*] succeeded!
+Connection to 127.0.0.1 port 7879 [tcp/*] succeeded!
+
+0. the core claim: obligations recovered from raw chain data
+  PASS  history came from the chain
+  PASS  eth_getLogs returned the payments
+  PASS  obligations inferred, unlabelled
+  PASS  declined the counterparty with no rhythm
+
+1. the agent does the work
+  PASS  pays what is inside the cap
+  PASS  a model made the ordering
+  PASS  divergence is measured
+  PASS  escalates what is outside it
+  PASS  flags ignored escalations
+  PASS  anchors the log root
+
+2. the record and the chain agree
+  PASS  anchored root == computed root
+
+3. the same bill cannot be paid twice
+  PASS  second run settles nothing
+  PASS  0x1111 paid once, not twice
+  PASS  0x2222 paid once, not twice
+  PASS  settlement key is stable across runs
+  PASS  action hash still tracks the reasoning
+
+4. the contract refuses the agent
+  PASS  agent cannot withdraw
+  PASS  agent cannot raise its own cap
+  PASS  agent cannot replace itself
+  PASS  a stranger cannot pay
+  PASS  an address the principal never attested is refused on chain
+  PASS  agent cannot attest a payee
+  PASS  operator cannot attest a payee
+  PASS  over-cap payment refused on chain
+
+5. the split roles hold
+  PASS  operator cannot withdraw
+  PASS  principal cannot change limits
+  PASS  operator cannot appoint its successor
+
+6. a human can settle, and the agent notices
+  PASS  cycle unsettled before
+  PASS  principal settlement recorded
+  PASS  payee received the escalated amount
+  PASS  agent stops escalating it
+
+7. limits other than the per-action cap
+  PASS  reserve floor is enforced
+  PASS  daily cap is enforced
+
+8. duplicate settlement is refused at the contract, not just in the agent
+  PASS  first payment lands
+  PASS  the same key cannot execute twice
+
+9. a model outage does not stop the agent
+./scripts/acceptance.sh: line 183:  4660 Terminated: 15          PORT=$PORT cargo run -p operator --quiet --example serve > /tmp/acceptance-srv.log 2>&1
+Connection to 127.0.0.1 port 7879 [tcp/*] succeeded!
+  PASS  falls back to the deterministic rule
+  PASS  still completes the loop
+  PASS  records that it fell back
+
+not covered here
+  These are real gaps, stated rather than implied:
+    - History is real on-chain data, but written by this script rather than
+      by a live treasury, and read through a TestUSDC stand-in because a
+      local EVM emits nothing for a native transfer.
+    - Runs on anvil, so Arc's own behaviour is untested *here*: the native
+      Transfer emitter, getLogs chunking above 1,000 blocks, and 429 backoff.
+      Those are covered by proof/arc-testnet-2026-09-21.txt, recorded against
+      this contract with the model driving -- but by one run, not by a suite.
+    - One scenario, four counterparties. No zero-obligation case, no
+      balance-exhaustion case, no reorg.
+
+result
+  38 passed, 0 failed
+
+exit 0

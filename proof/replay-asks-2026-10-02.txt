@@ -1,0 +1,231 @@
+# Asks per 100 payments on 130 real treasuries, six models, 2026-10-02
+
+Data: runtime/research/treasury-scan/{transfers,incoming}.tsv, the 130 Safe
+treasuries of docs/21, 6,629 legitimate non-dust payments, 417 look-alike
+proposals injected. Binary: scripts/research/treasury-scan/probe/src/bin/replay.rs
+(`cargo run --release --bin replay -- transfers.tsv incoming.tsv`, env vars below).
+The verifier is the shipped one in every model; only who proposes what, and
+how questions are counted, changes.
+
+Summary (asks per 100 proposals; test 3 of docs/36 wants <= 10, and every
+look-alike refused):
+
+  model                                          proposals  asks   per 100  part 1  part 2
+  1 default: every payment proposed (10-01)        6629     1791   27.02    PASS    FAIL
+  2 + onboarding after 60 days                     4424     1027   23.21    PASS    FAIL
+  3 + daily batching (every payment proposed)      6629      780   11.77    PASS    FAIL
+  4 agent scope (payee has >= 3 prior payments)    3588      383   10.67    PASS    FAIL
+  5 agent scope + onboarding after 60 days         2319      319   13.76    PASS    FAIL
+  6 agent scope + daily batching                   3588      264    7.36    PASS    PASS
+
+What each model means:
+- Agent scope (AGENT_SCOPE=1): a payment is a proposal only if `detect` could
+  have inferred it -- the payee already has ledger::MIN_SAMPLES (3) earlier
+  payments. The agent cannot propose a payment to someone paid fewer times;
+  those were the owner paying by hand. This is the detector's existing rule,
+  not one chosen for this test. It is generous in one stated way: it ignores
+  the regularity bound (interval CV <= 0.35), which would remove more proposals.
+- Daily batching (BATCH_DAILY=1): new-payee questions on the same UTC day in
+  the same treasury are one question. That is what the shipped runner does:
+  one pass hands every unapproved payee to the principal as ONE `setPayees`
+  link (proof/agent-passkey-loop-2026-10-02.txt, onboarding run below).
+- Onboarding (ONBOARD_DAYS=N): the owner pays by hand for N days, then approves
+  everyone paid twice or more in one batch.
+
+What contradicts the plan, loudest:
+- Onboarding does not fix the rate (models 2 and 5). It cuts asks in absolute
+  terms (383 -> 319) but removes even more proposals, because the learning
+  period becomes the owner's own payments. These treasuries keep gaining new
+  recurring payees after any onboarding date; one batch cannot pre-approve
+  people who do not exist yet. The floor is set by the customer's rate of new
+  payees, not by the agent.
+- Model 6 passes and models 1-5 do not. Choosing model 6 as "the" test is a
+  definition choice the founder should make knowingly: under the 10-01
+  definition (every payment a proposal) the test still fails at 11.77 even
+  with batching.
+
+Not validated: whether a daily one-tap approval feels like one question to a
+real treasurer (that is test 1 territory, people, not data); and the regularity
+bound, which model 4-6 ignore.
+
+## Raw output
+=== default (10-01 model)
+model: first payment to every payee is a question (10-01)
+treasuries replayed                     130
+treasuries with a planted look-alike    65
+legitimate payments proposed            6629
+  allowed without asking                4838
+  asked a human                         1791  (27.02 per 100)
+    of which: onboarding batches        0
+    of which: first payment to a payee  1791
+    of which: anything else             0
+  blocked                               0  (0.00 per 100)
+  payments to recurring payees (>=3)    5172  asked 528  (10.21 per 100)
+  payments to one-off payees (<3)       1457  asked 1263  (86.68 per 100)
+look-alike proposals injected           417
+  refused (BLOCK)                       417
+  asked a human (REVIEW)                0
+  paid (ALLOW)                          0
+TEST 3 (docs/36): asks <= 10 per 100 and no look-alike asked or allowed -> FAIL
+  part 1, look-alikes: every one refused, no legitimate payment refused -> PASS
+  part 2, asks per 100 legitimate payments <= 10 -> FAIL (27.02)
+=== ONBOARD_DAYS=60
+model: onboarding after 60 days (owner pays by hand meanwhile; one batch approval)
+payments in the learning periods         2205  (history, not proposals)
+onboarding batches approved             57  covering 167 payees  (one question each)
+treasuries replayed                     130
+treasuries with a planted look-alike    65
+legitimate payments proposed            4424
+  allowed without asking                3454
+  asked a human                         1027  (23.21 per 100)
+    of which: onboarding batches        57
+    of which: first payment to a payee  970
+    of which: anything else             0
+  blocked                               0  (0.00 per 100)
+  payments to recurring payees (>=3)    3699  asked 376  (10.16 per 100)
+  payments to one-off payees (<3)       725  asked 594  (81.93 per 100)
+look-alike proposals injected           405
+  refused (BLOCK)                       405
+  asked a human (REVIEW)                0
+  paid (ALLOW)                          0
+TEST 3 (docs/36): asks <= 10 per 100 and no look-alike asked or allowed -> FAIL
+  part 1, look-alikes: every one refused, no legitimate payment refused -> PASS
+  part 2, asks per 100 legitimate payments <= 10 -> FAIL (23.21)
+=== AGENT_SCOPE=1
+model: first payment to every payee is a question (10-01)
+scope: only payments the agent could propose (payee has >= 3 earlier payments)
+payments the owner made by hand          3041  (incl. any learning period)
+treasuries replayed                     130
+treasuries with a planted look-alike    65
+legitimate payments proposed            3588
+  allowed without asking                3205
+  asked a human                         383  (10.67 per 100)
+    of which: onboarding batches        0
+    of which: first payment to a payee  383
+    of which: anything else             0
+  blocked                               0  (0.00 per 100)
+  payments to recurring payees (>=3)    3588  asked 383  (10.67 per 100)
+  payments to one-off payees (<3)       0  asked 0  (0.00 per 100)
+look-alike proposals injected           417
+  refused (BLOCK)                       417
+  asked a human (REVIEW)                0
+  paid (ALLOW)                          0
+TEST 3 (docs/36): asks <= 10 per 100 and no look-alike asked or allowed -> FAIL
+  part 1, look-alikes: every one refused, no legitimate payment refused -> PASS
+  part 2, asks per 100 legitimate payments <= 10 -> FAIL (10.67)
+=== AGENT_SCOPE=1 ONBOARD_DAYS=30
+model: onboarding after 30 days (owner pays by hand meanwhile; one batch approval)
+payments in the learning periods         3932  (history, not proposals)
+onboarding batches approved             50  covering 98 payees  (one question each)
+scope: only payments the agent could propose (payee has >= 3 earlier payments)
+payments the owner made by hand          3932  (incl. any learning period)
+treasuries replayed                     130
+treasuries with a planted look-alike    65
+legitimate payments proposed            2697
+  allowed without asking                2394
+  asked a human                         353  (13.09 per 100)
+    of which: onboarding batches        50
+    of which: first payment to a payee  303
+    of which: anything else             0
+  blocked                               0  (0.00 per 100)
+  payments to recurring payees (>=3)    2697  asked 303  (11.23 per 100)
+  payments to one-off payees (<3)       0  asked 0  (0.00 per 100)
+look-alike proposals injected           409
+  refused (BLOCK)                       409
+  asked a human (REVIEW)                0
+  paid (ALLOW)                          0
+TEST 3 (docs/36): asks <= 10 per 100 and no look-alike asked or allowed -> FAIL
+  part 1, look-alikes: every one refused, no legitimate payment refused -> PASS
+  part 2, asks per 100 legitimate payments <= 10 -> FAIL (13.09)
+=== AGENT_SCOPE=1 ONBOARD_DAYS=60
+model: onboarding after 60 days (owner pays by hand meanwhile; one batch approval)
+payments in the learning periods         4310  (history, not proposals)
+onboarding batches approved             57  covering 167 payees  (one question each)
+scope: only payments the agent could propose (payee has >= 3 earlier payments)
+payments the owner made by hand          4310  (incl. any learning period)
+treasuries replayed                     130
+treasuries with a planted look-alike    65
+legitimate payments proposed            2319
+  allowed without asking                2057
+  asked a human                         319  (13.76 per 100)
+    of which: onboarding batches        57
+    of which: first payment to a payee  262
+    of which: anything else             0
+  blocked                               0  (0.00 per 100)
+  payments to recurring payees (>=3)    2319  asked 262  (11.30 per 100)
+  payments to one-off payees (<3)       0  asked 0  (0.00 per 100)
+look-alike proposals injected           405
+  refused (BLOCK)                       405
+  asked a human (REVIEW)                0
+  paid (ALLOW)                          0
+TEST 3 (docs/36): asks <= 10 per 100 and no look-alike asked or allowed -> FAIL
+  part 1, look-alikes: every one refused, no legitimate payment refused -> PASS
+  part 2, asks per 100 legitimate payments <= 10 -> FAIL (13.76)
+=== AGENT_SCOPE=1 ONBOARD_DAYS=90
+model: onboarding after 90 days (owner pays by hand meanwhile; one batch approval)
+payments in the learning periods         4644  (history, not proposals)
+onboarding batches approved             57  covering 171 payees  (one question each)
+scope: only payments the agent could propose (payee has >= 3 earlier payments)
+payments the owner made by hand          4644  (incl. any learning period)
+treasuries replayed                     130
+treasuries with a planted look-alike    65
+legitimate payments proposed            1985
+  allowed without asking                1757
+  asked a human                         285  (14.36 per 100)
+    of which: onboarding batches        57
+    of which: first payment to a payee  228
+    of which: anything else             0
+  blocked                               0  (0.00 per 100)
+  payments to recurring payees (>=3)    1985  asked 228  (11.49 per 100)
+  payments to one-off payees (<3)       0  asked 0  (0.00 per 100)
+look-alike proposals injected           361
+  refused (BLOCK)                       361
+  asked a human (REVIEW)                0
+  paid (ALLOW)                          0
+TEST 3 (docs/36): asks <= 10 per 100 and no look-alike asked or allowed -> FAIL
+  part 1, look-alikes: every one refused, no legitimate payment refused -> PASS
+  part 2, asks per 100 legitimate payments <= 10 -> FAIL (14.36)
+=== AGENT_SCOPE=1 BATCH_DAILY=1
+model: first payment to every payee is a question (10-01)
+batching: one approval request per treasury per day (119 new payees rode along in an earlier request)
+scope: only payments the agent could propose (payee has >= 3 earlier payments)
+payments the owner made by hand          3041  (incl. any learning period)
+treasuries replayed                     130
+treasuries with a planted look-alike    65
+legitimate payments proposed            3588
+  allowed without asking                3205
+  asked a human                         264  (7.36 per 100)
+    of which: onboarding batches        0
+    of which: first payment to a payee  264
+    of which: anything else             0
+  blocked                               0  (0.00 per 100)
+  payments to recurring payees (>=3)    3588  asked 264  (7.36 per 100)
+  payments to one-off payees (<3)       0  asked 0  (0.00 per 100)
+look-alike proposals injected           417
+  refused (BLOCK)                       417
+  asked a human (REVIEW)                0
+  paid (ALLOW)                          0
+TEST 3 (docs/36): asks <= 10 per 100 and no look-alike asked or allowed -> PASS
+  part 1, look-alikes: every one refused, no legitimate payment refused -> PASS
+  part 2, asks per 100 legitimate payments <= 10 -> PASS (7.36)
+=== BATCH_DAILY=1 (all payments proposed)
+model: first payment to every payee is a question (10-01)
+batching: one approval request per treasury per day (1011 new payees rode along in an earlier request)
+treasuries replayed                     130
+treasuries with a planted look-alike    65
+legitimate payments proposed            6629
+  allowed without asking                4838
+  asked a human                         780  (11.77 per 100)
+    of which: onboarding batches        0
+    of which: first payment to a payee  780
+    of which: anything else             0
+  blocked                               0  (0.00 per 100)
+  payments to recurring payees (>=3)    5172  asked 317  (6.13 per 100)
+  payments to one-off payees (<3)       1457  asked 463  (31.78 per 100)
+look-alike proposals injected           417
+  refused (BLOCK)                       417
+  asked a human (REVIEW)                0
+  paid (ALLOW)                          0
+TEST 3 (docs/36): asks <= 10 per 100 and no look-alike asked or allowed -> FAIL
+  part 1, look-alikes: every one refused, no legitimate payment refused -> PASS
+  part 2, asks per 100 legitimate payments <= 10 -> FAIL (11.77)

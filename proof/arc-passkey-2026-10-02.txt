@@ -1,0 +1,113 @@
+# Arc testnet, 2026-10-02: the passkey owns the policy; the agent asks, the owner taps once, the agent pays
+
+Chain 5042002. The principal is a PasskeyPrincipal (Chrome passkey, virtual
+authenticator, UV on -- the browser encoding and signature are real; the
+biometric is not). The treasury EOA relays and is the operator; it cannot
+attest a payee or withdraw. Agent 0x80c195BE650FBfD55a9ffe059f397Db39f2fe881,
+ERC-8004 identity 896918. scripts/prove_passkey.sh arc …; agent = run_arc with
+the model reasoner.
+
+Arc verifies P-256 natively: the precompile at 0x100 returned 1 for this
+page's real signature and empty for a one-bit change (eth_call, 30,811 gas),
+as Arbitrum Sepolia's does.
+
+Explorer:
+- PasskeyPrincipal   https://explorer.testnet.arc.io/address/0x760d06dF3f928C05E7f5f9899f2cDE8F9C451096
+- BudgetPolicy       https://explorer.testnet.arc.io/address/0x9B07bD5C91DB55e6A692eb2431d8ede25E570439
+- passkey approval (setPayees 0x1111, 0x3333)  https://explorer.testnet.arc.io/tx/0xc4379d0cb2fafe17b41f8b41cfbca3afa94e7ef4eae62287416b7ecaac4275cc
+- agent paid 0x1111 0.003 (cycle ~800)          https://explorer.testnet.arc.io/tx/0xc452e13c8bb1d219f7e00a3cbfc513657cdd4a30f4fed925e622b2e76ad375f6
+- agent paid 0x3333 0.002 (cycle ~800)          https://explorer.testnet.arc.io/tx/0xff36bdc087d993667e97ac31281a9516d18b910788ca924d27ac1073018caaf9
+- agent paid 0x1111 0.003 (cycle ~980)          https://explorer.testnet.arc.io/tx/0x23bf6e131d31f6c4af9ca40b0fe91cb3b08a47372014f4abaa424af5a9789a9c
+- agent paid 0x3333 0.002 (cycle ~980)          https://explorer.testnet.arc.io/tx/0x3f66d7a410f1e380960128d27ec217a7cc182641d755970115fcbd125b467d2b
+- log anchored (pass with nothing due)          https://explorer.testnet.arc.io/tx/0xf2a5a4d404e06f406de40d0cf516fa142c5f39e884253fc25c7e77d0ae12ba07
+- log anchored (pass that paid cycle ~980)      https://explorer.testnet.arc.io/tx/0xf259fd11042747dad5637207622354a946ce8e716562ef7d6c36786fa18d602d
+
+## 1. deploy
+== chain 5042002 ==
+  ERC-8004 agent 896918, owned by the treasury
+  relayer 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25 holds 1.543922110413766795 ETH
+== deploy: the passkey owns the policy ==
+  PasskeyPrincipal  0x760d06dF3f928C05E7f5f9899f2cDE8F9C451096  (qx 0xe8d08e6f…, qy 0x04b1ca27…)
+  BudgetPolicy      0x9B07bD5C91DB55e6A692eb2431d8ede25E570439
+  principal()       0x760d06dF3f928C05E7f5f9899f2cDE8F9C451096
+  operator()        0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25  (the relayer: limits, not payees)
+  agent()           0x80c195BE650FBfD55a9ffe059f397Db39f2fe881
+  agentId()         896918 [8.969e5]
+  MemoryAnchor      0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB
+  funded the policy with 0.050000 USDC: tx 0xa01973f6e2488840e53880f9da74979cae4adb74ee0160d08a96b4801a06376d
+
+## 2. the owner's wallet pays two bills by hand, six rounds 180 s apart (fixed schedule)
+== 6 rounds of bills from 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25, 180s apart ==
+  round 1  0.003000 -> 0x1111… 0xddb9f844…   0.002000 -> 0x3333… 0xb9c000f6…
+  round 2  0.003000 -> 0x1111… 0xd0360793…   0.002000 -> 0x3333… 0xe7f0b642…
+  round 3  0.003000 -> 0x1111… 0xdea4c7e3…   0.002000 -> 0x3333… 0x199a7619…
+  round 4  0.003000 -> 0x1111… 0xa5adb58a…   0.002000 -> 0x3333… 0x970929cc…
+  round 5  0.003000 -> 0x1111… 0x06f481e7…   0.002000 -> 0x3333… 0x27e3af7d…
+  round 6  0.003000 -> 0x1111… 0x97b82d07…   0.002000 -> 0x3333… 0x8015f7c8…
+
+## 3. first pass: nothing due yet; ONE approval asked for both payees
+跑一轮
+  balance 0.050000 USDC · 2 obligations · 0 settled · 0 escalated · 0 blocked · 0 already paid
+  log root   0x776c3ac3477b917ef6e893fcb74e8edb011ad0cbc659af7ec58f54bce2b172e1
+  anchored   0x1466e1451ce843595732dcb64d3f57fab855971b2c63fb8e1b10dde7ad14f98b
+
+等主人批准的
+  0x1111111111111111111111111111111111111111
+  0x3333333333333333333333333333333333333333
+  principal  0x760d06dF3f928C05E7f5f9899f2cDE8F9C451096 (passkey), approval #0
+  allow the agent to pay these 2 payees from now on
+  http://localhost:8787/?owner=0x760d06df3f928c05e7f5f9899f2cde8f9c451096&chain=5042002&n=0&to=0x9b07bd5c91db55e6a692eb2431d8ede25e570439&data=0x48a5650300000000000000000000000000000000000000000000000
+  signs      0xb38deeaf922af2948b19ab7e62cfce3259d5169b6b6650271fdcfe3ff26bef87
+  calldata   0x48a56503000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000
+
+记录
+[0000] OBSERVATION Holding 0.050000 USDC. Read 12 transfers (0 of them my own payments, which are not evidence) and recovered 2 recurring obligations, of which 2 fall due within 30.0 days totalling 0.
+
+## 4. what the page showed, and the relay
+  Allow the agent to pay:
+    0x1111111111111111111111111111111111111111
+    0x3333333333333333333333333333333333333333
+  On Arc testnet. Your agent's budget limits still apply to every payment.
+  … approval #0 · signs 0xb38deeaf922af2948b19ab7e62cfce3259d5169b6b6650271fdcfe3ff26bef87  (= the agent's)
+  before: attestedPayee(0x1111111111111111111111111111111111111111) = false
+  before: attestedPayee(0x3333333333333333333333333333333333333333) = false
+  after:  attestedPayee(0x1111111111111111111111111111111111111111) = true
+  after:  attestedPayee(0x3333333333333333333333333333333333333333) = true
+  tx 0xc4379d0cb2fafe17b41f8b41cfbca3afa94e7ef4eae62287416b7ecaac4275cc
+  approvals used: 1
+
+## 5. the paying pass crashed after paying -- and the retry paid nothing twice
+The pass run once the bills fell due paid both, then a later read hit the
+endpoint's intermittent "-32601 method not supported"; the pass errored and
+its log was not anchored. The payments, from the policy's Paid events:
+  to 0x1111… 3000 units  tx 0xc452e13c…  block 64991669  time 1790880806 (due ~800)
+  to 0x3333… 2000 units  tx 0xff36bdc0…  block 64991684  time 1790880814
+The pass re-run at once:
+跑一轮
+  balance 0.045000 USDC · 2 obligations · 0 settled · 0 escalated · 0 blocked · 0 already paid
+  log root   0xa3303618f31495fed4d765af8bbcf8367ff7ccf2c793b150ed2eb4a8c2b5fa9a
+  anchored   0xf2a5a4d404e06f406de40d0cf516fa142c5f39e884253fc25c7e77d0ae12ba07
+
+记录
+[0000] OBSERVATION Holding 0.045000 USDC. Read 14 transfers (2 of them my own payments, which are not evidence) and recovered 2 recurring obligations, of which 2 fall due within 30.0 days totalling 0.005000 USDC; 0 within 3.0 days (or a tenth of their interval
+Its own two payments recognised as its own, those cycles stepped over, nothing
+due, nothing paid twice. The lost log was the defect: arc::retrying_client now
+retries exactly -32601 (and rate limits) at the transport, and nothing else
+(arc/tests/retry.rs: retried until answered; -32000 asked once).
+
+## 6. the next cycle, on the retrying client
+跑一轮
+  balance 0.045000 USDC · 2 obligations · 2 settled · 0 escalated · 0 blocked · 0 already paid
+  log root   0x8cc4e270f5f83bf3bebeaca387e3c0654f02551549016df53b182cf7bde2e693
+  anchored   0xf259fd11042747dad5637207622354a946ce8e716562ef7d6c36786fa18d602d
+
+  付掉的:
+    0x1111111111111111111111111111111111111111 0.003000 USDC  0x23bf6e131d31f6c4af9ca40b0fe91cb3b08a47372014f4abaa424af5a9789a9c
+    0x3333333333333333333333333333333333333333 0.002000 USDC  0x3f66d7a410f1e380960128d27ec217a7cc182641d755970115fcbd125b467d2b
+
+记录
+[0000] OBSERVATION Holding 0.045000 USDC. Read 14 transfers (2 of them my own payments, which are not evidence) and recovered 2 recurring obligations, of which 2 fall due within 30.0 days totalling 0.005000 USDC; 2 within 3.0 days (or a tenth of their interval
+[0001] DECISION    ALLOW for 0x1111111111111111111111111111111111111111. Both are due now with near-identical regularity and confidence; placed first only because its slightly larger fixed amount makes a missed cycle the more visible interruption, and no other
+[0002] SETTLEMENT  Paid 0.003000 USDC to 0x1111111111111111111111111111111111111111, settled in 0x23bf6e131d31f6c4af9ca40b0fe91cb3b08a47372014f4abaa424af5a9789a9c.
+[0003] DECISION    ALLOW for 0x3333333333333333333333333333333333333333. Equally due and equally well-evidenced, ranked second with no substantive signal beyond its smaller amount; the balance appears sufficient for both. Basis: 0x33333333333333333333333333333
+[0004] SETTLEMENT  Paid 0.002000 USDC to 0x3333333333333333333333333333333333333333, settled in 0x3f66d7a410f1e380960128d27ec217a7cc182641d755970115fcbd125b467d2b.

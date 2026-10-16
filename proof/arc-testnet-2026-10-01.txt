@@ -1,0 +1,114 @@
+# Arc testnet, 2026-10-01: the new BudgetPolicy, end to end
+
+Chain 5042002 (Arc testnet). Contract with the trailing 24-hour window and the
+on-chain payee allowlist (docs/14). Agent 0x80c195BE650FBfD55a9ffe059f397Db39f2fe881, principal 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25.
+
+Explorer links:
+- policy     https://explorer.testnet.arc.io/address/0x54Fb9a179e62EB1F818eC9dd710B9499a8395c4b
+- attest A1  https://explorer.testnet.arc.io/tx/0xcd7d2125b4c60e2e9a9d5962d535ca9bf3fbfad25666ceb361f9fa4c2be61e7d
+- attest A2  https://explorer.testnet.arc.io/tx/0xe7b3ec3b3f849beb2c34c2432e39b231d42ece75ff429bd24ba51f7b959725e5
+- attest A3  https://explorer.testnet.arc.io/tx/0xe9489929e70b0c652d34bb1cd84e162db57353a1a959d6ef538bf2e3b167e15a
+- agent paid A1 0.002 USDC  https://explorer.testnet.arc.io/tx/0x6c9d544eeecf0f3b72f7e5880be550724914a086d518b9d982f41ee883c61203
+- agent paid A2 0.005 USDC  https://explorer.testnet.arc.io/tx/0xb563d5bd0448071866bda4a1d4d7064a678640031ab6937e0dbe707668f3528b
+- log root anchored          https://explorer.testnet.arc.io/tx/0x2835eb58254014b32a87ee293513485091276c16142e09bdb789ed4ad21b224c
+
+## 1. deploy
+
+== chain ==
+  chain 5042002 · treasury 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25 (2.990753 USDC)
+
+== deploy ==
+  BudgetPolicy 0x54Fb9a179e62EB1F818eC9dd710B9499a8395c4b
+  MemoryAnchor 0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB  (unchanged, reused)
+
+== fund the policy ==
+  policy holds 0.200000 USDC
+
+== attest the payees ==
+  0x00000000000000000000000000000000000000A1 attested=true  tx 0xcd7d2125b4c60e2e9a9d5962d535ca9bf3fbfad25666ceb361f9fa4c2be61e7d
+  0x00000000000000000000000000000000000000A2 attested=true  tx 0xe7b3ec3b3f849beb2c34c2432e39b231d42ece75ff429bd24ba51f7b959725e5
+  0x00000000000000000000000000000000000000A3 attested=true  tx 0xe9489929e70b0c652d34bb1cd84e162db57353a1a959d6ef538bf2e3b167e15a
+  history starts at block 64957833
+
+## 2. history
+The first seed (history from block 64957833) was interrupted after 4 rounds by the
+public endpoint's intermittent '-32601 method not supported'. A run on those 4
+rounds escalated all three obligations: 4 samples give confidence 0.67-0.74,
+below the 0.75 floor, so the agent asked rather than paid (log anchored in
+0x650aa69d0286b34bc0ce705bf2c32dc29e98aaabdad78ef910641538c7acc1c6). A second
+attempt failed the same way after 3 rounds. The seed step now retries only when
+the pending nonce proves a transaction never left, and the window was restarted
+at block 64958820 for six clean rounds:
+  round 1/6  0.002000 -> A1   0.005000 -> A2   0.030000 -> A3
+  round 2/6  0.002000 -> A1   0.006200 -> A2   0.030000 -> A3
+  round 3/6  0.002000 -> A1   0.004100 -> A2   0.030000 -> A3
+  round 4/6  0.002000 -> A1   0.005800 -> A2   0.030000 -> A3
+  round 5/6  0.002000 -> A1   0.005350 -> A2   0.030000 -> A3
+  round 6/6  0.002000 -> A1   0.005000 -> A2   0.030000 -> A3
+
+  treasury now holds 2.403805 USDC · policy 0.060290 USDC
+
+## 3. the agent reads Arc, decides, pays, escalates, anchors
+
+== the agent reads Arc and decides ==
+
+链
+─
+  chain id   5042002 (真 Arc 测试网)
+  agent      0x80c195BE650FBfD55a9ffe059f397Db39f2fe881
+  policy     0x54Fb9a179e62EB1F818eC9dd710B9499a8395c4b
+  anchor     0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB
+  单笔上限   0.010000 USDC
+  每日上限   1.000000 USDC  已花 0.000000 USDC
+  合约余额   0.060290 USDC
+  reasoner   claude-opus-5 (model)
+
+读历史
+───
+  链上读到 18 笔,其中 18 笔是付出去的
+
+跑一轮
+───
+  balance 0.060290 USDC · 3 obligations · 2 settled · 1 escalated · 0 blocked · 0 already paid
+  log root   0xf120836854e31fe9019c12ecfb2dc3ee363aa4c83e58dab9308d147f3303d248
+  anchored   0x2835eb58254014b32a87ee293513485091276c16142e09bdb789ed4ad21b224c
+
+  付掉的:
+    0x00000000000000000000000000000000000000a1 0.002000 USDC  0x6c9d544eeecf0f3b72f7e5880be550724914a086d518b9d982f41ee883c61203
+    0x00000000000000000000000000000000000000a2 0.005000 USDC  0xb563d5bd0448071866bda4a1d4d7064a678640031ab6937e0dbe707668f3528b
+
+  交给人的:
+    0x00000000000000000000000000000000000000a3 0.030000 USDC
+        [review] per-action-cap           0.030000 USDC over cap 0.010000 USDC
+
+记录
+──
+[0000] OBSERVATION Holding 0.060290 USDC. Read 18 transfers and recovered 3 recurring obligations, of which 3 fall due within 30.0 days totalling 0.037000 USDC.
+[0001] DECISION    REVIEW for 0x00000000000000000000000000000000000000a3. Highest confidence and perfectly fixed amount across six cycles, and the largest exposure, so a miss here is the most consequential. Basis: 0x00000000000000000000000000000000000000a3 has been paid 6 times every 48s, amounts varying by 0.0% and timing by 2.7%, so this reads as a subscription (confidence 0.82).
+[0002] ESCALATION  Stopping and asking a human: per-action-cap: 0.030000 USDC over cap 0.010000 USDC. This is outside the authority delegated to me, so I will not proceed on my own. If unanswered for 7.0 days I will report it as overdue.
+[0003] DECISION    ALLOW for 0x00000000000000000000000000000000000000a1. Fixed-amount subscription with tight timing and solid confidence, and small enough that settling it early costs little headroom. Basis: 0x00000000000000000000000000000000000000a1 has been paid 6 times every 48s, amounts varying by 0.0% and timing by 3.9%, so this reads as a subscription (confidence 0.80).
+[0004] SETTLEMENT  Paid 0.002000 USDC to 0x00000000000000000000000000000000000000a1, settled in 0x6c9d544eeecf0f3b72f7e5880be550724914a086d518b9d982f41ee883c61203.
+[0005] DECISION    ALLOW for 0x00000000000000000000000000000000000000a2. Lowest confidence and 13.9% amount drift suggests the underlying arrangement may have changed, so it is the safest to defer; no counterparty-behaviour signal is available beyond the numbers. Basis: 0x00000000000000000000000000000000000000a2 has been paid 6 times every 47s, amounts varying by 13.9% and timing by 4.5%, so this reads as a recurring payment (confidence 0.76).
+[0006] SETTLEMENT  Paid 0.005000 USDC to 0x00000000000000000000000000000000000000a2, settled in 0xb563d5bd0448071866bda4a1d4d7064a678640031ab6937e0dbe707668f3528b.
+
+== read the anchored root back off chain ==
+0xf120836854e31fe9019c12ecfb2dc3ee363aa4c83e58dab9308d147f3303d248
+
+## 4. what the contract refuses, on Arc
+
+== what the contract refuses, on Arc ==
+  selector 0x28d94177  PayeeNotAttested(address)
+  selector 0x97b81df2  OverPerActionCap(uint256,uint256)
+  selector 0x789a70b0  NotPrincipal()
+agent pays a look-alike of A1 (0x0000ffffffffffffffffffffffffffffffff00A1)
+  refused: 0x28d94177
+agent pays A3 over the per-action cap
+  refused: 0x97b81df2
+agent attests the look-alike itself
+  refused: 0x789a70b0
+  look-alike attested on chain: false
+
+## Not explained
+Minutes after deployment, 0xea84406b5863d768daebf7230b64c49ff2f45d40 (an EOA,
+nonce 81, holding 33.2 USDC) sent the policy 0.044140 USDC. Unknown sender,
+unknown purpose. The agent records it as an incoming transfer and nothing more.

@@ -1,0 +1,17 @@
+treasuries replayed                     130
+treasuries with a planted look-alike    65
+legitimate payments proposed            6629
+  allowed without asking                4838
+  asked a human                         1791  (27.02 per 100)
+    of which: first payment to a payee  1791
+    of which: anything else             0
+  blocked                               0  (0.00 per 100)
+  payments to recurring payees (>=3)    5172  asked 528  (10.21 per 100)
+  payments to one-off payees (<3)       1457  asked 1263  (86.68 per 100)
+look-alike proposals injected           417
+  refused (BLOCK)                       417
+  asked a human (REVIEW)                0
+  paid (ALLOW)                          0
+TEST 3 (docs/36): asks <= 10 per 100 and no look-alike asked or allowed -> FAIL
+  part 1, look-alikes: every one refused, no legitimate payment refused -> PASS
+  part 2, asks per 100 legitimate payments <= 10 -> FAIL (27.02)

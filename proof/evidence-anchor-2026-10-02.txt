@@ -1,0 +1,47 @@
+# Evidence desk: a pack's hash anchored on Arc, and four ways to fail verification — 2026-10-02
+
+`scripts/evidence/anchor.py` (new). `pack.py` stays read-only; this is the one
+step that sends a transaction: the pack's sha256 to MemoryAnchor
+0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB on Arc testnet, `anchor(bytes32)`.
+Packs now carry a random 32-byte salt inside the hash, so the published hash
+cannot be used to confirm a guess about whose pack it is. Tests: 20 offline
+(salt, tamper detection, receipt parsing: wrong status, contract, root, event).
+
+The pack: the same public Arbitrum DAO treasury as the 10-01 demo
+(0x897b41bdf47ef039484cacbbd2e07f88899f1f96, 2026-01-01 → 2026-10-01).
+Personal data rules apply to real earners' packs; this one is a public treasury.
+
+$ python3 scripts/evidence/pack.py --earner "Demo" --address 0x897b41bd… --chains arbitrum --from 2026-01-01 --to 2026-10-01 --out runtime/evidence/demo-anchor
+  arbitrum  0x897b41bdf47ef039484cacbbd2e07f88899f1f96  6 incoming token transfers
+  wrote runtime/evidence/demo-anchor/pack.md and pack.json · {'ASK': 1, 'EXCLUDED': 5} · sha256 573a88ab89e9e5ac…
+
+$ python3 scripts/evidence/anchor.py verify runtime/evidence/demo-anchor
+record matches its sha256 573a88ab89e9e5ac…
+not anchored: nothing proves when it was written            (exit 1)
+
+$ python3 scripts/evidence/anchor.py anchor runtime/evidence/demo-anchor
+anchored sha256 573a88ab89e9e5ac… at 2026-10-01 18:26:32 UTC, block 64988496
+tx 0x242c78908301832530ecd8b37adbb4a76a8bce4ef14989e474750c415eafabc5
+   https://explorer.testnet.arc.io/tx/0x242c78908301832530ecd8b37adbb4a76a8bce4ef14989e474750c415eafabc5
+
+$ python3 scripts/evidence/anchor.py verify runtime/evidence/demo-anchor
+record matches its sha256 573a88ab89e9e5ac…
+VERIFIED: this record existed, unchanged, by 2026-10-01 18:26:32 UTC (Arc testnet block 64988496, tx 0x242c7890…)   (exit 0)
+
+## A copy, edited three ways
+
+1. One amount multiplied by ten:
+runtime/evidence/demo-tampered/pack.json does not match its own sha256: it was edited after it was written   (exit 1)
+
+2. …and the stated sha256 recomputed to match the edit:
+record matches its sha256 405e1520f0846f3d…
+ANCHOR MISMATCH: pack.anchor.json is for 573a88ab89e9e5ac…, not this record                                   (exit 1)
+
+3. …and pack.anchor.json rewritten to claim the new hash:
+record matches its sha256 405e1520f0846f3d…
+ANCHOR NOT FOUND: 0x242c7890… does not anchor this record at 0xDAb65A53…                                       (exit 1)
+
+What this proves, and does not: the record existed exactly as it is no later
+than block 64988496. It does not prove the record is right -- each line still
+has its own explorer link to check -- and on a testnet it proves nothing to a
+bank yet. The same call works on any chain with a MemoryAnchor.
