@@ -1,0 +1,276 @@
+# Hedge backtest — what the hedge rule as coded would have done over the last 90 days for real holders
+# Run 2026-10-16 20:03 +0800. Script: scripts/research/hedge_backtest.py (stdlib; its header reproduces this file).
+# Third-party addresses are not printed: ids only (S = docs/21 Safes, Arbitrum One; C = S7 census, Base + Ethereum).
+# Window: 2026-07-18 13:00Z .. 2026-10-16 12:00Z, 2160 hourly closes, Hyperliquid mainnet candleSnapshot 1h (read only); funding from fundingHistory; taker fee 0.00045 (userFees, base tier).
+# Rule: HedgePolicy::default() — short = holding per coin, band 500 bps, leverage <= 2x, equity >= 4 x tiered MM,
+#   50 bps slippage haircut on non-reducing orders, 10 USDC minimum (position and order), allowlist BTC ETH SOL PAXG.
+#   Margin at three levels, each capped at 50 % of the address's stablecoins: min (the least the check accepts, 2x
+#   at entry), 1x (the hedged notional; the main table), max (the cap). No top-up between orders (the engine has none).
+
+## The four markets over the window
+BTC     64196.00 ->   82610.00 (+28.7%); highest close 87217.00 (+35.9% from start); worst fall from a peak 8.1%; funding to a short +2.05% over 90 d (+8.3%/yr); maintenance tiers [(0.0, 40), (150000000.0, 20)] szDecimals 5; hours without a funding row 0
+ETH      1845.10 ->    2476.50 (+34.2%); highest close 2786.60 (+51.0% from start); worst fall from a peak 16.0%; funding to a short +2.19% over 90 d (+8.9%/yr); maintenance tiers [(0.0, 25), (100000000.0, 15)] szDecimals 4; hours without a funding row 0
+SOL        74.98 ->     106.56 (+42.1%); highest close 124.46 (+66.0% from start); worst fall from a peak 18.5%; funding to a short +1.71% over 90 d (+6.9%/yr); maintenance tiers [(0.0, 20), (70000000.0, 10)] szDecimals 2; hours without a funding row 0
+PAXG     4011.50 ->    4170.60 (+4.0%); highest close 4679.00 (+16.6% from start); worst fall from a peak 12.6%; funding to a short +2.20% over 90 d (+8.9%/yr); maintenance tiers [(0.0, 10), (3000000.0, 5)] szDecimals 3; hours without a funding row 0
+
+## S: Safes of docs/21 (Arbitrum One, top-4,000 USDC holders) — 133 addresses; 35 with >= $1,000 non-stable today
+with ETH/BTC/SOL/PAXG (or a wrapper) worth >= $10: 29 | hedge placed: 28 | no stablecoins, so no margin available: 0 | stablecoins too few for a first order: 1 | only tokens off the allowlist: 6
+margin-limited at 1x (50 % of stablecoins < the hedge's margin; the check shrank orders): 2; S001 21% offset at the end, 1528 fills + 3 sub-$10 orders after entry; S124 25% offset at the end, 948 fills + 30 sub-$10 orders after entry
+non-stable today across them: $22.94M = on the allowlist $3.67M + a Hyperliquid perp exists but not allowlisted $16.51M + no Hyperliquid perp $2.77M; of which held at today's price for lack of a path $3.0k
+
+Main table: margin posted = 1x the hedged notional (capped at 50 % of stablecoins). Rows above the line: every address with >= $1,000 non-stable.
+
+metric                                      n        p10        p50        p90
+non-stable holding today                   35      $2.1k     $31.8k     $1.54M
+share of it on the allowlist               35         0%       100%       100%
+max drawdown 90 d, unhedged                35      11.7%      16.0%      41.2%
+max drawdown 90 d, hedged                  35       0.0%       0.0%      42.1%
+max drawdown $, unhedged                   35       $748      $5.7k    $500.9k
+max drawdown $, hedged                     35         $0        $32    $493.1k
+loss at a 30 % fall, unhedged              35       $626      $9.5k    $507.4k
+loss at a 30 % fall, hedged                35         $0       $100    $495.4k
+  hedged, as % of the holding              35       0.0%       0.3%      30.0%
+90-day change, unhedged                    35       $241      $8.0k    $694.5k
+90-day change, hedged                      35      -$531       $787    $694.5k
+-- below: the addresses where a hedge was placed --
+margin needed (least the rule accepts)     28       $575     $12.5k     $52.8k
+  as % of the address's stablecoins        28       0.2%       5.0%      28.7%
+margin posted at 1x                        28      $1.1k     $24.7k     $82.7k
+rebalances after entry (filled)            28          0          0          0
+  orders the venue would reject (< $10)    28          0          0          0
+hours equity < 4 x MM, hourly close        28          0          0          0
+hours equity < 4 x MM, hourly high         28          0          0          0
+hours over 2x leverage, unchecked          28        603        890       1035
+lowest health (equity / 4 x MM)            28       4.09       4.21       6.37
+funding received (+) / paid (-)            28        $32       $691      $2.3k
+taker fees                                 28         $1        $11        $69
+health after a further 30 % rally          28       1.65       2.02       2.74
+
+Margin sensitivity, the same 28 hedged addresses (min = the least the safety check accepts, 2x at entry; 1x = margin equal to the hedged notional; max = 50 % of stablecoins, the share rule's ceiling):
+margin  p50 posted  within 4xMM once  liquidated  limited  p50 rebal  p50 hedged MDD  p50 30% loss  p50 90-d change
+min         $12.5k                23          22       22         98           22.7%         $5.7k            -$897
+1x          $24.7k                 0           0        2          0            0.0%            $0             $663
+max         $81.8k                 0           0        2          0            0.0%            $0             $663
+Off-allowlist tokens with a Hyperliquid perp: their DefiLlama spot path against the perp's own 1 h closes (the basis a hedge of them would carry): MORPHO median 0.4%, p95 1.9%; APE median 0.6%, p95 18.5%; ARB median 0.1%, p95 0.8%; AAVE median 0.0%, p95 0.4%; UNI median 0.1%, p95 0.4%; GMX median 6.6%, p95 18.2%
+
+Summed over the 35 addresses (dollar-weighted), loss at a 30 % fall: unhedged $6.86M; hedged min $6.60M (4% less); 1x $6.33M (8% less); max $6.33M (8% less)
+What-if, not the rule: with every token that has a Hyperliquid perp (ARB, GMX, AAVE, ...) on the allowlist and fully offset, the summed loss would be $830.5k (the no-perp part only).
+
+Per address (ids only), margin 1x unless marked. $: non-stable today | on the allowlist | stables ; max drawdown unhedged / hedged ; loss at a 30 % fall unhedged / hedged ; margin needed (min) ; rebalances ; hours < 4xMM close ; liquidated at min margin? ; funding
+S001     $5.05M    $2.22M   $838.8k ;   7.8%   7.3% ;    $1.42M    $1.28M ;   $837.6k ; 1528 ;    0 ;          - ;   $12.2k
+S002     $2.00M   $112.1k    $5.43M ;  17.9%  17.4% ;   $595.7k   $562.1k ;    $41.1k ;    0 ;    0 ; liquidated ;    $2.2k
+S003       $492  skipped: under $1,000 non-stable
+S004       $245  skipped: under $1,000 non-stable
+S005         $0  skipped: under $1,000 non-stable
+S006        $24  skipped: under $1,000 non-stable
+S007         $6  skipped: under $1,000 non-stable
+S008    $964.7k    $75.7k    $1.18M ;  47.9%  49.2% ;   $278.8k   $256.1k ;    $28.5k ;    0 ;    0 ; liquidated ;    $1.6k
+S009         $7  skipped: under $1,000 non-stable
+S010         $0  skipped: under $1,000 non-stable
+S011         $0  skipped: under $1,000 non-stable
+S012      $4.5k     $4.5k   $735.9k ;  16.0%   0.0% ;     $1.4k        $0 ;     $1.7k ;    0 ;    0 ; liquidated ;      $95
+S013        $24  skipped: under $1,000 non-stable
+S014         $0  skipped: under $1,000 non-stable
+S015         $0  skipped: under $1,000 non-stable
+S016      $1.7k     $1.7k    $1.30M ;  16.0%   0.0% ;      $513        $0 ;      $644 ;    0 ;    0 ; liquidated ;      $36
+S017     $1.32M        $0   $576.5k ;  34.5%  34.5% ;   $395.4k   $395.4k ;        $0 ;    0 ;    0 ;          - ;       $0
+S018         $0  skipped: under $1,000 non-stable
+S019      $1.9k        $0   $576.9k ;  34.5%  34.5% ;      $571      $571 ;        $0 ;    0 ;    0 ;          - ;       $0
+S020         $0  skipped: under $1,000 non-stable
+S021         $0  skipped: under $1,000 non-stable
+S022         $0  skipped: under $1,000 non-stable
+S023         $0  skipped: under $1,000 non-stable
+S024      $9.8k     $9.8k        $4 ;  16.0%  16.0% ;     $2.9k     $2.9k ;     $3.7k ;    0 ;    0 ;          - ;       $0
+S025    $389.0k   $389.0k   $500.0k ;  16.0%   0.0% ;   $116.7k        $0 ;   $146.4k ;    0 ;    0 ; liquidated ;    $8.1k
+S026         $0  skipped: under $1,000 non-stable
+S027        $56  skipped: under $1,000 non-stable
+S028       $826  skipped: under $1,000 non-stable
+S029       $174  skipped: under $1,000 non-stable
+S030        $64  skipped: under $1,000 non-stable
+S031     $55.9k    $55.9k   $464.0k ;   8.1%   0.0% ;    $16.8k        $0 ;    $21.9k ;    0 ;    0 ;          - ;    $1.1k
+S032         $0  skipped: under $1,000 non-stable
+S033         $0  skipped: under $1,000 non-stable
+S034     $24.2k        $0   $378.6k ;  34.5%  34.5% ;     $7.3k     $7.3k ;        $0 ;    0 ;    0 ;          - ;       $0
+S035      $2.4k      $309   $273.7k ;  45.6%  47.7% ;      $708      $616 ;      $116 ;    0 ;    0 ; liquidated ;       $6
+S036     $18.2k    $18.2k   $375.5k ;  16.0%   0.0% ;     $5.5k        $0 ;     $6.9k ;    0 ;    0 ; liquidated ;     $380
+S037         $5  skipped: under $1,000 non-stable
+S038         $0  skipped: under $1,000 non-stable
+S039         $0  skipped: under $1,000 non-stable
+S040      $8.8k     $8.8k   $635.2k ;  16.0%   0.0% ;     $2.6k        $0 ;     $3.3k ;    0 ;    0 ; liquidated ;     $183
+S041         $0  skipped: under $1,000 non-stable
+S042         $0  skipped: under $1,000 non-stable
+S043         $0  skipped: under $1,000 non-stable
+S044       $860  skipped: under $1,000 non-stable
+S045        $20  skipped: under $1,000 non-stable
+S046    $10.40M        $0    $1.24M ;  34.5%  34.5% ;    $3.12M    $3.12M ;        $0 ;    0 ;    0 ;          - ;       $0
+S047         $0  skipped: under $1,000 non-stable
+S048         $0  skipped: under $1,000 non-stable
+S049      $1.0k        $0    $78.1k ;  28.6%  28.6% ;      $304      $304 ;        $0 ;    0 ;    0 ;          - ;       $0
+S050         $0  skipped: under $1,000 non-stable
+S051      $6.8k     $5.5k   $361.0k ;  18.7%   8.7% ;     $2.0k      $372 ;     $2.1k ;    0 ;    0 ; liquidated ;     $115
+S052       $244  skipped: under $1,000 non-stable
+S053         $0  skipped: under $1,000 non-stable
+S054         $0  skipped: under $1,000 non-stable
+S055     $76.7k    $75.1k   $347.5k ;  12.1%   0.7% ;    $23.0k      $469 ;    $28.8k ;    0 ;    0 ;          - ;    $1.5k
+S056     $31.7k    $31.7k   $220.0k ;  16.0%   0.0% ;     $9.5k        $0 ;    $11.9k ;    0 ;    0 ; liquidated ;     $660
+S057        $40  skipped: under $1,000 non-stable
+S058         $2  skipped: under $1,000 non-stable
+S059         $1  skipped: under $1,000 non-stable
+S060         $0  skipped: under $1,000 non-stable
+S061        $24  skipped: under $1,000 non-stable
+S062        $25  skipped: under $1,000 non-stable
+S063       $196  skipped: under $1,000 non-stable
+S064         $5  skipped: under $1,000 non-stable
+S065         $0  skipped: under $1,000 non-stable
+S066         $0  skipped: under $1,000 non-stable
+S067         $0  skipped: under $1,000 non-stable
+S068     $10.2k    $10.1k   $159.4k ;  16.1%   0.0% ;     $3.0k        $7 ;     $3.8k ;    0 ;    0 ; liquidated ;     $211
+S069         $0  skipped: under $1,000 non-stable
+S070     $61.4k    $61.4k   $150.0k ;  16.0%   0.0% ;    $18.4k        $0 ;    $23.1k ;    0 ;    0 ; liquidated ;    $1.3k
+S071         $0  skipped: under $1,000 non-stable
+S072       $398  skipped: under $1,000 non-stable
+S073        $74  skipped: under $1,000 non-stable
+S074         $2  skipped: under $1,000 non-stable
+S075         $0  skipped: under $1,000 non-stable
+S076         $0  skipped: under $1,000 non-stable
+S077      $5.8k     $5.8k   $148.2k ;  16.0%   0.0% ;     $1.8k        $0 ;     $2.2k ;    0 ;    0 ; liquidated ;     $122
+S078         $3  skipped: under $1,000 non-stable
+S079         $0  skipped: under $1,000 non-stable
+S080         $0  skipped: under $1,000 non-stable
+S081         $0  skipped: under $1,000 non-stable
+S082        $64  skipped: under $1,000 non-stable
+S083         $0  skipped: under $1,000 non-stable
+S084      $3.9k     $3.9k   $119.9k ;  16.0%   0.0% ;     $1.2k        $0 ;     $1.5k ;    0 ;    0 ; liquidated ;      $81
+S085     $59.8k    $59.8k   $117.4k ;   8.1%   0.0% ;    $17.9k        $0 ;    $23.5k ;    0 ;    0 ;          - ;    $1.1k
+S086     $31.8k    $31.4k   $124.5k ;  15.9%   0.0% ;     $9.5k      $100 ;    $11.8k ;    0 ;    0 ; liquidated ;     $654
+S087     $49.1k    $49.1k   $113.8k ;  16.0%   0.0% ;    $14.7k        $0 ;    $18.5k ;    0 ;    0 ; liquidated ;    $1.0k
+S088         $0  skipped: under $1,000 non-stable
+S089         $0  skipped: under $1,000 non-stable
+S090     $17.8k       $24   $111.2k ;  11.4%  11.4% ;     $4.7k     $4.7k ;        $9 ;    0 ;    0 ; liquidated ;       $1
+S091         $0  skipped: under $1,000 non-stable
+S092         $0  skipped: under $1,000 non-stable
+S093         $0  skipped: under $1,000 non-stable
+S094       $500  skipped: under $1,000 non-stable
+S095        $26  skipped: under $1,000 non-stable
+S096         $0  skipped: under $1,000 non-stable
+S097       $505  skipped: under $1,000 non-stable
+S098     $1.69M       $12    $99.9k ;  47.2%  47.2% ;   $582.2k   $582.2k ;        $0 ;    0 ;    0 ;          - ;       $0
+S099         $0  skipped: under $1,000 non-stable
+S100        $15  skipped: under $1,000 non-stable
+S101         $0  skipped: under $1,000 non-stable
+S102         $0  skipped: under $1,000 non-stable
+S103         $0  skipped: under $1,000 non-stable
+S104       $291  skipped: under $1,000 non-stable
+S105         $0  skipped: under $1,000 non-stable
+S106        $68  skipped: under $1,000 non-stable
+S107         $0  skipped: under $1,000 non-stable
+S108        $25  skipped: under $1,000 non-stable
+S109         $0  skipped: under $1,000 non-stable
+S110       $321  skipped: under $1,000 non-stable
+S111         $0  skipped: under $1,000 non-stable
+S112         $0  skipped: under $1,000 non-stable
+S113     $34.7k    $34.7k    $80.8k ;  16.0%   0.0% ;    $10.4k        $0 ;    $13.1k ;    0 ;    0 ; liquidated ;     $723
+S114         $0  skipped: under $1,000 non-stable
+S115    $109.3k    $42.4k    $80.0k ;  51.1%  51.2% ;    $33.7k    $21.0k ;    $15.8k ;    0 ;    0 ; liquidated ;     $878
+S116         $0  skipped: under $1,000 non-stable
+S117     $38.0k    $38.0k    $85.0k ;  16.0%   0.0% ;    $11.4k        $0 ;    $14.3k ;    0 ;    0 ; liquidated ;     $791
+S118      $1.1k     $1.1k    $77.8k ;  16.0%   0.0% ;      $332        $0 ;      $416 ;    0 ;    0 ; liquidated ;      $23
+S119         $0  skipped: under $1,000 non-stable
+S120         $0  skipped: under $1,000 non-stable
+S121     $22.1k    $22.1k   $157.6k ;  16.0%   0.0% ;     $6.6k        $0 ;     $8.3k ;    0 ;    0 ; liquidated ;     $460
+S122         $0  skipped: under $1,000 non-stable
+S123    $146.7k   $126.4k   $167.6k ;  16.6%   6.3% ;    $44.0k     $6.1k ;    $47.6k ;    0 ;    0 ;          - ;    $2.6k
+S124    $301.3k   $171.4k    $72.7k ;  26.4%  26.3% ;    $98.7k    $85.8k ;    $64.8k ;  948 ;    0 ;          - ;    $1.1k
+S125         $0  skipped: under $1,000 non-stable
+S126        $12  skipped: under $1,000 non-stable
+S127         $0  skipped: under $1,000 non-stable
+S128        $49  skipped: under $1,000 non-stable
+S129         $2  skipped: under $1,000 non-stable
+S130         $0  skipped: under $1,000 non-stable
+S131       $300  skipped: under $1,000 non-stable
+S132        $31  skipped: under $1,000 non-stable
+S133         $5  skipped: under $1,000 non-stable
+
+## C: S7 census addresses (Base + Ethereum) — 12 addresses; 11 with >= $1,000 non-stable today
+set k1 on base: 3 addresses, p50 non-stable $41.8k, 82% of it on the allowlist, summed loss at a 30 % fall $49.6k unhedged -> $36.3k hedged at 1x, no stablecoins: 0
+set k2 on base: 2 addresses, p50 non-stable $1.4k, 93% of it on the allowlist, summed loss at a 30 % fall $842 unhedged -> $842 hedged at 1x, no stablecoins: 2
+set k2 on ethereum: 6 addresses, p50 non-stable $4.0k, 0% of it on the allowlist, summed loss at a 30 % fall $13.85M unhedged -> $13.85M hedged at 1x, no stablecoins: 2
+with ETH/BTC/SOL/PAXG (or a wrapper) worth >= $10: 9 | hedge placed: 4 | no stablecoins, so no margin available: 4 | stablecoins too few for a first order: 2 | only tokens off the allowlist: 2
+margin-limited at 1x (50 % of stablecoins < the hedge's margin; the check shrank orders): 2; C001 3% offset at the end, 1565 fills + 584 sub-$10 orders after entry; C009 5% offset at the end, 60 fills + 2022 sub-$10 orders after entry
+against S7's own valuation of the same 12 addresses (Blockscout): median difference 1.3%; under $1,000 by this script's count: 1
+non-stable today across them: $46.32M = on the allowlist $149.5k + a Hyperliquid perp exists but not allowlisted $30.9k + no Hyperliquid perp $46.14M; of which held at today's price for lack of a path $46.13M
+
+Main table: margin posted = 1x the hedged notional (capped at 50 % of stablecoins). Rows above the line: every address with >= $1,000 non-stable.
+
+metric                                      n        p10        p50        p90
+non-stable holding today                   11      $1.3k      $5.7k     $93.8k
+share of it on the allowlist               11         0%        99%       100%
+max drawdown 90 d, unhedged                11       9.3%      15.9%      25.4%
+max drawdown 90 d, hedged                  11       0.0%      15.9%      25.4%
+max drawdown $, unhedged                   11       $200       $364      $8.0k
+max drawdown $, hedged                     11         $5       $349      $8.0k
+loss at a 30 % fall, unhedged              11       $390      $1.7k     $28.1k
+loss at a 30 % fall, hedged                11       $368       $625     $27.4k
+  hedged, as % of the holding              11      28.4%      30.0%      30.0%
+90-day change, unhedged                    11         $0       $493      $9.5k
+90-day change, hedged                      11         $0       $493      $7.5k
+-- below: the addresses where a hedge was placed --
+margin needed (least the rule accepts)      4       $289      $8.5k     $29.6k
+  as % of the address's stablecoins         4      19.0%     203.5%     495.0%
+margin posted at 1x                         4        $97      $1.7k     $13.3k
+rebalances after entry (filled)             4          0         30       1114
+  orders the venue would reject (< $10)     4          0        292       1591
+hours equity < 4 x MM, hourly close         4          0          0          0
+hours equity < 4 x MM, hourly high          4          0          0          0
+hours over 2x leverage, unchecked           4          0        445       1260
+lowest health (equity / 4 x MM)             4       2.96       5.30       6.78
+funding received (+) / paid (-)             4         $3        $39       $582
+taker fees                                  4         $0         $7        $29
+health after a further 30 % rally           4      -0.25       2.34       3.35
+
+Margin sensitivity, the same 4 hedged addresses (min = the least the safety check accepts, 2x at entry; 1x = margin equal to the hedged notional; max = 50 % of stablecoins, the share rule's ceiling):
+margin  p50 posted  within 4xMM once  liquidated  limited  p50 rebal  p50 hedged MDD  p50 30% loss  p50 90-d change
+min          $1.7k                 1           1        2         30           15.8%         $1.7k             $840
+1x           $1.7k                 0           0        2         30           15.5%         $1.7k             $847
+max          $1.7k                 0           0        2         30           15.5%         $1.7k             $847
+Off-allowlist tokens with a Hyperliquid perp: their DefiLlama spot path against the perp's own 1 h closes (the basis a hedge of them would carry): AERO median 0.4%, p95 1.9%; MORPHO median 0.4%, p95 1.9%; NEAR median 0.1%, p95 0.4%
+
+Summed over the 11 addresses (dollar-weighted), loss at a 30 % fall: unhedged $13.90M; hedged min $13.88M (0% less); 1x $13.88M (0% less); max $13.88M (0% less)
+What-if, not the rule: with every token that has a Hyperliquid perp (ARB, GMX, AAVE, ...) on the allowlist and fully offset, the summed loss would be $13.84M (the no-perp part only).
+
+Per address (ids only), margin 1x unless marked. $: non-stable today | on the allowlist | stables ; max drawdown unhedged / hedged ; loss at a 30 % fall unhedged / hedged ; margin needed (min) ; rebalances ; hours < 4xMM close ; liquidated at min margin? ; funding
+C001     $93.8k    $93.8k     $6.4k ;  16.0%  15.9% ;    $28.1k    $27.4k ;    $35.3k ; 1565 ;    0 ;          - ;      $74
+C002     $41.8k    $41.8k    $35.2k ;   9.3%   0.0% ;    $12.5k        $1 ;    $16.2k ;    0 ;    0 ;          - ;     $799
+C003     $29.7k       $11      $300 ;  25.4%  25.4% ;     $8.9k     $8.9k ;        $0 ;    0 ;    0 ;          - ;       $0
+C004      $1.5k     $1.5k        $0 ;  16.0%  16.0% ;      $452      $452 ;      $567 (no margin) ;    0 ;    0 ;          - ;       $0
+C005      $1.3k     $1.1k        $0 ;  13.9%  13.9% ;      $390      $390 ;      $418 (no margin) ;    0 ;    0 ;          - ;       $0
+C006      $2.2k      $117      $590 ;  15.3%  15.2% ;      $660      $625 ;       $44 ;    0 ;    0 ; liquidated ;       $2
+C007      $1.2k     $1.2k        $0 ;  16.0%  16.0% ;      $368      $368 ;      $461 (no margin) ;    0 ;    0 ;          - ;       $0
+C008      $5.7k     $5.7k        $0 ;  15.9%  15.9% ;     $1.7k     $1.7k ;     $2.1k ;    0 ;    0 ;          - ;       $0
+C009      $8.3k     $2.3k      $239 ;  43.8%  43.9% ;     $2.8k     $2.7k ;      $862 ;   60 ;    0 ;          - ;       $3
+C010    $46.13M        $0        $0 ;   0.0%   0.0% ;   $13.84M   $13.84M ;        $0 (no margin) ;    0 ;    0 ;          - ;       $0
+C011      $1.9k     $1.9k        $7 ;  15.9%  15.9% ;      $584      $584 ;      $727 ;    0 ;    0 ;          - ;       $0
+C012         $3  skipped: under $1,000 non-stable
+
+## Cross-check: the 12 largest non-stable holders of S, valued again by Blockscout v2
+id    this script (multicall + DefiLlama)   Blockscout (balances + exchange_rate)   difference
+S046       $10.40M                                   $10.52M       +1.2%
+S001        $5.05M                                    $6.94M      +37.4%
+S002        $2.00M                                    $2.04M       +1.8%
+S098        $1.69M                                    $1.71M       +1.6%
+S017        $1.32M                                    $1.33M       +1.2%
+S008       $964.7k                                   $965.2k       +0.1%
+S025       $389.0k                                   $392.2k       +0.8%
+S124       $301.3k                                   $304.1k       +1.0%
+S123       $146.7k                                   $147.9k       +0.8%
+S115       $109.3k                                   $109.8k       +0.4%
+S055        $76.7k                                    $77.2k       +0.7%
+S070        $61.4k                                    $61.9k       +0.8%
+median absolute difference 0.9%
+
+## Window check: one-coin hedges over every 90-day window starting weekly (Hyperliquid 4 h candles)
+coin   windows                    span   min: <4xMM  min: liq.   1x: <4xMM  1x: liq.   1x lowest health p10/p50
+BTC         96  2024-09-16..2026-10-16          10%         8%          0%        0%          8.36 / 15.60
+ETH         96  2024-09-16..2026-10-16          32%        31%         12%        5%          1.02 / 8.81
+SOL         96  2024-09-16..2026-10-16          35%        26%          3%        0%          2.28 / 6.44
+PAXG        69  2025-03-27..2026-10-16          30%         3%          0%        0%          2.57 / 3.86
