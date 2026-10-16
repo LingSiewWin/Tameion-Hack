@@ -70,7 +70,7 @@ export function NeedsYou() {
     <Section title="Needs you" icon={Inbox} tone={empty ? "default" : "attention"} description={empty ? undefined : "The agent prepared these. Your tap decides."} flush>
       {empty ? (
         <EmptyState icon={CheckCircle2} title="Nothing waiting">
-          {inbox.mode === "Propose" ? "While the agent asks before paying, every payment comes here first." : undefined}
+          {inbox.mode === "Propose" ? "While the agent asks before paying, every bill comes here first; it buys nothing by itself until Autopilot." : undefined}
         </EmptyState>
       ) : (
         <Rows>
@@ -182,7 +182,7 @@ function NeedItem({ n }: { n: NeedRow }) {
           Pay <span className="figures font-semibold">{usd(n.amount)} USDC</span> to <Payee addr={n.counterparty} />
         </>
       }
-      why={plainWhy(n.why)}
+      why={[n.reason, plainWhy(n.why)].filter(Boolean).join(" · ")}
     >
       {mayHaveEnded && (
         <Button
@@ -219,37 +219,57 @@ function NeedItem({ n }: { n: NeedRow }) {
 }
 
 function SellerRow({ s, confirm }: { s: Seller; confirm: Confirm }) {
-  const { sign, refresh } = useAccount();
+  const { sign, refresh, inbox, cfg } = useAccount();
   const { state, run } = useAction();
+  // An outside agent's request for a payee reads as a payee, not a seller (docs/110 row 9): its amount is the per-payment limit.
+  const payee = !!s.askedBy;
+  // x402 buying needs Autopilot (docs/60 P-174): on "Asks before paying" approving is not enough, and the row says so.
+  const auto = inbox?.mode === "Autopilot";
+  const what = payee ? "pay it" : `buy from ${s.host}`;
   return (
     <Row
       state={state}
       title={
-        <>
-          Let the agent buy from <span className="font-semibold">{s.host}</span> — <span className="figures">{usd(s.amount)} USDC</span> a
-          call, paid to <Payee addr={s.seller} />
-        </>
+        payee ? (
+          <>
+            Let the agent pay <Payee addr={s.seller} /> — up to <span className="figures">{usd(s.amount)} USDC</span> a payment
+          </>
+        ) : (
+          <>
+            Let the agent buy from <span className="font-semibold">{s.host}</span> — <span className="figures">{usd(s.amount)} USDC</span> a
+            call, paid to <Payee addr={s.seller} />
+          </>
+        )
       }
-      why={`It wanted it for: ${s.reason ?? "—"}. After this it buys from it by itself, never more than your limits.`}
+      why={`${payee ? `${s.askedBy} asked` : "It wanted it for"}: ${s.reason ?? "—"}. ${
+        auto
+          ? `After this it may ${what} by itself, never more than your limits.`
+          : `It may ${what} by itself only on Autopilot; you are on Asks before paying, so after you approve it still waits until you turn Autopilot on.`
+      }`}
     >
       <Button
         disabled={state.kind === "working"}
         onClick={() =>
           run("Approving…", async () => {
             const ok = await confirm({
-              title: `Let the agent buy from ${s.host}?`,
+              title: payee ? "Let the agent pay this payee?" : `Let the agent buy from ${s.host}?`,
               action: "Approve with passkey",
               body: (
                 <p>
-                  Approves <Payee addr={s.seller} nameable={false} /> as a payee, so the agent may buy from {s.host} inside your limits.
-                  Valid for ten minutes, and only while the terms you see hold.
+                  Approves <Payee addr={s.seller} nameable={false} /> as a payee, so the agent may {what} inside your limits
+                  {auto ? "" : " once Autopilot is on"}. Valid for ten minutes, and only while the terms you see hold.
                 </p>
               ),
             });
             if (!ok) throw new Error("cancelled");
             const ex = await sign(s.to, s.data, { fn: PAYEES, attested: true, rows: [{ to: s.seller }] });
             setTimeout(refresh, 4000);
-            return { text: `The agent may buy from ${s.host} once the waiting period ends.`, href: ex.explorer };
+            // The contract's waiting period, said as a time (docs/60 P-172 item 9).
+            const from = new Date(Date.now() + cfg.delaySecs * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+            return {
+              text: `Approved. The agent may ${what} from about ${from}, after the ${cfg.delaySecs} s waiting period${auto ? "" : ", and only once Autopilot is on"}.`,
+              href: ex.explorer,
+            };
           })
         }
       >
