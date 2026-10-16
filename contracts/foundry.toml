@@ -1,0 +1,33 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc_version = "0.8.28"
+remappings = ["@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"]
+# OpenZeppelin's P256 Solidity fallback (used where a chain has no P-256
+# precompile, e.g. Arc) needs the IR pipeline to compile.
+optimizer = true
+optimizer_runs = 200
+via_ir = true
+# Addresses are CREATE2 of the creation code (PLAN 5.22, 5.32), so the code
+# must depend on what the contract does, never on its comments or layout:
+# no metadata hash in the bytecode. A `forge fmt` once moved every new
+# owner's address through the metadata hash alone (docs/60 P-33).
+bytecode_hash = "none"
+cbor_metadata = false
+# Scripts read passkey approvals written under the git-ignored runtime/.
+fs_permissions = [{ access = "read", path = "../runtime" }]
+
+[rpc_endpoints]
+arc_testnet = "https://rpc.testnet.arc.network"
+local = "http://127.0.0.1:8545"
+
+[lint]
+# screaming-snake-case-const: TestUSDC's `name`, `symbol` and `decimals` are
+#   fixed by ERC-20. Renaming them to satisfy a style lint would break the
+#   interface every wallet and indexer expects.
+# screaming-snake-case-immutable: BudgetPolicy exposes its immutables as public
+#   getters that callers read as `principal()` and `identityRegistry()`.
+#   Keeping them camelCase keeps the ABI readable and matches the rest of the
+#   codebase; the lint is a style preference, not a correctness one.
+exclude_lints = ["screaming-snake-case-const", "screaming-snake-case-immutable"]
