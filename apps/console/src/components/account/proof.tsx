@@ -107,10 +107,8 @@ function RecordList() {
       </Rows>
       <p className="text-caption text-muted-foreground">
         Nodes asked: {(NODES[chain] ?? []).map((u) => new URL(u).host).join(" and ") || "none known for this chain"}. From
-        a terminal, the same check: <code className="break-all font-mono">scripts/verify_tenant.sh {origin()} {tenant.policy}</code>.{" "}
-        <a className="font-medium text-foreground underline-offset-4 hover:underline" href="/level1">
-          Every receipt
-        </a>
+        a terminal, the same check: <code className="break-all font-mono">scripts/verify_tenant.sh {origin()} {tenant.policy}</code>. Every payment&apos;s
+        receipt is in Recent, beside it.
       </p>
     </div>
   );
