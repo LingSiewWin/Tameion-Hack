@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tameion Watch</title>
+<meta name="description" content="Paste a treasury address. See what it owes, what an agent would pay, and the most a stolen key could lose. Read-only: no key, nothing sent.">
+<style>
+  :root { --bg:#f6f5f1; --ink:#171717; --mute:#6b6b66; --line:#dedcd4; --accent:#1f6f5c; --amber:#a3630a; --crimson:#9b2c2c; --card:#ffffff; --mono:"SF Mono",ui-monospace,Menlo,monospace; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#121311; --ink:#ebe9e2; --mute:#9a9992; --line:#2b2c28; --accent:#5fc3a4; --amber:#e3a24a; --crimson:#e07070; --card:#1a1b18; } }
+  :root[data-theme="dark"] { --bg:#121311; --ink:#ebe9e2; --mute:#9a9992; --line:#2b2c28; --accent:#5fc3a4; --amber:#e3a24a; --crimson:#e07070; --card:#1a1b18; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 -apple-system,Inter,system-ui,sans-serif; }
+  main { max-width:880px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 4px; letter-spacing:-0.01em; }
+  .sub { color:var(--mute); margin:0 0 24px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin:0 0 16px; }
+  label { display:block; font-size:12px; color:var(--mute); text-transform:uppercase; letter-spacing:.06em; margin:0 0 4px; }
+  input, select { width:100%; font:inherit; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); }
+  .row { display:grid; grid-template-columns:1fr; gap:12px; }
+  @media (min-width:640px) { .row { grid-template-columns:2fr 1fr 1fr; } .row.caps { grid-template-columns:1fr 1fr 1fr; } }
+  button { font:inherit; padding:10px 16px; border-radius:8px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; }
+  button[disabled] { opacity:.6; cursor:default; }
+  .ghost { background:transparent; color:var(--accent); }
+  .muted { color:var(--mute); }
+  .mono { font-family:var(--mono); font-size:13px; }
+  .bar { height:8px; background:var(--line); border-radius:4px; overflow:hidden; margin:8px 0; }
+  .bar > div { height:100%; background:var(--accent); width:0%; transition:width .4s; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-size:11px; color:var(--mute); text-transform:uppercase; letter-spacing:.06em; }
+  .pay { color:var(--accent); font-weight:600; } .ask { color:var(--amber); font-weight:600; } .wait { color:var(--mute); }
+  .big { font-size:22px; font-weight:600; }
+  .grid3 { display:grid; grid-template-columns:1fr; gap:12px; } @media (min-width:640px) { .grid3 { grid-template-columns:repeat(3,1fr); } }
+  .hide { display:none; }
+  .warn { color:var(--crimson); }
+  a { color:var(--accent); }
+  details summary { cursor:pointer; color:var(--mute); }
+  footer { color:var(--mute); font-size:13px; margin-top:32px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Tameion Watch</h1>
+  <p class="sub">Paste a treasury address. See what it owes, what an agent would pay, and the most a stolen key could lose. Read-only: no key, nothing sent, nothing stored but this report.</p>
+
+  <form class="card" id="f">
+    <div class="row">
+      <div><label>Address <a class="muted" href="?chain=arc-testnet&address=0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25&days=7" title="the project's own Arc testnet treasury, which pays two bills every three minutes">(no address? try the demo treasury)</a></label><input id="address" placeholder="0x…" required autocomplete="off" spellcheck="false"></div>
+      <div><label>Chain</label><select id="chain"></select></div>
+      <div><label>Days of history</label><input id="days" type="number" min="7" max="365" value="90"></div>
+    </div>
+    <details style="margin-top:10px"><summary>Caps to print the maximum loss under (optional) · other wallets of the same owner</summary>
+      <div class="row caps" style="margin-top:10px">
+        <div><label>Per-action cap (USDC)</label><input id="perAction" placeholder="e.g. 25000"></div>
+        <div><label>Daily cap (USDC)</label><input id="daily" placeholder="e.g. 170000"></div>
+        <div><label>Reserve floor (USDC)</label><input id="floor" placeholder="e.g. 340000"></div>
+      </div>
+      <div style="margin-top:10px"><label>Also read these wallets (comma-separated)</label><input id="also" placeholder="0x…, 0x…"></div>
+    </details>
+    <div style="margin-top:14px; display:flex; gap:10px; align-items:center">
+      <button id="go" type="submit">Watch this address</button>
+      <span class="muted" id="hint">Takes a minute or a few, depending on the chain's public RPC.</span>
+    </div>
+  </form>
+
+  <section class="card hide" id="progress">
+    <div class="mono" id="phase">queued</div>
+    <p class="muted hide" id="cachedNote">This report comes from a scan of the same address within the last hour. <a href="#" id="rescan">Scan again now</a>.</p>
+    <div class="bar"><div id="barfill"></div></div>
+    <div class="muted mono" id="pstat"></div>
+  </section>
+
+  <section class="hide" id="out">
+    <div class="card">
+      <div class="grid3">
+        <div><label>Obligations inferred</label><div class="big" id="nObl">–</div><div class="muted" id="nOblSub"></div></div>
+        <div><label>Needed within 30 days</label><div class="big" id="liq">–</div><div class="muted" id="liqSub"></div></div>
+        <div><label>USDC balance now</label><div class="big" id="bal">–</div><div class="muted" id="balSub"></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <label>What this address pays on a schedule, from its own transfers</label>
+      <table id="tbl"><thead><tr><th>Payee</th><th>Amount</th><th>Every</th><th>Confidence</th><th>Next due</th><th>Agent would</th></tr></thead><tbody></tbody></table>
+      <p class="muted" id="emptyNote" style="display:none">No recurring payment found in this window. Try more days, or add the wallet the bills were paid from.</p>
+      <p class="muted">"Agent would" assumes you approved the payee once with your passkey; nothing is paid before that. Every row links its evidence.</p>
+    </div>
+
+    <div class="card" id="mlCard">
+      <label>The most a stolen key could lose, under these caps</label>
+      <div class="row caps" style="margin-top:8px">
+        <div><label>Per-action cap</label><input id="mlPer"></div>
+        <div><label>Daily cap</label><input id="mlDaily"></div>
+        <div><label>Reserve floor</label><input id="mlFloor"></div>
+      </div>
+      <table style="margin-top:12px"><tbody>
+        <tr><td>Agent key, per rolling 24 h</td><td class="mono" id="mlAgent">–</td><td class="muted">only to payees you approved; stopped by one call</td></tr>
+        <tr><td>Agent key, per call</td><td class="mono" id="mlCall">–</td><td class="muted">the per-action cap</td></tr>
+        <tr><td>Operator key, with the 48 h delay rule</td><td class="mono" id="mlOp">–</td><td class="muted">two days of the daily cap; cannot add a payee; you can cancel the raise</td></tr>
+        <tr><td>Your passkey</td><td class="mono" id="mlPrin">–</td><td class="muted">everything, by design — it is yours</td></tr>
+      </tbody></table>
+      <p class="muted">Read from the chain, computed in your browser: min(daily cap, balance − floor). The same formula runs against the deployed contract in <span class="mono">scripts/max_loss.sh</span>.</p>
+    </div>
+
+    <div class="card">
+      <label>Next step</label>
+      <p><b>Level 0 is what you just did: read-only, no key.</b> Level 1: a policy contract with your passkey as the only key that can add a payee or withdraw, the agent in <i>Propose</i> mode (it prepares each payment, your phone signs). Level 2: Autopilot inside the caps above.</p>
+      <p><a id="toLevel1" href="/level1"><b>Start Level 1 with these caps and payees</b></a> (your passkey, your policy, Propose mode; Arc testnet today) · <a id="contact" href="{{CONTACT_URL}}" target="_blank" rel="noopener">Talk to us</a> · <a href="{{REPO_URL}}" target="_blank" rel="noopener" id="repo">Read the code and the proofs</a></p>
+      <p class="muted">This report: <span class="mono" id="permalink"></span></p>
+    </div>
+  </section>
+
+  <section class="card hide" id="err"><div class="warn" id="errText"></div></section>
+
+  <footer>Tameion · a treasury account for onchain companies that keeps itself solvent. The agent's key can pay payees you approved, under a cap, and nothing else.</footer>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const fmt = (s) => s; // amounts arrive as "123.456789 USDC"
+const num = (s) => parseFloat(String(s).replace(/[^0-9.\-]/g, "")) || 0;
+const usdc = (n) => (Math.round(n * 1e6) / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 6 }) + " USDC";
+let chains = [];
+let report = null;
+
+async function loadChains() {
+  const r = await fetch("/api/chains"); const d = await r.json(); chains = d.chains;
+  const sel = $("#chain"); sel.innerHTML = "";
+  for (const c of chains) { const o = document.createElement("option"); o.value = c.key; o.textContent = `${c.name} · ${c.note}`; sel.appendChild(o); }
+  const q = new URLSearchParams(location.search);
+  if (q.get("chain")) sel.value = q.get("chain");
+  if (q.get("address")) $("#address").value = q.get("address");
+  if (q.get("days")) $("#days").value = q.get("days");
+  if (q.get("run")) poll(q.get("run"));
+}
+
+$("#f").addEventListener("invalid", (e) => { showErr(`${e.target.previousElementSibling ? e.target.previousElementSibling.textContent + ": " : ""}${e.target.validationMessage}`); }, true);
+$("#f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("#err").classList.add("hide"); $("#out").classList.add("hide");
+  const caps = ($("#perAction").value && $("#daily").value) ? { perAction: $("#perAction").value, daily: $("#daily").value, floor: $("#floor").value || "0" } : null;
+  const body = { chain: $("#chain").value, address: $("#address").value.trim(), days: Number($("#days").value), caps,
+                 alsoHistory: $("#also").value.split(",").map(s => s.trim()).filter(Boolean), fresh: window.__fresh === true };
+  window.__fresh = false;
+  $("#go").disabled = true;
+  const r = await fetch("/api/watch", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const d = await r.json();
+  if (!r.ok) { showErr(d.error || r.statusText); $("#go").disabled = false; return; }
+  history.replaceState(null, "", `?run=${d.id}&chain=${body.chain}&address=${body.address}&days=${body.days}`);
+  $("#cachedNote").classList.toggle("hide", !d.cached);
+  poll(d.id);
+});
+$("#rescan").onclick = (e) => { e.preventDefault(); window.__fresh = true; $("#f").requestSubmit(); };
+
+function showErr(t) { $("#errText").textContent = t; $("#err").classList.remove("hide"); }
+
+async function poll(id) {
+  $("#progress").classList.remove("hide"); $("#go").disabled = true;
+  for (;;) {
+    const r = await fetch(`/api/watch/${id}`); const j = await r.json();
+    if (!r.ok) { showErr(j.error || "run not found"); break; }
+    const p = j.progress || {};
+    $("#phase").textContent = `${j.status}: ${p.phase || "waiting for a scan slot"}`;
+    const pct = p.totalBlocks ? Math.round(100 * p.scannedBlocks / p.totalBlocks) : 0;
+    $("#barfill").style.width = pct + "%";
+    const eta = p.etaSecs == null ? "" : ` · about ${p.etaSecs < 90 ? p.etaSecs + " s" : Math.round(p.etaSecs / 60) + " min"} left`;
+    $("#pstat").textContent = p.totalBlocks ? `${pct}% · ${p.transfersSoFar} transfers so far${eta}` : "";
+    if (j.status === "done") { render(j.report, id); break; }
+    if (j.status === "failed") { showErr(j.error); break; }
+    await new Promise(f => setTimeout(f, 2000));
+  }
+  $("#go").disabled = false;
+}
+
+function render(d, id) {
+  report = d;
+  $("#progress").classList.add("hide"); $("#out").classList.remove("hide");
+  $("#nObl").textContent = d.obligations.length;
+  $("#nOblSub").textContent = `${d.transfers} transfers read · ${d.counterparties} counterparties · ${d.days} days on ${d.chain.name}`;
+  $("#liq").textContent = d.liquidity30d;
+  $("#liqSub").textContent = `${d.upcoming30d} bills fall due · ${d.dueNow} due now`;
+  $("#bal").textContent = d.balance;
+  $("#balSub").textContent = num(d.balance) >= num(d.liquidity30d) ? "covers the next 30 days" : "short of the next 30 days";
+  const he = d.holdingsElsewhere;
+  if (he && he.chains && he.chains.length) $("#balSub").textContent += ` · ${he.total} more in Circle Gateway (${he.chains.map(c => `${c.chain} ${c.balance.replace(" USDC", "")}`).join(", ")})`;
+  // PLAN 5.49: what it holds outside dollars, in days of its own bills.
+  const ex = d.exposure;
+  if (ex && ex.holdings && ex.holdings.length && ex.notionalUsd) $("#balSub").textContent += ` · also ${Number(ex.ethTotal).toLocaleString("en-US", { maximumFractionDigits: 4 })} ETH ($${Number(ex.notionalUsd).toLocaleString("en-US", { maximumFractionDigits: 2 })}); a 30% fall would cost $${Number(ex.fall30Usd).toLocaleString("en-US", { maximumFractionDigits: 2 })}${ex.fall30Days != null ? `, about ${ex.fall30Days} days of these bills` : ""} — Tameion can keep that protected, up to a printed maximum`;
+  const tb = $("#tbl tbody"); tb.innerHTML = "";
+  $("#emptyNote").style.display = d.obligations.length ? "none" : "block";
+  for (const o of d.obligations) {
+    const tr = document.createElement("tr");
+    const cls = o.verdict === "pay" ? "pay" : (o.verdict === "ask" ? "ask" : "wait");
+    const ev = o.evidence.slice(-1)[0];
+    const link = ev ? `${d.chain.explorer}/tx/${ev}` : "#";
+    tr.innerHTML = `<td class="mono"><a href="${d.chain.explorer}/address/${o.counterparty}" target="_blank" rel="noopener">${o.counterparty.slice(0,6)}…${o.counterparty.slice(-4)}</a><br><span class="muted">${o.kind} · <a href="${link}" target="_blank" rel="noopener">${o.samples} payments</a></span></td>
+      <td class="mono">${o.amount}${o.amountMin !== o.amountMax ? `<br><span class="muted">${o.amountMin.replace(" USDC","")}–${o.amountMax}</span>` : ""}</td><td>${o.every}</td><td>${o.confidence}</td>
+      <td>${new Date(o.nextDue*1000).toISOString().slice(0,10)}${o.dueWindowDays > 0.05 ? ` <span class="muted">±${o.dueWindowDays.toFixed(1)} d</span>` : ""}${o.overdueDays > 0 ? ` <span class="ask">(${o.overdueDays.toFixed(1)} d overdue)</span>` : ""}</td>
+      <td><span class="${cls}">${o.verdict}</span><br><span class="muted">${o.why}</span></td>`;
+    tb.appendChild(tr);
+  }
+  // Max-loss box: seed from the request's caps or sensible defaults.
+  const per = d.maxLoss ? num(d.maxLoss.perActionCap) : Math.max(...d.obligations.map(o => num(o.amount)), 0);
+  const daily = d.maxLoss ? num(d.maxLoss.dailyCap) : Math.max(num(d.liquidity30d), per);
+  const floor = d.maxLoss ? num(d.maxLoss.reserveFloor) : 0;
+  $("#mlPer").value = per; $("#mlDaily").value = daily; $("#mlFloor").value = floor;
+  maxLoss();
+  for (const id2 of ["mlPer", "mlDaily", "mlFloor"]) $("#" + id2).oninput = maxLoss;
+  $("#permalink").textContent = location.origin + location.pathname + `?run=${id}`;
+  $("#toLevel1").href = `/level1?run=${id}`;
+}
+
+function maxLoss() {
+  if (!report) return;
+  const bal = num(report.balance), per = num($("#mlPer").value), daily = num($("#mlDaily").value), floor = num($("#mlFloor").value);
+  const agent = Math.max(0, Math.min(daily, bal - floor));
+  $("#mlAgent").textContent = usdc(agent);
+  $("#mlCall").textContent = usdc(Math.min(per, agent));
+  $("#mlOp").textContent = usdc(Math.min(bal, 2 * daily));
+  $("#mlPrin").textContent = usdc(bal);
+}
+
+loadChains();
+</script>
+</body>
+</html>

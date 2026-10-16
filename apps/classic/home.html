@@ -1,0 +1,1427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon.svg">
+<meta name="theme-color" content="#1f6f5c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Tameion</title>
+<meta name="description" content="A treasury account that pays your company's recurring bills by itself, inside a limit you set, and can prove every payment.">
+<style>
+  :root { --bg:#f6f5f1; --ink:#171717; --mute:#6b6b66; --line:#dedcd4; --accent:#1f6f5c; --amber:#a3630a; --crimson:#9b2c2c; --card:#ffffff; --mono:"SF Mono",ui-monospace,Menlo,monospace; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#121311; --ink:#ebe9e2; --mute:#9a9992; --line:#2b2c28; --accent:#5fc3a4; --amber:#e3a24a; --crimson:#e07070; --card:#1a1b18; } }
+  :root[data-theme="dark"] { --bg:#121311; --ink:#ebe9e2; --mute:#9a9992; --line:#2b2c28; --accent:#5fc3a4; --amber:#e3a24a; --crimson:#e07070; --card:#1a1b18; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 -apple-system,Inter,system-ui,sans-serif; }
+  main { max-width:720px; margin:0 auto; padding:40px 16px 64px; }
+  h1 { font-size:30px; line-height:1.15; margin:0 0 8px; letter-spacing:-.01em; }
+  .sub { color:var(--mute); margin:0 0 28px; font-size:17px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px 22px; margin:0 0 16px; overflow-wrap:anywhere; }
+  label { display:block; font-size:12px; color:var(--mute); text-transform:uppercase; letter-spacing:.06em; margin:0 0 6px; }
+  input { width:100%; font:inherit; padding:12px 14px; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--ink); }
+  /* A choice is a sentence, not a field name: no capitals, box beside its words. */
+  label.small { text-transform:none; letter-spacing:normal; font-size:14px; color:var(--ink); line-height:1.45; }
+  input[type=checkbox], input[type=radio] { width:auto; flex:0 0 auto; padding:0; margin-top:3px; }
+  .row { display:grid; gap:12px; grid-template-columns:1fr; } @media (min-width:600px) { .row { grid-template-columns:2fr 1fr; } }
+  button { font:inherit; font-weight:600; padding:12px 18px; border-radius:10px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; }
+  button[disabled] { opacity:.5; cursor:default; } .ghost { background:transparent; color:var(--accent); font-weight:500; }
+  .tiles { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:0 0 16px; }
+  .tile { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
+  .tile .k { font-size:12px; color:var(--mute); text-transform:uppercase; letter-spacing:.06em; }
+  .tile .v { font-size:28px; font-weight:650; margin:4px 0 0; letter-spacing:-.01em; } .tile .d { color:var(--mute); font-size:13px; }
+  .item { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 0; border-top:1px solid var(--line); }
+  .item:first-of-type { border-top:0; } .who { font-weight:600; } .why { color:var(--mute); font-size:13px; }
+  .amt { font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .mono { font-family:var(--mono); font-size:12.5px; word-break:break-all; }
+  .muted { color:var(--mute); } .ok { color:var(--accent); } .warn { color:var(--crimson); } .amber { color:var(--amber); }
+  .status { color:var(--mute); font-size:14px; margin:0 0 16px; }
+  .bar { height:4px; background:var(--line); border-radius:2px; overflow:hidden; margin:8px 0 0; } .bar > div { height:100%; width:0; background:var(--accent); transition:width .6s; }
+  .hide { display:none; } a { color:var(--accent); } .small { font-size:13px; }
+  .fig { overflow:hidden; margin:14px 0 18px; } .fig svg { display:block; width:100%; height:auto; }
+  @media (max-width:600px) { .fig { margin:10px -16px 14px; } .fig svg { width:118%; margin-left:-9%; }
+    .card .fig { margin:10px 0 0; } .card .fig svg { width:100%; margin-left:0; } }
+  .controls { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  footer { color:var(--mute); font-size:13px; margin-top:28px; }
+  * { min-width:0; }
+  @media (max-width:600px) {
+    h1 { font-size:24px; }
+    .tiles { grid-template-columns:1fr 1fr; } .tile .v { font-size:22px; }
+    .item { flex-wrap:wrap; } .item > div:last-child { width:100%; }
+    .controls button { padding:10px 12px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <!-- State A: nothing yet. Two facts, one button. -->
+  <section id="start">
+    <h1>Your bills, paid on time, inside a limit you set.</h1>
+    <p class="sub">Tameion reads what your company already pays, pays it when due, and can prove every payment. Your phone is the only key that can take money out.</p>
+    <p class="sub small hide" id="partnerLine"></p>
+    <p class="sub small" id="trustLine">The agent's key can pay payees you approved, under a cap, and nothing else. It cannot add a payee, raise its own limit, or withdraw. You sign; Tameion holds no key that can take your money.</p>
+    <div class="fig">{{HERO_SVG}}</div>
+    <div class="card">
+      <div class="row">
+        <div><label>The wallet that pays your bills today</label><input id="watched" placeholder="0x…" autocomplete="off" spellcheck="false"></div>
+        <div><label>Daily limit (USDC)</label><input id="daily" placeholder="e.g. 1000" inputmode="decimal"></div>
+      </div>
+      <div id="startPreview" class="small hide" style="margin-top:10px"></div>
+      <div id="inviteRow" class="hide" style="margin-top:12px"><label>Invite word</label><input id="invite"></div>
+      <label class="small" style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;cursor:pointer"><input type="checkbox" id="pull" style="margin-top:3px"> <span>Keep the money in my wallet. The agent pulls each payment from it, inside the limit; my wallet approves the limit once and can cut it to zero any time.</span></label>
+      <!-- docs/64: shown up front, these optional set-ups read as requirements
+           ("most browser wallets cannot yet" stopped 7 of 10 simulated buyers). -->
+      <details style="margin-top:12px"><summary class="small">More ways to set it up</summary>
+      <div class="small" style="margin-top:10px"><label for="startChain">Where your USDC is</label> <select id="startChain"></select></div>
+      <label class="small" style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;cursor:pointer"><input type="checkbox" id="keyless" style="margin-top:3px"> <span>No agent key at all. The agent reads and proposes; every payment waits for my one tap (one tap pays everything waiting), and standing orders pay themselves. Nothing anywhere holds a key that can pay from this account except my passkey.</span></label>
+      <label class="small" style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;cursor:pointer"><input type="checkbox" id="wallet7702" style="margin-top:3px"> <span>Make my wallet itself the account. Same address, and the money never moves: your wallet signs once and the limits live inside it. Today this works with developer wallets and some smart wallets, not most browser wallets. Your wallet keeps its own key; the limits bind only the agent.</span></label>
+      </details>
+      <p class="small muted" style="margin:12px 0 14px">Starting creates a key on this device (Face ID, Touch ID or your password manager) and reserves your account's address. Nothing goes on chain until money can reach it; the agent's first check then creates the account and proposes first. You turn on autopilot when you are ready.</p>
+      <button id="go">Start</button>
+      <p id="goOut" class="small warn"></p>
+    </div>
+    <p class="small muted" id="price"><b>What it costs.</b> {{PRICE_LINE}}</p>
+    <p class="small muted"><a id="useWallet" href="#" class="hide">Use the wallet in this browser</a><span id="useWalletSep" class="hide"> · </span>No wallet handy? <a id="demo" href="#">Try the demo treasury</a> · Just want a read-only report first? <a href="/watch">Watch an address</a></p>
+  </section>
+
+  <!-- State B: the account, running. -->
+  <section id="home" class="hide">
+    <h1 id="title">Your treasury</h1>
+    <p class="sub" id="headline"></p>
+    <p id="accounts" class="small muted hide"></p>
+    <p id="status" class="status"></p>
+    <div class="bar hide" id="bar"><div id="barfill"></div></div>
+    <div class="tiles">
+      <div class="tile"><div class="k">Paid</div><div class="v" id="tPaid">—</div><div class="d" id="tPaidD"></div></div>
+      <div class="tile"><div class="k">Needs you</div><div class="v" id="tNeed">—</div><div class="d" id="tNeedD"></div></div>
+      <div class="tile"><div class="k">Protected</div><div class="v" id="tProt">—</div><div class="d">the most it can pay out in a day</div></div>
+    </div>
+
+    <div class="card hide" id="previewText"></div>
+
+    <div class="card hide" id="fund">
+      <b>Fund it.</b> <span id="fundHow"></span>Send USDC to <span class="mono" id="fundAddr"></span>. The address is yours before the contract exists; the agent's first check creates the account there. Only your key can take it back out. <span class="small muted" id="faucet"></span>
+      <div style="margin-top:10px"><button id="fundBtn" class="hide"></button> <span class="small mono" id="fundOut"></span></div>
+      <div class="fig">{{LAZY_SVG}}</div>
+    </div>
+
+    <div class="card hide" id="allow">
+      <b>Allow it.</b> <span id="allowText"></span>
+      <div style="margin-top:10px"><button id="allowBtn" class="ghost">Allow from this browser</button> <button id="revokeBtn" class="ghost">Cut it to zero</button> <span class="small mono" id="allowOut"></span></div>
+      <div class="why" id="allowHow"></div>
+    </div>
+    <div class="card hide" id="delegateCard">
+      <b>Your wallet becomes the account.</b> <span class="small muted">One step only your wallet can take: one signature that puts the limits inside it. Nothing moves; the limits start to bind the agent the moment it lands.</span>
+      <details style="margin-top:8px"><summary class="small">For whoever runs your wallet</summary>
+      <pre class="small mono" id="delegateCmd" style="white-space:pre-wrap;word-break:break-all;margin-top:10px"></pre>
+      <div class="why" id="delegateWhy"></div>
+      </details>
+    </div>
+    <div class="card hide" id="runwayCard">
+      <b>Runway</b> <span id="runway"></span>
+      <div class="why" id="runwayWhy"></div>
+      <div id="runwayFix" style="margin-top:8px"></div>
+    </div>
+    <div class="card hide" id="protectCard">
+      <b>Protection</b> <span id="protectNow"></span>
+      <div class="why" id="protectWhy"></div>
+    </div>
+    <div class="card hide" id="elsewhere">
+      <b>Elsewhere</b> <span id="elseTotal"></span>
+      <div class="why" id="elseWhy"></div>
+      <div style="margin-top:10px"><button id="bring" class="ghost">Bring it into the account</button> <span class="small mono" id="bringOut"></span></div>
+    </div>
+    <div class="card hide" id="park">
+      <b>Fund it from another chain.</b> <span class="small muted">USDC you hold on another chain (testnets for now) goes into Circle Gateway there with one tap; once Circle credits it, one more tap above brings it into your account.</span>
+      <div class="row" style="margin-top:10px">
+        <div><label>From</label><select id="parkChain"></select></div>
+        <div><label>Amount (USDC)</label><input id="parkAmt" placeholder="e.g. 0.5" inputmode="decimal"></div>
+      </div>
+      <div style="margin-top:10px"><button id="parkGo" class="ghost">Send it to Circle Gateway</button> <span class="small muted" id="parkOut"></span></div>
+      <div class="why" id="parkWhy">Your wallet switches to that chain and asks you to confirm once, or twice if it cannot do both steps together. Tameion never touches the money: it goes from your wallet into Circle's Gateway under your own address.</div>
+    </div>
+    <div class="card hide" id="recommend">
+      <b>The agent recommends autopilot.</b> <span class="small muted" id="recWhy"></span>
+      <div style="margin-top:10px"><button id="recOn" class="ghost">Turn autopilot on</button> <span class="small muted">It starts after the delay unless you cancel; pausing stays one tap.</span></div>
+    </div>
+    <div class="card hide" id="suggest">
+      <b>The agent suggests</b> a daily limit of <span id="sugDaily"></span> USDC <span class="small muted" id="sugWhy"></span>
+      <div style="margin-top:10px"><button id="sugSet" class="ghost">Set it</button> <span class="small mono" id="sugOut"></span></div>
+    </div>
+    <div class="card">
+      <b>Needs you</b> <span class="small muted" id="needHint"></span>
+      <div id="need"></div>
+    </div>
+
+    <div class="hide" id="keyPaste" style="margin:0 0 16px"><input id="keyIn" placeholder="agent key" style="width:70%;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)"> <button id="keyUse" class="ghost">Use it</button></div>
+    <div class="card hide" id="renew">
+      <b id="renewTitle">The agent's authority</b> <span id="renewText"></span>
+      <div style="margin-top:10px"><button id="renewBtn" class="ghost">Renew for 90 days</button> <span class="small mono" id="renewOut"></span></div>
+    </div>
+    <div class="card hide" id="standing">
+      <b>Standing orders</b> <span class="small muted">— paid on their day by whoever is awake: the agent, you, anyone. Tameion being down changes nothing.</span>
+      <div id="standingList"></div>
+      <div id="standingSuggest"></div>
+      <div class="small mono" id="standingOut"></div>
+    </div>
+    <div class="card">
+      <b>Recent</b> <a href="#" id="statement" class="small hide">Download statement (CSV)</a> <a href="#" id="statementBank" class="small hide">· for Xero / QuickBooks</a>
+      <div id="recent"><p class="small muted">Nothing paid yet.</p></div>
+    </div>
+
+    <div class="card">
+      <div class="controls">
+        <button id="autopilot" class="ghost"></button>
+        <button id="pause" class="ghost">Pause</button>
+        <button id="check" class="ghost">Check now</button>
+        <span class="small muted" id="mode"></span>
+      </div>
+      <p id="ctlOut" class="small mono"></p>
+    </div>
+
+    <!-- docs/65 F5: one fold for everything a new owner does not need on day
+         one; it opens itself when a device asks to join or an approval waits. -->
+    <details id="settings" style="margin:0 0 16px"><summary class="small">More — other agents, owners and devices, recovery, bills to add, where the agent reports</summary>
+    <div class="card">
+      <b>Add bills the agent should know about</b> <span class="small muted">— one per line: payee address, USDC amount, every N days, and, if the invoice offers it, the early-payment discount ("2%/10" = 2% off when paid 10 days early; the agent takes it only when every other bill stays covered). The agent confirms them from history as it appears.</span>
+      <textarea id="billsIn" rows="3" style="width:100%;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);margin-top:8px" placeholder="0xabc…, 1200, 30"></textarea>
+      <div style="margin-top:10px"><button id="billsAdd" class="ghost">Approve payees &amp; add</button> <span class="small mono" id="billsOut"></span></div>
+    </div>
+    <div class="card">
+      <b>Where the agent reports</b> <span class="small muted" id="notifyNow">— after every check: what it paid, what needs you.</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <input id="notifyUrl" placeholder="https://… (your webhook)" style="flex:1 1 220px;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)">
+        <input id="notifyChat" placeholder="Telegram chat id (optional)" style="flex:0 1 200px;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)">
+      </div>
+      <div style="margin-top:10px"><button id="notifySet" class="ghost">Set with my key</button> <span class="small mono" id="notifyOut"></span></div>
+      <div style="margin-top:10px"><button id="pushOn" class="ghost">Tell me on this phone</button> <span class="small" id="pushOut"></span></div>
+    </div>
+    <div class="card" id="agentsCard">
+      <b>Your other agents</b> <span class="small muted" id="agentsNow">— give an agent a key to this account; it can look, run, prepare and, if you allow it, buy from payees you approved under your limits. It never signs for you.</span>
+      <div id="agentsList"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px" class="small">
+        <label><input type="checkbox" class="scope" value="read" checked> read</label>
+        <label><input type="checkbox" class="scope" value="run" checked> run checks</label>
+        <label><input type="checkbox" class="scope" value="prepare"> prepare calls for my key</label>
+        <label><input type="checkbox" class="scope" value="import"> add bills</label>
+        <label><input type="checkbox" class="scope" value="buy"> buy paid APIs (inside the limits)</label>
+        <input id="agentLabel" placeholder="what it is (e.g. ops bot)" style="flex:1 1 160px;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)">
+        <input id="agentDays" value="90" inputmode="numeric" style="width:56px;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)"><span class="muted">days</span>
+        <button id="agentMint" class="ghost">Mint with my key</button>
+      </div>
+      <div class="small mono" id="agentOut" style="margin-top:8px;word-break:break-all"></div>
+      <div class="why">The first key you mint locks this account: from then on every look, check or prepared call needs a key. This browser keeps the one it minted. Your passkey stays the only thing that moves money or authority.</div>
+      <div class="fig">{{TRUST_SVG}}</div>
+    </div>
+    <div class="card" id="ownersCard">
+      <b>Who owns this account</b> <span class="small muted" id="ownersNow"></span>
+      <div id="ownersWaiting"></div>
+      <div id="ownersJoins"></div>
+      <div class="small muted" id="ownersHow" style="margin-top:8px"></div>
+      <div id="ownersAsk" class="hide" style="margin-top:8px"><button class="ghost" id="askJoin">Ask to join from this device</button> <span class="small" id="askOut"></span></div>
+    </div>
+    <div class="card hide" id="guardiansCard">
+      <b>If you lose your phone</b> <span class="small muted" id="guardiansNow"></span>
+      <textarea id="guardiansIn" rows="2" style="width:100%;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);margin-top:8px" placeholder="guardian addresses, one per line (a co-founder, a hardware wallet in a drawer)"></textarea>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px"><label class="small muted">How many must agree</label><input id="guardiansT" inputmode="numeric" value="2" style="width:60px;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)"> <button id="guardiansSet" class="ghost">Set with my key</button> <span class="small mono" id="guardiansOut"></span></div>
+      <div class="why">They can only propose a replacement key, which waits the recovery delay; you can cancel it until then. They cannot spend.</div>
+    </div>
+    </details>
+    <footer>
+      <a href="/level1">Receipts, proof &amp; settings</a> · <a id="nameIt" href="#">Name this account</a> · <a id="openElsewhere" href="#">Open on another device</a> · <a href="/watch">Watch another address</a> · <a href="{{REPO_URL}}" target="_blank" rel="noopener">How it works</a> · <a id="contact" href="{{CONTACT_URL}}" target="_blank" rel="noopener">Talk to us</a>
+    </footer>
+  </section>
+</main>
+<script src="/level1/call.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const hex = (buf) => "0x" + [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+const fromHex = (h) => new Uint8Array(h.replace(/^0x/, "").match(/../g).map(x => parseInt(x, 16)));
+const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const unb64u = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+let pub = null, tenant = null, cfg = null, inbox = null, timer = null, lastNudge = 0;
+
+const N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+function derToRS(der) {
+  const b = new Uint8Array(der); let i = 2;
+  const read = () => { if (b[i++] !== 0x02) throw new Error("bad DER"); let len = b[i++]; let v = 0n; for (let k = 0; k < len; k++) v = (v << 8n) | BigInt(b[i++]); return v; };
+  let r = read(), s = read(); if (s > N / 2n) s = N - s;
+  const to32 = (n) => "0x" + n.toString(16).padStart(64, "0");
+  return { r: to32(r), s: to32(s) };
+}
+// The agent key this browser holds for the current account (PLAN 5.31):
+// minted here by the passkey, kept here, sent as a bearer once the account
+// is gated. Any other agent gets its own.
+function agentKey() { try { return tenant ? store.get(`tameion.token.${tenant.policy}`) : null; } catch (e) { return null; } }
+function authHeaders() { const k = agentKey(); return k ? { authorization: `Bearer ${k}` } : {}; }
+// An action in flight — a passkey prompt the owner is reading, a wallet's
+// confirmation, a call to the service — holds the page still: the 15 s
+// refresh keeps fetching but does not redraw, so a row never snaps back to
+// "Pay" under the owner's finger while the payment is landing, and an error
+// stays on screen (docs/70 C3: a paid invoice showed "Pay" again at 20 s).
+let busy = 0;
+async function holding(fn) { busy++; try { return await fn(); } finally { busy--; } }
+const walletRequest = (a) => holding(() => window.ethereum.request(a));
+// A wallet answers with the hash before the transaction is mined; a first
+// check started then would see no money and the next one waits ten minutes.
+// Up to a minute for the receipt (a wallet that cannot say goes on at once).
+// A receipt that says the transaction failed is an error, never "done" (docs/60 P-72 B4).
+async function landed(tx) {
+  for (let i = 0; i < 60; i++) {
+    let r; try { r = await window.ethereum.request({ method: "eth_getTransactionReceipt", params: [tx] }); } catch (e) { return; }
+    if (r) { if (r.status === "0x0") throw new Error("the wallet's transaction failed on chain; nothing changed"); return; }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
+async function post(path, body) {
+  return holding(async () => {
+    const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json", ...authHeaders() }, body: JSON.stringify(body) });
+    const d = await r.json(); if (!r.ok) throw new Error(plainError(d.error || r.statusText)); return d;
+  });
+}
+// A refusal by the chain, in words (docs/70 C10: the owner was shown
+// "execution reverted, data: 0xa5fa8d2b…"). The service passes the node's
+// message; the revert data carries the contract's own error (its selector,
+// also inside the passkey contract's CallFailed(bytes)) or a token's
+// Error(string). Nothing is paid when this happens, and the words say so.
+const REFUSALS = [
+  [["InsufficientBalance(uint256,uint256)", "BelowFloor(uint256,uint256,uint256)"], "The account holds less than this payment, so nothing was paid. Add money and tap again."],
+  [["InsufficientAllowance(uint256,uint256)"], "Your wallet allows the account less than this payment, so nothing was paid. Allow more and tap again."],
+  [["OverPerActionCap(uint256,uint256)"], "Over the limit for one payment, so nothing was paid. Raise the limit or pay it in parts."],
+  [["OverDailyCap(uint256,uint256)", "OverDailyCap(uint256,uint256,uint256)"], "Over today's limit, so nothing was paid. It can go tomorrow, or raise the limit."],
+  [["BelowReserveFloor(uint256,uint256)"], "It would take the account below the reserve you keep, so nothing was paid."],
+  [["AlreadyExecuted(bytes32)"], "Already paid — a payment is never made twice."],
+  [["PayeeNotAttested(address)", "NotAttested(address)"], "Not one of your approved payees yet, so nothing was paid."],
+  [["PayeeCoolingOff(address,uint256)"], "A payee approved just now can be paid once the waiting period you set has passed."],
+  [["Paused()"], "The account is paused, so nothing was paid. Resume it to pay."],
+  [["TermsChanged(bytes32,bytes32)"], "Your limits or keys changed since this was prepared, so nothing was paid. Refresh and tap again."],
+  [["ApprovalExpired(uint64)"], "This approval expired, so nothing was paid. Refresh and tap again."],
+  [["AgentLapsed(uint64)"], "The agent's authority lapsed. Renew it to let the agent pay."],
+  [["BadPasskeySignature()"], "That passkey is not this account's owner, so nothing happened."],
+  [["NeedsMoreApprovals(uint8,uint8)"], "More owners need to approve this first."],
+  [["WindowFull()"], "Too many payments in this window; try again shortly."],
+];
+const REFUSAL_TEXT = [[/exceeds balance/i, REFUSALS[0][1]], [/exceeds allowance/i, REFUSALS[1][1]]];
+function plainError(msg) {
+  const m = String(msg || "");
+  const hexes = (m.match(/0x[0-9a-fA-F]{8,}/g) || []).map((h) => h.slice(2).toLowerCase()).join(" ");
+  if (!hexes && !/reverted/i.test(m)) return m;
+  for (const [sigs, words] of REFUSALS) if (sigs.some((g) => hexes.includes(TameionCall.selector(g).slice(2)))) return words;
+  // Error(string) — a token's own reason, e.g. "transfer amount exceeds balance".
+  const at = hexes.indexOf("08c379a0");
+  let reason = "";
+  if (at >= 0) { try { const b = hexes.slice(at + 8), n = parseInt(b.slice(64, 128), 16); reason = decodeURIComponent(b.slice(128, 128 + 2 * n).replace(/../g, "%$&")); } catch (e) {} }
+  for (const [re, words] of REFUSAL_TEXT) if (re.test(reason) || re.test(m)) return words;
+  return /reverted/i.test(m) ? `The chain refused this, so nothing was paid${reason ? ` (${reason})` : ""}. Refresh and try again.` : m;
+}
+const short = (a) => a ? a.slice(0, 6) + "…" + a.slice(-4) : "";
+// Address book (docs/62 §3.4: the owner should not read hex): a name per
+// payee, kept on this device only — a name the server stored could be set by
+// anyone who knows the account, and "Landlord" on an attacker's address is
+// how invoice fraud works. Confirmations still show the full address.
+const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const nameOf = (a) => (a && tenant && store.get(`tameion.payee.${tenant.policy}.${a.toLowerCase()}`)) || "";
+const who = (a) => { const n = nameOf(a); return n ? `${esc(n)} (${short(a)})` : short(a); };
+const whoText = (a) => { const n = nameOf(a); return n ? `${n} (${short(a)})` : short(a); }; // for textContent
+// The verifier's reasons in the owner's words (the surface rule: no
+// mechanism words on `/`; the exact checks stay on /level1). Unknown checks
+// fall back to the verifier's own text.
+const PLAIN = {
+  "payee-attested": "Not one of your approved payees yet. “Approve & pay” approves it and pays.",
+  "cycles-behind": "Nobody has paid this bill for a while: it may have ended. If it has, tap “Bill ended”.",
+  "solvency": "The account holds less than this bill.",
+  "pre:balance": "The account holds less than this bill.",
+  "pre:reserve": "Paying it would go below the amount you keep untouched.",
+  "per-action-cap": "More than one payment may be on its own.",
+  "daily-cap": "Over what may go out in a day.",
+  "amount-range": "More than this payee has been paid before.",
+  "payee-lookalike": "This address looks like another payee's. Check it before paying.",
+  "payee-unchanged": "The payee's details changed since the last payment.",
+  "pre:payee": "The payee's details changed since the last payment.",
+  "pre:confidence": "The agent is not sure enough that this is a real recurring bill.",
+  "pre:evidence": "Not enough past payments to be sure.",
+  "pre:known": "Never paid before.",
+  "pre:provenance": "The evidence for this bill is weak.",
+  "issuer-blocklist": "Circle has frozen this address; it cannot be paid.",
+  "idempotency": "Already paid.",
+  "pre:not-settled": "Already paid.",
+};
+// Server sentences carry amounts as the ledger prints them ("0.200000 USDC");
+// a person reads "0.20 USDC" (docs/65 F9).
+const pretty = (t) => String(t || "").replace(/(-?\d+\.\d{6}) USDC/g, (m, v) => usd(v) + " USDC");
+const plainWhy = (why) => {
+  if (!why) return "";
+  const seen = new Set(), out = [];
+  for (const part of String(why).split(" · ")) {
+    const k = part.split(":")[0].trim(), k2 = part.split(":").slice(0, 2).join(":").trim();
+    const t = PLAIN[k2] || PLAIN[k] || part;
+    if (!seen.has(t)) { seen.add(t); out.push(t); }
+  }
+  return pretty(out.join(" "));
+};
+// A pairing code for a key (PLAN 5.7): the joining device shows it, the
+// owner's card shows it, and the owner adds the device only if they match —
+// so a stranger who knows the account's link cannot pass for "the CFO".
+// 48 bits in three groups (docs/60 P-72: 24 bits could be ground in minutes);
+// the console (apps/console/src/lib/guard.ts pairCode) shows the same code.
+const pairCode = (qx, qy) => {
+  const h = TameionCall.keccak256(TameionCall.bytesOf(qx.replace(/^0x/, "") + qy.replace(/^0x/, "")));
+  const x = (typeof h === "string" ? h : TameionCall.hex(h)).replace(/^0x/, "").slice(0, 12).toUpperCase();
+  return `${x.slice(0, 4)}-${x.slice(4, 8)}-${x.slice(8, 12)}`;
+};
+const nameLink = (a) => ` <a href="#" class="small muted" data-name="${a}">${nameOf(a) ? "rename" : "name"}</a>`;
+// `raw` is what the service takes back; `usd` is what a person reads: no
+// trailing zeros past the cents, thousands grouped (docs/65 F9: "0.150000"
+// read as machine output).
+const raw = (s) => (s || "").replace(" USDC", "").trim();
+const usd = (s) => {
+  const v = raw(s), m = v.match(/^(-?)(\d+)(?:\.(\d+))?$/);
+  if (!m) return v;
+  const frac = (m[3] || "").replace(/0+$/, "");
+  return m[1] + Number(m[2]).toLocaleString("en-US") + "." + (frac.length < 2 ? frac.padEnd(2, "0") : frac);
+};
+const num = (s) => parseFloat(raw(s)) || 0;
+const ago = (t) => { const d = Math.max(0, Math.floor(Date.now() / 1000 - t)); return d < 90 ? `${d} s ago` : d < 5400 ? `${Math.round(d / 60)} min ago` : `${Math.round(d / 3600)} h ago`; };
+
+// The same clear signing as /level1: the page describes the call itself and
+// recomputes the challenge; anything it cannot describe is never signed.
+async function sign(target, data) { return holding(() => signNow(target, data)); }
+async function signNow(target, data) {
+  const d = TameionCall.describe(data);
+  if (!d.known) throw new Error(`not signing: this page cannot describe the call (${d.selector})`);
+  // A bound approval (PLAN 5.23) names the terms it rests on; this page
+  // recomputes them from what it shows and refuses a call bound to anything
+  // else. The contract refuses again if the terms move before it lands.
+  if (d.terms) {
+    const t = inbox && inbox.terms;
+    if (!t) throw new Error("not signing: this approval is bound to terms this page has not read");
+    const mine = TameionCall.termsFingerprint(t);
+    if (mine.toLowerCase() !== d.terms.toLowerCase()) throw new Error("not signing: the call is bound to different terms than the ones on this page");
+    if (d.deadline && d.deadline * 1000 < Date.now()) throw new Error("not signing: this approval expired; refresh and tap again");
+  }
+  const ch = await post("/api/level1/challenge", { chain: tenant.chain, owner: tenant.owner, target, data });
+  const chainId = (cfg.chains.find(c => c.key === tenant.chain) || {}).chainId;
+  const mine = TameionCall.challengeFor({ chainId, owner: tenant.owner, nonce: ch.nonce, target, data });
+  if (mine.toLowerCase() !== String(ch.challenge).toLowerCase()) throw new Error("not signing: the service's challenge differs from the one this page computed");
+  // PLAN 5.7: which of the owner's keys this device holds (0 = the first passkey).
+  const keys = (inbox && inbox.owners && inbox.owners.keys) || [];
+  const mineIx = keys.findIndex((k) => pub && k.qx.toLowerCase() === pub.qx.toLowerCase());
+  // The passkey this browser remembers may not be this account's (storage
+  // cleared — Safari drops a site's storage after 7 days unvisited — or a
+  // second account made elsewhere): then let the browser offer the passkeys
+  // it has for this site instead of demanding one it does not hold, which
+  // failed silently (docs/70 C3).
+  const id = pub && (mineIx >= 0 || !keys.length) ? pub.credentialId : null;
+  const assertion = await navigator.credentials.get({ publicKey: { challenge: fromHex(ch.challenge), rpId: location.hostname, userVerification: "required",
+    allowCredentials: id ? [{ type: "public-key", id: unb64u(id) }] : [] } });
+  const r = assertion.response; const clientDataJSON = new TextDecoder().decode(r.clientDataJSON);
+  const { r: rr, s } = derToRS(r.signature);
+  const auth = { r: rr, s, challengeIndex: clientDataJSON.indexOf('"challenge":"'), typeIndex: clientDataJSON.indexOf('"type":"webauthn.get"'), authenticatorData: hex(r.authenticatorData), clientDataJSON };
+  const res = await post("/api/level1/execute", { chain: tenant.chain, owner: tenant.owner, target, data, auth, keyIndex: Math.max(0, mineIx) });
+  if (res.pending) { setTimeout(refresh, 2000); throw new Error(`Approved by you. ${res.need - res.have} more owner approval${res.need - res.have === 1 ? "" : "s"} needed: it waits on their account page.`); }
+  return res;
+}
+
+async function createKey() {
+  const saved = store.get("tameion.pub"); if (saved) { pub = JSON.parse(saved); return pub; }
+  const cred = await navigator.credentials.create({ publicKey: {
+    rp: { name: "Tameion", id: location.hostname },
+    user: { id: crypto.getRandomValues(new Uint8Array(16)), name: "treasurer", displayName: "Treasurer" },
+    challenge: crypto.getRandomValues(new Uint8Array(32)),
+    pubKeyCredParams: [{ type: "public-key", alg: -7 }],
+    authenticatorSelection: { userVerification: "required", residentKey: "preferred" },
+    attestation: "none",
+  }});
+  const spki = new Uint8Array(cred.response.getPublicKey());
+  const point = spki.slice(spki.length - 65);
+  if (point[0] !== 0x04) throw new Error("expected an uncompressed P-256 point");
+  pub = { qx: hex(point.slice(1, 33)), qy: hex(point.slice(33, 65)), credentialId: b64u(cred.rawId) };
+  store.set("tameion.pub", JSON.stringify(pub));
+  return pub;
+}
+
+function tenants() { try { return JSON.parse(store.get("tameion.tenants") || "[]"); } catch { return []; } }
+function remember(t) { const all = tenants().filter(x => x.policy !== t.policy); all.unshift(t); store.set("tameion.tenants", JSON.stringify(all)); store.set("tameion.tenant", JSON.stringify(t)); }
+
+// ---- State A: start -------------------------------------------------------
+$("#go").onclick = async () => {
+  const watched = $("#watched").value.trim(), daily = $("#daily").value.trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(watched)) { $("#goOut").textContent = "That is not an address."; return; }
+  if (!(parseFloat(daily) > 0)) { $("#goOut").textContent = startPeek.key ? "Set a daily limit in USDC (the agent found no bill to size it from)." : "Set a daily limit in USDC."; return; }
+  $("#go").disabled = true; $("#goOut").className = "small muted";
+  try {
+    $("#goOut").textContent = "Creating your key…";
+    await createKey();
+    $("#goOut").textContent = "Reserving your account…";
+    const chain = $("#startChain").value || (cfg.chains.find(c => c.anchor) || cfg.chains[0]).key;
+    // Defaults a treasurer should not have to think about on day one: one
+    // payment may be at most the daily limit, nothing is kept untouched, 90
+    // days of history, Propose first.
+    // Reserve, do not deploy (PLAN 5.32): the addresses are known at once and
+    // nothing is on chain until money arrives or the owner taps. The first
+    // pass then puts the contracts there.
+    const d = await post("/api/level1/deploy", { chain, qx: pub.qx, qy: pub.qy, watched, pull: $("#pull").checked, keyless: $("#keyless").checked, wallet7702: $("#wallet7702").checked, partner: store.get("tameion.partner") || undefined, caps: { perAction: daily, daily, floor: "0" }, days: 90, invite: $("#invite").value, lazy: true });
+    tenant = d.tenant; remember(tenant);
+    show(); await refresh();
+    // Keep looking: the reserved account comes alive by itself when money
+    // can be reached, and only a running refresh can notice that.
+    if (!timer) timer = setInterval(refresh, 15000);
+  } catch (e) { $("#goOut").className = "small warn"; $("#goOut").textContent = e.message; $("#go").disabled = false; }
+};
+$("#demo").onclick = (e) => { e.preventDefault(); $("#watched").value = "0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25"; peekWallet(); };
+// The bill wallet is usually the one already in this browser: one tap, no pasting.
+$("#useWallet").onclick = async (e) => {
+  e.preventDefault();
+  try { const [from] = await walletRequest({ method: "eth_requestAccounts" }); if (from) { $("#watched").value = from; peekWallet(); } }
+  catch (err) { $("#goOut").className = "small warn"; $("#goOut").textContent = err.message; }
+};
+
+// docs/65 F3/F4, before the passkey: the moment a wallet is pasted (or taken
+// from this browser), the agent reads it — read-only, nothing created — and
+// says what it found; the daily limit is filled with twice the largest bill
+// unless the owner typed one. The owner decides with their bills in front of
+// them, not a blank number.
+let startPeek = { key: "", timer: 0 };
+function peekWallet() {
+  const w = $("#watched").value.trim(), chain = $("#startChain").value || (cfg.chains.find(c => c.anchor) || cfg.chains[0]).key;
+  const box = $("#startPreview");
+  if (!/^0x[0-9a-fA-F]{40}$/.test(w)) { box.classList.add("hide"); return; }
+  const key = `${chain}:${w.toLowerCase()}`;
+  if (key === startPeek.key) return;
+  startPeek.key = key; clearTimeout(startPeek.timer);
+  box.classList.remove("hide"); box.textContent = "Reading this wallet's last 90 days…";
+  (async () => {
+    try {
+      const r = await post("/api/watch", { chain, address: w, days: 90 });
+      if (r.error) throw new Error(r.error);
+      for (let n = 0; n < 120 && startPeek.key === key; n++) {
+        const j = await (await fetch(`/api/watch/${r.id}`)).json();
+        if (j.status === "done" && j.report) return showPeek(key, j.report);
+        if (j.status === "failed") throw new Error(j.error || "the read failed");
+        const p = j.progress || {}, pct = p.totalBlocks && p.scannedBlocks ? Math.round(100 * p.scannedBlocks / p.totalBlocks) : 0;
+        box.textContent = `Reading this wallet's last 90 days…${pct ? " " + pct + "%" : ""}`;
+        await new Promise(res => (startPeek.timer = setTimeout(res, 1500)));
+      }
+    } catch (e) { if (startPeek.key === key) box.textContent = `Could not read it yet (${e.message}); Start still works — the agent reads it after.`; }
+  })();
+}
+function showPeek(key, rep) {
+  if (startPeek.key !== key) return;
+  startPeek.report = rep;
+  const box = $("#startPreview"), bills = rep.obligations || [];
+  box.innerHTML = "";
+  const lead = document.createElement("div");
+  lead.textContent = bills.length
+    ? `Found ${bills.length} recurring bill${bills.length > 1 ? "s" : ""} in ${rep.transfers} payments; the next 30 days of them come to ${usd(rep.liquidity30d)} USDC.`
+    : `No recurring bill in ${rep.transfers} payments over 90 days yet. The agent keeps watching once the account exists.`;
+  box.appendChild(lead);
+  for (const b of bills.slice(0, 5)) {
+    const row = document.createElement("div"); row.className = "muted";
+    row.textContent = `${usd(b.amount)} USDC to ${whoText(b.counterparty)}, ${everyText(b.intervalSecs, b.every)}`;
+    box.appendChild(row);
+  }
+  const largest = Math.max(0, ...bills.map(b => num(b.amount)));
+  const d = $("#daily");
+  if (largest > 0 && (!d.value.trim() || d.dataset.auto === "1")) {
+    d.value = String(+(largest * 2).toFixed(6)); d.dataset.auto = "1";
+    const note = document.createElement("div"); note.className = "muted";
+    note.textContent = `Daily limit set to ${usd(d.value)} USDC — twice the largest bill. Change it if you like.`;
+    box.appendChild(note);
+  }
+}
+$("#watched").addEventListener("input", () => { clearTimeout(startPeek.debounce); startPeek.debounce = setTimeout(peekWallet, 500); });
+$("#startChain").addEventListener("change", () => { startPeek.key = ""; peekWallet(); });
+$("#daily").addEventListener("input", () => { $("#daily").dataset.auto = ""; });
+
+// ---- State B: the account ---------------------------------------------------
+function show() { $("#start").classList.add("hide"); $("#home").classList.remove("hide"); accountsLine(); }
+// One passkey, many policies: the accounts this browser knows, one tap to switch.
+const labelOf = (t) => store.get(`tameion.label.${t.policy}`) || "";
+function accountsLine() {
+  const all = tenants(); const el = $("#accounts");
+  const mine = labelOf(tenant);
+  $("#title").textContent = mine ? `${mine}` : "Your treasury";
+  $("#nameIt").textContent = mine ? "Rename" : "Name this account";
+  el.classList.toggle("hide", all.length < 2);
+  if (all.length < 2) return;
+  el.textContent = "Your accounts: ";
+  all.forEach((t, i) => {
+    const a = document.createElement("a"); a.href = "#";
+    const l = labelOf(t);
+    a.textContent = l ? `${l} (${short(t.policy)})` : `${short(t.policy)} (${t.kind === "pull" ? "from your wallet" : "holds money"})`;
+    if (t.policy === tenant.policy) { a.style.fontWeight = "600"; a.style.textDecoration = "none"; }
+    a.onclick = (e) => { e.preventDefault(); if (t.policy === tenant.policy) return; store.set("tameion.tenant", JSON.stringify(t)); location.href = "/"; };
+    el.appendChild(a); if (i < all.length - 1) el.appendChild(document.createTextNode(" · "));
+  });
+}
+// A name for this account ("Ops payroll", "EU entity"): kept in this
+// browser only; the chain and the service never see it (docs/62 F2).
+$("#nameIt").onclick = (e) => {
+  e.preventDefault();
+  const cur = labelOf(tenant);
+  const name = prompt("Name this account (shown on this device only):", cur);
+  if (name === null) return;
+  if (name.trim()) store.set(`tameion.label.${tenant.policy}`, name.trim());
+  else { try { localStorage.removeItem(`tameion.label.${tenant.policy}`); } catch {} }
+  accountsLine();
+};
+// A statement an accountant can import (docs/62 table: ERP/accounting): one
+// row per payment, from the chain — date, payee, amount, who paid, the
+// transaction. Built here from what the page already shows; no new route.
+$("#statement").onclick = (e) => {
+  e.preventDefault();
+  const rows = [["date_utc", "payee", "amount_usdc", "paid_by", "transaction", "explorer", "account"]];
+  for (const p of (inbox && inbox.paid) || []) {
+    rows.push([p.at ? new Date(p.at * 1000).toISOString() : "", nameOf(p.counterparty) ? `${nameOf(p.counterparty)} (${p.counterparty})` : p.counterparty, usd(p.amount), p.by === "you" ? "owner" : "agent", p.tx || "", p.explorer || "", tenant.policy]);
+  }
+  const csv = rows.map((r) => r.map((c) => /[",\n]/.test(String(c)) ? `"${String(c).replace(/"/g, '""')}"` : String(c)).join(",")).join("\n") + "\n";
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = `tameion-${(labelOf(tenant) || tenant.policy.slice(0, 10)).replace(/[^\w.-]+/g, "_")}-statement.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+};
+// PLAN 5.7: this device asks to become an owner (its own passkey).
+$("#askJoin").onclick = async () => {
+  const out = $("#askOut"); out.textContent = "";
+  try {
+    if (pub && inbox && inbox.owners && inbox.owners.keys.some((k) => k.qx.toLowerCase() === pub.qx.toLowerCase())) throw new Error("this device is already an owner");
+    store.set("tameion.pub.prev", store.get("tameion.pub") || ""); store.set("tameion.pub", "");
+    try { localStorage.removeItem("tameion.pub"); } catch {}
+    await createKey();
+    const label = prompt("Name this device (the owners see it):", "my phone") || "another device";
+    await post("/api/level1/join-request", { policy: tenant.policy, qx: pub.qx, qy: pub.qy, label });
+    out.innerHTML = `Asked. Pairing code <b>${pairCode(pub.qx, pub.qy)}</b> — show it to the owner; they add this device only if their screen shows the same code.`;
+    setTimeout(refresh, 2000);
+  } catch (e) { out.textContent = e.message; }
+};
+// The same payments as a bank statement an accounting package imports as-is
+// (Xero's statement import: *Date, *Amount, Payee, Description, Reference;
+// QuickBooks Online maps Date / Description / Amount): money out is negative.
+$("#statementBank").onclick = (e) => {
+  e.preventDefault();
+  const rows = [["*Date", "*Amount", "Payee", "Description", "Reference"]];
+  for (const p of (inbox && inbox.paid) || []) {
+    const d = p.at ? new Date(p.at * 1000).toISOString().slice(0, 10) : "";
+    rows.push([d, "-" + usd(p.amount), nameOf(p.counterparty) || p.counterparty, `USDC payment to ${p.counterparty} by ${p.by === "you" ? "the owner" : "the agent"} from ${tenant.policy}`, p.tx || ""]);
+  }
+  const csv = rows.map((r) => r.map((c) => /[",\n]/.test(String(c)) ? `"${String(c).replace(/"/g, '""')}"` : String(c)).join(",")).join("\n") + "\n";
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = `tameion-${(labelOf(tenant) || tenant.policy.slice(0, 10)).replace(/[^\w.-]+/g, "_")}-bank-statement.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+};
+// Name a payee (this device only).
+document.addEventListener("click", (e) => {
+  const a = e.target.closest && e.target.closest("[data-name]"); if (!a) return;
+  e.preventDefault();
+  const addr = a.getAttribute("data-name").toLowerCase();
+  const name = prompt(`A name for ${addr} (kept on this device only):`, nameOf(addr));
+  if (name === null) return;
+  if (name.trim()) store.set(`tameion.payee.${tenant.policy}.${addr}`, name.trim().slice(0, 40));
+  else { try { localStorage.removeItem(`tameion.payee.${tenant.policy}.${addr}`); } catch {} }
+  refresh();
+});
+// The same account on another device: the link carries only the policy
+// address; the passkey (synced by the platform) is what signs there.
+$("#openElsewhere").onclick = async (e) => {
+  e.preventDefault();
+  const url = `${location.origin}/?policy=${tenant.policy}`;
+  try { await navigator.clipboard.writeText(url); $("#openElsewhere").textContent = "Link copied — open it on your phone"; }
+  catch { $("#openElsewhere").textContent = url; }
+};
+
+async function refresh() {
+  // Paint the last inbox this browser saw at once, then the live one: a
+  // public node answers the inbox in seconds (docs/60 P-31). The stale copy
+  // is shown read-only; its prepared calls may have expired.
+  const cacheKey = `tameion.inbox.${tenant.policy}`;
+  if (!inbox || inbox.policy !== tenant.policy) {
+    try { const c = JSON.parse(store.get(cacheKey) || "null"); if (c && c.paid) { render(c); $("#status").textContent = "Updating…"; document.querySelectorAll("#need button").forEach((b) => { b.disabled = true; }); } } catch (e) {}
+  }
+  try {
+    const ir = await fetch(`/api/level1/inbox?policy=${tenant.policy}`, { headers: authHeaders() });
+    inbox = await ir.json();
+    if (ir.status === 401 || ir.status === 403) {
+      $("#status").textContent = "This account's owner locked it to agent keys. Paste the key you were given:";
+      $("#keyPaste").classList.remove("hide");
+      return;
+    }
+    $("#keyPaste").classList.add("hide");
+    // A node hiccup (502 from a rate-limited public RPC) must not blank the
+    // page: say so and try again on the next tick.
+    if (!ir.ok) { $("#status").textContent = `The chain did not answer just now (${inbox.error || ir.status}); trying again.`; return; }
+  } catch (e) { $("#status").textContent = e.message; return; }
+  inbox.policy = tenant.policy;
+  store.set(cacheKey, JSON.stringify(inbox));
+  // The action's own handler asks for a fresh draw when it is done.
+  if (!busy) render(inbox);
+}
+
+function render(i) {
+  $("#tPaid").textContent = i.paid.length;
+  $("#tPaidD").textContent = i.paid.length
+    ? `${usd(i.paidTotal)} USDC — ${i.paidByAgent || 0} by the agent${i.paidByYou ? `, ${i.paidByYou} by you` : ""}`
+    : "nothing due yet";
+  const waiting = i.needsYou.length + (i.sellersToApprove || []).length + (i.invoices || []).length;
+  $("#tNeed").textContent = waiting;
+  $("#tNeedD").textContent = waiting ? "tap to approve" : "all clear";
+  $("#tProt").textContent = usd(i.protectedPerDay);
+  // Pull mode: nothing to fund; the wallet allows instead.
+  const pl = i.pull;
+  $("#fund").classList.toggle("hide", !!pl || num(i.balance) > 0);
+  $("#fundAddr").textContent = tenant.policy;
+  renderPreview(i);
+  $("#allow").classList.toggle("hide", !pl);
+  if (pl) {
+    const low = num(pl.allowance) < num(i.caps.daily);
+    $("#allowText").textContent = pl.error ? pl.error : `The agent may pull up to ${usd(pl.allowance)} USDC from your wallet ${short(pl.wallet)}, which holds ${usd(pl.walletBalance)} USDC. Tameion holds nothing.${low ? " That is less than one day's limit: allow more for the agent to pay." : ""}`;
+    $("#allowHow").textContent = `Allowing sets ${usd(pl.suggestedAllowance)} USDC: ${pretty(pl.suggestedBasis || "thirty days at your daily limit")}. From any wallet: approve(${tenant.policy}, ${usd(pl.suggestedAllowance)} USDC) on USDC ${short(pl.usdc)}; approve(…, 0) cuts the agent off without Tameion.`;
+    $("#allow").classList.toggle("amber", low);
+  }
+  $("#mode").textContent = `${i.mode}${i.pending ? " · a change is waiting for the delay" : ""} · holds ${usd(i.balance)} USDC`;
+  $("#autopilot").textContent = i.mode === "Autopilot" ? "Autopilot is on" : i.pending && i.pending.mode === "Autopilot" ? "Autopilot: waiting for the delay (cancel)" : "Turn autopilot on";
+  // A keyless account (PLAN 5.38) has no agent key to put on autopilot.
+  $("#autopilot").classList.toggle("hide", !!i.keyless);
+  $("#pause").textContent = i.mode === "Watch" ? "Paused (resume: propose)" : "Pause";
+  // Status: running, or last checked / next.
+  if (i.running) {
+    const p = i.running.progress || {};
+    const pct = p.totalBlocks && p.scannedBlocks ? Math.round(100 * p.scannedBlocks / p.totalBlocks) : 0;
+    const eta = p.etaSecs ? ` · about ${p.etaSecs < 90 ? p.etaSecs + " s" : Math.round(p.etaSecs / 60) + " min"} left` : "";
+    $("#status").textContent = `Checking your bills…${pct ? " " + pct + "%" : ""}${eta}`;
+    $("#bar").classList.remove("hide"); $("#barfill").style.width = pct + "%";
+  } else {
+    $("#bar").classList.add("hide");
+    if (i.halted) $("#status").textContent = "Paused by a safety check: a payment's receipt did not match what the agent sent. Nothing more is paid until a human clears it. ";
+    else $("#status").textContent = "";
+    $("#status").textContent += i.lastPass ? `Last checked ${ago(i.lastPass.at)} · ${i.lastPass.obligations} recurring bills found${i.nextPassSecs ? ` · checks every ${Math.round(i.nextPassSecs / 60)} min` : ""}${i.lastPass.modelUnavailable ? " · ordered by rule that time: the model was unavailable, the limits were not" : ""}${i.lastPass.historyNote ? " · " + i.lastPass.historyNote : ""}` : "Not checked yet.";
+    // Locally there is no scheduler; the page nudges a pass once an hour,
+    // and never more than once per ten minutes even if passes keep failing.
+    if (i.lastPass && Date.now() / 1000 - i.lastPass.at > 3600 && !i.nextPassSecs && Date.now() - lastNudge > 600000) { lastNudge = Date.now(); runPass(); }
+    // Reserved, not yet on chain: the first pass starts by itself the moment
+    // money can be reached (funded, or allowed in pull mode).
+    if (i.deployed === false && !i.lastPass && !i.running && num(i.balance) > 0 && Date.now() - lastNudge > 60000) { lastNudge = Date.now(); runPass(); }
+    if (i.deployed === false && !i.lastPass && !i.running) $("#status").textContent = "Nothing is on chain yet. The moment money can be reached, the agent's first check creates your account and runs.";
+  }
+  // The account in one sentence, from the buyer's own numbers (docs/62 §3.8,
+  // Jobs): how long every bill is covered, and the most the key can move.
+  {
+    // Before the contract exists the chain reads a zero limit: say the one
+    // the owner chose (docs/65 F1).
+    const r = i.runway, most = i.deployed === false
+      ? `the agent's key will never move more than ${usd(i.chosenDaily)} USDC a day`
+      : `the agent's key can never move more than ${usd(i.protectedPerDay)} USDC a day`;
+    $("#headline").textContent = !r ? `Nothing is paid without a limit: ${most}.`
+      : r.firstAtRisk ? `Covered for ${r.days > 0 ? r.days + " days" : "less than a day"}; the first bill at risk is ${usd(r.firstAtRisk.amount)} USDC to ${whoText(r.firstAtRisk.counterparty)}. And ${most}.`
+      : `Every bill for the next ${r.horizonDays} days is covered, and ${most}.`;
+  }
+  // PLAN 5.28: a wallet account waits for the wallet's one authorization.
+  const dg = i.delegation;
+  $("#delegateCard").classList.toggle("hide", !(dg && !dg.active));
+  if (dg && !dg.active) {
+    $("#delegateCmd").textContent = `cast send ${dg.wallet} ${dg.initializeData} --auth ${dg.implementation} --private-key <your wallet's key> --rpc-url <chain>`;
+    $("#delegateWhy").textContent = `The authorization points your wallet's code at ${dg.implementation} (the same policy code every Tameion account runs, readable on the explorer). The call initialises it with your passkey's account as the owner. The agent's first check sees it and starts.`;
+  }
+  // PLAN 5.7: owners, devices asking to join, calls waiting for more approvals.
+  {
+    const o = i.owners, keys = (o && o.keys) || [];
+    const mineIx = keys.findIndex((k) => pub && k.qx.toLowerCase() === pub.qx.toLowerCase());
+    $("#ownersCard").classList.toggle("hide", !o);
+    if (o) {
+      $("#ownersNow").textContent = keys.length === 1 ? "— one passkey; it approves alone." : `— ${keys.length} passkeys; ${o.threshold} must approve every change.${mineIx >= 0 ? ` This device is owner ${mineIx + 1}.` : ""}`;
+      $("#ownersHow").textContent = `Add a phone, a co-founder or the CFO: open ${location.origin}/?policy=${tenant.policy} on their device and tap "Ask to join"; it appears here for the owners to approve.`;
+      $("#ownersAsk").classList.toggle("hide", mineIx >= 0);
+      if (mineIx < 0 || (i.approvals || []).length || (i.joinRequests || []).length) $("#settings").open = true;
+      const wait = $("#ownersWaiting"); wait.innerHTML = "";
+      for (const a of i.approvals || []) {
+        const d = TameionCall.describe(a.data);
+        const row = document.createElement("div"); row.className = "item";
+        row.innerHTML = `<div><div class="who">${d.known ? d.action + " " + (d.payees || []).map(short).join(", ") : "A change"}</div><div class="why">${a.have} of ${a.need} owners approved</div></div><div></div>`;
+        if (mineIx >= 0 && !(a.keys || []).includes(mineIx)) {
+          const b = document.createElement("button"); b.textContent = "Approve";
+          b.onclick = async () => { b.disabled = true; try { const ex = await sign(a.target, a.data); row.querySelector(".why").innerHTML = `approved by enough owners · <a href="${ex.explorer}" target="_blank" rel="noopener">receipt</a>`; setTimeout(refresh, 3000); } catch (e) { b.disabled = false; row.querySelector(".why").textContent = e.message; } };
+          row.lastElementChild.appendChild(b);
+        }
+        wait.appendChild(row);
+      }
+      const joins = $("#ownersJoins"); joins.innerHTML = "";
+      for (const j of (mineIx >= 0 ? i.joinRequests || [] : [])) {
+        const row = document.createElement("div"); row.className = "item";
+        row.innerHTML = `<div><div class="who">${esc(j.label)} asks to become an owner</div><div class="why">Pairing code <b>${pairCode(j.qx, j.qy)}</b>: add it only if the device in front of you shows the same code. Anyone with the link can ask; only you can add. Added with the approvals this account needs today.</div></div><div></div>`;
+        const sel = document.createElement("select");
+        const total = keys.length + 1;
+        for (let m = 1; m <= total; m++) { const op = document.createElement("option"); op.value = m; op.textContent = m === 1 ? "any one of us approves" : `${m} of ${total} must approve`; sel.appendChild(op); }
+        sel.value = String(Math.min(2, total));
+        const b = document.createElement("button"); b.textContent = "Add as owner";
+        b.onclick = async () => {
+          b.disabled = true;
+          try {
+            const co = keys.slice(1).map((k) => ({ qx: k.qx, qy: k.qy })).concat([{ qx: j.qx, qy: j.qy }]);
+            const prep = await post("/api/level1/prepare-coowners", { policy: tenant.policy, keys: co, threshold: Number(sel.value) });
+            const ex = await sign(prep.to, prep.data);
+            row.querySelector(".why").innerHTML = `added · <a href="${ex.explorer}" target="_blank" rel="noopener">receipt</a>`; setTimeout(refresh, 3000);
+          } catch (e) { b.disabled = false; row.querySelector(".why").textContent = e.message; }
+        };
+        row.lastElementChild.appendChild(sel); row.lastElementChild.appendChild(document.createTextNode(" ")); row.lastElementChild.appendChild(b);
+        joins.appendChild(row);
+      }
+    }
+  }
+  // Runway: the first bill the policy could not cover, and when.
+  const rw = i.runway;
+  $("#runwayCard").classList.toggle("hide", !rw);
+  if (rw) {
+    const when = (fa) => rw.days > 0 ? `${rw.days} days` : fa.inHours > 0 ? `about ${fa.inHours} hours` : "less than an hour";
+    $("#runway").textContent = rw.firstAtRisk
+      ? `${when(rw.firstAtRisk)} — the first bill at risk is ${usd(rw.firstAtRisk.amount)} USDC to ${whoText(rw.firstAtRisk.counterparty)} on ${new Date(rw.firstAtRisk.onUnix * 1000).toLocaleDateString()}`
+      : `every bill in the next ${rw.horizonDays} days is covered (${usd(rw.billsInHorizon)} USDC due)`;
+    // PLAN 5.36: the part of the balance no bill in the horizon needs — a number only.
+    if (!rw.firstAtRisk && rw.idleCover && num(rw.idleCover) > 0) $("#runway").textContent += ` · not needed for those bills: ${usd(rw.idleCover)} USDC`;
+    $("#runwayWhy").textContent = pretty(rw.basis);
+    // The owner's real problem is timing (docs/62 §3.4): say how much is
+    // missing for the whole horizon, and offer the one tap that adds it.
+    const fix = $("#runwayFix"); fix.innerHTML = "";
+    // PLAN 5.57: the reverse — money no bill needs, beyond a second horizon
+    // of bills, goes back to the company's wallet with one tap of the owner's.
+    const back = num(rw.returnable || "0");
+    if (back > 0 && rw.returnTo) {
+      const line = document.createElement("div"); line.className = "small";
+      line.textContent = `${usd(rw.returnable)} USDC is not needed for the next ${rw.horizonDays * 2} days of bills. The agent suggests sending it back to the wallet that pays your bills (${whoText(rw.returnTo)}); it can come back with one tap.`;
+      const b = document.createElement("button"); b.className = "ghost"; b.textContent = "Send it back";
+      b.onclick = async () => {
+        b.disabled = true;
+        try {
+          const prep = await post("/api/level1/prepare-withdraw", { policy: tenant.policy, to: rw.returnTo, amount: rw.returnable.replace(/ USDC$/, "") });
+          const ex = await sign(prep.to, prep.data);
+          line.innerHTML = `Sent ${usd(rw.returnable)} USDC back to your wallet · <a href="${ex.explorer}" target="_blank" rel="noopener">receipt</a>`;
+          setTimeout(refresh, 4000);
+        } catch (e) { b.disabled = false; line.textContent = e.message; }
+      };
+      fix.appendChild(line); fix.appendChild(b);
+    }
+    const sf = num(rw.shortfall || "0");
+    if (sf > 0) {
+      const he = i.holdingsElsewhere, elsewhere = he && he.total ? num(he.total) : 0;
+      const line = document.createElement("div"); line.className = "small";
+      line.textContent = `To cover every bill in the next ${rw.horizonDays} days the account needs ${usd(rw.shortfall)} USDC more.`;
+      fix.appendChild(line);
+      if (elsewhere >= sf) {
+        line.textContent += ` You hold ${usd(he.total)} USDC in Circle Gateway: "Bring it into the account" covers it.`;
+      } else if (i.pull && !i.pull.error) {
+        const target = num(i.pull.allowance) + sf;
+        if (num(i.pull.walletBalance) < num(rw.horizonTotal)) line.textContent += ` Your wallet holds ${usd(i.pull.walletBalance)} USDC; the bills need ${usd(rw.horizonTotal)}.`;
+        // An allowance beyond what the wallet holds pays nothing more: offer
+        // the tap only when the wallet can back it.
+        if (num(i.pull.walletBalance) >= target) {
+          const b = document.createElement("button"); b.className = "ghost"; b.textContent = `Allow ${usd(target.toFixed(6))} USDC`;
+          b.onclick = () => sendFromWallet("0x095ea7b3" + tenant.policy.slice(2).toLowerCase().padStart(64, "0") + BigInt(Math.round(target * 1e6)).toString(16).padStart(64, "0"), `allowing ${usd(target.toFixed(6))} USDC`);
+          fix.appendChild(b);
+        }
+      } else {
+        line.textContent += ` Send it to ${tenant.policy}; only your key can take it back out.`;
+      }
+    }
+  }
+  // PLAN 5.49: what the bill wallet holds outside dollars, in days of bills.
+  {
+    const e = i.exposure, has = e && e.holdings && e.holdings.length && e.notionalUsd;
+    $("#protectCard").classList.toggle("hide", !has);
+    if (has) {
+      const where = e.holdings.map((h) => `${h.size} ${h.coin} on ${h.chain}`).join(", ");
+      const days = e.fall30Days != null ? ` — about ${e.fall30Days} day${e.fall30Days === 1 ? "" : "s"} of your bills` : "";
+      const $$ = (x) => Number(x).toLocaleString("en-US", { maximumFractionDigits: 2 });
+      $("#protectNow").textContent = `Your bill wallet also holds ${Number(e.ethTotal).toLocaleString("en-US", { maximumFractionDigits: 4 })} ETH ($${$$(e.notionalUsd)} at $${$$(e.ethMark)}). A 30% fall would cost $${$$(e.fall30Usd)}${days}.`;
+      $("#protectWhy").textContent = (e.hedge && e.hedge.on
+        ? "The agent keeps an offsetting short on Hyperliquid (testnet), sized to your bills, at most 2x, never closer than four times the venue's liquidation line; its key can trade on that account and cannot withdraw. "
+        : "Protection is off for this account: it needs a trade-only Hyperliquid key (it can trade on that account and cannot withdraw). Until then the agent reports the exposure and nothing else. ") + `Held: ${where}. ${e.source}.`;
+    }
+  }
+  // What the bill wallet holds in Circle Gateway on other chains: shown
+  // when there is some, never counted as the policy's balance.
+  const he = i.holdingsElsewhere;
+  const have = he && he.chains && he.chains.length;
+  const arriving = he && he.arriving && he.arriving.length;
+  $("#elsewhere").classList.toggle("hide", !(have || arriving));
+  if (have || arriving) {
+    $("#elseTotal").textContent = have
+      ? `${usd(he.total)} USDC of your bill wallet's USDC sits in Circle Gateway on ${he.chains.length === 1 ? he.chains[0].chain : he.chains.length + " chains"}.`
+      : `${he.arriving.map(a => `${usd(a.amount)} USDC`).join(" + ")} of your bill wallet's USDC is arriving in Circle Gateway.`;
+    const parts = [];
+    if (have) parts.push(`${he.chains.map(c => `${c.chain} ${usd(c.balance)}`).join(" · ")} — one tap below brings it into the account with your wallet's signature; the agent does not count it until it does.`);
+    if (arriving) parts.push(`${he.arriving.map(a => `${usd(a.amount)} from ${a.chain}`).join(", ")} still confirming (Circle waits about 15 minutes for deposits from Ethereum rollups).`);
+    $("#elseWhy").textContent = parts.join(" ");
+    $("#bring").classList.toggle("hide", !have);
+  }
+  parkSetup();
+  // The agent's recommendation to go to autopilot, with its evidence.
+  $("#recommend").classList.toggle("hide", !i.recommendAutopilot);
+  if (i.recommendAutopilot) $("#recWhy").textContent = `You settled ${i.approvedByYou} of its proposals yourself; none were refused by the contract.`;
+  // The agent's own proposal for the limit, when it has one.
+  const sg = i.suggestedLimit;
+  $("#suggest").classList.toggle("hide", !sg);
+  if (sg) { $("#sugDaily").textContent = usd(sg.daily); $("#sugWhy").textContent = `— ${pretty(sg.basis)}. Tightening applies at once; loosening waits the delay.`; }
+  // Other agents' keys (PLAN 5.31): what exists (never the secrets), with one-tap revoke.
+  const al = $("#agentsList"); al.innerHTML = "";
+  const toks = i.agentTokens || [];
+  $("#agentsNow").textContent = toks.length ? `— ${toks.length} key${toks.length === 1 ? "" : "s"}; this account is locked to them` : "— give an agent a key to this account; it can look, run and prepare, never sign.";
+  for (const t of toks) {
+    const row = document.createElement("div"); row.className = "item";
+    row.innerHTML = `<div><div class="who">${esc(t.label || "unnamed")} <span class="small muted mono">${esc(t.id)}</span></div><div class="why">${esc(t.scopes.join(", "))} · until ${new Date(t.expires * 1000).toLocaleDateString()}</div></div><div></div>`;
+    const b = document.createElement("button"); b.className = "ghost"; b.textContent = "Revoke";
+    b.onclick = async () => { b.disabled = true; try { const issued = Math.floor(Date.now() / 1000); const ch = await post("/api/level1/prepare-token-revoke", { policy: tenant.policy, id: t.id, issued }); const auth = await passkeyAssert(ch.challenge); const r = await post("/api/level1/token-revoke-signed", { policy: tenant.policy, id: t.id, issued, auth }); $("#agentOut").textContent = `revoked ${r.revoked}${r.gated ? "" : " · no keys left: the account is open again"}`; setTimeout(refresh, 1500); } catch (e) { $("#agentOut").textContent = e.message; b.disabled = false; } };
+    row.lastElementChild.appendChild(b); al.appendChild(row);
+  }
+  // Guardians (PLAN 5.30): shown when the owner's contract has them (or can).
+  const gd = i.guardians;
+  $("#guardiansCard").classList.toggle("hide", !gd);
+  if (gd) $("#guardiansNow").textContent = gd.list.length ? `— ${gd.threshold} of ${gd.list.length} (${gd.list.map(short).join(", ")})${gd.pendingEta ? " · a replacement key is pending; cancel it on /level1 if you did not ask for it" : ""}` : "— none named yet";
+  // The agent's authority lapses (PLAN 5.24): shown in the last two weeks,
+  // loud when lapsed; one tap renews, the passkey signs.
+  const aa = i.agentAuthority;
+  $("#renew").classList.toggle("hide", !(aa && aa.renewSuggested));
+  if (aa && aa.renewSuggested) {
+    $("#renewTitle").textContent = aa.lapsed ? "The agent's authority has lapsed." : "The agent's authority lapses soon.";
+    $("#renewText").textContent = aa.lapsed
+      ? `Since ${new Date(aa.lapsesAt * 1000).toLocaleDateString()} it proposes and pays nothing by itself. Renew to let it pay again; standing orders and your own payments were never affected.`
+      : `On ${new Date(aa.lapsesAt * 1000).toLocaleDateString()} (${aa.daysLeft} days) it stops paying by itself unless you renew. A key nobody re-confirms is one nobody is watching.`;
+    $("#renew").classList.toggle("amber", true);
+  }
+  // Standing orders (PLAN 5.25): what the contract holds, and what the agent
+  // suggests making one. Setting or ending one is the owner's tap.
+  const so = i.standingOrders || [], cands = i.standingOrderCandidates || [];
+  $("#standing").classList.toggle("hide", !(so.length || cands.length));
+  const sl = $("#standingList"); sl.innerHTML = "";
+  for (const o of so.filter(x => x.active)) {
+    const row = document.createElement("div"); row.className = "item";
+    row.innerHTML = `<div><div class="who">${usd(o.amount)} USDC to ${who(o.payee)} ${everyText(o.everySecs)}</div><div class="why">${o.due ? "due now — the agent pays it on its next check, or tap Pay now" : "next on " + new Date(o.nextDue * 1000).toLocaleDateString()}</div></div><div></div>`;
+    const btns = row.lastElementChild;
+    if (o.due) { const b = document.createElement("button"); b.className = "ghost"; b.textContent = "Pay now"; b.onclick = async () => { b.disabled = true; try { const r = await post("/api/level1/pay-due", { policy: tenant.policy, id: o.id }); if (r.error) throw new Error(r.error); $("#standingOut").innerHTML = `paid · <a href="${r.explorer}" target="_blank" rel="noopener">receipt</a>`; setTimeout(refresh, 3000); } catch (e) { $("#standingOut").textContent = e.message; b.disabled = false; } }; btns.appendChild(b); btns.appendChild(document.createTextNode(" ")); }
+    const end = document.createElement("button"); end.className = "ghost"; end.textContent = "End it";
+    end.onclick = async () => { end.disabled = true; try { const prep = await post("/api/level1/prepare-unschedule", { policy: tenant.policy, id: o.id }); const ex = await sign(prep.to, prep.data); $("#standingOut").innerHTML = `ended · <a href="${ex.explorer}" target="_blank" rel="noopener">receipt</a>`; setTimeout(refresh, 3000); } catch (e) { $("#standingOut").textContent = e.message; end.disabled = false; } };
+    btns.appendChild(end);
+    sl.appendChild(row);
+  }
+  const ss = $("#standingSuggest"); ss.innerHTML = "";
+  if (cands.length) {
+    const h = document.createElement("p"); h.className = "small muted"; h.textContent = "The agent suggests making these standing orders — one tap each, your key signs:"; ss.appendChild(h);
+    for (const c of cands.slice(0, 6)) {
+      const row = document.createElement("div"); row.className = "item";
+      row.innerHTML = `<div><div class="who">${usd(c.amount)} USDC to ${who(c.payee)} ${everyText(c.everySecs)}</div><div class="why">${esc(pretty(c.basis))}${c.confidence != null && c.confidence !== "" ? " · confidence " + Number(c.confidence).toFixed(2) : ""}</div></div><div></div>`;
+      const b = document.createElement("button"); b.className = "ghost"; b.textContent = "Make it standing";
+      b.onclick = async () => { b.disabled = true; try { const prep = await post("/api/level1/prepare-schedule", { policy: tenant.policy, payee: c.payee, amount: raw(c.amount), everySecs: c.everySecs, firstDue: c.nextDue }); if (prep.error) throw new Error(prep.error); const ex = await sign(prep.to, prep.data); $("#standingOut").innerHTML = `set · <a href="${ex.explorer}" target="_blank" rel="noopener">receipt</a>`; setTimeout(refresh, 3000); } catch (e) { $("#standingOut").textContent = e.message; b.disabled = false; } };
+      row.lastElementChild.appendChild(b); ss.appendChild(row);
+    }
+  }
+  // Needs you.
+  const need = $("#need"); need.innerHTML = "";
+  $("#needHint").textContent = i.needsYou.length ? "— the agent prepared these; your tap pays" : "";
+  if (!i.needsYou.length && !(i.sellersToApprove || []).length && !(i.invoices || []).length) need.innerHTML = `<p class="small muted">${i.mode === "Propose" ? "Nothing waiting. In Propose, every payment comes here first." : "Nothing waiting."}</p>`;
+  // PLAN 5.54: a service the agent wanted to buy from. One tap approves the
+  // seller; from then on the agent buys from it by itself, inside the limits.
+  for (const sl of i.sellersToApprove || []) {
+    const row = document.createElement("div"); row.className = "item";
+    row.innerHTML = `<div><div class="who">Let the agent buy from ${esc(sl.host || "")} — ${usd(sl.amount)} USDC a call, paid to ${who(sl.seller)}${nameLink(sl.seller)}</div><div class="why">It wanted it for: ${esc(sl.reason || "")}. After this it buys from it by itself, never more than your limits.</div></div><div></div>`;
+    const b = document.createElement("button"); b.textContent = "Approve";
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        if (!confirm(`Approve ${sl.seller}${nameOf(sl.seller) ? ` (${nameOf(sl.seller)}, named on this device)` : ""} as a payee, so the agent may buy from ${sl.host} inside your limits?\n\nValid for ten minutes, and only while the terms you see hold.`)) throw new Error("cancelled");
+        b.textContent = "Approving…"; const ex = await sign(sl.to, sl.data);
+        row.innerHTML = `<div><div class="who ok">The agent may buy from ${esc(sl.host || "")}</div><div class="why"><a href="${ex.explorer}" target="_blank" rel="noopener">receipt</a> · it can pay this seller once the waiting period ends</div></div>`;
+        setTimeout(refresh, 4000);
+      } catch (e) { b.disabled = false; b.textContent = "Approve"; row.querySelector(".why").textContent = e.message; }
+    };
+    row.lastElementChild.appendChild(b); need.appendChild(row);
+  }
+  // PLAN 5.39: everything waiting, reviewed here, paid with one tap.
+  if (i.run && i.needsYou.length >= 2) {
+    const row = document.createElement("div"); row.className = "item";
+    row.innerHTML = `<div><div class="who">Pay all ${i.run.count} — ${usd(i.run.total)} USDC</div><div class="why">One approval for every bill below, as you see them now. A bill already paid is skipped, never paid twice; if the limits or keys change before it lands, nothing is paid.</div></div><div></div>`;
+    const all = document.createElement("button"); all.textContent = `Pay all ${i.run.count}`;
+    all.onclick = async () => {
+      all.disabled = true;
+      try {
+        const d = TameionCall.describe(i.run.data);
+        if (!confirm(`${d.action.replace(/, to$/, "")}:\n\n${d.rows.map((r) => `${r.amount} to ${r.to}${nameOf(r.to) ? ` (${nameOf(r.to)}, named on this device)` : ""}`).join("\n")}\n\nA bill already paid is skipped. Valid for ten minutes, and only while the terms you see hold.`)) throw new Error("cancelled");
+        all.textContent = "Paying…"; const ex = await sign(i.run.to, i.run.data);
+        row.innerHTML = `<div><div class="who ok">Paid ${i.run.count} bills, ${usd(i.run.total)} USDC, with one approval</div><div class="why"><a href="${ex.explorer}" target="_blank" rel="noopener">receipt</a></div></div>`;
+        setTimeout(refresh, 4000);
+      } catch (e) { all.disabled = false; all.textContent = `Pay all ${i.run.count}`; row.querySelector(".why").textContent = e.message; }
+    };
+    row.lastElementChild.appendChild(all); need.appendChild(row);
+  }
+  // docs/65 §5.4: invoices a vendor (or a vendor's agent) sent, signed by
+  // the address to be paid. Accept = approve the payee if new (passkey) and
+  // add it as a bill the agent pays on schedule; a one-off one is paid by
+  // this tap. Decline = forget it.
+  for (const v of i.invoices || []) {
+    const row = document.createElement("div"); row.className = "item";
+    const due = v.dueAt ? new Date(v.dueAt * 1000).toLocaleDateString() : "";
+    const every = v.everyDays ? `, ${everyText(v.everyDays * 86400)}` : ", once";
+    const terms = v.discountBps ? ` · ${v.discountBps / 100}% off if paid ${v.earlyDays} days early` : "";
+    row.innerHTML = `<div><div class="who">Invoice from ${who(v.payee)}${nameLink(v.payee)}: ${usd(v.amountText)} USDC, due ${esc(due)}${every}${esc(terms)}</div><div class="why">${(v.notes || []).filter((x) => !((v.approvedPayee || !v.everyDays) && /approved payees yet/.test(x))).map((x) => esc(pretty(x))).join(" ")}${!v.everyDays && num(v.amountText) > num(i.balance) ? ` <b>The account can reach ${usd(i.balance)} USDC now; this needs ${usd((num(v.amountText) - num(i.balance)).toFixed(6))} more before it can be paid.</b>` : ""}</div></div><div></div>`;
+    const no = document.createElement("button"); no.className = "ghost"; no.textContent = "Decline";
+    no.onclick = async () => { no.disabled = true; try { await decideInvoice(v.id, false); row.innerHTML = `<div><div class="who muted">Declined the invoice from ${who(v.payee)}</div></div>`; setTimeout(refresh, 2000); } catch (e) { no.disabled = false; row.querySelector(".why").textContent = e.message; } };
+    const yes = document.createElement("button");
+    // A one-off is paid by the owner's own signature, which needs no approved
+    // payee: approving one would let the vendor's next repeating invoice in
+    // without the passkey (review, docs/60 P-46).
+    const label = v.everyDays ? (v.approvedPayee ? "Accept" : "Approve & accept") : "Pay";
+    yes.textContent = label;
+    yes.onclick = async () => {
+      yes.disabled = true;
+      try {
+        if (v.everyDays && !v.approvedPayee) { yes.textContent = "Approving…"; const prep = await post("/api/level1/prepare-payees", { policy: tenant.policy, payees: [v.payee] }); if (prep.error) throw new Error(prep.error); await sign(prep.to, prep.data); }
+        let ex = null;
+        if (!v.everyDays) { if (!v.pay) throw new Error("the account is not ready to pay yet; try again after its first check"); yes.textContent = "Paying…"; ex = await sign(v.pay.to, v.pay.data); }
+        await decideInvoice(v.id, true);
+        row.innerHTML = `<div><div class="who ok">${v.everyDays ? `Added: ${usd(v.amountText)} USDC to ${who(v.payee)}${every}` : `Paid ${usd(v.amountText)} USDC to ${who(v.payee)}`}</div><div class="why">${ex ? `<a href="${ex.explorer}" target="_blank" rel="noopener">receipt</a>` : "the agent pays it when due, inside your limits"}</div></div>`;
+        if (v.everyDays) runPass();
+        setTimeout(refresh, 4000);
+      } catch (e) { yes.disabled = false; yes.textContent = label; row.querySelector(".why").textContent = e.message; }
+    };
+    row.lastElementChild.appendChild(no); row.lastElementChild.appendChild(document.createTextNode(" ")); row.lastElementChild.appendChild(yes);
+    need.appendChild(row);
+  }
+  for (const n of i.needsYou) {
+    const row = document.createElement("div"); row.className = "item";
+    row.innerHTML = `<div><div class="who">Pay ${usd(n.amount)} USDC to ${who(n.counterparty)}${nameLink(n.counterparty)}</div><div class="why">${esc(plainWhy(n.why))}</div></div><div></div>`;
+    // When the agent thinks the bill may have ended, the human can say so in
+    // one tap: the payee is revoked at once and the agent stops asking.
+    if (/cycles-behind|may have ended/i.test(n.why || "")) {
+      const ended = document.createElement("button"); ended.className = "ghost"; ended.textContent = "Bill ended";
+      ended.onclick = async () => {
+        ended.disabled = true;
+        try {
+          const prep = await post("/api/level1/prepare-payees", { policy: tenant.policy, payees: [n.counterparty], allow: false });
+          const ex = await sign(prep.to, prep.data);
+          row.innerHTML = `<div><div class="who muted">Stopped paying ${who(n.counterparty)}</div><div class="why"><a href="${ex.explorer}" target="_blank" rel="noopener">receipt</a> · the agent will not ask again</div></div>`;
+          setTimeout(refresh, 4000);
+        } catch (e) { ended.disabled = false; row.querySelector(".why").textContent = e.message; }
+      };
+      row.lastElementChild.appendChild(ended); row.lastElementChild.appendChild(document.createTextNode(" "));
+    }
+    const b = document.createElement("button"); b.textContent = n.attest ? "Approve & pay" : "Pay";
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        if (n.attest) { b.textContent = "Approving…"; await sign(n.attest.to, n.attest.data); }
+        b.textContent = "Paying…"; const ex = await sign(n.to, n.data);
+        row.innerHTML = `<div><div class="who ok">Paid ${usd(n.amount)} USDC to ${who(n.counterparty)}</div><div class="why"><a href="${ex.explorer}" target="_blank" rel="noopener">receipt</a></div></div>`;
+        setTimeout(refresh, 4000);
+      } catch (e) { b.disabled = false; b.textContent = n.attest ? "Approve & pay" : "Pay"; row.querySelector(".why").textContent = e.message; }
+    };
+    row.lastElementChild.appendChild(b); need.appendChild(row);
+  }
+  // What the checks refused, and why — nothing to do, but never hidden.
+  if (i.refused && i.refused.length) {
+    const r = document.createElement("div"); r.className = "small muted"; r.style.marginTop = "10px";
+    r.textContent = "Refused by the checks, nothing for you to do: " + i.refused.slice(0, 5).map((x) => `${usd(x.amount)} USDC to ${whoText(x.counterparty)} (${plainWhy((x.why || "").split(" · ")[0])})`).join("; ") + (i.refused.length > 5 ? ` and ${i.refused.length - 5} more` : "") + ".";
+    need.appendChild(r);
+  }
+  // Recent.
+  const rec = $("#recent"); rec.innerHTML = i.paid.length ? "" : `<p class="small muted">Nothing paid yet.</p>`;
+  $("#statement").classList.toggle("hide", !i.paid.length);
+  $("#statementBank").classList.toggle("hide", !i.paid.length);
+  for (const p of i.paid.slice(0, 8)) {
+    const row = document.createElement("div"); row.className = "item";
+    row.innerHTML = p.bought
+      ? `<div><div class="who">Bought from ${esc(p.bought)} — ${usd(p.amount)} USDC</div><div class="why">${esc(p.reason || "")} · ${ago(p.at)} · <a href="${p.explorer}" target="_blank" rel="noopener">receipt</a></div></div><div class="amt ok">✓</div>`
+      : `<div><div class="who">Paid ${usd(p.amount)} USDC to ${who(p.counterparty)}${nameLink(p.counterparty)}${p.by === "you" ? " <span class=\"small muted\">by you</span>" : ""}</div><div class="why">${p.early ? `Paid early for the invoice's discount: saved ${usd(p.saved)} USDC${p.dueAt ? `, due ${new Date(p.dueAt * 1000).toLocaleDateString()}` : ""} · ` : ""}${ago(p.at)} · <a href="${p.explorer}" target="_blank" rel="noopener">receipt</a></div></div><div class="amt ok">✓</div>`;
+    rec.appendChild(row);
+  }
+}
+
+async function runPass() {
+  lastNudge = Date.now();
+  try { await post("/api/level1/run", { policy: tenant.policy }); } catch (e) { $("#status").textContent = e.message; }
+  setTimeout(refresh, 1500);
+}
+$("#check").onclick = runPass;
+$("#recOn").onclick = () => $("#autopilot").click();
+$("#billsAdd").onclick = async () => {
+  const lines = $("#billsIn").value.split("\n").map(l => l.trim()).filter(Boolean);
+  // "payee, amount, every N days[, 2%/10]" — the last field is the invoice's
+  // early-payment terms (PLAN 5.56): 2% off when paid 10 days before due.
+  const bills = lines.map(l => { const [payee, amount, every, terms] = l.split(/[,;\t]+/).map(x => x.trim()); const m = /^([\d.]+)\s*%\s*\/\s*(\d+)/.exec(terms || ""); return { payee, amount, everyDays: Number(every) || 30, ...(m ? { discountPercent: Number(m[1]), earlyDays: Number(m[2]) } : {}) }; });
+  if (!bills.length) { $("#billsOut").textContent = "nothing to add"; return; }
+  $("#billsAdd").disabled = true; $("#billsOut").textContent = "";
+  try {
+    // One passkey tap attests every payee listed; the service then keeps the
+    // bills whose payees the chain now attests.
+    const payees = [...new Set(bills.map(b => b.payee))];
+    const prep = await post("/api/level1/prepare-payees", { policy: tenant.policy, payees });
+    const ex = await sign(prep.to, prep.data);
+    const r = await post("/api/level1/bills", { policy: tenant.policy, bills });
+    $("#billsOut").innerHTML = `${r.bills.length} added${r.refused.length ? `, ${r.refused.length} refused (${r.refused.map(x => x.why).join("; ")})` : ""} · <a href="${ex.explorer}" target="_blank" rel="noopener">receipt</a>`;
+    $("#billsIn").value = "";
+    runPass();
+  } catch (e) { $("#billsOut").textContent = e.message; }
+  $("#billsAdd").disabled = false;
+};
+// Where the agent reports: the owner's key signs the address (a challenge
+// over policy + url + chat id, checked by the service against the key the
+// contract holds). The webhook secret is shown once, here.
+$("#notifySet").onclick = async () => {
+  const out = $("#notifyOut"); out.textContent = ""; $("#notifySet").disabled = true;
+  try {
+    const url = $("#notifyUrl").value.trim(), telegramChatId = $("#notifyChat").value.trim();
+    const prep = await post("/api/level1/prepare-notify", { policy: tenant.policy, url, telegramChatId });
+    if (prep.error) throw new Error(prep.error);
+    const id = pub && pub.credentialId;
+    const assertion = await navigator.credentials.get({ publicKey: { challenge: fromHex(prep.challenge), rpId: location.hostname, userVerification: "required",
+      allowCredentials: id ? [{ type: "public-key", id: unb64u(id) }] : [] } });
+    const r = assertion.response; const clientDataJSON = new TextDecoder().decode(r.clientDataJSON);
+    const { r: rr, s } = derToRS(r.signature);
+    const auth = { r: rr, s, challengeIndex: clientDataJSON.indexOf('"challenge":"'), typeIndex: clientDataJSON.indexOf('"type":"webauthn.get"'), authenticatorData: hex(r.authenticatorData), clientDataJSON };
+    const res = await post("/api/level1/notify-signed", { policy: tenant.policy, url, telegramChatId, issued: prep.issued, auth });
+    if (res.error) throw new Error(res.error);
+    out.textContent = res.notifySecret ? `set · your receiver checks each report with this secret (shown once): ${res.notifySecret}` : "set";
+    $("#notifyNow").textContent = res.notifyUrl ? `— reports to ${res.notifyUrl}${res.telegramChatId ? " and Telegram" : ""}` : "— after every check: what it paid, what needs you.";
+  } catch (e) { out.textContent = e.message; }
+  $("#notifySet").disabled = false;
+};
+// Bring the Gateway USDC to the policy: the service prepares the intent
+// (fee and expiry from Circle), the bill wallet in this browser signs it
+// (EIP-712, shown in words first), the service hands it to Circle and pays
+// the gas for the mint. The data names the policy as the only recipient.
+$("#bring").onclick = async () => {
+  const he = inbox && inbox.holdingsElsewhere; if (!he || !he.chains || !he.chains.length) return;
+  const out = $("#bringOut"); out.textContent = ""; $("#bring").disabled = true;
+  try {
+    if (!window.ethereum) throw new Error("needs your bill wallet in this browser (MetaMask or similar) to sign");
+    const [from] = await walletRequest({ method: "eth_requestAccounts" });
+    const src = he.chains.slice().sort((a, b) => num(b.balance) - num(a.balance))[0];
+    const prep = await post("/api/level1/prepare-fund", { policy: tenant.policy, from, all: true, sourceDomain: src.domain });
+    if (!confirm(prep.describe)) throw new Error("cancelled");
+    const signature = await walletRequest({ method: "eth_signTypedData_v4", params: [from, JSON.stringify(prep.typedData)] });
+    out.textContent = "sending…";
+    const r = await post("/api/level1/fund", { policy: tenant.policy, burnIntent: prep.typedData.message, signature });
+    out.innerHTML = `arrived · <a href="${r.explorer}" target="_blank" rel="noopener">receipt</a>`;
+    setTimeout(refresh, 3000);
+  } catch (e) { out.textContent = e.message; }
+  $("#bring").disabled = false;
+};
+// PLAN 5.33: fund from another chain — approve + deposit into Circle Gateway
+// on the source chain, batched with wallet_sendCalls (EIP-5792) when the
+// wallet offers it, sequential otherwise. The wallet does everything; the
+// page only prepares two calls and names Circle's Gateway contract.
+const to32 = (n) => BigInt(n).toString(16).padStart(64, "0");
+const encodeCall = (sel, addr, amount) => sel + addr.toLowerCase().replace(/^0x/, "").padStart(64, "0") + to32(amount);
+// docs/65 F3/F4: before any money arrives, what the agent already read in
+// the bill wallet, and the exact amount that covers the next 30 days of it,
+// sendable from this browser's wallet in one tap.
+// "every 30 days", "every week", "every 3 minutes" (the demo's): never "3.0m".
+const everyText = (secs, fallback) => {
+  if (!secs) return `every ${fallback}`;
+  const plural = (n, u) => n === 1 ? `every ${u}` : `every ${n} ${u}s`;
+  const d = secs / 86400, w = Math.round(d / 7);
+  if (d >= 2 || Math.abs(d - 1) < 0.05) return w >= 1 && Math.abs(d - 7 * w) < 0.5 ? plural(w, "week") : plural(Math.round(d), "day");
+  if (secs >= 7200) return plural(Math.round(secs / 3600), "hour");
+  if (secs >= 120) return plural(Math.round(secs / 60), "minute");
+  return plural(Math.round(secs), "second");
+};
+// What the Start view already read for this wallet, in the preview's shape:
+// shown while the service's own read is still running, so the bills the
+// owner just saw do not vanish behind "Reading…" (docs/70 C1).
+function peekAsPreview() {
+  const r = startPeek.report;
+  if (!r || !tenant || startPeek.key !== `${tenant.chain}:${(tenant.watched || "").toLowerCase()}`) return null;
+  const bills = (r.obligations || []).map((o) => ({ counterparty: o.counterparty, amount: o.amount, every: o.every, intervalSecs: o.intervalSecs }));
+  const largest = Math.max(0, ...bills.map((b) => num(b.amount)));
+  return { status: "done", days: r.days, transfers: r.transfers, bills, next30: r.liquidity30d,
+    fundMinor: String(Math.round(num(r.liquidity30d) * 1e6)), suggestedLimit: largest > 0 ? (largest * 2).toFixed(6) : null, usdc: null };
+}
+function renderPreview(i) {
+  const peek = (!i.preview || i.preview.status !== "done") && i.deployed === false ? peekAsPreview() : null;
+  const pv = peek ? { ...peek, usdc: (i.preview && i.preview.usdc) || peek.usdc } : i.preview, ch = (cfg.chains.find(c => c.key === tenant.chain) || {});
+  const testnet = /testnet|sepolia/.test(tenant.chain || "");
+  $("#faucet").innerHTML = testnet ? `(Testnet USDC: <a href="https://faucet.circle.com" target="_blank" rel="noopener">Circle's faucet</a>, choose ${ch.name || "this chain"}.)` : "";
+  const box = $("#previewText");
+  const fund = pv && pv.status === "done" ? BigInt(pv.fundMinor || "0") : 0n;
+  if (!pv || pv.status === "failed") box.classList.add("hide");
+  else if (pv.status === "reading") { box.classList.remove("hide"); box.textContent = "Reading your wallet's last 90 days…"; }
+  else {
+    box.classList.remove("hide");
+    const bills = pv.bills || [];
+    box.innerHTML = "";
+    const lead = document.createElement("div");
+    lead.textContent = bills.length
+      ? `The agent read your wallet's last ${pv.days} days (${pv.transfers} payments) and found ${bills.length} recurring bill${bills.length > 1 ? "s" : ""}. The next 30 days of them come to ${usd(pv.next30)} USDC.`
+      : `The agent read your wallet's last ${pv.days} days (${pv.transfers} payments) and found no recurring bill yet. Fund it and it keeps watching; or add a bill below.`;
+    box.appendChild(lead);
+    for (const b of bills.slice(0, 6)) {
+      const row = document.createElement("div"); row.className = "why";
+      row.textContent = `${usd(b.amount)} USDC to ${whoText(b.counterparty)}, ${everyText(b.intervalSecs, b.every)}`;
+      box.appendChild(row);
+    }
+    if (pv.suggestedLimit && num(pv.suggestedLimit) > num(i.chosenDaily)) {
+      const w = document.createElement("div"); w.className = "why";
+      w.textContent = `Your daily limit (${usd(i.chosenDaily)} USDC) is under twice your largest bill; the agent will suggest ${usd(pv.suggestedLimit)} after its first check.`;
+      box.appendChild(w);
+    }
+  }
+  $("#fundHow").textContent = fund > 0n ? `${usd((Number(fund) / 1e6).toFixed(6))} USDC covers the next 30 days. ` : "";
+  const btn = $("#fundBtn");
+  // The token's address comes from the service's own read; until it lands
+  // (the Start view's read does not carry it) there is no button.
+  btn.classList.toggle("hide", !(window.ethereum && fund > 0n && pv.usdc));
+  btn.textContent = `Send ${usd((Number(fund) / 1e6).toFixed(6))} USDC from this browser's wallet`;
+  btn.onclick = async () => {
+    const out = $("#fundOut"); out.textContent = ""; btn.disabled = true;
+    try {
+      const [from] = await walletRequest({ method: "eth_requestAccounts" });
+      const chainHex = "0x" + (ch.chainId || 0).toString(16);
+      try { await walletRequest({ method: "wallet_switchEthereumChain", params: [{ chainId: chainHex }] }); }
+      catch (e) { throw new Error(e.code === 4902 ? `your wallet does not know ${ch.name}; add it there first` : e.message); }
+      out.textContent = "sending…";
+      const tx = await walletRequest({ method: "eth_sendTransaction", params: [{ from, to: pv.usdc, data: encodeCall("0xa9059cbb", tenant.policy, fund) }] });
+      out.innerHTML = `sent · <a href="${ch.explorer ? ch.explorer + "/tx/" + tx : "#"}" target="_blank" rel="noopener">receipt</a> · the agent starts as soon as it lands`;
+      await landed(tx); runPass();
+    } catch (e) { out.textContent = e.message; btn.disabled = false; }
+  };
+}
+function parkSetup() {
+  const srcs = (cfg.gatewaySources || []).filter(c => c.chainId !== (cfg.chains.find(k => k.key === tenant.chain) || {}).chainId);
+  $("#park").classList.toggle("hide", !window.ethereum || !srcs.length);
+  if (!srcs.length || $("#parkChain").options.length) return;
+  for (const c of srcs) { const o = document.createElement("option"); o.value = c.chainId; o.textContent = c.name; $("#parkChain").appendChild(o); }
+}
+$("#parkGo").onclick = async () => {
+  const out = $("#parkOut"); out.textContent = ""; $("#parkGo").disabled = true;
+  try {
+    const src = (cfg.gatewaySources || []).find(c => String(c.chainId) === $("#parkChain").value);
+    const amt = parseFloat($("#parkAmt").value);
+    if (!src) throw new Error("pick a chain");
+    if (!(amt > 0)) throw new Error("set an amount in USDC");
+    if (!window.ethereum) throw new Error("needs your bill wallet in this browser (MetaMask or similar)");
+    const minor = BigInt(Math.round(amt * 1e6));
+    const [from] = await walletRequest({ method: "eth_requestAccounts" });
+    const chainHex = "0x" + src.chainId.toString(16);
+    out.textContent = `switching your wallet to ${src.name}…`;
+    try { await walletRequest({ method: "wallet_switchEthereumChain", params: [{ chainId: chainHex }] }); }
+    catch (e) { throw new Error(e.code === 4902 ? `your wallet does not know ${src.name}; add it there first` : e.message); }
+    const calls = [
+      { to: src.usdc, data: encodeCall("0x095ea7b3", src.wallet, minor) },
+      { to: src.wallet, data: encodeCall("0x47e7ef24", src.usdc, minor) },
+    ];
+    const ex = { 421614: "https://sepolia.arbiscan.io", 84532: "https://sepolia.basescan.org", 11155111: "https://sepolia.etherscan.io", 11155420: "https://sepolia-optimism.etherscan.io", 5042002: "https://explorer.testnet.arc.io" }[src.chainId];
+    const link = (h) => ex ? `<a href="${ex}/tx/${h}" target="_blank" rel="noopener">${h.slice(0, 10)}…</a>` : h.slice(0, 10) + "…";
+    let hashes = [], how = "";
+    try {
+      out.textContent = `asking your wallet for one batch (approve + deposit ${amt} USDC)…`;
+      const { id } = await walletRequest({ method: "wallet_sendCalls", params: [{ version: "2.0.0", chainId: chainHex, from, atomicRequired: false, calls }] });
+      let st; for (let i = 0; i < 120; i++) { st = await walletRequest({ method: "wallet_getCallsStatus", params: [id] }); if (st.status >= 200) break; await new Promise(r => setTimeout(r, 2000)); }
+      if (!st || st.status !== 200) throw new Error(`the batch did not land (status ${st && st.status})`);
+      hashes = (st.receipts || []).map(r => r.transactionHash); how = st.atomic ? "one atomic batch" : "one batch, two transactions";
+    } catch (e) {
+      if (e.code !== -32601 && !/not (exist|available|supported)/i.test(e.message || "")) throw e;
+      // No wallet_sendCalls: the same two calls, one after the other.
+      out.textContent = `your wallet has no batching; approve, then deposit (two confirmations)…`;
+      for (const c of calls) hashes.push(await walletRequest({ method: "eth_sendTransaction", params: [{ from, to: c.to, data: c.data }] }));
+      how = "two transactions";
+    }
+    try { await walletRequest({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x" + ((cfg.chains.find(k => k.key === tenant.chain) || {}).chainId || 0).toString(16) }] }); } catch {}
+    out.innerHTML = `${amt} USDC deposited into Gateway on ${src.name} (${how}: ${hashes.map(link).join(", ")}). It shows above as arriving until Circle credits it; then "Bring it into the account".`;
+    setTimeout(refresh, 4000);
+  } catch (e) { out.textContent = e.message; }
+  $("#parkGo").disabled = false;
+};
+// Pull mode: the wallet signs the allowance itself (eth_sendTransaction on
+// USDC). The page never holds the wallet's key; a wallet elsewhere uses the
+// words in the card.
+async function sendFromWallet(data, label) {
+  const pl = inbox && inbox.pull; if (!pl) return;
+  const out = $("#allowOut"); out.textContent = "";
+  try {
+    if (!window.ethereum) throw new Error("needs your bill wallet in this browser (MetaMask or similar); otherwise use the call in words below from your wallet");
+    const [from] = await walletRequest({ method: "eth_requestAccounts" });
+    if (from.toLowerCase() !== pl.wallet.toLowerCase()) throw new Error(`this browser's wallet is ${short(from)}, not the bill wallet ${short(pl.wallet)}`);
+    // On the account's chain only: the same approve on another chain changes
+    // nothing here, and the page must not say "cut to zero" (docs/60 P-72 B4).
+    const ch = cfg.chains.find(c => c.key === tenant.chain) || {};
+    try { await walletRequest({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x" + (ch.chainId || 0).toString(16) }] }); }
+    catch (e) { throw new Error(e.code === 4902 ? `your wallet does not know ${ch.name}; add it there first` : e.message); }
+    if (parseInt(await walletRequest({ method: "eth_chainId" }), 16) !== ch.chainId) throw new Error(`your wallet is not on ${ch.name}; switch it there and tap again`);
+    out.textContent = `${label}…`;
+    const tx = await walletRequest({ method: "eth_sendTransaction", params: [{ from, to: pl.usdc, data }] });
+    await landed(tx);
+    out.innerHTML = `${label} · <a href="${ch.explorer ? ch.explorer + "/tx/" + tx : "#"}" target="_blank" rel="noopener">receipt</a>`;
+    // The money can be reached now: a reserved account's first check starts
+    // at once instead of on the next poll (it took 35–54 s, docs/70 C5).
+    if (inbox && inbox.deployed === false) runPass(); else setTimeout(refresh, 1000);
+  } catch (e) { out.textContent = e.message; }
+}
+// An invoice decision (docs/60 P-72/P-73): on an account without agent keys the
+// owner's passkey signs level1::invoice_decide_challenge, computed here —
+// keccak256("tameion.invoice-decide.v1" ‖ chainId u64 ‖ policy ‖ id ‖ accept u8 ‖ issued u64).
+async function decideInvoice(id, accept) {
+  let signed = {};
+  if (!(inbox && inbox.agentTokens && inbox.agentTokens.length)) {
+    const chainId = (cfg.chains.find(c => c.key === tenant.chain) || {}).chainId;
+    if (!chainId) throw new Error("this page does not know the account's chain; reload it");
+    const issued = Math.floor(Date.now() / 1000);
+    const u64 = (n) => BigInt(n).toString(16).padStart(16, "0");
+    const tag = [...new TextEncoder().encode("tameion.invoice-decide.v1")].map((b) => b.toString(16).padStart(2, "0")).join("");
+    const msg = tag + u64(chainId) + tenant.policy.replace(/^0x/, "").toLowerCase() + id.replace(/^0x/, "").toLowerCase() + (accept ? "01" : "00") + u64(issued);
+    signed = { issued, auth: await passkeyAssert(TameionCall.hex(TameionCall.keccak256(TameionCall.bytesOf(msg)))) };
+  }
+  const r = await post("/api/level1/invoice-decide", { policy: tenant.policy, id, accept, ...signed });
+  if (r.error) throw new Error(r.error);
+  return r;
+}
+// A passkey assertion over a 32-byte challenge the service issued (off-chain
+// approvals: notify address, agent keys). Same shape the contract takes.
+async function passkeyAssert(challengeHex) { return holding(() => passkeyAssertNow(challengeHex)); }
+async function passkeyAssertNow(challengeHex) {
+  const id = pub && pub.credentialId;
+  const assertion = await navigator.credentials.get({ publicKey: { challenge: fromHex(challengeHex), rpId: location.hostname, userVerification: "required",
+    allowCredentials: id ? [{ type: "public-key", id: unb64u(id) }] : [] } });
+  const r = assertion.response; const clientDataJSON = new TextDecoder().decode(r.clientDataJSON);
+  const { r: rr, s } = derToRS(r.signature);
+  return { r: rr, s, challengeIndex: clientDataJSON.indexOf('"challenge":"'), typeIndex: clientDataJSON.indexOf('"type":"webauthn.get"'), authenticatorData: hex(r.authenticatorData), clientDataJSON };
+}
+// docs/65: the agent's report as a notification on this device (Web Push).
+// The owner's passkey signs the subscription; the service checks it against
+// the key the contract holds, so nobody else can add a browser.
+$("#pushOn").onclick = async () => {
+  const out = $("#pushOut"); out.textContent = ""; $("#pushOn").disabled = true;
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) throw new Error("this browser cannot show notifications; add the page to your home screen first");
+    const reg = await navigator.serviceWorker.register("/sw.js");
+    if ((await Notification.requestPermission()) !== "granted") throw new Error("notifications are off for this page; allow them in the browser's settings");
+    const { key } = await (await fetch("/api/level1/push-key")).json();
+    const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: unb64u(key) }));
+    const subscription = sub.toJSON();
+    const prep = await post("/api/level1/push-subscribe", { policy: tenant.policy, subscription });
+    if (prep.error) throw new Error(prep.error);
+    const auth = await passkeyAssert(prep.challenge);
+    const res = await post("/api/level1/push-subscribe", { policy: tenant.policy, subscription, issued: prep.issued, auth });
+    if (res.error) throw new Error(res.error);
+    out.textContent = `on — this device hears when the agent pays or needs you${res.devices > 1 ? ` (${res.devices} devices)` : ""}`;
+  } catch (e) { out.textContent = e.message; }
+  $("#pushOn").disabled = false;
+};
+$("#agentMint").onclick = async () => {
+  const out = $("#agentOut"); out.textContent = ""; $("#agentMint").disabled = true;
+  try {
+    const scopes = [...document.querySelectorAll("#agentsCard .scope:checked")].map(x => x.value);
+    const label = $("#agentLabel").value.trim(); const days = parseInt($("#agentDays").value, 10) || 90;
+    const prep = await post("/api/level1/prepare-token", { policy: tenant.policy, scopes, label, days });
+    if (!confirm(prep.summary)) throw new Error("cancelled");
+    const auth = await passkeyAssert(prep.challenge);
+    const r = await post("/api/level1/token-signed", { policy: tenant.policy, scopes, label, issued: prep.issued, expires: prep.expires, auth });
+    store.set(`tameion.token.${tenant.policy}`, r.token);
+    out.textContent = `key for ${label || "your agent"} (shown once; this browser kept a copy): ${r.token} — tameion-mcp: TAMEION_TOKEN=${r.token}`;
+    setTimeout(refresh, 1500);
+  } catch (e) { out.textContent = e.message; }
+  $("#agentMint").disabled = false;
+};
+$("#keyUse").onclick = () => { const k = $("#keyIn").value.trim(); if (k && tenant) { store.set(`tameion.token.${tenant.policy}`, k); refresh(); } };
+$("#guardiansSet").onclick = async () => {
+  const out = $("#guardiansOut"); out.textContent = ""; $("#guardiansSet").disabled = true;
+  try {
+    const guardians = $("#guardiansIn").value.split(/\s+/).filter(Boolean);
+    const threshold = parseInt($("#guardiansT").value, 10) || 0;
+    const prep = await post("/api/level1/prepare-guardians", { owner: tenant.owner, guardians, threshold });
+    if (prep.error) throw new Error(prep.error);
+    const ex = await sign(prep.to, prep.data);
+    out.innerHTML = `set · <a href="${ex.explorer}" target="_blank" rel="noopener">receipt</a>`;
+    setTimeout(refresh, 3000);
+  } catch (e) { out.textContent = e.message; }
+  $("#guardiansSet").disabled = false;
+};
+$("#renewBtn").onclick = async () => {
+  const out = $("#renewOut"); out.textContent = ""; $("#renewBtn").disabled = true;
+  try {
+    const prep = await post("/api/level1/prepare-renew", { policy: tenant.policy, days: 90 });
+    if (prep.error) throw new Error(prep.error);
+    const ex = await sign(prep.to, prep.data);
+    out.innerHTML = `renewed · <a href="${ex.explorer}" target="_blank" rel="noopener">receipt</a>`;
+    setTimeout(refresh, 3000);
+  } catch (e) { out.textContent = e.message; }
+  $("#renewBtn").disabled = false;
+};
+$("#allowBtn").onclick = () => sendFromWallet(inbox.pull.approveData, "allowed");
+$("#revokeBtn").onclick = () => sendFromWallet(inbox.pull.revokeData, "cut to zero");
+$("#sugSet").onclick = async () => {
+  const sg = inbox && inbox.suggestedLimit; if (!sg) return;
+  $("#sugSet").disabled = true; $("#sugOut").textContent = "";
+  try {
+    const prep = await post("/api/level1/prepare-limits", { policy: tenant.policy, perAction: raw(sg.perAction), daily: raw(sg.daily), floor: raw(inbox.caps.floor) });
+    const ex = await sign(prep.to, prep.data);
+    $("#sugOut").innerHTML = `set · <a href="${ex.explorer}" target="_blank" rel="noopener">receipt</a>`;
+    setTimeout(refresh, 3000);
+  } catch (e) { $("#sugOut").textContent = e.message; }
+  $("#sugSet").disabled = false;
+};
+$("#autopilot").onclick = async () => {
+  $("#ctlOut").textContent = "";
+  try {
+    if (inbox.mode === "Autopilot") { $("#ctlOut").textContent = "Autopilot is on. Pause to stop it at once."; return; }
+    if (inbox.pending && inbox.pending.mode === "Autopilot") {
+      const prep = await post("/api/level1/prepare-cancel", { policy: tenant.policy });
+      const ex = await sign(prep.to, prep.data); $("#ctlOut").innerHTML = `cancelled · <a href="${ex.explorer}" target="_blank" rel="noopener">receipt</a>`;
+    } else {
+      const prep = await post("/api/level1/prepare-mode", { policy: tenant.policy, mode: 2 });
+      const ex = await sign(prep.to, prep.data);
+      $("#ctlOut").innerHTML = `asked · it turns on after the delay unless you cancel · <a href="${ex.explorer}" target="_blank" rel="noopener">receipt</a>`;
+      // Apply for them when the delay has passed: anyone may.
+      setTimeout(async () => { try { await post("/api/level1/mode", { policy: tenant.policy, action: "apply" }); refresh(); } catch {} }, (cfg.delaySecs + 5) * 1000);
+    }
+    refresh();
+  } catch (e) { $("#ctlOut").textContent = e.message; }
+};
+$("#pause").onclick = async () => {
+  $("#ctlOut").textContent = "";
+  try {
+    const mode = inbox.mode === "Watch" ? 1 : 0;
+    const prep = await post("/api/level1/prepare-mode", { policy: tenant.policy, mode });
+    const ex = await sign(prep.to, prep.data);
+    $("#ctlOut").innerHTML = `${mode === 0 ? "paused, at once" : "resumed in Propose"} · <a href="${ex.explorer}" target="_blank" rel="noopener">receipt</a>`;
+    refresh();
+  } catch (e) { $("#ctlOut").textContent = e.message; }
+};
+
+async function init() {
+  cfg = await (await fetch("/api/level1/config")).json();
+  // PLAN 5.58: the chains this host can open an account on (those with an anchor).
+  $("#startChain").innerHTML = cfg.chains.filter((c) => c.anchor).map((c) => `<option value="${c.key}">${esc(c.name)}</option>`).join("");
+  // Pull mode by default when a wallet can approve from this browser.
+  $("#pull").checked = !!window.ethereum;
+  $("#useWallet").classList.toggle("hide", !window.ethereum); $("#useWalletSep").classList.toggle("hide", !window.ethereum);
+  $("#inviteRow").classList.toggle("hide", !cfg.inviteNeeded);
+  if (!cfg.operator) { $("#go").disabled = true; $("#goOut").className = "small muted"; $("#goOut").textContent = "This host has no relayer key, so it cannot start an account here. Watch still works."; }
+  const q = new URLSearchParams(location.search);
+  if (q.get("address")) $("#watched").value = q.get("address");
+  if (q.get("daily")) $("#daily").value = q.get("daily");
+  const saved = store.get("tameion.pub"); if (saved) pub = JSON.parse(saved);
+  // PLAN 5.45: arriving from a partner's link (?partner=<id>) names the partner on Start.
+  const pid = (q.get("partner") || store.get("tameion.partner") || "").trim();
+  if (/^[a-z0-9-]{2,32}$/.test(pid)) {
+    try {
+      const r = await fetch(`/api/partner/public?id=${pid}`);
+      if (r.ok) { const p = await r.json(); store.set("tameion.partner", p.id); $("#partnerLine").textContent = `Set up with ${p.name}. They see that your account exists and how it is doing — never a key, never your money.`; $("#partnerLine").classList.remove("hide"); }
+    } catch {}
+  }
+  // ?policy=0x… opens an existing account here (another device, a fresh browser).
+  const wanted = (q.get("policy") || "").trim();
+  if (/^0x[0-9a-fA-F]{40}$/.test(wanted)) {
+    try {
+      const r = await fetch(`/api/level1/tenant/${wanted}`);
+      if (r.ok) { const d = await r.json(); if (d.tenant && d.tenant.policy) remember(d.tenant); }
+      else { $("#goOut").className = "small warn"; $("#goOut").textContent = `No account at ${short(wanted)} on this host.`; }
+    } catch (e) { $("#goOut").textContent = e.message; }
+    history.replaceState(null, "", "/");
+  }
+  const t = store.get("tameion.tenant");
+  if (t) { tenant = JSON.parse(t); show(); await refresh(); timer = setInterval(refresh, 15000); }
+}
+init();
+</script>
+</body>
+</html>

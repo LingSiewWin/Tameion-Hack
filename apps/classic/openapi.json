@@ -1,0 +1,2167 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Tameion Watch",
+    "version": "0.1.0",
+    "description": "Level 0 of the trust ladder: read-only. Submit an address, poll the run, read what it owes, what the agent would pay or ask about, and the maximum a stolen key could lose under caps you choose. Nothing is signed or sent.\n\nIdempotency (PLAN 5.42): any POST may carry `Idempotency-Key` (1–255 chars). A retry with the same key and body returns the first 2xx answer with `Idempotent-Replayed: true`; the same key with a different body answers 422; a key still in flight answers 409; keys live 24 hours. Agent-readable summary: GET /llms.txt."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/api/chains": {
+      "get": {
+        "summary": "Chains this service can read",
+        "responses": {
+          "200": {
+            "description": "Presets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "chains": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Chain"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/watch": {
+      "post": {
+        "summary": "Start a read-only watch of an address",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WatchRequest",
+                "properties": {
+                  "fresh": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "force a rescan; without it a finished run of the same address, chain, window and caps from the last hour answers at once with cached: true"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted; poll /api/watch/{id}",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad chain, address or body"
+          },
+          "429": {
+            "description": "All scan slots busy"
+          },
+          "200": {
+            "description": "a recent identical run answers at once: { id, status: \"done\", cached: true }"
+          }
+        }
+      }
+    },
+    "/api/watch/{id}": {
+      "get": {
+        "summary": "Status, progress and report of a run",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such run"
+          }
+        },
+        "description": "progress carries phase, scannedBlocks, totalBlocks, transfersSoFar, elapsedSecs and etaSecs (rate so far × blocks left); a Level 1 pass reports the same fields. A Level 1 pass report also carries obligationsList (counterparty, amount, intervalSecs, nextDue, confidence, samples), reasoner, settled, escalated, pendingSignature (with actionHash and why), root, anchorTx, agentGasTopUpTx."
+      }
+    },
+    "/healthz": {
+      "get": {
+        "summary": "Liveness",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/level1/mode": {
+      "post": {
+        "summary": "The autonomy level as the contract holds it. status and apply are anyone's (apply: the contract checks the delay). pause, propose and autopilot are the operator's own actions, signed with the relayer key, and need the admin token in the body; a principal changes their mode with the passkey via /api/level1/prepare-mode + /api/level1/execute.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "status",
+                      "pause",
+                      "propose",
+                      "autopilot",
+                      "apply"
+                    ],
+                    "default": "status"
+                  },
+                  "token": {
+                    "type": "string",
+                    "description": "admin token, for pause/propose/autopilot only"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "tx (null for status), explorerTx, mode, delaySecs, balance, caps {perAction, daily, floor}, pending {kinds, mode, perActionCap, dailyCap, reserveFloor, eta}"
+          },
+          "400": {
+            "description": "unknown action or missing policy"
+          },
+          "404": {
+            "description": "no such tenant"
+          },
+          "502": {
+            "description": "the chain refused or timed out"
+          },
+          "403": {
+            "description": "operator action without the admin token"
+          }
+        }
+      }
+    },
+    "/api/level1/prepare-cancel": {
+      "post": {
+        "summary": "Calldata for the principal's passkey to cancel a pending raise (cancelPending()).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "to, data, summary"
+          }
+        }
+      }
+    },
+    "/api/level1/prepare-mode": {
+      "post": {
+        "summary": "Calldata for the principal's passkey to set the autonomy level (setMode(uint8): 0 Watch, 1 Propose, 2 Autopilot). The contract applies a lowering at once and schedules a raise behind the delay.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "mode"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "mode": {
+                    "type": "integer",
+                    "enum": [
+                      0,
+                      1,
+                      2
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "to, data, summary"
+          },
+          "400": {
+            "description": "bad mode or policy"
+          }
+        }
+      }
+    },
+    "/api/level1/prepare-withdraw": {
+      "post": {
+        "summary": "Calldata for the principal's passkey to withdraw from the policy (withdraw(to, usdcUnits); principal only on the contract).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "to",
+                  "amount"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "to": {
+                    "type": "string"
+                  },
+                  "amount": {
+                    "type": "string",
+                    "description": "USDC, for example 0.01"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "to, data, summary"
+          },
+          "400": {
+            "description": "missing field or zero amount"
+          }
+        }
+      }
+    },
+    "/api/level1/record": {
+      "get": {
+        "summary": "The events behind one anchored root of one tenant (NDJSON), as written before anchoring; recompute the root with `operator --example audit` and compare with rootOf on the chain.",
+        "parameters": [
+          {
+            "name": "policy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "root",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "application/x-ndjson"
+          },
+          "404": {
+            "description": "no record of that root for that policy"
+          }
+        }
+      }
+    },
+    "/api/level1/prepare-limits": {
+      "post": {
+        "summary": "Calldata for the principal's passkey to set the agent's limits (setLimits(perActionCap, dailyCap, reserveFloor)); tightening applies at once on the contract, loosening is scheduled behind the delay.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "perAction",
+                  "daily",
+                  "floor"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "perAction": {
+                    "type": "string"
+                  },
+                  "daily": {
+                    "type": "string"
+                  },
+                  "floor": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "to, data, summary"
+          },
+          "400": {
+            "description": "missing field or per-action above daily"
+          }
+        }
+      }
+    },
+    "/api/level1/prepare-notify": {
+      "post": {
+        "summary": "Where the agent reports, set by the OWNER'S PASSKEY instead of the admin (PLAN 5.3): returns a 32-byte challenge = keccak256(\"tameion.notify.v1\" || chainId || policy || url || telegramChatId || issued) and `issued` (unix seconds; valid 10 minutes). The owner signs it with navigator.credentials.get; the assertion goes to /api/level1/notify-signed.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "http(s) webhook; empty clears"
+                  },
+                  "telegramChatId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "challenge (hex), issued, summary"
+          },
+          "400": {
+            "description": "bad url"
+          },
+          "404": {
+            "description": "no such tenant"
+          }
+        }
+      }
+    },
+    "/api/level1/notify-signed": {
+      "post": {
+        "summary": "Apply the notify settings carried by a passkey assertion over the challenge from prepare-notify. The service verifies the WebAuthn assertion (P-256, over sha256(authenticatorData || sha256(clientDataJSON))) against the key the tenant's PasskeyPrincipal holds on chain (qx, qy), checks the challenge is the one it issued, fresh and unused, then stores url / telegramChatId and mints the webhook secret once.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "issued",
+                  "auth"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "telegramChatId": {
+                    "type": "string"
+                  },
+                  "issued": {
+                    "type": "integer"
+                  },
+                  "auth": {
+                    "type": "object",
+                    "description": "r, s, challengeIndex, typeIndex, authenticatorData (hex), clientDataJSON — the same shape /api/level1/execute takes"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "policy, notifyUrl, telegramChatId, notifySecret (once), signature recipe"
+          },
+          "400": {
+            "description": "stale or reused challenge"
+          },
+          "403": {
+            "description": "the assertion does not verify against the owner's key"
+          },
+          "404": {
+            "description": "no such tenant"
+          }
+        }
+      }
+    },
+    "/api/level1/prepare-fund": {
+      "post": {
+        "summary": "Fund the policy from the bill wallet's USDC in Circle Gateway on another chain (PLAN 5.15): returns the EIP-712 typed data (domain GatewayWallet v1, primaryType BurnIntent) the bill wallet signs, with Circle's maxFee and maxBlockHeight filled from Gateway's /v1/estimate, the fees, and a one-sentence description. The spec names this tenant's policy as the only recipient. Nothing here signs.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "amount",
+                  "sourceDomain"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "amount": {
+                    "type": "string",
+                    "description": "USDC, e.g. \"0.5\""
+                  },
+                  "sourceDomain": {
+                    "type": "integer",
+                    "description": "Gateway domain the USDC sits on (3 Arbitrum Sepolia, 6 Base Sepolia, 0 Ethereum Sepolia, 26 Arc Testnet, …)"
+                  },
+                  "from": {
+                    "type": "string",
+                    "description": "the depositor (bill wallet); default: the tenant's watched wallet"
+                  },
+                  "all": {
+                    "type": "boolean",
+                    "description": "move everything on that domain less Circle's fee cap (amount ignored)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "typedData {types, primaryType, domain, message}, fees, describe"
+          },
+          "400": {
+            "description": "missing field, unknown domain"
+          },
+          "404": {
+            "description": "no such tenant"
+          },
+          "502": {
+            "description": "Gateway's estimate failed"
+          }
+        }
+      }
+    },
+    "/api/level1/fund": {
+      "post": {
+        "summary": "Hand the signed burn intent to Circle Gateway (POST /v1/transfer) and relay gatewayMint(attestation, signature) on the policy's chain with the relayer key, which only pays gas. Refused unless the intent's destinationRecipient is this tenant's policy on its chain.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "burnIntent",
+                  "signature"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "burnIntent": {
+                    "type": "object",
+                    "description": "typedData.message from prepare-fund, unchanged"
+                  },
+                  "signature": {
+                    "type": "string",
+                    "description": "the bill wallet's EIP-712 signature (eth_signTypedData_v4)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "transferId, fees, expirationBlock, mintTx, explorer, policy"
+          },
+          "400": {
+            "description": "intent does not pay this policy"
+          },
+          "502": {
+            "description": "Gateway refused the transfer, or the mint reverted (attestation returned so it can be retried)"
+          }
+        }
+      }
+    },
+    "/api/level1/prepare-recovery": {
+      "post": {
+        "summary": "Calldata for the passkey to name or clear (zero address) the recovery address on its own PasskeyPrincipal (setRecovery(address)); the target is the owner contract.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "owner",
+                  "recovery"
+                ],
+                "properties": {
+                  "owner": {
+                    "type": "string"
+                  },
+                  "recovery": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "to (the owner), data, summary"
+          },
+          "400": {
+            "description": "missing field"
+          }
+        }
+      }
+    },
+    "/api/level1/records": {
+      "get": {
+        "summary": "Every root this tenant's agent has anchored (the service's anchors.jsonl: root, anchorTx, at, events, agent, anchor), newest last. With /api/level1/record a hosted tenant is verifiable from another machine: scripts/verify_tenant.sh.",
+        "parameters": [
+          {
+            "name": "policy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{ policy, records: [...] }"
+          },
+          "404": {
+            "description": "no anchored records for that policy"
+          }
+        }
+      }
+    },
+    "/api/level1/inbox": {
+      "get": {
+        "summary": "One screen for a treasurer: deployed (false while only reserved; status then reads what the reserved address can reach); agentTokens [{id, label, scopes, expires, issued}] and gated (true once a key exists — then this route needs Authorization: Bearer with the read scope); guardians {list, threshold, pendingEta}; terms {perActionCap, dailyCap, reserveFloor, mode, agent, operator, delay, agentExpiry, pendingEta, pendingKinds, fingerprint, recomputed, consistent} — the fields the owner's approvals are bound to, and needsYou rows whose to/data/attest are settleAsPrincipalIf / setPayeesIf bound to that fingerprint for ten minutes (boundUntil); standingOrders [{id, payee, amount, everySecs, nextDue, active, due}] and standingOrderCandidates (confirmed bills the agent suggests making standing orders); kind (hold | pull) and, for pull tenants, pull {wallet, usdc, allowance, walletBalance, suggestedAllowance, approveData, revokeData} — the money stays in the bill wallet and balance = the smaller of its balance and the allowance; mode, caps, balance, pending change, protectedPerDay = min(daily cap, balance - floor), lastPass, running (with progress), needsYou (prepared payments with why the agent asked), paid (settled by the agent across passes) and paidTotal, nextPassSecs when a scheduler runs. Also runway: {days, horizonDays, firstAtRisk {counterparty, amount, onUnix}, billsInHorizon, basis} projected from the last pass's obligationsList against the balance above the floor. halted {reason, clear} when a post-pay read-back mismatch left HALT beside the tenant's log (nothing is paid until a human removes it). And holdingsElsewhere: the bill wallet's USDC in Circle Gateway on every chain Gateway serves — {source, total, chains [{domain, chain, balance}], arriving [{domain, chain, amount, tx, since}] (deposits Gateway has seen but not credited yet)} or {source, error}; read with no key, shown beside the balance, never counted as the policy's. run (PLAN 5.39: every waiting bill as one call the owner approves with one tap; null on policies without settleRunIf), refused (what the checks refused on the last pass, and why), keyless (PLAN 5.38), runway.idleCover (PLAN 5.36). delegation (PLAN 5.28, wallet accounts): {implementation, wallet, initializeData, active}. invoices (PLAN 5.60): invoices vendors sent and the owner has not answered — the vendor's signed body plus status, at, amountText, approvedPayee (read live), frozen, notes (the agent's checks in words) and, for a one-off invoice on a deployed account, pay {to, data, summary}: the owner's payment bound to the terms for ten minutes, keyed by the invoice's ref so it pays once. preview (PLAN 5.59, before the first pass): {status reading|done|failed, at, readMs, days, transfers, bills [{counterparty, amount, every, intervalSecs, nextDue, confidence}], next30, fundMinor (USDC minor units that cover the next 30 days), suggestedLimit, usdc (the token to send)} — the read-only report of the bill wallet, kept an hour; chosenDaily: the daily limit the owner chose, before the contract holds it.",
+        "parameters": [
+          {
+            "name": "policy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the inbox"
+          },
+          "404": {
+            "description": "no such tenant"
+          },
+          "502": {
+            "description": "the chain did not answer"
+          }
+        }
+      }
+    },
+    "/api/level1/notify": {
+      "post": {
+        "summary": "Admin: set or clear the URL the agent POSTs a JSON summary to after each pass (kind tameion.pass). The body is signed: X-Tameion-Signature = sha256=hex(HMAC-SHA256(secret, X-Tameion-Timestamp + '.' + body)); the secret is minted when a URL is first set (or with rotateSecret: true) and returned once. Deploy also takes notifyUrl and mints a secret.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "token"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "token": {
+                    "type": "string"
+                  },
+                  "telegramChatId": {
+                    "type": "string",
+                    "description": "a Telegram chat id the agent reports to after each pass; the host sets TAMEION_TELEGRAM_BOT_TOKEN"
+                  },
+                  "rotateSecret": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "policy, notifyUrl, telegramChatId, notifySecret (only when minted), signature (the recipe)"
+          },
+          "403": {
+            "description": "admin token"
+          }
+        }
+      }
+    },
+    "/api/level1/bills": {
+      "post": {
+        "summary": "Import bills (PLAN 5.8): add to the tenant's imported bills (a payee named again replaces its earlier bill; the others stay); only payees the policy attests are kept (attesting is the passkey's act). The agent proposes them until history confirms them.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "bills"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "bills": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "payee": {
+                          "type": "string"
+                        },
+                        "amount": {
+                          "type": "string"
+                        },
+                        "everyDays": {
+                          "type": "integer"
+                        },
+                        "nextDue": {
+                          "type": "integer",
+                          "description": "unix seconds; default now"
+                        },
+                        "discountPercent": {
+                          "type": "number",
+                          "description": "PLAN 5.56: early-payment discount on the invoice (0 < x ≤ 10)"
+                        },
+                        "earlyDays": {
+                          "type": "integer",
+                          "description": "paid at least this many days before the due date to earn the discount (shorter than everyDays)"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "policy, bills (kept), refused (with why)"
+          },
+          "404": {
+            "description": "no such tenant"
+          }
+        }
+      }
+    },
+    "/api/level1/config": {
+      "get": {
+        "summary": "What this host offers for Level 1: delaySecs, agentId, operator (the relayer; null when the host has no relayer key and cannot deploy), inviteNeeded, chains with their anchor. gatewaySources (PLAN 5.33): the EVM chains a browser wallet can deposit into Circle Gateway from — domain, chainId, usdc, wallet — for the page's one-tap approve + deposit (wallet_sendCalls, sequential fallback).",
+        "responses": {
+          "200": {
+            "description": "config"
+          }
+        }
+      }
+    },
+    "/api/level1/deploy": {
+      "post": {
+        "summary": "Deploy a tenant: PasskeyPrincipal (owner = the passkey, recovery, delay) and BudgetPolicy (Propose mode, the caps given) from snapshotted bytecode, a fresh agent key per tenant funded with gas by the relayer. Invite-gated on a public host.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "chain",
+                  "qx",
+                  "qy",
+                  "watched",
+                  "caps"
+                ],
+                "properties": {
+                  "chain": {
+                    "type": "string"
+                  },
+                  "qx": {
+                    "type": "string"
+                  },
+                  "qy": {
+                    "type": "string"
+                  },
+                  "watched": {
+                    "type": "string",
+                    "description": "0x… address"
+                  },
+                  "recovery": {
+                    "type": "string",
+                    "description": "0x… address"
+                  },
+                  "caps": {
+                    "type": "object",
+                    "properties": {
+                      "perAction": {
+                        "type": "string"
+                      },
+                      "daily": {
+                        "type": "string"
+                      },
+                      "floor": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "days": {
+                    "type": "integer"
+                  },
+                  "invite": {
+                    "type": "string"
+                  },
+                  "notifyUrl": {
+                    "type": "string"
+                  },
+                  "pull": {
+                    "type": "boolean",
+                    "description": "PLAN 5.26: deploy BudgetPolicyPull — the money stays in `watched`, which approves the policy an allowance; payments are transferFrom inside the same caps. Default false (the policy holds the USDC)."
+                  },
+                  "lazy": {
+                    "type": "boolean",
+                    "description": "PLAN 5.32: reserve only — compute the owner's and the policy's addresses through the EIP-7997 factory, mint the agent key, send nothing. The tenant carries deployed:false; the first pass or the first passkey challenge materialises both contracts at the reserved addresses."
+                  },
+                  "keyless": {
+                    "type": "boolean",
+                    "description": "PLAN 5.38: mint no agent key at all. The policy's agent is 0x…dEaD (no one holds its key), the account stays in Propose; every payment is the owner's tap (one tap pays all that wait), standing orders pay themselves, and passes are anchored by the relayer key, which holds no authority over the policy. prepare-mode refuses Autopilot (409)."
+                  },
+                  "wallet7702": {
+                    "type": "boolean",
+                    "description": "PLAN 5.28: the bill wallet (`watched`) itself becomes the account by EIP-7702. The policy address is the wallet; the service deploys the TameionDelegate code once per chain (EIP-7997 factory) and returns, in the inbox's `delegation`, the implementation and the `initialize` calldata the wallet must send to itself with an authorization to that implementation (one type-4 transaction). The first pass checks the wallet's code and owner and starts. The wallet's own key keeps its power; the limits bind the agent."
+                  },
+                  "partner": {
+                    "type": "string",
+                    "description": "PLAN 5.45: the id of the partner whose link the client came from; ignored unless the partner exists. An attribution, not a permission."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "tenant (owner, policy, agent, operator, caps, delay, mode, created block, history window)"
+          },
+          "403": {
+            "description": "invite word needed"
+          },
+          "400": {
+            "description": "missing field or bad key"
+          }
+        }
+      }
+    },
+    "/api/level1/challenge": {
+      "post": {
+        "summary": "The challenge the owner's passkey must sign for one call: the contract's own challengeFor(target, value, data, nonce) over the owner's next nonce. The page recomputes it itself before signing.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "chain",
+                  "owner",
+                  "target",
+                  "data"
+                ],
+                "properties": {
+                  "chain": {
+                    "type": "string"
+                  },
+                  "owner": {
+                    "type": "string",
+                    "description": "0x… address"
+                  },
+                  "target": {
+                    "type": "string",
+                    "description": "0x… address"
+                  },
+                  "data": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "nonce, challenge, chainId"
+          }
+        }
+      }
+    },
+    "/api/level1/execute": {
+      "post": {
+        "summary": "Relay a passkey-signed call through PasskeyPrincipal.execute: the relayer pays gas, the contract verifies the WebAuthn signature; the relayer gains no authority.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "chain",
+                  "owner",
+                  "target",
+                  "data",
+                  "auth"
+                ],
+                "properties": {
+                  "chain": {
+                    "type": "string"
+                  },
+                  "owner": {
+                    "type": "string",
+                    "description": "0x… address"
+                  },
+                  "target": {
+                    "type": "string",
+                    "description": "0x… address"
+                  },
+                  "data": {
+                    "type": "string"
+                  },
+                  "auth": {
+                    "type": "object",
+                    "description": "r, s, challengeIndex, typeIndex, authenticatorData, clientDataJSON"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "tx, explorer"
+          },
+          "502": {
+            "description": "the chain refused the call (bad signature, revert)"
+          }
+        }
+      }
+    },
+    "/api/level1/prepare-payees": {
+      "post": {
+        "summary": "Calldata for the owner's passkey: setPayees(payees, allow). allow=true attests (cooling-off starts), allow=false revokes (instant).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "payees"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string",
+                    "description": "0x… address"
+                  },
+                  "payees": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "description": "0x… address"
+                    }
+                  },
+                  "allow": {
+                    "type": "boolean",
+                    "default": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "to, data, summary"
+          }
+        }
+      }
+    },
+    "/api/level1/run": {
+      "post": {
+        "summary": "Start one pass of the tenant's agent (a job, polled on /api/watch/{id}); one per policy per ten minutes, the latest answers in between; the relayer tops up the agent's gas first if it is under the floor.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string",
+                    "description": "0x… address"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "{ id, status } (202 when new; 200 with cached: true when a recent pass answers)"
+          },
+          "404": {
+            "description": "no such tenant"
+          }
+        }
+      }
+    },
+    "/api/level1/tenant/{policy}": {
+      "get": {
+        "summary": "The tenant record as the service keeps it (no keys). Public view (Tenant::public): never the webhook secret nor agent-key hashes; carries notifySet and agentTokenCount instead.",
+        "parameters": [
+          {
+            "name": "policy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "tenant"
+          },
+          "404": {
+            "description": "no such tenant"
+          }
+        }
+      }
+    },
+    "/api/level1/tenants": {
+      "get": {
+        "summary": "Admin: every tenant on this host. Public view (Tenant::public): never the webhook secret nor agent-key hashes; carries notifySet and agentTokenCount instead.",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "tenants"
+          },
+          "403": {
+            "description": "admin token"
+          }
+        }
+      }
+    },
+    "/api/runs": {
+      "get": {
+        "summary": "Admin: every run this host made (Watch and Level 1), one line each, for the founder to see who tried.",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "runs"
+          },
+          "403": {
+            "description": "admin token"
+          }
+        }
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "summary": "This document.",
+        "responses": {
+          "200": {
+            "description": "OpenAPI JSON"
+          }
+        }
+      }
+    },
+    "/api/level1/prepare-schedule": {
+      "post": {
+        "summary": "Calldata for the owner's passkey to set a standing order on the policy (PLAN 5.25, EIP-7833 idea): addSchedule(payee, amount, every, firstDue). Refused in words when the payee is not approved yet or the cadence is under an hour. Anyone may later call payDue(id) on its due date, inside the caps.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "payee",
+                  "amount"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "payee": {
+                    "type": "string"
+                  },
+                  "amount": {
+                    "type": "string"
+                  },
+                  "everyDays": {
+                    "type": "number"
+                  },
+                  "everySecs": {
+                    "type": "integer"
+                  },
+                  "firstDue": {
+                    "type": "integer",
+                    "description": "unix seconds; default now"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "to, data, summary"
+          },
+          "400": {
+            "description": "payee not approved, cadence too short, missing field"
+          },
+          "404": {
+            "description": "no such tenant"
+          }
+        }
+      }
+    },
+    "/api/level1/prepare-unschedule": {
+      "post": {
+        "summary": "Calldata for the owner's passkey to end a standing order: removeSchedule(id), instant.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "id"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "to, data, summary"
+          }
+        }
+      }
+    },
+    "/api/level1/pay-due": {
+      "post": {
+        "summary": "Pay one due cycle of a standing order with the relayer's gas (anyone may; the contract checks due date, payee and caps). The agent does this on its passes; this is the page's tap.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "id"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "tx, explorer"
+          },
+          "502": {
+            "description": "the contract refused (not due, inactive, caps, paused)"
+          }
+        }
+      }
+    },
+    "/api/level1/prepare-renew": {
+      "post": {
+        "summary": "Calldata for the owner's passkey to renew (or shorten) the agent's authority to pay (PLAN 5.24): renewAgent(until). `until` unix seconds, or `days` from now (default 90, at most 365). The inbox's agentAuthority {lapsesAt, lapsed, daysLeft, renewSuggested, renewUntil} says when it is due.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "until": {
+                    "type": "integer"
+                  },
+                  "days": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "to, data, summary"
+          },
+          "400": {
+            "description": "bad date"
+          }
+        }
+      }
+    },
+    "/api/level1/prepare-guardians": {
+      "post": {
+        "summary": "Calldata for the owner's passkey to name guardians on its own PasskeyPrincipal (PLAN 5.30): setGuardians(list, threshold). Up to sixteen addresses, threshold between 1 and the count; an empty list with threshold 0 removes them. Guardians call approveRecovery(qx, qy) themselves; the threshold-th agreement makes the replacement pending for the recovery delay, which the passkey can cancel. The inbox's `guardians {list, threshold, pendingEta}` shows the state.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "owner",
+                  "guardians",
+                  "threshold"
+                ],
+                "properties": {
+                  "owner": {
+                    "type": "string"
+                  },
+                  "guardians": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "threshold": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "to (the owner contract), data, summary"
+          },
+          "400": {
+            "description": "bad list or threshold"
+          }
+        }
+      }
+    },
+    "/api/level1/prepare-token": {
+      "post": {
+        "summary": "Agent keys (PLAN 5.31): the challenge the OWNER'S PASSKEY signs to mint a capability token for another agent — scopes (read, run, prepare, import), label, days (1–365). Returns challenge, issued, expires, scopes, summary. The first token minted locks the account: read / run / prepare / import routes then require Authorization: Bearer <token> (or ?token=) carrying the scope; execute, challenge, deploy, pay-due, notify and the token routes stay open.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "scopes"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "read",
+                        "run",
+                        "prepare",
+                        "import"
+                      ]
+                    }
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "days": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "challenge, issued, expires, scopes, summary"
+          }
+        }
+      }
+    },
+    "/api/level1/token-signed": {
+      "post": {
+        "summary": "Mint the token the passkey approved (assertion verified against the owner's on-chain key; fresh, unused). Returns the secret once (`token`), its id, scopes, expiry; the service keeps only sha256(token).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "scopes",
+                  "issued",
+                  "expires",
+                  "auth"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "issued": {
+                    "type": "integer"
+                  },
+                  "expires": {
+                    "type": "integer"
+                  },
+                  "auth": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "id, token (once), scopes, label, expires, use, gated"
+          },
+          "403": {
+            "description": "the assertion does not verify"
+          }
+        }
+      }
+    },
+    "/api/level1/prepare-token-revoke": {
+      "post": {
+        "summary": "The challenge for revoking agent key `id`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "id"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "issued": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "challenge, issued, summary"
+          }
+        }
+      }
+    },
+    "/api/level1/token-revoke-signed": {
+      "post": {
+        "summary": "Revoke agent key `id` on a passkey assertion over the revoke challenge. When no key remains the account is open again.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "id",
+                  "issued",
+                  "auth"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "issued": {
+                    "type": "integer"
+                  },
+                  "auth": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "revoked, remaining, gated"
+          },
+          "404": {
+            "description": "no such token"
+          }
+        }
+      }
+    },
+    "/llms.txt": {
+      "get": {
+        "summary": "The agent-readable map of this service: what Tameion is, what an agent may and may not do, auth, idempotency, errors.",
+        "responses": {
+          "200": {
+            "description": "text/plain"
+          }
+        }
+      }
+    },
+    "/api/partner/public": {
+      "get": {
+        "summary": "PLAN 5.45: a partner's public name, for the Start page (?id=).",
+        "responses": {
+          "200": {
+            "description": "{id, name}"
+          },
+          "404": {
+            "description": "no such partner"
+          }
+        }
+      }
+    },
+    "/api/partner/accounts": {
+      "get": {
+        "summary": "PLAN 5.45: with Authorization: Bearer <partner key>, the accounts this partner brought (policy, owner, kind, keyless, deployed, created, lastPass {at, obligations, needsYou, settled}) and how many are live. From files; no chain reads, no keys, no balances.",
+        "responses": {
+          "200": {
+            "description": "{partner, accounts, live}"
+          },
+          "401": {
+            "description": "no or wrong partner key"
+          }
+        }
+      }
+    },
+    "/api/level1/buy": {
+      "post": {
+        "summary": "Buy one call of a paid API (x402) from the account, inside its limits (PLAN 5.54). Needs an agent key with the `buy` scope, always. The service answers the seller's 402 (PAYMENT-REQUIRED, x402 v2), picks the `exact` offer in USDC on the account's chain, signs one Purchase(payTo, amount, nonce, deadline) with the account's agent key, dry-runs `redeemDelegations` on the account, and retries with PAYMENT-SIGNATURE (ERC-7710 method: the account is delegation manager and delegator). The seller's facilitator redeems it on chain; the payment is read back from the receipt.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "url",
+                  "maxUsdc",
+                  "reason"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "http(s); internal addresses are refused"
+                  },
+                  "method": {
+                    "type": "string",
+                    "default": "GET"
+                  },
+                  "body": {
+                    "description": "sent as JSON"
+                  },
+                  "maxUsdc": {
+                    "type": "string",
+                    "description": "the most this one call may cost"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "description": "why; kept with the purchase and shown on the account page"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "{paid, purchase {amount, seller, tx, explorer, actionHash, reason, status}, status, contentType, body}; paid=false with the service's status and body when it did not ask for payment"
+          },
+          "401": {
+            "description": "no agent key with the buy scope"
+          },
+          "409": {
+            "description": "refused in words: above maxUsdc, above a cap, not on Autopilot, frozen seller, or `needsYou` (a seller nobody approved, now waiting on the account page)"
+          },
+          "402": {
+            "description": "the service takes no payment this account can make (accepts echoed)"
+          },
+          "502": {
+            "description": "the seller did not settle, or did not answer"
+          }
+        }
+      }
+    },
+    "/api/level1/invoice": {
+      "post": {
+        "summary": "Bill an account (PLAN 5.60): a vendor, or a vendor's agent, posts an invoice signed by the address to be paid. Open — the signature is the authentication. Nothing is paid on receipt: the account's agent checks it against its history and approved payees and puts it in the owner's Needs you with its notes; the owner accepts (a recurring invoice becomes a bill the agent pays inside the caps; a one-off one is paid by the owner's tap) or declines. Twenty invoices an hour per account; 4 KiB a body.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "payee",
+                  "amount",
+                  "dueAt",
+                  "everyDays",
+                  "discountBps",
+                  "earlyDays",
+                  "ref",
+                  "issuedAt",
+                  "signature"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string",
+                    "description": "the account (policy) being billed; also the EIP-712 verifyingContract"
+                  },
+                  "payee": {
+                    "type": "string",
+                    "description": "the address to be paid; it must be the signer"
+                  },
+                  "amount": {
+                    "type": "string",
+                    "description": "USDC minor units as a decimal string (\"150000\" = 0.15 USDC); at most 10,000,000 USDC"
+                  },
+                  "dueAt": {
+                    "type": "integer",
+                    "description": "unix seconds; no more than 90 days past, at most a year ahead"
+                  },
+                  "everyDays": {
+                    "type": "integer",
+                    "description": "0 = one payment; otherwise the billing interval, at most 366"
+                  },
+                  "discountBps": {
+                    "type": "integer",
+                    "description": "early-payment discount in basis points (at most 1000 = 10%); 0 for none"
+                  },
+                  "earlyDays": {
+                    "type": "integer",
+                    "description": "paid at least this many days before due to earn the discount; shorter than everyDays"
+                  },
+                  "ref": {
+                    "type": "string",
+                    "description": "0x… 32 bytes, unique per invoice (e.g. keccak256 of the invoice number); a ref already sent is refused"
+                  },
+                  "issuedAt": {
+                    "type": "integer",
+                    "description": "unix seconds; not more than 300 s ahead, not older than 90 days"
+                  },
+                  "signature": {
+                    "type": "string",
+                    "description": "0x… 65-byte EIP-712 signature by the payee over Invoice(address payee,address policy,uint256 amount,uint64 dueAt,uint32 everyDays,uint16 discountBps,uint16 earlyDays,bytes32 ref,uint64 issuedAt), domain {name \"Tameion Invoice\", version \"1\", chainId, verifyingContract = policy}"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "received: the body plus status \"received\", at, amountText, approvedPayee, frozen, notes (the agent's checks in words)"
+          },
+          "404": {
+            "description": "no such account"
+          },
+          "413": {
+            "description": "body over 4 KiB"
+          },
+          "422": {
+            "description": "refused, in words: not signed by the payee, wrong account or chain, amount or dates out of range, discount over 10%, or a ref already received"
+          },
+          "429": {
+            "description": "twenty invoices an hour per account; try later"
+          }
+        }
+      }
+    },
+    "/api/level1/invoice-decide": {
+      "post": {
+        "summary": "The owner's answer to an invoice (import scope once agent keys exist). accept=true on a recurring invoice adds it as a bill (its payee must already be approved on chain — the page asks the owner's passkey first); a one-off invoice is paid by the owner's tap on its prepared `pay` call, then recorded here. accept=false forgets it.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "ref",
+                  "accept"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "ref": {
+                    "type": "string",
+                    "description": "the invoice's ref"
+                  },
+                  "accept": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "decision {ref, status accepted|declined, at} and bill (the added bill, or null)"
+          },
+          "404": {
+            "description": "no such account or invoice"
+          },
+          "409": {
+            "description": "answered already"
+          },
+          "422": {
+            "description": "refused in words (payee frozen by the issuer, payee not approved yet, terms out of range)"
+          }
+        }
+      }
+    },
+    "/api/level1/events": {
+      "get": {
+        "summary": "Server-Sent Events for one account, so a page redraws when something happens instead of polling. Same auth as the inbox (Authorization: Bearer with the read scope once the account is locked). Events: hello {policy, at} on connect; pass {id, status: queued|running|done|failed, progress?: {phase, scannedBlocks, totalBlocks, transfersSoFar, elapsedSecs, etaSecs}, error?, paid?, needsYou?, anchorTx?}; inbox {cause} after any successful POST on the account (cause = the route: execute, invoice, invoice-decide, bills, buy, fund, run, …), when the pre-funding preview finishes (cause: preview), or after the stream fell behind (cause: resync) — re-read /api/level1/inbox. A ': ping' comment every 15 s; retry: 3000.",
+        "parameters": [
+          {
+            "name": "policy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "the account (policy) address"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "text/event-stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "policy is not an address"
+          },
+          "401": {
+            "description": "locked account, no or wrong agent key"
+          },
+          "404": {
+            "description": "no such account"
+          }
+        }
+      }
+    },
+    "/api/level1/identity": {
+      "post": {
+        "summary": "The account's own agent registers itself in the ERC-8004 Identity Registry (0x8004A818BFB912233c491871b3d84c89A494BD9e) on the account's chain, signing and paying its own gas, with its registration-v1 card as an on-chain data: URI. Once per account; a second call returns the first registration. Needs the run scope on a locked account. 409 for a keyless account.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "{agentId, agentRegistry (CAIP-10 of the registry), tx, explorerTx, owner (the agent), at}"
+          },
+          "200": {
+            "description": "already registered: the same record"
+          },
+          "404": {
+            "description": "no such account"
+          },
+          "409": {
+            "description": "no agent key"
+          },
+          "502": {
+            "description": "the chain refused or did not answer"
+          }
+        }
+      }
+    },
+    "/agents/{policy}.json": {
+      "get": {
+        "summary": "The account agent's ERC-8004 registration-v1 card, live: name, the trust sentence, services (the agent's wallet and the account as CAIP-10, this card, the MCP map), x402Support, registrations [{agentId, agentRegistry}] once registered, and tameion {chainId, account, agent, owner, anchor, kind, caps read from the contract now, explorer links, registrationTx}.",
+        "parameters": [
+          {
+            "name": "policy",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "application/json card"
+          },
+          "404": {
+            "description": "no such account"
+          }
+        }
+      }
+    },
+    "/classic": {
+      "get": {
+        "summary": "The classic hand-written account page (also /classic/watch, /classic/level1). / serves the console (apps/console, Next.js static export) when it is built, and this page until then.",
+        "responses": {
+          "200": {
+            "description": "text/html"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Chain": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "chainId": {
+            "type": "integer"
+          },
+          "explorer": {
+            "type": "string"
+          },
+          "usdc": {
+            "type": "string",
+            "nullable": true,
+            "description": "null = native USDC (Arc)"
+          },
+          "dust": {
+            "type": "string"
+          },
+          "keyed": {
+            "type": "boolean",
+            "description": "a keyed RPC is configured; public endpoints throttle or refuse log scans"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
+      "Money": {
+        "type": "string",
+        "description": "Six-decimal USDC with unit, e.g. \"0.856380 USDC\"",
+        "example": "0.856380 USDC"
+      },
+      "Caps": {
+        "type": "object",
+        "required": [
+          "perAction",
+          "daily",
+          "floor"
+        ],
+        "properties": {
+          "perAction": {
+            "type": "string",
+            "example": "25000"
+          },
+          "daily": {
+            "type": "string",
+            "example": "170000"
+          },
+          "floor": {
+            "type": "string",
+            "example": "340000"
+          }
+        }
+      },
+      "WatchRequest": {
+        "type": "object",
+        "required": [
+          "chain",
+          "address"
+        ],
+        "properties": {
+          "chain": {
+            "type": "string",
+            "example": "arc-testnet"
+          },
+          "address": {
+            "type": "string",
+            "example": "0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25"
+          },
+          "days": {
+            "type": "integer",
+            "minimum": 7,
+            "maximum": 365,
+            "default": 90
+          },
+          "alsoHistory": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "other wallets of the same owner"
+          },
+          "caps": {
+            "$ref": "#/components/schemas/Caps"
+          }
+        }
+      },
+      "Progress": {
+        "type": "object",
+        "properties": {
+          "phase": {
+            "type": "string"
+          },
+          "scannedBlocks": {
+            "type": "integer"
+          },
+          "totalBlocks": {
+            "type": "integer"
+          },
+          "transfersSoFar": {
+            "type": "integer"
+          }
+        }
+      },
+      "Obligation": {
+        "type": "object",
+        "properties": {
+          "counterparty": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "Subscription",
+              "RecurringPayment"
+            ]
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "amountMin": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "amountMax": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "every": {
+            "type": "string",
+            "example": "30.0 days"
+          },
+          "confidence": {
+            "type": "string"
+          },
+          "lastPaid": {
+            "type": "integer"
+          },
+          "nextDue": {
+            "type": "integer"
+          },
+          "dueWindowDays": {
+            "type": "number",
+            "description": "observed timing spread around nextDue"
+          },
+          "overdueDays": {
+            "type": "number"
+          },
+          "samples": {
+            "type": "integer"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "transaction hashes, oldest first"
+          },
+          "explain": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "pay",
+              "ask",
+              "pay-or-ask",
+              "wait"
+            ]
+          },
+          "why": {
+            "type": "string"
+          },
+          "attested": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MaxLoss": {
+        "type": "object",
+        "properties": {
+          "perActionCap": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "dailyCap": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "reserveFloor": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "agentKey24h": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "agentKeyPerCall": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "operatorKeyNoDelay": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "operatorKeyWith48h": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "principal": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "onlyTo": {
+            "type": "string"
+          }
+        }
+      },
+      "Report": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "$ref": "#/components/schemas/Chain"
+          },
+          "address": {
+            "type": "string"
+          },
+          "days": {
+            "type": "integer"
+          },
+          "fromBlock": {
+            "type": "integer"
+          },
+          "toBlock": {
+            "type": "integer"
+          },
+          "now": {
+            "type": "integer"
+          },
+          "transfers": {
+            "type": "integer"
+          },
+          "outgoing": {
+            "type": "integer"
+          },
+          "counterparties": {
+            "type": "integer"
+          },
+          "balance": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "obligations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Obligation"
+            }
+          },
+          "upcoming30d": {
+            "type": "integer"
+          },
+          "dueNow": {
+            "type": "integer"
+          },
+          "liquidity30d": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "holdingsElsewhere": {
+            "type": "object",
+            "description": "USDC the address holds in Circle Gateway on other chains (POST {gateway}/v1/balances and /v1/deposits, no key): {source, total, chains:[{domain, chain, balance}], arriving:[{domain, chain, amount, tx, since}]}, or {source, error} when Gateway did not answer. Never counted as the balance.",
+            "properties": {
+              "source": {
+                "type": "string"
+              },
+              "total": {
+                "$ref": "#/components/schemas/Money"
+              },
+              "chains": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "domain": {
+                      "type": "integer"
+                    },
+                    "chain": {
+                      "type": "string"
+                    },
+                    "balance": {
+                      "$ref": "#/components/schemas/Money"
+                    }
+                  }
+                }
+              },
+              "error": {
+                "type": "string"
+              }
+            }
+          },
+          "maxLoss": {
+            "$ref": "#/components/schemas/MaxLoss",
+            "nullable": true
+          },
+          "readOnly": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "elapsedMs": {
+            "type": "integer"
+          }
+        }
+      },
+      "Run": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "created": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "failed"
+            ]
+          },
+          "progress": {
+            "$ref": "#/components/schemas/Progress",
+            "nullable": true
+          },
+          "report": {
+            "$ref": "#/components/schemas/Report",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "request": {
+            "$ref": "#/components/schemas/WatchRequest"
+          }
+        }
+      }
+    }
+  }
+}

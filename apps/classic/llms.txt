@@ -1,0 +1,137 @@
+# Tameion
+
+> A treasury account for onchain companies that keeps itself solvent: bills
+> paid on time inside a limit a smart contract enforces, the owner's passkey
+> as the only key that can take money out, every decision provable on chain.
+
+The agent's key can pay payees the owner approved, under a cap, and nothing
+else. It cannot add a payee, raise its own limit, or withdraw. Adding a payee
+or withdrawing needs the owner's passkey; raising a cap waits a delay the
+owner can cancel. Tameion's service holds no key that can take the owner's
+money: it prepares calls, the owner's passkey signs them, the chain enforces
+them.
+
+## For an AI agent working for the company
+
+- MCP server: `tameion-mcp` (stdio). Sixteen tools; none can sign for the
+  owner. Every tool carries `readOnlyHint` (read and `prepare_*` tools only
+  read or compute calldata; `run_pass`, `import_bills`, `watch_address` change
+  state, never money). `buy_service` is the one that spends (marked
+  `destructiveHint: true`), and only inside the account's limits. Set
+  `TAMEION_URL` to this host and, if the owner minted one, `TAMEION_TOKEN` to
+  the agent key.
+- Agent keys: the owner's passkey mints a bearer token with scopes `read`,
+  `run`, `prepare`, `import`, `buy` and an expiry. Once one exists, the
+  account's read / run / prepare / import routes need
+  `Authorization: Bearer <token>`. Buying always needs one with `buy`.
+- Idempotency: send `Idempotency-Key: <1–255 chars>` on any POST. A retry with
+  the same key and body returns the first answer with `Idempotent-Replayed:
+  true`; the same key with a different body is refused (422); a key still in
+  flight answers 409. Keys live 24 hours.
+- Errors are JSON `{"error": "<words>"}` with an HTTP status that means what it
+  says (400 bad input, 401/403 agent key, 404 no such account, 409, 422,
+  502 the chain did not answer — retry).
+
+## What an agent may usefully do
+
+- Read the account: `GET /api/level1/inbox?policy=0x…` — mode, caps, balance,
+  what was paid, what waits for the owner ("needsYou", with the agent's
+  reason), `run` (every waiting bill as one call the owner approves with one
+  tap), runway (days until the first bill the policy could not cover) and
+  `runway.idleCover` (the part no bill in 90 days needs — report it, never
+  suggest where it should earn), `holdingsElsewhere` (USDC in Circle Gateway
+  on other chains), `deployed` (false: the address is reserved and the first
+  check creates the account there).
+- Ask for a check: `POST /api/level1/run {"policy"}` then
+  `GET /api/watch/<id>` for progress and the report.
+- Tell the agent about a bill: `POST /api/level1/bills` (payee, amount, every N
+  days, and the invoice's early-payment terms if any: `discountPercent`,
+  `earlyDays`). The owner's passkey still approves the payee. The agent pays
+  early for the discount only when every bill in the next 30 days stays
+  covered; the Paid row says what it saved.
+- Prepare, never sign: `POST /api/level1/prepare-*` returns `{to, data,
+  summary}` for the owner's passkey; the account page decodes and shows the
+  call in words before the passkey signs.
+- Standing orders anyone may trigger on their day: `POST /api/level1/pay-due`.
+- Buy a paid API (x402): `POST /api/level1/buy {"policy", "url", "method"?,
+  "body"?, "maxUsdc", "reason"}` with a `buy` agent key. The service answers
+  the seller's HTTP 402, signs one purchase with the account's agent key and
+  sends it by x402's `exact` scheme, ERC-7710 method (the account is the
+  delegation manager); the seller's facilitator redeems it on the account,
+  which applies the same checks as a bill: approved seller, per-payment cap,
+  24-hour limit, floor, Autopilot. A seller nobody approved answers 409 with
+  `needsYou` and appears on the account page for one tap; never retry it.
+  `inbox.purchases` lists what was bought, with the reason.
+
+- A keyless account (`inbox.keyless: true`) has no agent key at all: the
+  agent only reads and proposes; tell the owner one tap pays everything
+  waiting. Autopilot is refused for it.
+
+- A wallet account (`inbox.delegation` present) is the company's own
+  wallet running the policy by EIP-7702. While `delegation.active` is false
+  it waits for one transaction only the wallet can send (the authorization
+  plus `initialize`, both given in `delegation`); say so, do not retry
+  passes. Once active it behaves like any account, at the wallet's address.
+
+- Several owners (`inbox.owners`): an account may need more than one owner's
+  passkey for every change (`threshold`). A call one owner approved waits in
+  `inbox.approvals` for the others; say how many more are needed. Never
+  suggest adding an owner whose pairing code was not checked in person.
+- `inbox.exposure`: what the bill wallet holds outside dollars and what a
+  30% fall would cost in days of bills. Report it in those words; protection
+  needs a trade-only venue key the owner chooses to give.
+
+## Bill a Tameion account (for a vendor, or a vendor's agent)
+
+Send an invoice the PAYEE signed; nothing is paid on receipt. The account's
+agent checks it against its history and approved payees and puts it in the
+owner's Needs you with what it found; the owner accepts (a recurring invoice
+becomes a bill the agent pays inside the caps; a one-off one is paid by the
+owner's tap, once, keyed by the invoice's ref) or declines.
+
+- `POST /api/level1/invoice` with the signed body (open: the signature is the
+  authentication; twenty an hour per account; 4 KiB):
+  `{"policy","payee","amount":"150000","dueAt","everyDays","discountBps","earlyDays","ref","issuedAt","signature"}`
+  — `amount` in USDC minor units (string), `everyDays` 0 = one payment,
+  `discountBps` at most 1000 with `earlyDays` shorter than `everyDays`,
+  `ref` 32 bytes unique per invoice (a ref already sent is refused).
+  201 = received (with the agent's notes); 422 = refused, in words.
+- EIP-712: domain `{name: "Tameion Invoice", version: "1", chainId: <the
+  account's chain>, verifyingContract: <the account>}`, primary type
+  `Invoice(address payee,address policy,uint256 amount,uint64 dueAt,uint32 everyDays,uint16 discountBps,uint16 earlyDays,bytes32 ref,uint64 issuedAt)`.
+  The signer must be `payee` — the address the money goes to.
+- viem: `walletClient.signTypedData({ domain, types: { Invoice: [...] },
+  primaryType: "Invoice", message })`; cast: `cast wallet sign --data
+  --from-file invoice-typed.json` (the same typed data as JSON). MCP:
+  `send_invoice` posts a body you signed; `invoices` lists what waits.
+
+## Live updates, and the agent's identity
+
+- `GET /api/level1/events?policy=<account>` — Server-Sent Events (same auth as the inbox). `hello` on connect;
+  `pass` while a check is queued, running (with progress) and when it ends (`paid`, `needsYou`, `anchorTx`);
+  `inbox {cause}` after anything changes the account — re-read `/api/level1/inbox`. Ping every 15 s.
+- `GET /agents/<account>.json` — the account agent's ERC-8004 registration-v1 card, with the caps read from the
+  contract now. `POST /api/level1/identity {policy}` registers the agent itself in the ERC-8004 Identity Registry
+  `0x8004A818BFB912233c491871b3d84c89A494BD9e` (Arbitrum Sepolia and Arc testnet); the agent owns that identity.
+  Use it to check who you are dealing with before you bill or sell to an account: the card's `wallet` service is the
+  only key that pays you, and its `caps` are the most it can pay per call and per day.
+
+## What no agent can do here
+
+- Sign for the owner, add a payee, raise a limit, withdraw, change the key.
+- Pay a payee the stablecoin issuer has frozen (Circle's USDC blocklist is
+  read from the token on every pass; such a payment is refused, not asked).
+- Pay the same bill twice (the contract keeps every settled action hash).
+
+## Price
+
+Watch is free. An account is a flat monthly fee per protected account (free
+while on testnet); Tameion takes nothing per payment.
+
+## Reference
+
+- OpenAPI: /api/openapi.json
+- Account page: / · receipts and proof: /level1 · read-only report: /watch
+- Verify any record on your own machine: download it from
+  `/api/level1/record?policy=…&root=…` and recompute its root against the
+  anchor contract on chain.

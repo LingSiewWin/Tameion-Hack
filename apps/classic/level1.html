@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tameion Level 1</title>
+<meta name="description" content="Your own policy: your passkey is the only key that can add a payee or withdraw; the agent prepares each payment, your phone signs. Propose mode.">
+<style>
+  :root { --bg:#f6f5f1; --ink:#171717; --mute:#6b6b66; --line:#dedcd4; --accent:#1f6f5c; --amber:#a3630a; --crimson:#9b2c2c; --card:#ffffff; --mono:"SF Mono",ui-monospace,Menlo,monospace; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#121311; --ink:#ebe9e2; --mute:#9a9992; --line:#2b2c28; --accent:#5fc3a4; --amber:#e3a24a; --crimson:#e07070; --card:#1a1b18; } }
+  :root[data-theme="dark"] { --bg:#121311; --ink:#ebe9e2; --mute:#9a9992; --line:#2b2c28; --accent:#5fc3a4; --amber:#e3a24a; --crimson:#e07070; --card:#1a1b18; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 -apple-system,Inter,system-ui,sans-serif; }
+  main { max-width:880px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 4px; } h2 { font-size:17px; margin:0 0 8px; }
+  .sub { color:var(--mute); margin:0 0 24px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin:0 0 16px; }
+  label { display:block; font-size:12px; color:var(--mute); text-transform:uppercase; letter-spacing:.06em; margin:0 0 4px; }
+  input, select { width:100%; font:inherit; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); }
+  .row { display:grid; grid-template-columns:1fr; gap:12px; } @media (min-width:640px) { .row { grid-template-columns:1fr 1fr 1fr; } }
+  button { font:inherit; padding:10px 16px; border-radius:8px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; }
+  button[disabled] { opacity:.5; cursor:default; } .ghost { background:transparent; color:var(--accent); }
+  .mono { font-family:var(--mono); font-size:13px; word-break:break-all; }
+  .muted { color:var(--mute); } .ok { color:var(--accent); } .warn { color:var(--crimson); } .amber { color:var(--amber); }
+  .step { display:flex; gap:12px; align-items:baseline; } .n { font-family:var(--mono); color:var(--mute); }
+  table { width:100%; border-collapse:collapse; font-size:14px; } th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-size:11px; color:var(--mute); text-transform:uppercase; letter-spacing:.06em; }
+  pre { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px; overflow:auto; font-size:12px; }
+  a { color:var(--accent); } .hide { display:none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Level 1: your own policy, your phone signs</h1>
+  <p class="sub">A contract holds the money. Your passkey is the only key that can add a payee or withdraw. The agent reads what you owe and <b>prepares</b> each payment; nothing moves until you tap. Raising any limit waits the delay and you can cancel it.</p>
+
+  <section class="card">
+    <div class="step"><span class="n">1</span><h2>Passkey</h2></div>
+    <p class="muted">Created on this device, stored in its secure hardware or your password manager. The service sees only the public key.</p>
+    <button id="create">Create passkey</button>
+    <pre id="pub" class="hide"></pre>
+  </section>
+
+  <section class="card">
+    <div class="step"><span class="n">2</span><h2>Policy</h2></div>
+    <div class="row">
+      <div><label>Chain</label><select id="chain"></select></div>
+      <div><label>Treasury to read (the wallet that pays today)</label><input id="watched" placeholder="0x…"></div>
+      <div><label>Recovery address (optional)</label><input id="recovery" placeholder="hardware wallet, second phone, multisig"></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div><label>Per-action cap (USDC)</label><input id="perAction"></div>
+      <div><label>Daily cap (USDC)</label><input id="daily"></div>
+      <div><label>Reserve floor (USDC)</label><input id="floor" value="0"></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div><label>Days of history</label><input id="days" type="number" min="7" max="365" value="90"></div>
+      <div><label>Invite word (if this host asks)</label><input id="invite"></div>
+      <div><label>&nbsp;</label><button id="deploy" disabled>Deploy my policy (Propose mode)</button></div>
+    </div>
+    <p class="muted" id="cfg"></p>
+    <div id="deployed" class="hide">
+      <p class="muted">Policies on this device: <select id="tenantPick"></select></p>
+      <table><tbody>
+        <tr><td>Owner (your passkey, on chain)</td><td class="mono" id="tOwner"></td></tr>
+        <tr><td>Policy (holds the money)</td><td class="mono" id="tPolicy"></td></tr>
+        <tr><td>Agent (proposes; cannot add a payee, cannot withdraw)</td><td class="mono" id="tAgent"></td></tr>
+        <tr><td>Operator (this service: routine, cannot withdraw, cannot add a payee)</td><td class="mono" id="tOperator"></td></tr>
+        <tr><td>Mode · delay</td><td class="mono" id="tMode"></td></tr>
+      </tbody></table>
+      <p><b>Fund it:</b> send USDC to the policy address above. Everything above the reserve floor is what the agent may propose to pay. On Arc testnet, <a href="https://faucet.circle.com" target="_blank" rel="noopener">Circle's faucet</a> gives test USDC; a few cents is enough for a demo.</p>
+    </div>
+    <p id="deployErr" class="warn"></p>
+  </section>
+
+  <section class="card">
+    <div class="step"><span class="n">3</span><h2>Approve payees, one tap</h2></div>
+    <p class="muted">From your Watch report, or typed. Each one waits the delay before the agent can pay it; you can revoke any time.</p>
+    <input id="payees" placeholder="0x…, 0x…">
+    <div style="margin-top:10px"><button id="approve" disabled>Sign with passkey and approve</button>
+    <button id="revoke" disabled>Revoke (passkey, instant)</button></div>
+    <p id="approveOut" class="mono"></p>
+    <p id="signing" class="mono muted"></p>
+  </section>
+
+  <section class="card">
+    <div class="step"><span class="n">4</span><h2>Run the agent</h2></div>
+    <p class="muted">It reads the treasury's own transfers, infers the bills, verifies each against the caps, and hands you what it would pay as ready-to-sign calls. In Propose mode the contract refuses the agent itself.</p>
+    <button id="run" disabled>Run a pass now</button>
+    <p id="runStat" class="mono"></p>
+    <div id="runOut" class="hide">
+      <table id="pending"><thead><tr><th>Payee</th><th>Amount</th><th>What</th><th></th></tr></thead><tbody></tbody></table>
+      <details><summary>Record of this pass (anchored on chain)</summary><pre id="log"></pre></details>
+      <p id="check" class="muted"></p>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="step"><span class="n">5</span><h2>When you are ready for Level 2</h2></div>
+    <p>Autopilot pays approved payees inside the caps without a tap. Your passkey asks for it; the contract schedules the raise behind the delay, shows it here, and your passkey can cancel it until then. Lowering (Propose, or Watch to pause) applies the moment you sign. The service's own key can pause you, and can never raise you without the same delay.</p>
+    <p id="modeStat" class="mono"></p>
+    <button id="askAuto" disabled>Ask for Autopilot (passkey)</button>
+    <button id="applyMode" disabled>Apply (after the delay)</button>
+    <button id="cancelMode" disabled>Cancel (passkey)</button>
+    <button id="pauseMode" disabled>Pause: Watch (passkey, instant)</button>
+    <button id="proposeMode" disabled>Propose (passkey)</button>
+    <p id="modeOut" class="mono"></p>
+    <p><b>The agent's limits</b>, as the contract holds them: <span id="capsNow" class="mono"></span>. Tightening applies the moment you sign; loosening waits the delay and you can cancel it.</p>
+    <div class="row">
+      <div><label>Per-action cap (USDC)</label><input id="limPer" placeholder="0.01"></div>
+      <div><label>Daily cap (USDC)</label><input id="limDaily" placeholder="1"></div>
+      <div><label>Reserve floor (USDC)</label><input id="limFloor" placeholder="0"></div>
+      <div><label>&nbsp;</label><button id="setLimits" disabled>Set limits (passkey)</button></div>
+    </div>
+    <p id="limOut" class="mono"></p>
+    <p><b>If you lose this device.</b> A recovery address (hardware wallet, second phone, multisig) may propose a replacement passkey after the delay; your passkey can cancel it. Without one, losing the device loses the principal.</p>
+    <div class="row">
+      <div><label>Recovery address</label><input id="recAddr" placeholder="0x… (0x0 to remove)"></div>
+      <div><label>&nbsp;</label><button id="setRecovery" disabled>Set recovery (passkey)</button></div>
+    </div>
+    <p id="recOut" class="mono"></p>
+    <p><b>Your money.</b> Only your passkey can take it out; the agent and the service cannot.</p>
+    <div class="row">
+      <div><label>Withdraw (USDC)</label><input id="wdAmount" placeholder="0.01"></div>
+      <div><label>To</label><input id="wdTo" placeholder="0x… (your wallet)"></div>
+      <div><label>&nbsp;</label><button id="withdraw" disabled>Withdraw (passkey)</button></div>
+    </div>
+    <p id="wdOut" class="mono"></p>
+    <p class="muted"><a id="contact" href="{{CONTACT_URL}}" target="_blank" rel="noopener">Talk to us</a> · <a href="{{REPO_URL}}" target="_blank" rel="noopener">Read the code and the proofs</a></p>
+  </section>
+</main>
+<script src="/level1/call.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const hex = (buf) => "0x" + [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+const fromHex = (h) => new Uint8Array(h.replace(/^0x/, "").match(/../g).map(x => parseInt(x, 16)));
+const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const unb64u = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+let pub = null, tenant = null, cfg = null;
+
+// DER ECDSA signature -> low-s r,s (the contract accepts only low-s).
+const N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+function derToRS(der) {
+  const b = new Uint8Array(der); let i = 2;
+  const read = () => { if (b[i++] !== 0x02) throw new Error("bad DER"); let len = b[i++]; let v = 0n; for (let k = 0; k < len; k++) v = (v << 8n) | BigInt(b[i++]); return v; };
+  let r = read(), s = read(); if (s > N / 2n) s = N - s;
+  const to32 = (n) => "0x" + n.toString(16).padStart(64, "0");
+  return { r: to32(r), s: to32(s) };
+}
+
+// The agent key the account page minted for this browser (PLAN 5.31), if any.
+function authHeaders() { try { const k = tenant ? localStorage.getItem(`tameion.token.${tenant.policy}`) : null; return k ? { authorization: `Bearer ${k}` } : {}; } catch (e) { return {}; } }
+async function post(path, body) {
+  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json", ...authHeaders() }, body: JSON.stringify(body) });
+  const d = await r.json(); if (!r.ok) throw new Error(d.error || r.statusText); return d;
+}
+
+async function init() {
+  cfg = await (await fetch("/api/level1/config")).json();
+  const sel = $("#chain"); sel.innerHTML = "";
+  for (const c of cfg.chains) { const o = document.createElement("option"); o.value = c.key; o.textContent = c.name + (c.anchor ? "" : " (no anchor configured)"); sel.appendChild(o); }
+  $("#cfg").textContent = cfg.operator
+    ? `Delay on trust-expanding changes: ${cfg.delaySecs} s. Operator: ${cfg.operator}. ${cfg.inviteNeeded ? "This host needs an invite word to deploy." : ""}`
+    : "This host has no relayer key, so it cannot deploy or relay for you: Level 1 is off here (the host sets TAMEION_RELAYER_KEY or TAMEION_RELAYER_KEY_FILE). Watch still works.";
+  const q = new URLSearchParams(location.search);
+  if (q.get("chain")) sel.value = q.get("chain");
+  if (q.get("address")) $("#watched").value = q.get("address");
+  // Prefill from a Watch run: caps and the payees it found.
+  if (q.get("run")) {
+    try {
+      const j = await (await fetch(`/api/watch/${q.get("run")}`)).json();
+      const r = j.report; if (r) {
+        $("#watched").value = r.address; sel.value = r.chain.key;
+        const amounts = r.obligations.map(o => parseFloat(o.amountMax || o.amount));
+        const per = Math.max(...amounts, 0), need = parseFloat(r.liquidity30d) || per;
+        $("#perAction").value = per || ""; $("#daily").value = Math.max(need, per) || "";
+        if (r.maxLoss) { $("#perAction").value = parseFloat(r.maxLoss.perActionCap); $("#daily").value = parseFloat(r.maxLoss.dailyCap); $("#floor").value = parseFloat(r.maxLoss.reserveFloor); }
+        $("#payees").value = r.obligations.map(o => o.counterparty).join(", ");
+      }
+    } catch {}
+  }
+  const saved = store.get("tameion.pub"); if (saved) { pub = JSON.parse(saved); $("#pub").textContent = saved; $("#pub").classList.remove("hide"); $("#deploy").disabled = !cfg.operator; }
+  const t = store.get("tameion.tenant"); if (t) { tenant = JSON.parse(t); rememberTenant(tenant); showTenant(); }
+  // The last pass survives a reload: re-read it and show what is still waiting.
+  // Older pages kept one last pass for the device; carry it to the current policy once.
+  if (tenant && store.get("tameion.lastRun") && !store.get(`tameion.lastRun.${tenant.policy}`)) { store.set(`tameion.lastRun.${tenant.policy}`, store.get("tameion.lastRun")); }
+  const last = tenant && store.get(`tameion.lastRun.${tenant.policy}`);
+  if (tenant && last) { try { const j = await (await fetch(`/api/watch/${last}`)).json(); if (j.status === "done") renderRun(j.report); } catch {} }
+}
+
+$("#create").onclick = async () => {
+  try {
+    const cred = await navigator.credentials.create({ publicKey: {
+      rp: { name: "Tameion", id: location.hostname },
+      user: { id: crypto.getRandomValues(new Uint8Array(16)), name: "treasurer", displayName: "Treasurer" },
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      pubKeyCredParams: [{ type: "public-key", alg: -7 }],
+      authenticatorSelection: { userVerification: "required", residentKey: "preferred" },
+      attestation: "none",
+    }});
+    const spki = new Uint8Array(cred.response.getPublicKey());
+    const point = spki.slice(spki.length - 65);
+    if (point[0] !== 0x04) throw new Error("expected an uncompressed P-256 point");
+    pub = { qx: hex(point.slice(1, 33)), qy: hex(point.slice(33, 65)), credentialId: b64u(cred.rawId) };
+    store.set("tameion.pub", JSON.stringify(pub));
+    $("#pub").textContent = JSON.stringify(pub, null, 2); $("#pub").classList.remove("hide");
+    $("#deploy").disabled = !cfg.operator;
+  } catch (e) { $("#pub").textContent = e.message; $("#pub").classList.remove("hide"); }
+};
+
+// Every policy this device has deployed, newest first; the passkey is the same.
+function tenants() { try { return JSON.parse(store.get("tameion.tenants") || "[]"); } catch { return []; } }
+function rememberTenant(t) {
+  const all = tenants().filter(x => x.policy !== t.policy); all.unshift(t);
+  store.set("tameion.tenants", JSON.stringify(all));
+}
+$("#tenantPick").onchange = async () => {
+  const pick = tenants().find(x => x.policy === $("#tenantPick").value); if (!pick) return;
+  tenant = pick; store.set("tameion.tenant", JSON.stringify(tenant));
+  $("#runOut").classList.add("hide"); $("#runStat").textContent = ""; $("#modeOut").textContent = "";
+  showTenant();
+  const last = store.get(`tameion.lastRun.${tenant.policy}`);
+  if (last) { try { const j = await (await fetch(`/api/watch/${last}`)).json(); if (j.status === "done") renderRun(j.report); } catch {} }
+};
+function showTenant() {
+  $("#deployed").classList.remove("hide");
+  const pick = $("#tenantPick"); pick.innerHTML = "";
+  for (const x of tenants()) { const o = document.createElement("option"); o.value = x.policy; o.textContent = `${x.policy.slice(0, 10)}… on ${x.chain} (${new Date(x.created * 1000).toLocaleDateString()})`; pick.appendChild(o); }
+  pick.value = tenant.policy;
+  $("#tOwner").textContent = tenant.owner; $("#tPolicy").textContent = tenant.policy; $("#tAgent").textContent = tenant.agent; $("#tOperator").textContent = tenant.operator;
+  $("#tMode").textContent = `${tenant.mode === 1 ? "Propose" : tenant.mode === 2 ? "Autopilot" : "Watch"} · ${tenant.delay_secs} s · caps ${tenant.per_action} / ${tenant.daily} / floor ${tenant.floor}`;
+  $("#approve").disabled = false; $("#revoke").disabled = false; $("#run").disabled = false;
+  refreshMode().catch(e => { $("#modeStat").textContent = e.message; });
+}
+
+$("#setRecovery").onclick = async () => {
+  $("#setRecovery").disabled = true; $("#recOut").textContent = "";
+  try {
+    const prep = await post("/api/level1/prepare-recovery", { owner: tenant.owner, recovery: $("#recAddr").value.trim() });
+    const ex = await signAndExecute(prep.to, prep.data, prep.summary);
+    $("#recOut").innerHTML = `set: <a href="${ex.explorer}" target="_blank" rel="noopener">${ex.tx.slice(0, 12)}…</a>`;
+  } catch (e) { $("#recOut").textContent = e.message; }
+  $("#setRecovery").disabled = false;
+};
+$("#setLimits").onclick = async () => {
+  $("#setLimits").disabled = true; $("#limOut").textContent = "";
+  try {
+    const prep = await post("/api/level1/prepare-limits", { policy: tenant.policy, perAction: $("#limPer").value.trim(), daily: $("#limDaily").value.trim(), floor: $("#limFloor").value.trim() || "0" });
+    const ex = await signAndExecute(prep.to, prep.data, prep.summary);
+    $("#limOut").innerHTML = `signed: <a href="${ex.explorer}" target="_blank" rel="noopener">${ex.tx.slice(0, 12)}…</a>`;
+    await refreshMode();
+  } catch (e) { $("#limOut").textContent = e.message; }
+  $("#setLimits").disabled = false;
+};
+$("#withdraw").onclick = async () => {
+  $("#withdraw").disabled = true; $("#wdOut").textContent = "";
+  try {
+    const prep = await post("/api/level1/prepare-withdraw", { policy: tenant.policy, to: $("#wdTo").value.trim(), amount: $("#wdAmount").value.trim() });
+    const ex = await signAndExecute(prep.to, prep.data, prep.summary);
+    $("#wdOut").innerHTML = `withdrawn: <a href="${ex.explorer}" target="_blank" rel="noopener">${ex.tx.slice(0, 12)}…</a>`;
+    await refreshMode();
+  } catch (e) { $("#wdOut").textContent = e.message; }
+  $("#withdraw").disabled = false;
+};
+const MODE_BTNS = ["askAuto", "applyMode", "cancelMode", "pauseMode", "proposeMode"];
+function renderMode(m) {
+  const pend = m.pending
+    ? ` · pending → ${[(m.pending.kinds & 2) ? m.pending.mode : "", (m.pending.kinds & 1) ? `limits ${m.pending.perActionCap} / ${m.pending.dailyCap} / floor ${m.pending.reserveFloor}` : ""].filter(Boolean).join(" + ")} at ${new Date(m.pending.eta * 1000).toLocaleTimeString()}`
+    : "";
+  $("#modeStat").textContent = `mode ${m.mode} · delay ${m.delaySecs} s · policy holds ${m.balance}${pend}`;
+  if (m.caps) { $("#capsNow").textContent = `${m.caps.perAction} per payment · ${m.caps.daily} per day · floor ${m.caps.floor}`; $("#setLimits").disabled = false; }
+  for (const id of MODE_BTNS) $("#" + id).disabled = false;
+  $("#withdraw").disabled = false; $("#setRecovery").disabled = false;
+  $("#applyMode").disabled = !m.pending || m.pending.eta * 1000 > Date.now();
+  $("#cancelMode").disabled = !m.pending;
+}
+async function refreshMode() { renderMode(await post("/api/level1/mode", { policy: tenant.policy, action: "status" })); }
+// Apply is anyone's: the contract checks the delay itself.
+$("#applyMode").onclick = async () => {
+  for (const id of MODE_BTNS) $("#" + id).disabled = true;
+  $("#modeOut").textContent = "apply…";
+  try {
+    const m = await post("/api/level1/mode", { policy: tenant.policy, action: "apply" });
+    $("#modeOut").innerHTML = m.tx ? `applied: <a href="${m.explorerTx}" target="_blank" rel="noopener">${m.tx.slice(0, 12)}…</a>` : "";
+    renderMode(m);
+  } catch (e) { $("#modeOut").textContent = e.message; for (const id of MODE_BTNS) $("#" + id).disabled = false; }
+};
+// The principal's actions sign with the passkey and go through PasskeyPrincipal.execute.
+async function signedMode(path, body, label) {
+  for (const id of MODE_BTNS) $("#" + id).disabled = true;
+  try {
+    const prep = await post(path, body);
+    $("#modeOut").textContent = `Signing: ${prep.summary}`;
+    const ex = await signAndExecute(prep.to, prep.data, prep.summary);
+    $("#modeOut").innerHTML = `${label}: <a href="${ex.explorer}" target="_blank" rel="noopener">${ex.tx.slice(0, 12)}…</a>`;
+    await refreshMode();
+  } catch (e) { $("#modeOut").textContent = e.message; for (const id of MODE_BTNS) $("#" + id).disabled = false; }
+}
+$("#askAuto").onclick = () => signedMode("/api/level1/prepare-mode", { policy: tenant.policy, mode: 2 }, "asked for Autopilot");
+$("#pauseMode").onclick = () => signedMode("/api/level1/prepare-mode", { policy: tenant.policy, mode: 0 }, "paused");
+$("#proposeMode").onclick = () => signedMode("/api/level1/prepare-mode", { policy: tenant.policy, mode: 1 }, "Propose");
+$("#cancelMode").onclick = () => signedMode("/api/level1/prepare-cancel", { policy: tenant.policy }, "cancelled");
+
+$("#deploy").onclick = async () => {
+  $("#deployErr").textContent = ""; $("#deploy").disabled = true; $("#deploy").textContent = "Deploying… (two transactions)";
+  try {
+    const d = await post("/api/level1/deploy", { chain: $("#chain").value, qx: pub.qx, qy: pub.qy, watched: $("#watched").value.trim(), recovery: $("#recovery").value.trim() || undefined,
+      caps: { perAction: $("#perAction").value, daily: $("#daily").value, floor: $("#floor").value || "0" }, days: Number($("#days").value), invite: $("#invite").value });
+    tenant = d.tenant; store.set("tameion.tenant", JSON.stringify(tenant)); rememberTenant(tenant); showTenant();
+    $("#deploy").textContent = "Deployed";
+  } catch (e) { $("#deployErr").textContent = e.message; $("#deploy").disabled = false; $("#deploy").textContent = "Deploy my policy (Propose mode)"; }
+};
+
+// Clear signing, on this page: the calldata is described by the page's own
+// decoder (apps/classic/passkey/call.js, served as /level1/call.js) and the challenge
+// the service returns is recomputed here and must match. A call the page
+// cannot describe is never signed; a challenge that differs is never signed.
+async function signAndExecute(target, data, label) {
+  const d = TameionCall.describe(data);
+  if (!d.known) throw new Error(`not signing: this page cannot describe the call (selector ${d.selector})`);
+  const words = `${d.action}${d.payees && d.payees.length ? " " + d.payees.join(", ") : ""}${d.note ? " — " + d.note : ""}`;
+  $("#signing").textContent = `Signing: ${words}`;
+  const ch = await post("/api/level1/challenge", { chain: tenant.chain, owner: tenant.owner, target, data });
+  const chainId = (cfg.chains.find(c => c.key === tenant.chain) || {}).chainId;
+  const mine = TameionCall.challengeFor({ chainId, owner: tenant.owner, nonce: ch.nonce, target, data });
+  if (mine.toLowerCase() !== String(ch.challenge).toLowerCase()) throw new Error("not signing: the service's challenge differs from the one this page computed");
+  $("#signing").textContent = `Signing: ${words} · challenge recomputed by this page matches the service's (nonce ${ch.nonce})`;
+  const id = pub && pub.credentialId;
+  const assertion = await navigator.credentials.get({ publicKey: { challenge: fromHex(ch.challenge), rpId: location.hostname, userVerification: "required",
+    allowCredentials: id ? [{ type: "public-key", id: unb64u(id) }] : [] } });
+  const r = assertion.response; const clientDataJSON = new TextDecoder().decode(r.clientDataJSON);
+  const { r: rr, s } = derToRS(r.signature);
+  const auth = { r: rr, s, challengeIndex: clientDataJSON.indexOf('"challenge":"'), typeIndex: clientDataJSON.indexOf('"type":"webauthn.get"'), authenticatorData: hex(r.authenticatorData), clientDataJSON };
+  // PLAN 5.7: which of the owner's keys this device holds, and an approval
+  // that waits for another owner.
+  let keyIndex = 0;
+  try {
+    const ib = await (await fetch(`/api/level1/inbox?policy=${tenant.policy}`, { headers: (typeof authHeaders === "function" ? authHeaders() : {}) })).json();
+    const mine = (pub && pub.qx || "").toLowerCase();
+    const ix = ((ib.owners && ib.owners.keys) || []).findIndex((k) => k.qx.toLowerCase() === mine);
+    if (ix > 0) keyIndex = ix;
+  } catch {}
+  const ex = await post("/api/level1/execute", { chain: tenant.chain, owner: tenant.owner, target, data, auth, keyIndex });
+  if (ex.pending) throw new Error(`Approved by you. ${ex.need - ex.have} more owner approval${ex.need - ex.have === 1 ? "" : "s"} needed: it waits on their account page.`);
+  return ex;
+}
+
+async function setPayees(allow) {
+  $("#approveOut").textContent = ""; $("#approveOut").className = "";
+  try {
+    const payees = $("#payees").value.split(",").map(s => s.trim()).filter(Boolean);
+    const prep = await post("/api/level1/prepare-payees", { policy: tenant.policy, payees, allow });
+    $("#approveOut").textContent = `Signing: ${prep.summary}`;
+    const ex = await signAndExecute(prep.to, prep.data, prep.summary);
+    $("#approveOut").innerHTML = allow
+      ? `Approved. <a href="${ex.explorer}" target="_blank" rel="noopener">${ex.tx}</a>. Payable after the delay (${tenant.delay_secs} s).`
+      : `Revoked, at once. <a href="${ex.explorer}" target="_blank" rel="noopener">${ex.tx}</a>.`;
+  } catch (e) { $("#approveOut").textContent = e.message; $("#approveOut").className = "warn"; }
+}
+$("#approve").onclick = () => setPayees(true);
+$("#revoke").onclick = () => setPayees(false);
+
+$("#run").onclick = async () => {
+  $("#run").disabled = true; $("#runStat").textContent = "queued";
+  try {
+    const d = await post("/api/level1/run", { policy: tenant.policy });
+    store.set(`tameion.lastRun.${tenant.policy}`, d.id);
+    if (d.cached) $("#runStat").textContent = d.note || "a recent pass answers";
+    for (;;) {
+      const j = await (await fetch(`/api/watch/${d.id}`)).json();
+      const pr = j.progress || {};
+      const eta = pr.etaSecs ? ` · about ${pr.etaSecs < 90 ? pr.etaSecs + " s" : Math.round(pr.etaSecs / 60) + " min"} left${pr.note ? " (" + pr.note + ")" : ""}` : "";
+      const pct = pr.totalBlocks && pr.scannedBlocks ? `${Math.round(100 * pr.scannedBlocks / pr.totalBlocks)}% · ` : "";
+      $("#runStat").textContent = `${j.status}: ${pct}${pr.phase || ""}${pr.transfersSoFar ? " · " + pr.transfersSoFar + " transfers so far" : ""}${eta}`;
+      if (j.status === "done") { renderRun(j.report); break; }
+      if (j.status === "failed") { $("#runStat").textContent = j.error; break; }
+      await new Promise(f => setTimeout(f, 2000));
+    }
+  } catch (e) { $("#runStat").textContent = e.message; }
+  $("#run").disabled = false;
+};
+
+function renderRun(r) {
+  $("#runOut").classList.remove("hide");
+  $("#runStat").textContent = `mode ${r.mode} · ${r.obligations} obligations · ${r.pendingSignature.length} waiting for your tap · root ${r.root.slice(0, 12)}… ${r.anchorTx ? "anchored" : ""}`;
+  const tb = $("#pending tbody"); tb.innerHTML = "";
+  // Why the agent is asking rather than paying: the verifier's own words.
+  const why = {};
+  for (const e of (r.escalated || [])) why[e.counterparty.toLowerCase()] = (e.problems || []).join(" · ").replace(/\s{2,}/g, " ");
+  for (const p of r.pendingSignature) {
+    const tr = document.createElement("tr");
+    const reason = why[p.counterparty.toLowerCase()];
+    tr.innerHTML = `<td class="mono">${p.counterparty.slice(0, 8)}…</td><td class="mono">${p.amount}</td><td class="muted">${p.summary}${p.attest ? "<br>" + p.attest.summary : ""}${reason ? `<br><span class="warn">Why it asks: ${reason}</span>` : ""}</td><td></td>`;
+    const b = document.createElement("button"); b.textContent = p.attest ? "Approve payee" : "Sign & pay";
+    const done = document.createElement("span"); done.className = "mono muted";
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        if (p.attest) {
+          // First tap approves the payee; the same row then offers the payment.
+          const ex = await signAndExecute(p.attest.to, p.attest.data, p.attest.summary);
+          done.innerHTML = ` approved <a href="${ex.explorer}" target="_blank" rel="noopener">${ex.tx.slice(0, 12)}…</a> `;
+          p.attest = null; b.textContent = "Sign & pay"; b.disabled = false;
+          return;
+        }
+        const ex = await signAndExecute(p.to, p.data, p.summary);
+        b.outerHTML = `<a href="${ex.explorer}" target="_blank" rel="noopener">${ex.tx.slice(0, 12)}…</a>`;
+      } catch (e) { b.textContent = e.message.slice(0, 60); b.disabled = false; }
+    };
+    tr.lastElementChild.appendChild(done);
+    tr.lastElementChild.appendChild(b); tb.appendChild(tr);
+  }
+  $("#log").textContent = (r.log || []).join("\n");
+  // Check it yourself: the events behind this root, and the command that
+  // recomputes the root from them and compares it with the chain.
+  const anchor = ((cfg.chains || []).find(c => c.key === tenant.chain) || {}).anchor || "<anchor>";
+  $("#check").innerHTML = `<a href="/api/level1/record?policy=${tenant.policy}&root=${r.root}" download="${r.root}.events.jsonl">Download this pass's record</a> and recompute its root on your own machine: <code>AUDIT_EVENTS=${r.root}.events.jsonl AGENT=${tenant.keyless ? tenant.operator : tenant.agent} ANCHOR=${anchor} cargo run -q -p operator --example audit</code> — the root in the file name, the root recomputed from the events and <code>rootOf</code> on the chain must agree.`;
+}
+
+init();
+</script>
+</body>
+</html>

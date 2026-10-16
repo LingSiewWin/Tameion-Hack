@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tameion Passkey</title>
+<style>
+/* One narrow column: a phone-sized control for one key. */
+:root {
+  --bg: #f5f6f8; --surface: #ffffff; --fg: #17202b; --muted: #5d6775; --rule: #d8dde4;
+  --accent: #0f6b5c; --accent-fg: #ffffff; --warn: #a3401a;
+  --body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #12161c; --surface: #1a2028; --fg: #e6eaf0; --muted: #9aa4b1; --rule: #2b333e;
+          --accent: #4cc3a8; --accent-fg: #0b1512; --warn: #f19a6e; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 var(--body); }
+main { max-width: 560px; margin: 0 auto; padding: 32px 16px 64px; display: grid; gap: 28px; }
+h1 { font-size: 24px; margin: 0; }
+h2 { font-size: 17px; margin: 0; }
+p { margin: 0; color: var(--muted); }
+section { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 18px; display: grid; gap: 12px; }
+button { font: inherit; font-weight: 600; padding: 10px 16px; border-radius: 8px; border: 0; background: var(--accent); color: var(--accent-fg); cursor: pointer; justify-self: start; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input { font: 14px var(--mono); width: 100%; padding: 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--bg); color: var(--fg); }
+pre { font: 12.5px/1.5 var(--mono); background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; padding: 10px; margin: 0; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+.err { color: var(--warn); }
+.what { font-size: 17px; color: var(--fg); margin: 0; }
+.payees { margin: 0; padding-left: 18px; font: 13.5px/1.7 var(--mono); word-break: break-all; }
+.detail { font: 12px/1.5 var(--mono); color: var(--muted); word-break: break-all; }
+.warn { border-color: var(--warn); }
+.warn h2, .warn .what { color: var(--warn); }
+button:disabled { opacity: .4; cursor: not-allowed; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+
+<main>
+  <header>
+    <h1>The key that only your phone holds</h1>
+    <p>Create a passkey on this device, then approve one exact call to your agent's budget. Nothing here holds money or sends a transaction; it signs.</p>
+  </header>
+
+  <section aria-labelledby="s1">
+    <h2 id="s1">1. Create the owner's passkey</h2>
+    <p>Your device asks for Face ID, a fingerprint or your PIN. The private key never leaves it.</p>
+    <button id="create" type="button">Create passkey</button>
+    <pre id="pub" aria-live="polite">No passkey yet.</pre>
+  </section>
+
+  <section id="call" aria-labelledby="s2">
+    <h2 id="s2">2. Approve one call</h2>
+    <div id="clear" hidden>
+      <p class="what" id="what"></p>
+      <ul class="payees" id="payees"></ul>
+      <p id="note"></p>
+      <p class="detail" id="detail"></p>
+    </div>
+    <div id="blind">
+      <p>No call in this link, so this page cannot show what you would be approving. Signing a bare
+        challenge is a blind approval: only do it for one you computed yourself.</p>
+      <label for="challenge" class="visually-hidden">Challenge</label>
+      <input id="challenge" placeholder="0x… (64 hex characters)" autocomplete="off" spellcheck="false">
+    </div>
+    <button id="approve" type="button">Approve with passkey</button>
+    <pre id="auth" aria-live="polite">Nothing approved yet.</pre>
+    <button id="copy" type="button" hidden>Copy</button>
+  </section>
+</main>
+
+<script src="call.js"></script>
+<script>
+const N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551n;
+const hex = (buf) => "0x" + [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+const fromHex = (h) => {
+  const s = h.trim().replace(/^0x/, "");
+  if (!/^[0-9a-fA-F]{64}$/.test(s)) throw new Error("A challenge is 32 bytes: 0x followed by 64 hex characters.");
+  return Uint8Array.from(s.match(/../g).map(b => parseInt(b, 16)));
+};
+const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const unb64u = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+                set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+
+// DER ECDSA signature -> 32-byte r and s, with s normalised to the low half:
+// the on-chain verifier refuses high-s so a signature has one form.
+function derToRS(der) {
+  const b = new Uint8Array(der);
+  let i = 2;
+  if (b[1] & 0x80) i += b[1] & 0x7f;
+  const read = () => { if (b[i++] !== 0x02) throw new Error("bad DER"); const len = b[i++]; const v = b.slice(i, i + len); i += len; return v; };
+  const big = (v) => BigInt("0x" + [...v].map(x => x.toString(16).padStart(2, "0")).join(""));
+  let r = big(read()), s = big(read());
+  if (s > N / 2n) s = N - s;
+  const to32 = (n) => "0x" + n.toString(16).padStart(64, "0");
+  return { r: to32(r), s: to32(s) };
+}
+
+document.getElementById("create").addEventListener("click", async () => {
+  const out = document.getElementById("pub");
+  try {
+    const cred = await navigator.credentials.create({ publicKey: {
+      rp: { name: "Tameion", id: location.hostname },
+      user: { id: crypto.getRandomValues(new Uint8Array(16)), name: "owner", displayName: "Owner" },
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      pubKeyCredParams: [{ type: "public-key", alg: -7 }], // ES256: P-256
+      authenticatorSelection: { userVerification: "required", residentKey: "preferred" },
+      attestation: "none",
+    }});
+    const spki = new Uint8Array(cred.response.getPublicKey());
+    const point = spki.slice(spki.length - 65); // 0x04 || X || Y
+    if (point[0] !== 0x04) throw new Error("expected an uncompressed P-256 point");
+    const qx = hex(point.slice(1, 33)), qy = hex(point.slice(33, 65));
+    store.set("tameion.credId", b64u(cred.rawId));
+    out.className = "";
+    out.textContent = JSON.stringify({ qx, qy, credentialId: b64u(cred.rawId) }, null, 2);
+    store.set("tameion.pub", out.textContent);
+  } catch (e) { out.className = "err"; out.textContent = e.message; }
+});
+
+document.getElementById("approve").addEventListener("click", async () => {
+  const out = document.getElementById("auth");
+  try {
+    const challenge = fromHex(approved || document.getElementById("challenge").value);
+    const id = store.get("tameion.credId");
+    const assertion = await navigator.credentials.get({ publicKey: {
+      challenge, rpId: location.hostname, userVerification: "required",
+      allowCredentials: id ? [{ type: "public-key", id: unb64u(id) }] : [],
+    }});
+    const r = assertion.response;
+    const clientDataJSON = new TextDecoder().decode(r.clientDataJSON);
+    const { r: rr, s } = derToRS(r.signature);
+    const auth = {
+      r: rr, s,
+      challengeIndex: clientDataJSON.indexOf('"challenge":"'),
+      typeIndex: clientDataJSON.indexOf('"type":"webauthn.get"'),
+      authenticatorData: hex(r.authenticatorData),
+      clientDataJSON,
+    };
+    out.className = "";
+    out.textContent = JSON.stringify(auth, null, 2);
+    document.getElementById("copy").hidden = false;
+    if (pendingPair) {
+      const seen = seenPolicies();
+      if (!seen[pendingPair[0]]) { seen[pendingPair[0]] = pendingPair[1]; store.set("tameion.policies", JSON.stringify(seen)); }
+    }
+  } catch (e) { out.className = "err"; out.textContent = e.message; }
+});
+
+document.getElementById("copy").addEventListener("click", async (ev) => {
+  try {
+    await navigator.clipboard.writeText(document.getElementById("auth").textContent);
+    ev.target.textContent = "Copied";
+  } catch { ev.target.textContent = "Select the text above and copy it"; }
+});
+
+// Clear signing. A link from the agent or the relayer carries the call itself:
+// ?owner=&chain=&n=&to=&data=. The page says what it does in words, computes
+// the challenge from those same values (call.js, the contract's own formula),
+// and signs only that. A relayer cannot get a signature for one call by
+// showing another: a different call is a different challenge.
+let approved = null;
+let pendingPair = null;
+// Owner -> policy pairs this device has approved for. Unreadable storage is
+// treated as empty: the page then warns "first approval", never less.
+function seenPolicies() {
+  try { const v = JSON.parse(store.get("tameion.policies") || "{}"); return v && typeof v === "object" ? v : {}; }
+  catch { return {}; }
+}
+(function clearSign() {
+  const q = new URLSearchParams(location.search);
+  if (q.get("c")) document.getElementById("challenge").value = q.get("c");
+  const [owner, chain, n, to, data] = ["owner", "chain", "n", "to", "data"].map((k) => q.get(k));
+  if (!(owner && chain && n && to && data)) return;
+  const C = window.TameionCall;
+  document.getElementById("blind").hidden = true;
+  document.getElementById("clear").hidden = false;
+  let d;
+  try { d = C.describe(data); } catch (e) { d = { known: false, selector: e.message }; }
+  const net = C.CHAINS[chain] || `chain ${chain}`;
+  if (!d.known) {
+    document.getElementById("call").classList.add("warn");
+    document.getElementById("what").textContent = `This link asks you to approve a call this page does not recognise (${d.selector}). Do not approve it.`;
+    document.getElementById("approve").disabled = true;
+    return;
+  }
+  document.getElementById("what").textContent = `${d.action}:`;
+  const ul = document.getElementById("payees");
+  for (const p of d.payees) { const li = document.createElement("li"); li.textContent = p; ul.appendChild(li); }
+  document.getElementById("note").textContent = d.note || `On ${net}. Your agent's budget limits still apply to every payment.`;
+  approved = C.challengeFor({ chainId: BigInt(chain), owner, nonce: BigInt(n), target: to, data });
+
+  // Trust on first use. This device remembers which policy each owner it has
+  // approved for controls; a link pointing the same owner at another contract
+  // is the shape of a relayer trying its luck, and is said so plainly.
+  const seen = seenPolicies();
+  const pair = `${chain}:${owner.toLowerCase()}`;
+  const known = seen[pair];
+  if (known && known !== to.toLowerCase()) {
+    document.getElementById("call").classList.add("warn");
+    document.getElementById("note").textContent =
+      `Careful: this owner has only ever approved calls to ${known} on this device. This link targets ${to}. Do not approve unless you moved your budget there yourself.`;
+  } else if (!known) {
+    document.getElementById("note").textContent += " First approval for this owner on this device: check the policy address below.";
+  }
+  pendingPair = [pair, to.toLowerCase()];
+  document.getElementById("detail").textContent =
+    `policy ${to} · owner ${owner} · approval #${n} · signs ${approved}`;
+})();
+
+// A passkey made earlier on this device stays usable after a reload.
+if (store.get("tameion.pub")) document.getElementById("pub").textContent = store.get("tameion.pub");
+</script>
+
+</html>
