@@ -1,0 +1,8 @@
+# 2026-10-13T12:42:58Z prove_no_withdraw: the API wallet signs a 1 USDC withdraw to the master's own address; the venue must refuse
+# prove_no_withdraw — Hyperliquid Testnet
+master           : 0x557e1e07652b75abaa667223b11704165fc94d09   accountValue before 998.976571
+agent (signer)   : 0x22d3a1b3757e9ff4a83df9fc4447f16dfe4afca3
+action           : withdraw3 1 USDC -> 0x557e1e07652b75abaa667223b11704165fc94d09 (the master's own address)
+accountValue after: 998.976571
+venue answer     : REFUSED — venue api: Must deposit before performing actions. User: 0x53f18538ffd9c61c556e36428e3d7335d2a35b2f
+RESULT           : PASS — the API wallet cannot withdraw; the master's balance did not move

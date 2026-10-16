@@ -1,0 +1,11 @@
+# 2026-10-13T06:12:11Z probe_funding (read-only; books real user_funding payloads through book::funding)
+# funding-booking probe — 12 distinct addresses from the BTC/ETH tape
+
+user 0xf9724cd02C86Af65Ab12a83DFb0616E29BCFe0D6: 16 funding payments in 7d on ["BTC", "ETH"]; booked 16
+  t=1791277200054 BTC usdc=-0.003423 szi=0.0003 rate=0.0001326496 type=funding hash=0x0000000000000000000000000000000000000000000000000000000000000000
+  t=1791277200054 ETH usdc=-0.002826 szi=-0.005 rate=-0.0002080721 type=funding hash=0x0000000000000000000000000000000000000000000000000000000000000000
+  t=1791288000018 BTC usdc=-0.003959 szi=0.0003 rate=0.0001530503 type=funding hash=0x0000000000000000000000000000000000000000000000000000000000000000
+  books: funding income 0.033094 USDC · funding expense 0.040412 USDC · margin net -0.007318 USDC
+  trial balance: 0.073506 USDC = 0.073506 USDC BALANCED
+
+funding path exercised against real payloads: OK

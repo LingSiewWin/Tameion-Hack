@@ -1,0 +1,4 @@
+# 2026-10-13T14:09:34Z docs/50 #3: the short sized to the bills within the horizon, not the holding. Local demo (anvil), HEDGE_SPOT=ETH=5, dry run.
+coverUsdc: 3255   (sum of obligations within the horizon)
+ETH: spot 5 @ 2505.4 = 12527 USDC; target -1.2991937415183204278757882973 (= -min(spot, cover/mark)); outcome REFUSE; ETH: spot 5 @ 2505.4 = 12527 USDC; hedge 0 -> target -1.2991937415183204278757882973; drift 10000 bps, outside
+mode: dry-run liveDemoted: False

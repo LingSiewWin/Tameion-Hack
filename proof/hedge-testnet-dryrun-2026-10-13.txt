@@ -1,0 +1,34 @@
+# 2026-10-13T05:28:02Z dry_run HEDGE_SPOT=ETH=0.5,SOL=20
+# hedge dry run — Hyperliquid Testnet
+user: 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+holdings: [Holding { coin: "ETH", size: 0.5 }, Holding { coin: "SOL", size: 20 }]
+policy: HedgePolicy { band_bps: 500, max_leverage: 2, k_maintenance: 4, allowlist: ["BTC", "ETH", "SOL"], min_notional_usdc: 10, slippage_bps: 50 }
+
+## account
+AccountState { account_value: 0.0, margin_used: 0.0, maintenance_margin_used: 0.0 }
+withdrawable=0.0 health=None halted_before=false
+
+## ETH
+spot_size=0.5 mark=2511.3 oracle=2530.1 funding/hr=-0.0006977297 spot_value=1255.65
+hedge_before=0 hedge_upnl=0 target=-0.5
+rebalance: Trade { size_delta: -0.5, is_buy: false, drift_bps: 10000 }
+verdict:   Some(Refuse(NoCollateral))
+action:    None("refused: NoCollateral")
+books net: Some(NetView { spot: Money { minor: 1255650000, ccy: Usdc }, hedge: Money { minor: 0, ccy: Usdc }, margin: Money { minor: 0, ccy: Usdc }, net: Money { minor: 1255650000, ccy: Usdc } })
+
+## SOL
+spot_size=20 mark=108.01 oracle=108.385 funding/hr=-0.0001098163 spot_value=2160.20
+hedge_before=0 hedge_upnl=0 target=-20
+rebalance: Trade { size_delta: -20, is_buy: false, drift_bps: 10000 }
+verdict:   Some(Refuse(NoCollateral))
+action:    None("refused: NoCollateral")
+books net: Some(NetView { spot: Money { minor: 2160200000, ccy: Usdc }, hedge: Money { minor: 0, ccy: Usdc }, margin: Money { minor: 0, ccy: Usdc }, net: Money { minor: 2160200000, ccy: Usdc } })
+
+## journal (2 entries, 0 funding)
+mark:ETH@1791869285254 (1255.650000 USDC)
+  debit asset:treasury:spot:ETH 1255.650000 USDC
+  credit revenue:spot:gain 1255.650000 USDC
+mark:SOL@1791869285254 (2160.200000 USDC)
+  debit asset:treasury:spot:SOL 2160.200000 USDC
+  credit revenue:spot:gain 2160.200000 USDC
+trial balance: debits 3415.850000 USDC credits 3415.850000 USDC BALANCED

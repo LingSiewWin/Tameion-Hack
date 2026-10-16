@@ -1,0 +1,42 @@
+# 2026-10-13T12:42:52Z live_once HEDGE_SPOT=ETH=0
+# hedge LIVE step — Hyperliquid Testnet
+user: 0x557E1E07652B75ABaA667223B11704165fC94d09  agent: 0x22D3a1B3757e9Ff4A83Df9fc4447f16dfe4AfCa3
+holdings: [Holding { coin: "ETH", size: 0 }]
+books: 2 new entries written to runtime/hedge
+
+## account after
+AccountState { account_value: 998.976571, margin_used: 0.0, maintenance_margin_used: 0.0, total_notional: 0 } health=Some(500.83663768900653752055508763)
+
+## ETH
+mark=2493.3 target=-0 before=-0.01 rebalance=Trade { size_delta: 0.01, is_buy: true, drift_bps: 4294967295 }
+verdict: Some(Allow(Limits { size_delta: 0.01, size_after: 0.00, notional_after: 0, leverage_after: 0, maintenance_rate: 0.02, required_equity: 0 }))
+TRADED worst_px=2505.7665 filled=0.01 read_back=0
+  status: Filled { total_sz: 0.01, avg_px: 2493.4, oid: 62603000647 }
+books net: Some(NetView { spot: Money { minor: 0, ccy: Usdc }, hedge: Money { minor: 10, ccy: Usdc }, margin: Money { minor: 0, ccy: Usdc }, net: Money { minor: 10, ccy: Usdc } })
+
+## journal (8 entries, 0 funding)
+mark:ETH@1791889942077 (24.847100 USDC)
+  debit asset:treasury:spot:ETH 24.847100 USDC
+  credit revenue:spot:gain 24.847100 USDC
+mark:ETH@1791890361443 (1215.452900 USDC)
+  debit asset:treasury:spot:ETH 1215.452900 USDC
+  credit revenue:spot:gain 1215.452900 USDC
+mark:ETH@1791890397484 (0.450000 USDC)
+  debit expense:spot:loss 0.450000 USDC
+  credit asset:treasury:spot:ETH 0.450000 USDC
+mark:ETH@1791890883386 (1214.943000 USDC)
+  debit expense:spot:loss 1214.943000 USDC
+  credit asset:treasury:spot:ETH 1214.943000 USDC
+mark:ETH@1791892656511 (0.064600 USDC)
+  debit expense:spot:loss 0.064600 USDC
+  credit asset:treasury:spot:ETH 0.064600 USDC
+mark:ETH@1791895344221 (0.102600 USDC)
+  debit asset:treasury:spot:ETH 0.102600 USDC
+  credit revenue:spot:gain 0.102600 USDC
+mark:ETH@1791895375696 (24.945000 USDC)
+  debit expense:spot:loss 24.945000 USDC
+  credit asset:treasury:spot:ETH 24.945000 USDC
+mark:ETH@1791895375696 (0.000010 USDC)
+  debit asset:hedge:mtm:ETH 0.000010 USDC
+  credit revenue:hedge:gain 0.000010 USDC
+trial balance: debits 2480.805210 USDC credits 2480.805210 USDC BALANCED

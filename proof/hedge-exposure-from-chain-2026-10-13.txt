@@ -1,0 +1,5 @@
+# 2026-10-13T14:09:01Z docs/50 #2: ETH exposure read off the chains for the founder's address (eth_getBalance per mainnet preset, public RPCs)
+Arbitrum One 0 ETH
+Ethereum     0.017908088991183092 ETH
+Base         0.002308927373534759 ETH
+exit 0

@@ -1,0 +1,5 @@
+# 2026-10-13T13:04:30Z unhalt: clear runtime/hedge/HALT with a signed, named reason (docs/46)
+# unhalt runtime/hedge
+cleared 1 halt reason(s) at 1791896671  by 0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25  keccak 0x2e7f478770258bd3b2fa431592282ae1c75966e370ec6543aa6f2742f51e9383
+## HALT.history
+1791896671  0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25  test halt written by hand for docs/46; cleared after confirming the venue shows no position  keccak 0x2e7f478770258bd3b2fa431592282ae1c75966e370ec6543aa6f2742f51e9383  signature VALID

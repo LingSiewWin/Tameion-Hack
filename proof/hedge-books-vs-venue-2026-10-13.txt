@@ -1,0 +1,24 @@
+# 2026-10-13T12:45:09Z audit_books against the live venue account after the open+flatten (docs/46 #1 step 3)
+# audit_books runtime/hedge/journal.jsonl vs venue 0x557E1E07652B75ABaA667223B11704165fC94d09
+entries         : 8   trial balance debits 2480.805210 USDC = credits 2480.805210 USDC   BALANCED
+  asset:hedge:margin           0.000000 USDC
+  asset:hedge:mtm:ETH          0.000010 USDC
+  asset:treasury:spot:ETH      0.000000 USDC
+  asset:treasury:usdc          0.000000 USDC
+  expense:fees                 0.000000 USDC
+  expense:funding              0.000000 USDC
+  expense:hedge:loss           0.000000 USDC
+  expense:spot:loss            1240.402600 USDC
+  revenue:funding              0.000000 USDC
+  revenue:hedge:gain           0.000010 USDC
+  revenue:spot:gain            1240.402600 USDC
+
+line                                          books            venue         diff
+ETH unrealised (hedge:mtm vs upnl)                0                0            0   size 0
+margin + mtm vs accountValue                      0       998.976571  -998.976571
+venue marginUsed / maintenance                  0.0              0.0
+venue snapshot  : t=1791895513212 ms   tolerance 0.50 USDC
+RESULT          : FAIL
+exit 2
+
+# reading: the journal carries no margin deposit because the 999 USDC arrived by faucet, outside scripts/hedge_fund_from_evm.sh (which would book it); the gap equals the venue's accountValue. One journal also served two venue accounts today (treasury dry runs, founder's live account). Known modelling gap, recorded in docs/46 and docs/14.

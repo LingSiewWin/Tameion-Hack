@@ -1,0 +1,26 @@
+# 2026-10-13T05:27:59Z readonly_testnet
+# hedge read-only proof — Hyperliquid Testnet
+user: 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+policy: HedgePolicy { band_bps: 500, max_leverage: 2, k_maintenance: 4, allowlist: ["BTC", "ETH", "SOL"], min_notional_usdc: 10, slippage_bps: 50 }
+
+## markets (158 live perps on venue)
+BTC: index=3 sz_decimals=5 max_leverage=40x delisted=false
+    mark=82604.0 oracle=83750.0 funding/hr=-0.0013748676 open_interest=48.87526 margin_table_id=Some(54)
+    tier: notional >= 0.0 → max 40x → maintenance rate 0.0125
+    tier: notional >= 10000.0 → max 25x → maintenance rate 0.02
+    tier: notional >= 50000.0 → max 10x → maintenance rate 0.05
+ETH: index=4 sz_decimals=4 max_leverage=25x delisted=false
+    mark=2511.5 oracle=2530.2 funding/hr=-0.0006977297 open_interest=529.9886 margin_table_id=Some(53)
+    tier: notional >= 0.0 → max 25x → maintenance rate 0.02
+    tier: notional >= 20000.0 → max 10x → maintenance rate 0.05
+    tier: notional >= 50000.0 → max 5x → maintenance rate 0.10
+SOL: index=0 sz_decimals=2 max_leverage=10x delisted=false
+    mark=108.01 oracle=108.385 funding/hr=-0.0001098163 open_interest=5839.32 margin_table_id=Some(10)
+    tier: notional >= 0.0 → max 10x → maintenance rate 0.05
+
+## account (cross)
+account_value=0.0 margin_used=0.0 maintenance_margin_used=0.0 withdrawable=0.0 time=1791869282539
+health (equity / k×MM): None
+positions: none
+
+NOTE: account value is 0 on Hyperliquid testnet. Fund it at https://app.hyperliquid-testnet.xyz/faucet before `live_once`.

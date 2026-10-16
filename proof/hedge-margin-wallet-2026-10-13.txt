@@ -1,0 +1,45 @@
+# 2026-10-13T13:01:27Z docs/46 #7 margin wallet split: gen / check / fund / deposit paths without funds (treasury holds 0 USDC on HyperEVM; the 20 mock USDC sit in Circle's wallet)
+## gen
+margin wallet   0xD2CE2AB7d070a7117140231182D827935C24a66F
+key             ~/.tameion/hedge-margin.key (mode 600; never printed)
+next            send it a little test HYPE for gas; then 'scripts/hedge_fund_from_evm.sh fund <USDC>'; approve the API wallet with
+                TAMEION_TREASURY_KEY_FILE=~/.tameion/hedge-margin.key cargo run --locked -p hedge --example approve_agent
+                and run the hedge with HEDGE_USER=0xD2CE2AB7d070a7117140231182D827935C24a66F. On testnet the venue credits only addresses with mainnet state.
+exit 0
+## check
+chain id        998
+treasury        0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+  HyperEVM HYPE 0.289898799399922094  (gas)
+  HyperEVM USDC 0.000000
+margin wallet   0xD2CE2AB7d070a7117140231182D827935C24a66F
+  HyperEVM HYPE 0.000000000000000000  (gas)
+  HyperEVM USDC 0.000000
+  allowance     0.000000  (to CoreDepositWallet)
+  HyperCore perps accountValue 0.0 USDC
+HyperCore userRole 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25   {"role":"missing"}
+HyperCore userRole 0xD2CE2AB7d070a7117140231182D827935C24a66F   {"role":"missing"}
+exit 0
+## fund 1 (must refuse: treasury has no HyperEVM USDC)
+chain id        998
+treasury        0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+  HyperEVM HYPE 0.289898799399922094  (gas)
+  HyperEVM USDC 0.000000
+margin wallet   0xD2CE2AB7d070a7117140231182D827935C24a66F
+  HyperEVM HYPE 0.000000000000000000  (gas)
+  HyperEVM USDC 0.000000
+  allowance     0.000000  (to CoreDepositWallet)
+  HyperCore perps accountValue 0.0 USDC
+asked 1.000000 but the treasury holds 0.000000 on HyperEVM
+exit 1
+## deposit (must refuse: margin wallet empty)
+chain id        998
+treasury        0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+  HyperEVM HYPE 0.289898799399922094  (gas)
+  HyperEVM USDC 0.000000
+margin wallet   0xD2CE2AB7d070a7117140231182D827935C24a66F
+  HyperEVM HYPE 0.000000000000000000  (gas)
+  HyperEVM USDC 0.000000
+  allowance     0.000000  (to CoreDepositWallet)
+  HyperCore perps accountValue 0.0 USDC
+nothing to deposit: fund the margin wallet first ('scripts/hedge_fund_from_evm.sh fund <USDC>')
+exit 1

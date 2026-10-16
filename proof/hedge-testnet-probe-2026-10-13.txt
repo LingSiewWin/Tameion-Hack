@@ -1,0 +1,14 @@
+# 2026-10-13T05:36:38Z probe_positions (read-only; validates non-empty position parsing against live testnet)
+# position-parse probe — 10 recent ETH trades on testnet
+
+user 0x0e825e82d4709F353F422a268eF1097102992F38: account_value=995.485639 margin_used=21.500097 mm_used=8.600039 health=Some(28.938404785141090639240124376)
+  ETH: szi=-0.1715 entry=Some(2500.88) value=430.00195 upnl=-1.099884 liq=Some(8148.902926885) margin_used=21.500097 lev=20x/Cross cum_funding=6.17047
+
+user 0x5972698398d8c5bBE67C0DB74906236691020417: account_value=105581.573127 margin_used=27053.579354 mm_used=4588.394838 health=Some(5.7526420924262228890599235741)
+  ETH: szi=18.1869 entry=Some(2489.74) value=45600.01437 upnl=319.329406 liq=None margin_used=9120.002874 lev=5x/Cross cum_funding=-87614.947056
+  BTC: szi=1.08662 entry=Some(82644.7) value=89667.8824 upnl=-135.532342 liq=None margin_used=17933.57648 lev=5x/Cross cum_funding=-15983.66409
+
+user 0xb40385Eef3158C82e003DE4fD7260513665585b0: account_value=953.204965 margin_used=1.25365 mm_used=0.50146 health=Some(475.21485512304072109440433933)
+  ETH: szi=-0.01 entry=Some(2507.2) value=25.073 upnl=-0.001 liq=Some(95909.6044117647) margin_used=1.25365 lev=20x/Cross cum_funding=0.0
+
+parsed 3 accounts with open positions: OK

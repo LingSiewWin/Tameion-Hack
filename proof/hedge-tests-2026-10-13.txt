@@ -1,0 +1,315 @@
+# 2026-10-13T06:18:10Z cargo test --no-fail-fast -p ledger -p hedge
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running unittests src/lib.rs (target/debug/deps/hedge-e40a8385b5662673)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/book.rs (target/debug/deps/book-0514c43f265f49c6)
+
+running 6 tests
+test margin_deposit_moves_usdc_between_two_assets ... ok
+test funding_received_and_paid_land_on_opposite_sides ... ok
+test a_hedged_move_nets_to_zero_in_the_books ... ok
+test usdc_is_exact_at_six_places_and_rounds_half_even_beyond ... ok
+test unknown_coin_is_refused_by_the_chart ... ok
+test zero_and_sub_unit_deltas_book_nothing ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/delta.rs (target/debug/deps/delta-d8f94e091edc120f)
+
+running 7 tests
+test flat_against_flat_holds ... ok
+test inside_band_holds ... ok
+test position_against_zero_target_is_always_a_trade_to_flat ... ok
+test target_is_the_negation_of_the_holding ... ok
+test outside_band_trades_exactly_onto_target ... ok
+test trade_lands_on_target ... ok
+test hold_iff_within_band ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/driver.rs (target/debug/deps/driver-28cdab43ed93e845)
+
+running 2 tests
+test holdings_parse_and_upper_case ... ok
+test malformed_holdings_are_refused_with_the_offending_piece ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/engine.rs (target/debug/deps/engine-762dd465791ba0e7)
+
+running 4 tests
+test dry_run_books_the_mark_and_reports_the_order_it_would_send ... ok
+test a_position_without_a_holding_is_closed_to_flat ... ok
+test live_with_matching_read_back_is_a_trade ... ok
+test live_with_a_mismatching_read_back_halts_and_stays_halted ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/policy.rs (target/debug/deps/policy-b9b193a28e2e39c3)
+
+running 2 tests
+test the_default_policy_validates ... ok
+test a_bad_policy_lists_every_problem_at_once ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/record.rs (target/debug/deps/record-836554c64dadde84)
+
+running 4 tests
+test outcome_words_are_stable ... ok
+test a_dry_run_becomes_one_typed_event_with_usdc_notional ... ok
+test dashboard_json_carries_the_fields_the_page_reads ... ok
+test hedge_events_change_the_anchored_root_and_encode_deterministically ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/safety.rs (target/debug/deps/safety-91d0cd556037f3c6)
+
+running 9 tests
+test health_is_equity_over_required ... ok
+test closing_to_flat_is_always_allowed ... ok
+test a_second_coin_is_judged_on_the_whole_account ... ok
+test refusals ... ok
+test over_leverage_is_shrunk_to_the_cap ... ok
+test thin_buffer_is_shrunk_by_the_maintenance_rule ... ok
+test maintenance_rate_is_half_initial_at_tier_max_leverage ... ok
+test small_short_against_ample_collateral_is_allowed ... ok
+test verdicts_respect_the_limits ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/store.rs (target/debug/deps/store-677ebdb5cef4a31c)
+
+running 4 tests
+test nothing_saved_means_none ... ok
+test a_coin_booked_before_is_still_in_the_chart ... ok
+test an_edited_line_is_refused_with_its_line_number ... ok
+test save_then_load_round_trips_balances_and_appends_only_new_entries ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/ledger-b93e1ff61122f23b)
+
+running 4 tests
+test canon::settlement_key_tests::a_different_scope_is_a_different_key ... ok
+test canon::settlement_key_tests::a_different_billing_cycle_is_a_different_key ... ok
+test canon::settlement_key_tests::a_settlement_key_is_never_an_action_hash ... ok
+test canon::settlement_key_tests::wording_changes_the_action_hash_but_not_the_settlement_key ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/attack.rs (target/debug/deps/attack-8391d36cb70d21da)
+
+running 62 tests
+test c02_a_current_bill_is_not_held_back ... ok
+test c01_a_bill_a_cycle_behind_goes_to_the_principal_not_the_chain ... ok
+test c01_a_strong_inference_is_paid ... ok
+test c02_a_weak_inference_goes_to_a_human ... ok
+test c03_staleness_belongs_to_one_bill_not_to_its_neighbours ... ok
+test c05_the_agent_cannot_raise_the_score_it_is_judged_on ... ok
+test c04_an_action_nobody_inferred_is_not_judged_on_confidence ... ok
+test c03_the_floor_is_inclusive ... ok
+test p02_the_real_payee_is_not_mistaken_for_its_own_look_alike ... ok
+test p03_letter_case_does_not_hide_a_look_alike ... ok
+test c06_a_weak_inference_is_still_only_a_review_never_an_allow_by_omission ... ok
+test p04_a_look_alike_the_principal_attested_is_not_refused ... ok
+test p01_a_look_alike_of_a_known_payee_is_refused_not_escalated ... ok
+test p05_a_payee_the_contract_would_refuse_goes_to_a_human ... ok
+test p06_an_attested_payee_passes_the_on_chain_check ... ok
+test p07_without_an_on_chain_list_the_check_does_not_apply ... ok
+test p08_a_look_alike_is_refused_even_when_nothing_is_attested ... ok
+test r02b_the_floor_still_applies_when_the_action_is_otherwise_clean ... ok
+test r01_a_second_effect_on_the_treasury_is_refused ... ok
+test r02_an_agent_cannot_weaken_the_checks_by_omitting_preconditions ... ok
+test r03_agent_preconditions_are_additive_never_subtractive ... ok
+test r05b_a_trivially_true_balance_precondition_does_not_help ... ok
+test r05c_spending_exactly_the_balance_is_solvent ... ok
+test r06_negative_limits_are_refused ... ok
+test r04_a_validity_window_that_cannot_open_is_blocked ... ok
+test r06b_a_per_action_cap_above_the_daily_cap_is_refused ... ok
+test r05_the_treasury_cannot_be_overdrawn ... ok
+test s03_wrong_vendor_is_only_caught_when_the_vendor_is_unknown ... ok
+test s02_duplicate_payment_is_blocked_not_escalated ... ok
+test s04_effects_that_disagree_with_the_amount_are_blocked ... ok
+test s01_legitimate_payment_is_allowed ... ok
+test s06_thin_evidence_escalates ... ok
+test r07_solvency_is_blocked_never_escalated ... ok
+test s04b_a_consistently_wrong_amount_is_not_caught_here ... ok
+test s08_an_expired_action_is_blocked ... ok
+test s07_evidence_resting_only_on_a_guess_escalates ... ok
+test s09_changed_payee_details_are_refused_not_escalated ... ok
+test s09b_a_principal_attested_payee_change_goes_through ... ok
+test s09c_attesting_a_different_fingerprint_does_not_help ... ok
+test s10_an_action_drawing_on_another_treasury_is_blocked ... ok
+test s11b_the_daily_cap_counts_what_was_already_spent ... ok
+test s14_to_s16_belong_to_the_execution_layer_and_are_not_built ... ok
+test s13c_field_boundaries_cannot_be_moved ... ok
+test s17_retry_after_timeout_hits_the_same_key ... ok
+test s11_over_the_per_action_cap_escalates ... ok
+test s13b_the_hash_is_stable_for_an_identical_action ... ok
+test s12_an_action_from_the_future_is_blocked ... ok
+test t01_a_matched_invoice_order_and_receipt_is_allowed ... ok
+test t03_over_billing_within_the_cap_is_caught_on_its_own ... ok
+test s13_editing_the_action_changes_its_hash ... ok
+test t05_an_order_naming_a_different_vendor_is_refused ... ok
+test s20_an_agent_that_misstates_its_own_limits_is_blocked ... ok
+test t06_a_cited_order_that_does_not_exist_is_refused ... ok
+test t04_a_four_minor_unit_overcharge_is_refused_not_rounded ... ok
+test t02_an_internally_consistent_wrong_amount_is_now_caught ... ok
+test t08_billing_under_the_order_is_fine ... ok
+test t09_missing_documents_escalate_rather_than_refuse ... ok
+test t11_the_agent_cannot_decline_the_match_by_omitting_it ... ok
+test t12_the_match_is_not_imposed_on_a_principal_who_did_not_ask ... ok
+test t10_two_orders_for_one_action_are_ambiguous_and_refused ... ok
+test t07_goods_not_received_in_full_is_refused ... ok
+test the_models_reasoning_cannot_change_the_decision ... ok
+
+test result: ok. 62 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/balance.rs (target/debug/deps/balance-6bf1b8f2c8c97764)
+
+running 7 tests
+test an_unknown_account_is_refused_not_created ... ok
+test an_exact_assertion_tolerates_nothing ... ok
+test funding_then_two_payments_leaves_the_right_balance ... ok
+test tolerance_has_to_be_written_down_to_apply ... ok
+test the_journal_has_no_way_to_remove_an_entry ... ok
+test the_error_message_names_the_gap ... ok
+test the_trial_balance_closes_because_every_entry_had_to ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/entry.rs (target/debug/deps/entry-1aed5bba4618da42)
+
+running 13 tests
+test a_document_is_mandatory_so_the_upper_layers_have_an_anchor ... ok
+test a_negative_leg_is_refused ... ok
+test a_balanced_entry_posts ... ok
+test an_unbalanced_entry_does_not_become_a_value ... ok
+test complete_reversal_is_caught_by_the_type_system ... ok
+test currencies_cannot_be_mixed_inside_an_entry ... ok
+test a_zero_leg_is_refused ... ok
+test error_of_commission_is_not_caught_here_and_cannot_be ... ok
+test an_entry_needs_both_sides ... ok
+test error_of_original_entry_on_both_sides_is_not_caught_here_by_design ... ok
+test error_of_original_entry_is_caught_when_it_is_one_sided ... ok
+test many_legs_on_each_side_still_have_to_balance ... ok
+test the_half_unit_allowance_does_not_exist_here ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/keccak_agreement.rs (target/debug/deps/keccak_agreement-765d7c88a891cddf)
+
+running 5 tests
+test the_domain_separator_is_present_in_the_encoding ... ok
+test sha3_256_would_have_been_the_wrong_choice ... ok
+test matches_published_keccak256_vectors ... ok
+test the_action_hash_is_keccak_over_the_canonical_bytes ... ok
+test the_canonical_encoding_is_frozen ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/log.rs (target/debug/deps/log-dcb65a3c3a999bd3)
+
+running 13 tests
+test a_decision_carries_what_it_was_decided_on ... ok
+test an_empty_log_commits_to_zero ... ok
+test a_single_event_root_is_its_leaf ... ok
+test replay_reads_as_a_record_a_person_can_follow ... ok
+test leaves_and_nodes_live_in_separate_domains ... ok
+test settled_cycles_are_recovered_for_the_duplicate_guard ... ok
+test sequence_numbers_are_reissued_on_reload ... ok
+test three_events_and_four_do_not_share_a_root ... ok
+test editing_any_field_of_any_event_moves_the_root ... ok
+test inclusion_proofs_verify_and_fail_when_they_should ... ok
+test every_prefix_length_has_a_distinct_root ... ok
+test appending_always_moves_the_root ... ok
+test inclusion_holds_at_every_size ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.09s
+
+     Running tests/money.rs (target/debug/deps/money-2d69fcbd897cb856)
+
+running 11 tests
+test currencies_do_not_mix ... ok
+test addition_is_associative_and_commutative ... ok
+test display_never_panics_at_the_boundaries ... ok
+test invoice_ninja_cast_has_no_syntax ... ok
+test malformed_input_is_rejected ... ok
+test overflow_is_refused_not_wrapped ... ok
+test gnucash_ceiling_is_not_reachable ... ok
+test parse_and_display_round_trip ... ok
+test subtraction_inverts_addition_exactly ... ok
+test six_decimal_settlement_survives_a_two_decimal_world ... ok
+test refuses_precision_it_cannot_hold_instead_of_rounding ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/obligations.rs (target/debug/deps/obligations-8bc44b8d9a8d3e4b)
+
+running 25 tests
+test a_payment_just_above_the_dust_line_still_counts ... ok
+test a_clean_monthly_subscription_is_recovered ... ok
+test a_scaled_down_dust_line_keeps_small_payments_and_still_drops_zero ... ok
+test confidence_rejects_nonsense ... ok
+test an_irregular_payee_is_refused_rather_than_reported_with_a_low_score ... ok
+test a_varying_amount_reads_as_a_recurring_payment_not_a_subscription ... ok
+test confidence_climbs_with_evidence_and_never_reaches_one ... ok
+test dust_mixed_into_a_real_schedule_does_not_change_it ... ok
+test incoming_transfers_are_revenue_and_never_obligations ... ok
+test results_are_ordered_by_what_is_due_soonest ... ok
+test mixed_case_addresses_are_one_payee_not_two ... ok
+test simultaneous_payments_do_not_count_as_a_zero_interval ... ok
+test the_cycle_key_is_stable_and_changes_with_the_cycle ... ok
+test the_next_due_date_follows_the_last_payment ... ok
+test the_explanation_names_the_numbers_it_rests_on ... ok
+test the_same_payee_in_two_currencies_is_two_obligations ... ok
+test two_payments_are_never_a_pattern ... ok
+test totalling_across_currencies_refuses_rather_than_guesses ... ok
+test upcoming_and_total_read_the_same_horizon ... ok
+test zero_value_and_dust_transfers_are_not_evidence_of_a_payee ... ok
+test dust_is_never_an_obligation ... ok
+test a_generated_cadence_is_recovered ... ok
+test detection_does_not_depend_on_input_order ... ok
+test the_typical_amount_was_actually_paid ... ok
+test detection_is_total_and_confidence_stays_in_range ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/python_parity.rs (target/debug/deps/python_parity-e7f87975facc4085)
+
+running 3 tests
+test incoming_transfers_were_ignored_by_both ... ok
+test the_typical_amount_deliberately_differs_from_python ... ok
+test matches_the_python_implementation_field_for_field ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests hedge
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ledger
+
+running 1 test
+test ledger/src/lib.rs - (line 65) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 5 tests
+test ledger/src/lib.rs - (line 31) - compile fail ... ok
+test ledger/src/lib.rs - (line 42) - compile fail ... ok
+test ledger/src/lib.rs - (line 22) - compile fail ... ok
+test ledger/src/lib.rs - (line 58) - compile fail ... ok
+test ledger/src/lib.rs - (line 13) - compile fail ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+all doctests ran in 1.35s; merged doctests compilation took 0.35s

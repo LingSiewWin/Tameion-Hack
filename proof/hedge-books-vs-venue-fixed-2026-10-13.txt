@@ -1,0 +1,20 @@
+# 2026-10-13T13:00:01Z docs/46 books-vs-venue fix: per-account books + cash reconciliation; live step with target 0 on the founder's venue account (see the earlier lines of this proof), then audit_books
+# audit_books runtime/hedge/0x557e1e07652b75abaa667223b11704165fc94d09/journal.jsonl vs venue 0x557E1E07652B75ABaA667223B11704165fC94d09
+entries         : 1   trial balance debits 998.976571 USDC = credits 998.976571 USDC   BALANCED
+  asset:hedge:margin           998.976571 USDC
+  asset:treasury:usdc          0.000000 USDC
+  equity:hedge:contributed     998.976571 USDC
+  expense:fees                 0.000000 USDC
+  expense:funding              0.000000 USDC
+  expense:hedge:loss           0.000000 USDC
+  expense:spot:loss            0.000000 USDC
+  revenue:funding              0.000000 USDC
+  revenue:hedge:gain           0.000000 USDC
+  revenue:spot:gain            0.000000 USDC
+
+line                                          books            venue         diff
+margin + mtm vs accountValue             998.976571       998.976571     0.000000
+venue marginUsed / maintenance                  0.0              0.0
+venue snapshot  : t=1791896406098 ms   tolerance 0.50 USDC
+RESULT          : PASS
+exit 0

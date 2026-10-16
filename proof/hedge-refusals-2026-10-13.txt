@@ -1,0 +1,13 @@
+# 2026-10-13T06:15:23Z refusal paths: the live tools must refuse without a key / without funds
+## approve_agent with no master key file
+refusing: cannot read master key /nonexistent/treasury.key: No such file or directory (os error 2)
+exit=2
+## live_once with no API wallet key file
+refusing: no API wallet key at /nonexistent/hedge-agent.key: No such file or directory (os error 2)
+approve an API wallet for the treasury on testnet first (see docs/43 §8), save its key there, mode 600.
+exit=2
+## driver with HEDGE_LIVE=1 and no key refuses before any venue call
+# hedge dry run — Hyperliquid Testnet
+user: 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+holdings: [Holding { coin: "ETH", size: 0.5 }]
+(dry_run ignores HEDGE_LIVE by design; the driver path is exercised by serve/run_arc)

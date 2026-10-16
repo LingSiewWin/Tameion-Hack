@@ -1,0 +1,36 @@
+# 2026-10-13T12:42:17Z live_once HEDGE_SPOT=ETH=0.01
+# hedge LIVE step — Hyperliquid Testnet
+user: 0x557E1E07652B75ABaA667223B11704165fC94d09  agent: 0x22D3a1B3757e9Ff4A83Df9fc4447f16dfe4AfCa3
+holdings: [Holding { coin: "ETH", size: 0.01 }]
+books: 1 new entries written to runtime/hedge
+
+## account after
+AccountState { account_value: 998.976791, margin_used: 12.4725, maintenance_margin_used: 0.4989, total_notional: 24.945 } health=None
+
+## ETH
+mark=2494.5 target=-0.01 before=0 rebalance=Trade { size_delta: -0.01, is_buy: false, drift_bps: 10000 }
+verdict: Some(Allow(Limits { size_delta: -0.01, size_after: -0.01, notional_after: 24.945, leverage_after: 0.02496996996996996996996997, maintenance_rate: 0.02, required_equity: 1.99560 }))
+TRADED worst_px=2482.0275 filled=-0.01 read_back=-0.01
+  status: Filled { total_sz: 0.01, avg_px: 2493.3, oid: 62602965368 }
+books net: Some(NetView { spot: Money { minor: 24945000, ccy: Usdc }, hedge: Money { minor: 0, ccy: Usdc }, margin: Money { minor: 0, ccy: Usdc }, net: Money { minor: 24945000, ccy: Usdc } })
+
+## journal (6 entries, 0 funding)
+mark:ETH@1791889942077 (24.847100 USDC)
+  debit asset:treasury:spot:ETH 24.847100 USDC
+  credit revenue:spot:gain 24.847100 USDC
+mark:ETH@1791890361443 (1215.452900 USDC)
+  debit asset:treasury:spot:ETH 1215.452900 USDC
+  credit revenue:spot:gain 1215.452900 USDC
+mark:ETH@1791890397484 (0.450000 USDC)
+  debit expense:spot:loss 0.450000 USDC
+  credit asset:treasury:spot:ETH 0.450000 USDC
+mark:ETH@1791890883386 (1214.943000 USDC)
+  debit expense:spot:loss 1214.943000 USDC
+  credit asset:treasury:spot:ETH 1214.943000 USDC
+mark:ETH@1791892656511 (0.064600 USDC)
+  debit expense:spot:loss 0.064600 USDC
+  credit asset:treasury:spot:ETH 0.064600 USDC
+mark:ETH@1791895344221 (0.102600 USDC)
+  debit asset:treasury:spot:ETH 0.102600 USDC
+  credit revenue:spot:gain 0.102600 USDC
+trial balance: debits 2455.860200 USDC credits 2455.860200 USDC BALANCED

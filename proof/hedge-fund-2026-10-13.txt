@@ -1,0 +1,74 @@
+# 2026-10-13T07:49:55Z fund HyperCore testnet perps from HyperEVM testnet USDC, then approve the trade-only API wallet
+## deposit
+treasury        0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+chain id        998
+HyperEVM HYPE   0.300000000000000000  (gas)
+HyperEVM USDC   20.000000
+allowance       0.000000  (to CoreDepositWallet)
+HyperCore perps accountValue 0.0 USDC
+
+== approve 20.000000 USDC to CoreDepositWallet ==
+  tx 0xa60f00e737ffbedf1f32904ae9f1341d4feb2fb5c19b428dd57b96a4db7b6560 status 0x1
+== deposit(amount, destinationDex=0) ==
+  tx 0x6e204de4a21943386a8cd249a71c71a489b8e04ae255d4dc19e77dee3f72ec76 status 0x1
+== wait for HyperCore to credit ==
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+  accountValue 0.0
+
+treasury        0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+chain id        998
+HyperEVM HYPE   0.299901046299944563  (gas)
+HyperEVM USDC   0.000000
+allowance       0.000000  (to CoreDepositWallet)
+HyperCore perps accountValue 0.0 USDC
+deposit exit=0
+
+## approve_agent
+# approve API wallet — Hyperliquid Testnet
+master (treasury): 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+agent:             0x667E1425AAc7359d20EaADD8dD519CE59e677097  name="tameion-hedge"
+agent key saved:   ~/.tameion/hedge-agent.key (mode 600)
+approval failed, agent key file removed: venue api: Must deposit before performing actions. User: 0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25
+most common cause: the master account has never deposited on testnet ("Must deposit before performing actions"). Fund it at https://app.hyperliquid-testnet.xyz/faucet first.
+approve_agent exit=3
+
+## readonly after
+## account (cross)
+account_value=0.0 margin_used=0.0 maintenance_margin_used=0.0 withdrawable=0.0 time=1791877918742
+health (equity / k×MM): None
+positions: none
+
+NOTE: account value is 0 on Hyperliquid testnet. Fund it at https://app.hyperliquid-testnet.xyz/faucet before `live_once`.
+
+## 2026-10-13T07:55:42Z probe: 0.01 test HYPE HyperEVM -> Core via system address 0x2222…2222 (does it create the Core account?)
+  tx 0xf8b84ed91b0af38e4f91f3db0e663cdd060440d977976a69ec5131db94b9a5fa status 0x1 logs 1
+  t+3s role={"role":"missing"} spot={"balances":[],"evmEscrows":[{"coin":"HYPE","token":1105,"total":"0.01"}]}
+  HyperEVM HYPE left: 0.289898799399922094
