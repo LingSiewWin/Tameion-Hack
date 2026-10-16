@@ -18,6 +18,7 @@
 //! Environment:
 //!   TAMEION_URL   the service, default http://127.0.0.1:7880
 //!   TAMEION_TOKEN the agent key the owner minted on the account page (PLAN 5.31), sent as Bearer
+//!   TAMEION_MCP_TIMEOUT_SECS how long a call waits for the service, default 60
 //!
 //! Claude Code: `claude mcp add tameion -- cargo run -q -p operator --bin tameion-mcp`
 //! (or the built binary), then ask it what the treasury owes.
@@ -26,6 +27,15 @@ use serde_json::{Value, json};
 use std::io::{BufRead, Write};
 
 const PROTOCOL: &str = "2025-06-18";
+/// How long one tool call waits for the service: `TAMEION_MCP_TIMEOUT_SECS`,
+/// default 60.
+fn timeout_secs() -> u64 {
+    std::env::var("TAMEION_MCP_TIMEOUT_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .filter(|s| *s > 0)
+        .unwrap_or(60)
+}
 
 fn base() -> String {
     std::env::var("TAMEION_URL")
@@ -43,7 +53,7 @@ fn tools() -> Vec<Value> {
         json!({
             "name": "treasury_inbox",
             "annotations": { "title": "Treasury inbox", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true },
-            "description": "What the treasury agent did and needs for one policy: mode, caps, balance, the most it can pay out in a day, the last pass (and whether the model was unavailable), what was paid, what waits for the owner's tap with the agent's reason, the agent's own limit proposal and autopilot recommendation, the runway: how many days until the first bill the policy could not cover, and which, holdingsElsewhere: the bill wallet's USDC in Circle Gateway on other chains (not counted as the policy's), run: every waiting bill as one call the owner approves with one passkey tap (absent on older policies), refused: what the checks refused on the last pass and why (e.g. a payee Circle has frozen), runway.idleCover: the part of the balance no bill in 90 days needs (report it; never suggest where it should earn), owners {threshold, keys} and approvals waiting for more owners (PLAN 5.7), joinRequests (devices asking to become owners; an owner adds one only if its pairing code matches), and exposure: what the bill wallet holds outside dollars and what a 30% fall would cost in days of bills (PLAN 5.49). Read-only.",
+            "description": "The account in one read. What waits for the owner is `waiting` (with `waitingCount`): every bill to approve, seller to approve and invoice, the same items the account page counts — read that field, not one list alone. `caps` has perAction, daily and floor, plus `spent24h` (spent in the trailing 24 hours) and `leftNow` (what the contract still allows right now), read from the contract. `payees`: who the agent may pay, with `payableFrom` (unix) when each one's cooling-off ends. `pending`: a change the owner signed that waits its delay, in `words` (only what is pending). `purchases`: every paid-API buy, refused ones with why; `refused` is only the last pass's bill checks. Your own requests (from prepare_limits / prepare_mode / prepare_payees with an agent key) appear as `agentAsks`, `suggestedLimit`, `recommendAutopilot` and seller rows: one tap each for the owner. Also: mode, balance, what was paid, the runway, the last pass, invoices, owners. Read-only.",
             "inputSchema": { "type": "object", "required": ["policy"], "properties": { "policy": addr } }
         }),
         json!({
@@ -61,20 +71,20 @@ fn tools() -> Vec<Value> {
         json!({
             "name": "prepare_payees",
             "annotations": { "title": "Prepare payee approval (owner signs)", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false },
-            "description": "Calldata for the OWNER'S PASSKEY to approve (allow=true) or revoke (allow=false) payees. This tool cannot sign: it returns the exact call and its description in words; the owner signs on the Tameion page. Approving a payee starts the contract's cooling-off; revoking is instant.",
-            "inputSchema": { "type": "object", "required": ["policy", "payees"], "properties": { "policy": addr, "payees": { "type": "array", "items": addr }, "allow": { "type": "boolean", "default": true } } }
+            "description": "Ask the owner to approve (allow=true) or revoke (allow=false) payees. You cannot sign: the answer says who signs (`signer`: only the owner's passkey), when it applies (`applies`: an approval starts the contract's cooling-off; a revocation is instant) and what the owner sees (`ownerSees`). Called with an agent key, the request is kept and shows on the account page as one row with your `reason`, one tap for the owner; tell your user to open the account page.",
+            "inputSchema": { "type": "object", "required": ["policy", "payees"], "properties": { "policy": addr, "payees": { "type": "array", "items": addr }, "allow": { "type": "boolean", "default": true }, "reason": { "type": "string", "description": "why, in one sentence the owner reads beside the tap" } } }
         }),
         json!({
             "name": "prepare_limits",
             "annotations": { "title": "Prepare limits (owner signs)", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false },
-            "description": "Calldata for the owner's passkey to set the agent's limits (per-action cap, daily cap, reserve floor, in USDC). Tightening applies at once on the contract; loosening waits the delay and the owner can cancel. Cannot sign.",
-            "inputSchema": { "type": "object", "required": ["policy", "perAction", "daily", "floor"], "properties": { "policy": addr, "perAction": { "type": "string" }, "daily": { "type": "string" }, "floor": { "type": "string" } } }
+            "description": "Ask the owner to set the agent's limits (per payment, per day, reserve floor, in USDC). You cannot sign: the answer says `signer` (only the owner's passkey), `applies` (a cut: at once; a raise: after the account's delay, and the owner can cancel until then) and `ownerSees`. Called with an agent key, the request shows on the account page as the agent's suggestion with your `reason`, one tap for the owner.",
+            "inputSchema": { "type": "object", "required": ["policy", "perAction", "daily", "floor"], "properties": { "policy": addr, "perAction": { "type": "string" }, "daily": { "type": "string" }, "floor": { "type": "string" }, "reason": { "type": "string", "description": "why, in one sentence the owner reads beside the tap" } } }
         }),
         json!({
             "name": "prepare_mode",
             "annotations": { "title": "Prepare autonomy level (owner signs)", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false },
-            "description": "Calldata for the owner's passkey to set the autonomy level: 0 Watch (pause), 1 Propose, 2 Autopilot. Lowering applies at once; raising waits the contract's delay. Cannot sign.",
-            "inputSchema": { "type": "object", "required": ["policy", "mode"], "properties": { "policy": addr, "mode": { "type": "integer", "enum": [0, 1, 2] } } }
+            "description": "Ask the owner to set the autonomy level: 0 Watch (pause), 1 Propose, 2 Autopilot. You cannot sign: the answer says `signer` (only the owner's passkey), `applies` (lowering: at once; raising: after the account's delay, cancellable) and `ownerSees`. Called with an agent key, a request for Autopilot shows on the account page as one tap for the owner, with your `reason`.",
+            "inputSchema": { "type": "object", "required": ["policy", "mode"], "properties": { "policy": addr, "mode": { "type": "integer", "enum": [0, 1, 2] }, "reason": { "type": "string", "description": "why, in one sentence the owner reads beside the tap" } } }
         }),
         json!({
             "name": "prepare_fund",
@@ -115,7 +125,7 @@ fn tools() -> Vec<Value> {
         json!({
             "name": "invoices",
             "annotations": { "title": "Invoices waiting", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true },
-            "description": "Invoices vendors (or their agents) sent to this account and the owner has not answered yet (PLAN 5.60): payee, amountText, dueAt, everyDays (0 = one payment), early-payment terms, approvedPayee, frozen, and the agent's notes in words (does the amount match what this payee usually bills, is the payee approved). Accepting or paying one is the owner's tap on the account page. Read-only.",
+            "description": "Invoices vendors (or their agents) sent to this account and the owner has not answered yet: payee, amountText, dueAt, everyDays (0 = one payment), early-payment terms, approvedPayee, frozen, and the agent's notes in words (does the amount match what this payee usually bills, is the payee approved). Accepting or paying one is the owner's tap on the account page. Read-only.",
             "inputSchema": { "type": "object", "required": ["policy"], "properties": { "policy": addr } }
         }),
         json!({
@@ -127,15 +137,31 @@ fn tools() -> Vec<Value> {
         json!({
             "name": "records",
             "annotations": { "title": "Anchored records", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true },
-            "description": "Every anchored root of a policy (root, anchor transaction, time, event count, agent, anchor). With record_events an auditor recomputes a root from the events and compares it with the chain.",
+            "description": "Every anchored root of the account (root, anchor transaction, time, event count, agent, anchor contract). To check one yourself: fetch its events with record_events and recompute the root as the service's llms.txt describes (keccak256 Merkle tree, RFC 6962 split, 0x00 leaf / 0x01 node prefixes over each event's `canonical` bytes), then compare with `rootOf(agent)` on the anchor contract. A match covers the anchored bytes; `note`/`kind` are human text beside them.",
             "inputSchema": { "type": "object", "required": ["policy"], "properties": { "policy": addr } }
         }),
         json!({
             "name": "record_events",
             "annotations": { "title": "Record events", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false },
-            "description": "The events behind one anchored root (NDJSON as written before anchoring), for an audit.",
+            "description": "The events behind one anchored root, as written before anchoring: each line's `canonical` (hex) is the committed bytes, in order; `seq`, `at`, `kind` and `note` are carried for people. Recompute the root from `canonical` alone (see records).",
             "inputSchema": { "type": "object", "required": ["policy", "root"], "properties": { "policy": addr, "root": { "type": "string" } } }
         }),
+        json!({
+            "name": "watch_address",
+            "annotations": { "title": "Watch an address", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true },
+            "description": "Read-only report for any address (no key, nothing sent): recurring bills found in its USDC history with evidence, 30-day liquidity, its USDC in Circle Gateway on other chains, what the agent would pay vs ask under given caps, and the max loss. Returns a job id; poll pass_status. Chains: arc-testnet, arbitrum, base, ethereum.",
+            "inputSchema": { "type": "object", "required": ["address"], "properties": { "address": addr, "chain": { "type": "string", "default": "arc-testnet" }, "days": { "type": "integer", "default": 90 } } }
+        }),
+    ]
+}
+
+/// The gold desk's tools (dropped from the product on 2026-10-16, docs/109
+/// §10): kept, and still routed in [`call`], but never listed, so an agent
+/// is not offered a product that is gone. Removed with the desk's code.
+#[allow(dead_code)]
+fn desk_tools() -> Vec<Value> {
+    let addr = json!({ "type": "string", "description": "0x… address" });
+    vec![
         json!({
             "name": "desk",
             "annotations": { "title": "The trader's desk", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true },
@@ -166,12 +192,6 @@ fn tools() -> Vec<Value> {
             "description": "Issue the lender's kit for one deal: a borrowing-base statement (held, eligible / consigned / not eligible, share offset, printed maximum loss, eligible value after it, who controls the offset) signed by the desk's statement key, the deal's steps disclosed against the desk's root with each counterparty's signature, and the root anchored on chain now (costs the service a little gas). A lender checks it at /lender or with scripts/verify_desk.py. Needs an agent key with `run`.",
             "inputSchema": { "type": "object", "required": ["policy", "deal"], "properties": { "policy": addr, "deal": { "type": "string" } } }
         }),
-        json!({
-            "name": "watch_address",
-            "annotations": { "title": "Watch an address", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true },
-            "description": "Read-only report for any address (no key, nothing sent): recurring bills found in its USDC history with evidence, 30-day liquidity, its USDC in Circle Gateway on other chains, what the agent would pay vs ask under given caps, and the max loss. Returns a job id; poll pass_status. Chains: arc-testnet, arbitrum, base, ethereum.",
-            "inputSchema": { "type": "object", "required": ["address"], "properties": { "address": addr, "chain": { "type": "string", "default": "arc-testnet" }, "days": { "type": "integer", "default": 90 } } }
-        }),
     ]
 }
 
@@ -194,20 +214,20 @@ async fn call(http: &reqwest::Client, name: &str, args: &Value) -> Result<Value,
             "POST",
             format!("{b}/api/level1/prepare-payees"),
             Some(
-                json!({ "policy": s("policy"), "payees": args["payees"], "allow": args["allow"].as_bool().unwrap_or(true) }),
+                json!({ "policy": s("policy"), "payees": args["payees"], "allow": args["allow"].as_bool().unwrap_or(true), "reason": args["reason"] }),
             ),
         ),
         "prepare_limits" => (
             "POST",
             format!("{b}/api/level1/prepare-limits"),
             Some(
-                json!({ "policy": s("policy"), "perAction": s("perAction"), "daily": s("daily"), "floor": s("floor") }),
+                json!({ "policy": s("policy"), "perAction": s("perAction"), "daily": s("daily"), "floor": s("floor"), "reason": args["reason"] }),
             ),
         ),
         "prepare_mode" => (
             "POST",
             format!("{b}/api/level1/prepare-mode"),
-            Some(json!({ "policy": s("policy"), "mode": args["mode"] })),
+            Some(json!({ "policy": s("policy"), "mode": args["mode"], "reason": args["reason"] })),
         ),
         "prepare_fund" => (
             "POST",
@@ -312,7 +332,7 @@ async fn call(http: &reqwest::Client, name: &str, args: &Value) -> Result<Value,
     {
         req = req.bearer_auth(t.trim());
     }
-    let resp = req.send().await.map_err(|e| format!("{url}: {e}"))?;
+    let resp = req.send().await.map_err(|e| transport_words(&url, &e))?;
     let status = resp.status();
     let text = resp.text().await.map_err(|e| e.to_string())?;
     if !status.is_success() {
@@ -335,6 +355,23 @@ async fn call(http: &reqwest::Client, name: &str, args: &Value) -> Result<Value,
     })
 }
 
+/// What an agent reads when the service did not answer (docs/60 P-184): "error
+/// sending request" read as "the service is down" after a slow read.
+fn transport_words(url: &str, e: &reqwest::Error) -> String {
+    if e.is_timeout() {
+        format!(
+            "no answer from {url} in {} s; the call may still complete. Read treasury_inbox before retrying, so nothing is asked twice.",
+            timeout_secs()
+        )
+    } else if e.is_connect() {
+        format!(
+            "the Tameion service at {url} is not reachable ({e}); check TAMEION_URL and that the service runs"
+        )
+    } else {
+        format!("{url}: {e}")
+    }
+}
+
 fn reply(id: &Value, result: Value) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "result": result })
 }
@@ -346,7 +383,7 @@ fn error(id: &Value, code: i64, message: String) -> Value {
 #[tokio::main]
 async fn main() {
     let http = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(60))
+        .timeout(std::time::Duration::from_secs(timeout_secs()))
         .build()
         .expect("http client");
     let stdin = std::io::stdin();
@@ -381,7 +418,7 @@ async fn main() {
                     "protocolVersion": PROTOCOL,
                     "capabilities": { "tools": {} },
                     "serverInfo": { "name": "tameion", "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": "Tameion is a treasury account that pays a company's recurring bills by itself inside a limit the owner set, and can prove every payment. These tools read the account, run a pass, and prepare calls for the owner's passkey; none of them can add a payee, raise a cap or withdraw. One spends: buy_service has the service pay a seller the owner already approved, from the account's agent key and inside the contract's caps (it needs an agent key with the buy scope). Start with treasury_inbox."
+                    "instructions": "Tameion is the account an agent operator gives its agents: they pay in USDC (paid APIs over x402, bills and invoices) only to payees the owner approved and only up to the mandate one contract enforces; a raise waits a delay anyone can see, a cut is instant, and every payment lands in a book anchored on chain. These tools read the account, run a pass, and prepare changes the owner signs with a passkey; none of them can add a payee, raise a cap or withdraw. One spends: buy_service has the service pay a seller the owner already approved, inside the caps (it needs an agent key with the buy scope). Start with treasury_inbox; what waits for the owner is its `waiting` list."
                 }),
             ),
             "ping" => reply(&id, json!({})),
@@ -426,8 +463,8 @@ mod annotation_tests {
             // Spending is the one call that cannot be undone (PLAN 5.54).
             assert_eq!(
                 a["destructiveHint"],
-                name == "buy_service" || name == "send_milestone",
-                "{name}: only buying, and a signed step that can move the trader's hedge, are destructive"
+                name == "buy_service",
+                "{name}: only buying is destructive"
             );
             if name.starts_with("prepare_")
                 || matches!(
