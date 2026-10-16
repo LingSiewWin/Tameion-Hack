@@ -316,10 +316,17 @@ export class ApiError extends Error {
   }
 }
 
+/** The owner's device token on the routes the service gates as `prepare` (`prepare-*`, `fund`; docs/60 P-170): once an
+ *  agent key exists the gate asks for a credential, and the page that holds the owner's passkey has this one, not a key. */
+const ownerDevice = (path: string, policy?: string): Record<string, string> => {
+  const tok = policy && /^\/api\/level1\/(prepare-|fund$)/.test(path) ? reserveToken.get(policy) : null;
+  return tok ? { "x-tameion-device": tok } : {};
+};
+
 export async function post<T = Record<string, unknown>>(path: string, body: unknown, policy?: string): Promise<T> {
   const r = await fetch(path, {
     method: "POST",
-    headers: { "content-type": "application/json", ...authHeaders(policy) },
+    headers: { "content-type": "application/json", ...authHeaders(policy), ...ownerDevice(path, policy) },
     body: JSON.stringify(body),
   });
   const d = await r.json().catch(() => ({}));
