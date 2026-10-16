@@ -1,9 +1,10 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronsUpDown, Link2, Pencil, Plus, ReceiptText } from "lucide-react";
+import { Check, ChevronsUpDown, Link2, Pencil, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useSse } from "@/app/agent/live";
 import { TopBar } from "@/components/brand";
 import { Columns, Page, PageHeader } from "@/components/layout/page";
 import { Badge } from "@/components/ui/badge";
@@ -44,7 +45,13 @@ const cached = (policy: string): Inbox | undefined => {
 export function Account({ tenant, cfg, onSwitch, onNew }: { tenant: Tenant; cfg: Cfg; onSwitch: (t: Tenant) => void; onNew: () => void }) {
   const { busy, track } = useBusy();
   const refresh = useInvalidate(tenant.policy);
-  const [live, setLive] = useState(false);
+  // The account's live stream, read with fetch so it carries this device's token (docs/60 P-173: `EventSource`
+  // cannot send a header, and once an agent key exists the stream answers 401 without one). Named events:
+  // `hello` on connect, `pass` as a check queues / runs / ends, `inbox` after any change to the account.
+  const stream = useSse(`/api/level1/events?policy=${tenant.policy}`, tenant.policy, (e) => {
+    if (e.event === "inbox" || e.event === "pass") void refresh();
+  });
+  const live = stream.link.kind === "open";
   // /desk's "Add guardians" links here as /?keys: open Settings → Owners, where the Keys panel is (docs/104).
   const keysLink = typeof location !== "undefined" && new URLSearchParams(location.search).has("keys");
   const [settingsOpen, setSettingsOpen] = useState(keysLink);
@@ -77,23 +84,6 @@ export function Account({ tenant, cfg, onSwitch, onNew }: { tenant: Tenant; cfg:
     });
   }, [tenant.policy, refresh]);
 
-  // A live stream if the service offers one; polling otherwise.
-  useEffect(() => {
-    if (typeof EventSource === "undefined") return;
-    const es = new EventSource(`/api/level1/events?policy=${tenant.policy}`);
-    // Named events (the service's stream): `hello` on connect, `pass` as a
-    // check queues / runs / ends, `inbox` after any change to the account.
-    es.addEventListener("hello", () => setLive(true));
-    es.addEventListener("inbox", () => refresh());
-    es.addEventListener("pass", () => refresh());
-    es.onopen = () => setLive(true);
-    es.onerror = () => {
-      es.close();
-      setLive(false);
-    };
-    return () => es.close();
-  }, [tenant.policy, refresh]);
-
   // Whose account this is, decided by this browser's own key (docs/60 P-72 H3): a
   // link to someone else's account opens read-only, never as "Your treasury".
   const { pub, owns } = ownerPub(tenant, inbox?.owners?.keys);
@@ -118,12 +108,22 @@ export function Account({ tenant, cfg, onSwitch, onNew }: { tenant: Tenant; cfg:
   // page does it the moment it is ready, also after a reload.
   // A chain clock behind the page's refuses the first try (TooEarly): it tries
   // again every 15 s while the change is still pending (P-49).
+  // Never while an owner action is in flight (docs/60 P-171): a cancel the owner signed must reach the chain
+  // before this page applies the change it cancels.
+  const inFlight = useRef(0);
+  useEffect(() => {
+    inFlight.current = busy;
+  }, [busy]);
   const eta = inbox?.pending?.eta;
   useEffect(() => {
     if (!eta) return;
     let t: ReturnType<typeof setTimeout>;
     let tries = 0;
     const apply = async () => {
+      if (inFlight.current > 0) {
+        t = setTimeout(apply, 3_000);
+        return;
+      }
       try {
         await post("/api/level1/mode", { policy: tenant.policy, action: "apply" }, tenant.policy);
       } catch {
@@ -323,11 +323,6 @@ function AccountMenu({
             <Plus className="size-4" /> Start another account
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem asChild>
-            <a href="/level1">
-              <ReceiptText className="size-4" /> Receipts, proof &amp; advanced
-            </a>
-          </DropdownMenuItem>
           <DropdownMenuItem asChild>
             <a href="/classic">Classic view</a>
           </DropdownMenuItem>
