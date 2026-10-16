@@ -1,0 +1,34 @@
+Header toggle Human / Agent (docs/107 T1) — Playwright run, 2026-10-16 17:08 +08
+Method: Playwright (own browser context, isolated storage), page at http://localhost:3094 = a test-only proxy (outside the repo)
+in front of the console dev server :3000 (`next dev`, API -> the real service :7880); the proxy answers only /api/desk/live
+(sample frames: S3's route is not on :7880 yet). Account: demo desk desk-arc-0223 (its real device token, loaded from
+~/.tameion/desks, never printed). Viewport 1280x800, dark.
+
+Run 1 (verbatim output)
+1 /desk first load: {"url":"/desk","current":"Human* Agent","stored":null}
+2 Tab order until Agent: ["Tameion","Payments","Human","Agent"]
+3 focus ring on Agent (keyboard): {"text":"Agent","outlineStyle":"solid","outlineWidth":"2px","focusVisible":true}
+4 after Enter: {"url":"/agent","current":"Human Agent*","stored":"agent"}
+5 reload /agent: {"url":"/agent","current":"Human Agent*","stored":"agent"}
+7 click Human: {"url":"/desk","stored":"human","history":2}
+8 fresh tab on /desk, stored=human -> stays: /desk
+9 stored=agent, same tab with history, goto /desk -> stays: {"url":"/desk","history":4}
+10 localStorage throws: toggle still switches, page errors: {"url":"/agent","pageerrors":[]}
+page errors in the normal run: []
+(`*` = aria-current="page". Screenshot of the focus ring on the Agent segment: s4-toggle-focus.png, a 2 px green outline.)
+
+Run 1, line 6 (a "fresh tab" made with ctx.newPage() + goto) ended at /desk with stored=agent — NOT a bug in the rule, a harness
+artifact: Playwright's newPage() opens about:blank first, so history.length is 2 and the rule (history.length <= 1) correctly
+does not redirect. A real new tab (target=_blank / window.open) starts at 1:
+
+Run 2 (verbatim output)
+popup history.length at start (may already be after redirect): 1
+window.open(/desk) with stored=agent ends at: /agent
+window.open(/desk) with stored=human ends at: /desk
+
+What this shows
+- Two segments in <nav aria-label="View">, beside the theme button; aria-current follows the page; Tab reaches both in reading order; Enter follows.
+- The choice is written when it is made (a click or Enter on a segment) to localStorage `tameion.surface`, read back after a reload.
+- A tab opened straight onto /desk opens on the chosen surface; Back, a link, or the toggle itself never redirects (cases 7, 9).
+- localStorage that throws on every access (private window, blocked site data): no page error, the toggle still switches (case 10).
+Not run: a phone with a screen reader; Safari / Firefox (Chromium 155 only).

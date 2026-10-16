@@ -1,0 +1,83 @@
+Agent view (/agent) and Human home (/desk) — design seat S4, docs/107 — run output, 2026-10-16 17:57 +08
+
+ENVIRONMENT
+- Console: `next dev` on :3000 (the PM's). Its /api goes to the PM's service on :7880, restarted 17:18 on the binary with S3's feed and S2's
+  invite routes. Browser: Playwright, Chromium 155, a fresh isolated context per run, `localhost` origins (P-152).
+- The pages in the screenshots are the real pages. The data is one of three kinds, and every screenshot file says which in its name:
+  * `real-7880`  the real feed of the PM's service, GET /api/desk/live, for desk-gold-2329 (the funded demo desk; its policy read from the service
+    by name, GET /api/level1/name/desk-gold-2329; its device token from the key directory, put in the test browser's storage, never printed) and
+    for desk-arc-0223 (no exchange connected).
+  * `real-7903`  the same route on S3's own instance (runtime/seat-S3), which holds the six orders its engine placed and read back on the
+    funded demo account (proof/agent-feed-2026-10-16.txt). Same code, other records.
+  * `sample`     frames shaped like the brief, from a test-only server outside the repo (scratchpad `s4-sample-proxy.mjs`, :3094 in front of
+    :3000). It is a server and not `page.route()` because `route.fulfill` answers once and closes, and a live feed streams. Scenarios:
+    live, margin under the rule, margin below 1.0x, halt with a read-back mismatch, flat, venue error, feed gone quiet, 404, 403. Never in product code.
+  The human home screenshots are real service data (desk-gold-2329, desk-init-0132, desk-arc-0223); two files add ONE sample proposal
+  (GET /api/desk/party/proposals answered by the test) to show S2's approve row.
+
+1. UNIT TESTS of the pure core (apps/console/test/agent-feed.test.mts), `node --test test/*.mts`, 17:51:28 +0800
+   (verbatim; the first 12 are this seat's, the rest were already there)
+   ✔ the parser delivers the same events however the network cut the stream
+   ✔ CRLF and lone CR end lines too, even when the CR and LF arrive apart
+   ✔ an event cut off by the end of the stream is never delivered
+   ✔ a frame is read as sent: decimals stay strings, odd rows are dropped, nothing is filled in
+   ✔ a frame that cannot be trusted is refused with its reason, a halt is never assumed away
+   ✔ a venue that did not answer is unknown, not flat
+   ✔ the margin meter turns red under 1.0x, amber under the rule, green at it
+   ✔ numbers line up on the point and are never rounded in a column
+   ✔ money prints to the cent, keeps digits below a cent, and signs gains and losses
+   ✔ a pair of small figures is printed at the same places, signed, never rounded to a cent
+   ✔ time: a clock, the date once it is not today, an age
+   ✔ account events in words: known ones read like a log, unknown ones are shown, not dropped
+   ℹ tests 51   ℹ pass 51   ℹ fail 0
+   `npx tsc --noEmit` exit 0.   `npx eslint src test` exit 0.   (apps/console, same minute)
+
+2. AXE-CORE 4.10.2 on the live DOM (tags wcag2a wcag2aa wcag21a wcag21aa wcag22aa best-practice), 17:5x +0800, 27 page / state / width / theme
+   combinations, 5.5 to 13.5 s after load so the feed has arrived. Verbatim:
+   /agent | sample live | 1280px | dark | no violations | rules passed: 45
+   /agent | sample live | 390px | dark | no violations | rules passed: 45
+   /agent | sample live | 1280px | light | no violations | rules passed: 45
+   /agent | sample live | 390px | light | no violations | rules passed: 45
+   /agent | sample halt | 1280px | light | no violations | rules passed: 45
+   /agent | sample halt | 390px | dark | no violations | rules passed: 45
+   /agent | sample margin below 1x | 1280px | light | no violations | rules passed: 45
+   /agent | sample margin under rule | 1280px | light | no violations | rules passed: 45
+   /agent | sample flat | 390px | light | no violations | rules passed: 44
+   /agent | sample venue error | 1280px | light | no violations | rules passed: 44
+   /agent | sample stale | 1280px | light | no violations | rules passed: 45
+   /agent | sample no route (404) | 1280px | light | no violations | rules passed: 44
+   /agent | sample not owner (403) | 390px | dark | no violations | rules passed: 44
+   /agent | REAL :7880 desk-gold-2329 | 1280px | dark | no violations | rules passed: 39
+   /agent | REAL :7880 desk-gold-2329 | 390px | light | no violations | rules passed: 39
+   /agent | REAL :7903 desk-gold-2329 (six orders) | 1280px | light | no violations | rules passed: 44
+   /agent | REAL :7880 desk-arc-0223 (no exchange) | 1280px | dark | no violations | rules passed: 44
+   /desk | REAL desk-init-0132 (3 open deals, no exchange) | 1280px | dark | no violations | rules passed: 40
+   /desk | REAL desk-init-0132 | 390px | light | no violations | rules passed: 40
+   /desk | REAL desk-init-0132 | 1280px | light | no violations | rules passed: 40
+   /desk | REAL desk-init-0132 | 390px | dark | no violations | rules passed: 40
+   /desk | REAL desk-arc-0223 (empty inbox) | 1280px | light | no violations | rules passed: 40
+   /desk | REAL desk-arc-0223 (empty inbox) | 390px | dark | no violations | rules passed: 40
+   /desk | REAL desk-gold-2329 (keys nag) | 1280px | dark | no violations | rules passed: 40
+   /desk | REAL desk-gold-2329 (keys nag) | 390px | light | no violations | rules passed: 40
+   /desk | desk-init-0132 + SAMPLE approval row | 1280px | light | no violations | rules passed: 40
+   /desk | desk-init-0132 + SAMPLE approval row | 390px | dark | no violations | rules passed: 40
+   (An earlier run of the same check on the first build found 6 light-mode contrast violations and one label-in-name; fixed, docs/60 P-154.)
+
+3. NO HORIZONTAL OVERFLOW at 390 px: `document.documentElement.scrollWidth` = 390 = clientWidth on every phone capture, and no element
+   of any panel reaches past its panel's right edge (checked on the live and halt pages: `clipped: []`).
+
+4. KEYBOARD, FOCUS, PERSISTENCE, BLOCKED STORAGE: proof/design-toggle-2026-10-16.txt.
+
+5. THE FEED AS THE PAGE READ IT (real, :7880, desk-gold-2329, one frame at 17:37:32, from the page's own text):
+   Live · Last tick 17:37:32 · Venue ••4D09 · Halt None · Margin: "—", "No open position, so there is nothing to maintain." ·
+   Account value 945.22 · Margin used 0.00 · Maintenance 0.00 · Safety: Halt None, Pass latency —, Last pass —, Last anchor 06:14:40 0x7837d2…eea1 ·
+   Funding: last hour 0.0000, 24 hours −0.0194 · Positions: Flat · Orders: none.
+   S3's frame for the same desk on :7903 (read 17:3x with curl): positions [], accountValue "945.222847", funding24h "-0.019399", six lastOrders
+   (each readBack "match"), passLatencyMs 3391. The page prints 945.22 and −0.0194 (the pair of small funding figures at 4 places, never cents).
+
+WHAT THIS DOES NOT PROVE
+- No real frame with an open position, a real HALT or a real mismatch: the funded demo account is flat and the engine has not halted. Those states
+  are proven with sample frames through the same code (files named `sample`).
+- `next build` (the PM's) was not run; the static export of /agent is unverified.
+- `:3000` shows /agent stuck on "Connecting" to a browser that accepts gzip (docs/60 P-152); the runs here ask the dev server for identity encoding.
+- Chromium 155 only; no Safari, Firefox, phone or screen reader.

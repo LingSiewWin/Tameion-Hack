@@ -1,0 +1,63 @@
+Fix round 1, S4-1 (docs/103): the owner's device may read an account's events — 2026-10-16 20:11 +08
+
+THE CHANGE (crates/operator/src/bin/tameion-app.rs, `token_gate`, after the "no agent keys, nothing to gate" return)
+    if scope == "read" && level1::reserve_token_ok(&tenant, header(raw, "x-tameion-device")) {
+        return None;
+    }
+  One guard. `read` only: a run, an import, a buy or a prepare still needs a key with that scope. The header is the one the desk's routes
+  already accept (`desk_owner`) and the one the Agent view already sends (`app/agent/live.ts` `headersFor`). Same device token, same
+  constant-time hash check (`level1::reserve_token_ok`), the tenant being the one the request names.
+
+THE TEST (crates/operator/tests/app_http.rs: the_owners_device_reads_a_keyed_account_without_its_agent_key)
+  Two accounts, each with an agent key (scope read) and its own device token. Asserts, against the real binary on a random port:
+    no token on A's events ............................ 401, body names scope "read"
+    A's own device on A's events ...................... 200, text/event-stream, first event `event: hello`
+    B's device on A's events .......................... 401
+    a made-up token ................................... 401
+    A's agent key (Bearer) ............................ 200 (unchanged)
+    A's device on A's purchases.jsonl (another read route) ... 200;  B's device there ... 401
+    A's device on POST /api/level1/run ................ 401, scope "run"  (the device opens no run)
+
+  It bites. With the guard switched off (the condition made `scope == "no-such-scope"` for one run, 20:06:02, then put back and checked):
+    thread 'the_owners_device_reads_a_keyed_account_without_its_agent_key' panicked at crates/operator/tests/app_http.rs:1227:5:
+    assertion `left == right` failed: the account's own device reads its events: HTTP/1.1 401 Unauthorized
+    {"error":"this account's owner requires an agent key: send Authorization: Bearer <token> (the owner mints one on the account page)","scope":"read"}
+      left: 401   right: 200
+    test result: FAILED. 0 passed; 1 failed
+  With the guard (20:06:16): `test the_owners_device_reads_a_keyed_account_without_its_agent_key ... ok`.
+
+GATES (20:07–20:08)
+  cargo test -p operator: lib 140 passed (1 ignored); bin tameion-app 10; tameion-mcp 1; app_http 10 (incl. the existing read-gate test, still 401 without a
+    token); claude_transport 4; hedge_advice 4; mcp_stdio 1. No failures.
+  cargo clippy -p operator -- -D warnings: finished, no warnings.
+  cargo fmt -p operator -- --check: exit 0.
+
+REAL DATA, NOT A MOCK (20:09:07): my own service instance (PORT=7894, runtime/seat-S4, the binary built from the fixed source) holding a copy of the
+funded demo desk's real tenant record (desk-gold-2329, arbitrum-sepolia, ONE agent key), with the desk's real device token from the key directory
+(never printed). curl:
+    no token ................................. HTTP/1.1 401 Unauthorized  {"error":"this account's owner requires an agent key: send Authorization: Bearer <token> …","scope":"read"}
+    x-tameion-device: <the owner's token> .... HTTP/1.1 200 OK   retry: 3000 / event: hello / data: {"at":1792152547,"policy":"0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308"}
+    x-tameion-device: nope ................... HTTP/1.1 401 Unauthorized
+  The same owner token on the PM's :7880 (still the pre-fix binary, nothing restarted by me): HTTP/1.1 401 Unauthorized.
+  The browser check of the Events panel on :7880 waits for the PM's rebuild and restart.
+
+THE PANEL (apps/console/src/app/agent/panels.tsx): the paste instruction is gone. The stream already went out with the device token; a refusal now reads
+  "This device cannot read the account's events." (design-agent-view-fix1-real-7880-gold-events-before-restart-1280-dark.png shows that sentence on
+  the unrestarted :7880, which still refuses; after the restart the same panel should list events — to be re-checked in the browser.)
+
+S4-2, S4-3, S4-4 IN THE BROWSER (Playwright on :3094 -> :3000; sample frames now carry venueTime and fundingReadAt; real feed where stated)
+  venue reading frozen, frames still arriving (sample), 9 s after load:
+    strip: "Live", "Last tick 20:09:55 · 0 s ago"; Positions "Stale for 9 s"; Margin "Stale for 9 s", badge "Last seen: inside the rule", meter grey;
+    Orders "as of 20:09:55"; Funding "as of 19:44:55" (when its payments were read); Safety "None".   -> design-agent-view-fix1-sample-venue-frozen-1280-dark.png
+  connection gone quiet (sample), 11 s after the last frame:
+    strip "No update", Halt "None at the last tick"; Safety Halt "None at the last tick" (grey, was a green tick); panels "Stale for 11 s".
+                                                                                            -> design-agent-view-fix1-sample-connection-quiet-1280-dark.png
+  real feed, desk-arc-0223, no exchange connected (:7880):
+    "The venue's numbers are not shown: no exchange account is connected to this desk."; Margin footer "USDC." (it no longer claims "from the venue's own
+    account state"); Orders "No order recorded by this service yet."; Pass latency "not recorded"; Last pass "not recorded".
+                                                                                            -> design-agent-view-fix1-real-7880-no-exchange-1280-dark.png
+  console gates 20:10:54: tsc exit 0, eslint exit 0, node --test 53 pass (13 in test/agent-feed.test.mts, 2 new: the frame's venueTime and
+  fundingReadAt, and the venue-age rule).
+
+NOT DONE: the :7880 browser re-check of the Events panel (needs the PM's restart); a real frame whose venue reading freezes (the service nulls a reading older
+than 2 s, so only the sample can produce that state); the info item S4-i (the fresh-tab redirect) stays the founder's call.
