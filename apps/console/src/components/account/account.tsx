@@ -151,9 +151,6 @@ export function Account({ tenant, cfg, onSwitch, onNew }: { tenant: Tenant; cfg:
   return (
     <AccountProvider value={ctx}>
       <TopBar>
-        <a href="/desk" className="px-2 text-sm text-muted-foreground hover:text-foreground">
-          Desk
-        </a>
         <AccountMenu tenant={tenant} all={all} name={name} onSwitch={onSwitch} onNew={onNew} onRenamed={() => bump((x) => x + 1)} />
         <SettingsSheet
           open={settingsOpen}
