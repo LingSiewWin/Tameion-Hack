@@ -13,6 +13,7 @@
 //! Contracts are deployed from `contracts/bytecode/` (`scripts/snapshot_bytecode.sh`)
 //! so the host needs no forge.
 
+use crate::decide::{Configured, Decider};
 use crate::local::Choice;
 use crate::reasoner::{Reasoner, RuleBased};
 use crate::watch::{ChainPreset, rpc_for};
@@ -2591,7 +2592,7 @@ pub async fn run(
 
     // PLAN 5.54: what the agent bought since the last anchored record joins
     // this pass's record, so every purchase and its reason is under a root.
-    let (bought, bought_upto) = crate::x402::unanchored_events(app_dir, &t.policy);
+    let (mut bought, bought_upto) = crate::x402::unanchored_events(app_dir, &t.policy);
     // Receipt v1 (docs/76 §6): settled purchases are bill evidence. They are
     // detected here, beside the pass, not inside it: the pass keeps the
     // agent's own payments out of what it learns schedules from (an agent
@@ -2601,15 +2602,58 @@ pub async fn run(
     // owner's list see it — and the pass does not pay it.
     let receipts = crate::x402::settled_transfers(app_dir, &t.policy);
     let receipt_bills = crate::x402::receipt_bills(&history, &receipts);
-    // TAMEION_REASONER (docs/86); unset keeps Claude-if-keyed-else-rule.
-    let mut report = match crate::local::choose() {
-        Choice::Local(r) => drive(client, config, r, now, history, bought).await?,
-        Choice::Cloud(r) => drive(client, config, r, now, history, bought).await?,
-        Choice::CloudRedacted(r) => drive(client, config, r, now, history, bought).await?,
-        Choice::Rule => drive(client, config, RuleBased, now, history, bought).await?,
+    // TAMEION_REASONER (docs/86); unset keeps Claude-if-keyed-else-rule. The
+    // decider goes with it (docs/112): a cloud choice with a key gets the
+    // model, local or rule the rule; one memory file per account.
+    let choice = crate::local::choose();
+    let decider = Configured::for_choice(&choice).with_memory(
+        tenants_dir(app_dir)
+            .join(format!("{policy:#x}"))
+            .join("decisions.jsonl"),
+    );
+    // Invoices waiting for the owner are decision points too: decided here,
+    // before the pass, so their records sit under this pass's root.
+    let (invoice_events, invoice_records) = decide_invoices(
+        app_dir,
+        t,
+        &client,
+        config.detection,
+        &history,
+        &decider,
+        now,
+    )
+    .await;
+    bought.extend(invoice_events);
+    let mut report = match choice {
+        Choice::Local(r) => drive(client, config, r, &decider, now, history, bought).await?,
+        Choice::Cloud(r) => drive(client, config, r, &decider, now, history, bought).await?,
+        Choice::CloudRedacted(r) => {
+            drive(client, config, r, &decider, now, history, bought).await?
+        }
+        Choice::Rule => drive(client, config, RuleBased, &decider, now, history, bought).await?,
     };
     if !report["anchorTx"].is_null() {
         crate::x402::mark_anchored(app_dir, &t.policy, bought_upto);
+    }
+    // The invoices' decisions hold once the pass that records them did: kept
+    // (so the next pass does not decide them again), and a refused one is
+    // declined -- declining pays nothing, and the owner is not left a chore.
+    for r in &invoice_records {
+        remember_invoice_decision(app_dir, &t.policy, r);
+        if r["decision"]["action"] == "refuse"
+            && let Some(id) = r["id"].as_str().and_then(|i| B256::from_str(i).ok())
+        {
+            let _ = crate::invoice::decide(app_dir, &t.policy, id, false, now.as_unix() as u64);
+            if let Some(list) = report["blocked"].as_array_mut() {
+                list.push(json!({
+                    "counterparty": r["counterparty"], "amount": r["amount"], "invoice": r["id"],
+                    "problems": [r["decision"]["why"]],
+                }));
+            }
+        }
+    }
+    if let Some(list) = report["decisions"].as_array_mut() {
+        list.extend(invoice_records);
     }
     if let Some(list) = report["obligationsList"].as_array_mut() {
         let listed: std::collections::BTreeSet<String> = list
@@ -2637,6 +2681,142 @@ pub async fn run(
     report["historyReadFromBlock"] = json!(reached);
     report["historyNote"] = json!(history_note);
     Ok(report)
+}
+
+/// Where an account keeps the agent's decision on each invoice (docs/112):
+/// one JSON line per invoice, written once the pass that recorded it held.
+pub fn invoice_decisions_path(app_dir: &Path, policy: &str) -> PathBuf {
+    tenants_dir(app_dir).join(format!("{}.invoice-decisions.jsonl", policy.to_lowercase()))
+}
+
+/// The agent's decisions on the account's invoices, oldest first: `id`,
+/// `decision` (`action`, `basis`, `why`, `by`, `model`), `note`, the `case`.
+pub fn invoice_decisions(app_dir: &Path, policy: &str) -> Vec<Value> {
+    fs::read_to_string(invoice_decisions_path(app_dir, policy))
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .collect()
+}
+
+fn remember_invoice_decision(app_dir: &Path, policy: &str, record: &Value) {
+    use std::io::Write;
+    if let Ok(mut f) = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(invoice_decisions_path(app_dir, policy))
+    {
+        let _ = writeln!(f, "{record}");
+    }
+}
+
+/// docs/112: the decision on every invoice still waiting for the owner and
+/// not decided before, as events for this pass's record and as report
+/// lines. `ask` leaves the invoice in the owner's list with the agent's why
+/// (an Escalation: the statement's "needs you"); `refuse` is a blocked
+/// Decision (the statement's "refused"), declined by `run` once the pass held.
+async fn decide_invoices<D: Decider + Sync>(
+    app_dir: &Path,
+    t: &Tenant,
+    client: &ArcClient,
+    detection: ledger::DetectionConfig,
+    history: &[ledger::Transfer],
+    decider: &D,
+    now: Timestamp,
+) -> (Vec<(u64, ledger::EventBody)>, Vec<Value>) {
+    let decided: std::collections::BTreeSet<String> = invoice_decisions(app_dir, &t.policy)
+        .iter()
+        .filter_map(|v| v["id"].as_str().map(str::to_string))
+        .collect();
+    let pending: Vec<Value> = crate::invoice::pending(app_dir, &t.policy)
+        .into_iter()
+        .filter(|l| l["id"].as_str().is_some_and(|i| !decided.contains(i)))
+        .collect();
+    let Ok(policy) = Address::from_str(&t.policy) else {
+        return (Vec::new(), Vec::new());
+    };
+    if pending.is_empty() {
+        return (Vec::new(), Vec::new());
+    }
+    let payees: Vec<Address> = pending
+        .iter()
+        .filter_map(|l| l["payee"].as_str().and_then(|p| Address::from_str(p).ok()))
+        .collect();
+    let (since, balance, authority) = tokio::join!(
+        client.attested_since_among(policy, &payees),
+        client.policy_balance(policy),
+        client.authority(policy),
+    );
+    let since: std::collections::BTreeMap<String, u64> = since
+        .map(|v| v.into_iter().map(|(a, s)| (format!("{a:#x}"), s)).collect())
+        .unwrap_or_default();
+    let balance = balance.unwrap_or_else(|_| Money::zero(Currency::Usdc));
+    // The per-payment cap the contract holds: above it the agent never pays.
+    let cap = authority
+        .ok()
+        .and_then(|a| u128::try_from(a.per_action_cap.to_minor()).ok());
+    // Whom history shows the owner paid: the references for the look-alike rule.
+    let known: Vec<String> = history
+        .iter()
+        .filter(|tr| tr.direction == ledger::Direction::Out && !detection.is_dust(tr.amount))
+        .map(|tr| tr.counterparty.as_str().to_lowercase())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let mut events = Vec::new();
+    let mut records = Vec::new();
+    for line in &pending {
+        let payee = line["payee"].as_str().unwrap_or("").to_lowercase();
+        let Some(case) = crate::decide::invoice_case(
+            line,
+            history,
+            detection,
+            since.get(&payee).copied(),
+            &known,
+            cap,
+            now.as_unix(),
+        ) else {
+            continue;
+        };
+        let (d, note) = crate::decide::decide_or_rule(decider, &case).await;
+        let amount = Money::minor(
+            i128::try_from(case.amount_minor).unwrap_or(0),
+            Currency::Usdc,
+        );
+        let counterparty = ledger::Counterparty::new(&payee);
+        let said = crate::decide::record_line(&d, note.as_deref());
+        let body = if d.action == crate::decide::Action::Refuse {
+            ledger::EventBody::Decision {
+                counterparty,
+                amount,
+                decision: ledger::Decision::Block,
+                action_hash: ledger::ActionHash::from_bytes(
+                    B256::from_str(&case.id).map(|b| b.0).unwrap_or_default(),
+                ),
+                confidence: ledger::Confidence::clamped(case.confidence),
+                balance_seen: balance,
+                weakest_evidence: Some(ledger::Provenance::CounterpartyAsserted),
+                evidence: vec![format!("invoice:{}", case.id)],
+                note: format!("Invoice {} refused and declined. {said}", case.id),
+            }
+        } else {
+            ledger::EventBody::Escalation {
+                counterparty,
+                amount,
+                reason: format!("invoice: {}", d.why),
+                note: format!(
+                    "Invoice {} is the owner's to accept or decline. {said}",
+                    case.id
+                ),
+            }
+        };
+        events.push((now.as_unix().max(0) as u64, body));
+        records.push(json!({
+            "kind": "invoice", "id": case.id, "counterparty": payee, "amount": amount.to_string(),
+            "decision": d, "note": note, "allowed": case.allowed, "case": case,
+        }));
+    }
+    (events, records)
 }
 
 /// Blocks re-read below the cache's newest block on every pass, in case
@@ -2720,10 +2900,11 @@ fn save_history(app_dir: &Path, t: &Tenant, h: &History) {
     }
 }
 
-async fn drive<R: Reasoner>(
+async fn drive<R: Reasoner, D: Decider + Sync>(
     client: ArcClient,
     config: Config,
     reasoner: R,
+    decider: &D,
     now: Timestamp,
     history: Vec<ledger::Transfer>,
     bought: Vec<(u64, ledger::EventBody)>,
@@ -2736,9 +2917,29 @@ async fn drive<R: Reasoner>(
         );
     }
     let outcome = op
-        .run_once(now, Some(history), true)
+        .run_once_deciding(now, Some(history), true, decider)
         .await
         .map_err(|e| e.to_string())?;
+    // docs/112: the decider's sentence leads the reasons a Needs-you or a
+    // refused row shows (the account page joins `problems` into its why).
+    let why = |o: &ledger::Obligation| {
+        outcome
+            .decisions
+            .iter()
+            .find(|(c, ..)| c.id == o.cycle_key())
+            .map(|(_, d, _)| d.why.clone())
+    };
+    let reasons = |o: &ledger::Obligation, v: &ledger::Verdict| {
+        why(o)
+            .into_iter()
+            .chain(v.problems().map(|c| format!("{}: {}", c.name, c.detail)))
+            .collect::<Vec<_>>()
+    };
+    let fallbacks = outcome
+        .decisions
+        .iter()
+        .filter(|(_, d, note)| note.is_some() && d.by != ledger::ActorKind::Model)
+        .count();
     Ok(json!({
         "now": now.as_unix(),
         "balance": outcome.balance.to_string(),
@@ -2751,8 +2952,16 @@ async fn drive<R: Reasoner>(
             let saved = outcome.early.iter().find(|(k, _)| *k == o.cycle_key()).map(|(_, m)| m.to_string());
             json!({ "counterparty": o.counterparty.to_string(), "amount": o.typical_amount.to_string(), "tx": format!("{tx:#x}"), "early": saved.is_some(), "saved": saved, "dueAt": o.next_due.as_unix() })
         }).collect::<Vec<_>>(),
-        "escalated": outcome.escalated.iter().map(|(o, v)| json!({ "counterparty": o.counterparty.to_string(), "amount": o.typical_amount.to_string(), "decision": v.decision.to_string(), "problems": v.problems().map(|c| format!("{}: {}", c.name, c.detail)).collect::<Vec<_>>() })).collect::<Vec<_>>(),
-        "blocked": outcome.blocked.iter().map(|(o, v)| json!({ "counterparty": o.counterparty.to_string(), "amount": o.typical_amount.to_string(), "problems": v.problems().map(|c| format!("{}: {}", c.name, c.detail)).collect::<Vec<_>>() })).collect::<Vec<_>>(),
+        "escalated": outcome.escalated.iter().map(|(o, v)| json!({ "counterparty": o.counterparty.to_string(), "amount": o.typical_amount.to_string(), "decision": v.decision.to_string(), "problems": reasons(o, v) })).collect::<Vec<_>>(),
+        "blocked": outcome.blocked.iter().map(|(o, v)| json!({ "counterparty": o.counterparty.to_string(), "amount": o.typical_amount.to_string(), "problems": reasons(o, v) })).collect::<Vec<_>>(),
+        "decider": outcome.decider,
+        "deciderFallbacks": fallbacks,
+        "decisions": outcome.decisions.iter().map(|(c, d, note)| json!({
+            // The address, as every other row of the report; the case's label beside it.
+            "kind": "bill", "id": c.id, "counterparty": c.id.split('@').next().unwrap_or(&c.payee), "label": c.payee,
+            "amount": format!("{} USDC", crate::decide::usdc(c.amount_minor)),
+            "decision": d, "note": note, "allowed": c.allowed, "case": c,
+        })).collect::<Vec<_>>(),
         "pendingSignature": outcome.pending_signature.iter().map(|p| json!({
             "cycleKey": p.cycle_key,
             "actionHash": p.action_hash,
@@ -2760,6 +2969,7 @@ async fn drive<R: Reasoner>(
             "amount": p.amount.to_string(),
             "settlementKey": p.settlement_key,
             "stale": p.stale,
+            "why": outcome.decisions.iter().find(|(c, ..)| c.id == p.cycle_key).map(|(_, d, _)| d.why.clone()),
             "to": format!("{:#x}", p.call.to),
             "data": p.call.data,
             "summary": p.call.summary,

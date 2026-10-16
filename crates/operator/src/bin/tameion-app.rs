@@ -3635,9 +3635,20 @@ impl App {
                 }
             }
         }
+        // docs/112: the agent's decision on each waiting invoice (ask, with its
+        // why; a refused one is declined and listed under `refused`).
+        let agent_said: std::collections::HashMap<String, Value> =
+            level1::invoice_decisions(&self.dir, &tenant.policy)
+                .into_iter()
+                .filter_map(|r| Some((r["id"].as_str()?.to_string(), r["decision"].clone())))
+                .collect();
         let invoices: Vec<Value> = pending_invoices
             .into_iter()
             .map(|mut l| {
+                if let Some(d) = l["id"].as_str().and_then(|i| agent_said.get(i)) {
+                    l["why"] = d["why"].clone();
+                    l["agent"] = d.clone();
+                }
                 let t = terms.as_ref().filter(|t| t.recompute() == t.fingerprint);
                 let payee = l["payee"].as_str().and_then(|x| Address::from_str(x).ok());
                 let amount = l["amount"]
