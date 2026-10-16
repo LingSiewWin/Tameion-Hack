@@ -1,0 +1,50 @@
+UAT fix wave 2 — /agent on an operator account (docs/110 §4 U1 step 11, docs/60 P-172 item 10) — S4 seat, 2026-10-16 21:53 +08
+
+WHAT WAS WRONG (U1, step 11): /agent on an operator account showed the gold desk's view (positions, margin, funding for a venue it does not have),
+"Last pass / Last anchor: not recorded" while the chain held the account's anchor, and a purchase only as "Account changed: buy".
+
+WHAT /agent IS NOW (apps/console/src/app/agent/* only)
+  Always, from the account's own record: Mandate (left now, spent in 24 h against the daily cap as a meter, per payment, per day, what the account holds,
+  the mode in words, a waiting change in words) · Pass & anchor (halt, last pass and what it read, pass latency, last anchor read from the account's
+  anchored records with its transaction, agent key lifetime) · Payments (time, payee by the account's own name, the reason the agent gave, USDC, receipt) ·
+  Refused (the checks' reason in words, and why the agent wanted it) · Asked of you (what the agents' keys asked, with their reasons) · Events.
+  Only when the desk's feed names a connected exchange account: Positions, Orders & read-back, Margin, Funding, Hedge (halt, passes).
+  Data sources: GET /api/level1/inbox (caps.spent24h and caps.leftNow, paid, purchases, refused, waiting, agentAsks, lastPass), GET /api/level1/records
+  (the last anchored record: time, event count, anchorTx), GET /api/watch/<lastPass.id> (the pass's own progress.elapsedSecs), the event stream (and it
+  refetches the inbox and the records the moment an event arrives, so a purchase shows with its amount, seller and reason). Nothing from the desk's
+  feed is used for the anchor, the pass or the payments.
+
+HOW IT WAS RUN
+  The pages are the PM's dev server (:3000, hot-reloaded with this code). A second `next dev -p 3002` is refused by Next 16 ("Another next dev server is
+  already running", pid 54292), so a test-only proxy outside the repo (scratchpad s4-sample-proxy.mjs, :3094) served the pages from :3000 and sent /api/* to the
+  service named for the run: S3's instance :7903 (the new inbox fields) or the PM's :7880. Browser: Playwright, Chromium 155, a fresh context per file.
+  Logins: the operator accounts' tenant records from the service that holds them, and an agent key with the READ scope from ~/.tameion/test-keys (the page
+  sends it as a Bearer; never printed). The demo desk logs in with its device token, as before.
+
+RUNS (verbatim from the checks; axe-core 4.10.2, tags wcag2a wcag2aa wcag21a wcag21aa wcag22aa best-practice; 13 s after load)
+  operator-u3-7903 | 1280px | dark  | overflow: false | pageerrors: 0 | axe: no violations
+  operator-u3-7903 | 390px  | dark  | overflow: false | pageerrors: 0 | axe: no violations
+  operator-u3-7903 | 1280px | light | overflow: false | pageerrors: 0 | axe: no violations
+  operator-u3-7903 | 390px  | light | overflow: false | pageerrors: 0 | axe: no violations
+  operator-u1-7880 | 1280px | dark  | overflow: false | pageerrors: 0 | axe: no violations
+  operator-u1-7880 | 390px  | dark  | overflow: false | pageerrors: 0 | axe: no violations
+  operator-u1-7880 | 1280px | light | overflow: false | pageerrors: 0 | axe: no violations
+  exchange-connected-gold2329-7880 | 1280px | dark  | overflow: false | pageerrors: 0 | axe: no violations
+  exchange-connected-gold2329-7880 | 390px  | light | overflow: false | pageerrors: 0 | axe: no violations
+
+WHAT THE SCREENSHOTS SHOW (real data)
+  uat-fix2-agent-operator-u3-7903-*  account uat-u3-agent on S3's instance (it reports the new fields): Mandate "Left now 0.003 USDC", "Spent in 24 h 0.002 of
+    0.008" (meter 25 %), per payment 0.003, per day 0.008, holds 0.048, Autopilot in words; no venue panel at all; Payments: 20:42:27 127.0.0.1 "ETH mid price before
+    the hedge check (uat-u3, inside the cap)" 0.002 with a receipt; Refused in words: "the price 0.002000 USDC is above the most you allowed for one call (0.001000
+    USDC)", "the account refuses: the price is above the per-payment limit", "the account refuses: the account is not on Autopilot; …", each with the agent's reason;
+    Asked of you: three asks of the key uat-u3-ops with their reasons, and two waiting approvals; Pass & anchor: "none yet" for the last pass and the last anchor
+    (this account has not completed a pass; GET /api/level1/records answers 404, which is an answer, not a failure); Waiting for you 2.
+  uat-fix2-agent-operator-u1-7880-*  U1's uat-u1-acme on the PM's :7880 (an older binary: no spent24h/leftNow in its inbox): Payments with their reasons ("BTC price for the investor
+    update", "ETH price for the weekly research report"), the refusal in words, "Last pass 21:21:55 · 26 min ago, 0 bills found · 3 transfers read", "Pass latency 32 s"
+    (from the pass's own job record), "Last anchor 21:22:25 0x83141a…b4cc — the record of 2 events, on chain" with the explorer link (the account's own anchor, which the UAT
+    found missing from this page: it is read from the account's records now, not from the desk feed). The Mandate says plainly "This service did not report what was spent in the last 24 hours." and shows "—" for Left now: nothing is invented.
+  uat-fix2-agent-exchange-connected-gold2329-7880-*  the demo desk (an exchange account is connected): Positions, Orders, Margin, Funding and Hedge appear, beside the
+    account's own panels, and the Events panel reads the gated account's stream with the owner's device token.
+
+GATES (21:52:27): npx tsc --noEmit exit 0; npx eslint src test exit 0; node --test test/*.mts 57 pass, 0 fail (17 in agent-feed.test.mts; 4 new this wave: paid rows, refused rows
+  in words, the agents' asks, the spent share).
