@@ -38,13 +38,15 @@ export function Activity() {
               size="sm"
               onClick={() =>
                 download(`${base}-statement.csv`, [
-                  ["date_utc", "payee", "amount_usdc", "paid_by", "transaction", "explorer", "account"],
+                  // `reason`: what each payment was for, as the service sends it (docs/60 P-177): the book says why, not only what.
+                  ["date_utc", "payee", "amount_usdc", "paid_by", "reason", "transaction", "explorer", "account"],
                   ...paid.map((p) => [
                     p.at ? new Date(p.at * 1000).toISOString() : "",
                     // A file for the accountant: the name, and the address it stands for.
                     `${partyOf(inbox, p.counterparty)?.label} (${p.counterparty})`,
                     usd(p.amount),
                     p.by === "you" ? "owner" : "agent",
+                    p.reason ?? "",
                     p.tx || "",
                     p.explorer || "",
                     tenant.policy,
@@ -60,13 +62,14 @@ export function Activity() {
               onClick={() =>
                 // Xero / QuickBooks bank-statement import: money out is negative.
                 download(`${base}-bank-statement.csv`, [
-                  ["*Date", "*Amount", "Payee", "Description", "Reference"],
+                  ["*Date", "*Amount", "Payee", "Description", "Reference", "Reason"],
                   ...paid.map((p) => [
                     p.at ? new Date(p.at * 1000).toISOString().slice(0, 10) : "",
                     "-" + usd(p.amount).replace(/,/g, ""),
                     partyOf(inbox, p.counterparty)?.label ?? p.counterparty,
                     `USDC payment to ${p.counterparty} by ${p.by === "you" ? "the owner" : "the agent"} from ${tenant.policy}`,
                     p.tx || "",
+                    p.reason ?? "",
                   ]),
                 ])
               }
