@@ -1,10 +1,10 @@
 "use client";
 
-import { CheckCircle2, Download, History, ReceiptText, ShoppingBag } from "lucide-react";
+import { Ban, CheckCircle2, Download, History, ReceiptText, ShoppingBag } from "lucide-react";
 import { EmptyState, Section } from "@/components/layout/section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ago, labelOf, usd } from "@/lib/tameion";
+import { ago, labelOf, noAddr, usd } from "@/lib/tameion";
 import { Receipt, useAccount } from "./ctx";
 import { partyOf, Payee } from "./payee";
 
@@ -22,6 +22,8 @@ export function Activity() {
   const { inbox, tenant } = useAccount();
   if (!inbox) return null;
   const paid = inbox.paid;
+  // The last few purchases the account refused (the service records each with its reason).
+  const refusedBuys = (inbox.purchases ?? []).filter((x) => x.status === "refused").slice(0, 5);
   const base = `tameion-${(labelOf(tenant) || tenant.policy.slice(0, 10)).replace(/[^\w.-]+/g, "_")}`;
   return (
     <Section
@@ -102,12 +104,32 @@ export function Activity() {
                   )}
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {p.bought && p.reason ? `${p.reason} · ` : ""}
+                  {p.reason ? `${p.reason} · ` : ""}
                   {p.early ? `Paid early for the invoice's discount: saved ${usd(p.saved)} USDC · ` : ""}
                   {p.at ? ago(p.at) : ""} {p.explorer && <>· <Receipt href={p.explorer} /></>}
                 </p>
               </div>
               <span className="figures shrink-0 text-sm font-semibold">{usd(p.amount)}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {/* What the agent tried and the account refused, in the service's own words (docs/60 P-174): nothing was paid. */}
+      {!!refusedBuys.length && (
+        <ol className="divide-y border-t" aria-label="Refused, nothing paid">
+          {refusedBuys.map((r, i) => (
+            <li key={r.at + (r.url ?? "") + i} className="flex gap-3 px-4 py-3 sm:px-5">
+              <Ban className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
+              <div className="min-w-0 flex-1 text-sm">
+                <p className="leading-snug">
+                  Refused: buying from <span className="font-medium">{r.host || "a seller"}</span> — nothing paid
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {r.reason ? `${r.reason} · ` : ""}
+                  {noAddr(r.why)} · {ago(r.at)}
+                </p>
+              </div>
+              <span className="figures shrink-0 text-sm text-muted-foreground line-through">{usd(r.amount)}</span>
             </li>
           ))}
         </ol>
