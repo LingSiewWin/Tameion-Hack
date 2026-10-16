@@ -1805,7 +1805,66 @@ impl App {
         )
     }
 
-    async fn level1_prepare_payees(&self, body: &str) -> Vec<u8> {
+    /// docs/60 P-182 (UAT U3): a prepared call says who signs it and when it
+    /// takes effect, by the contract's rule; when an agent key asked for it,
+    /// the request is kept (`agent_api::record_ask`) and the inbox shows it as
+    /// one row on the account page with the agent's reason and one tap.
+    async fn prepared(
+        &self,
+        policy: Address,
+        kind: &str,
+        raw: &str,
+        mut out: Value,
+        mut ask: Value,
+        applies: impl FnOnce(&Value, u64) -> String,
+    ) -> Vec<u8> {
+        let tenant = level1::load(&self.dir, &format!("{policy:#x}"));
+        let status = match &tenant {
+            Some(t) => tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                level1::mode_action(t, "status"),
+            )
+            .await
+            .ok()
+            .and_then(Result::ok),
+            None => None,
+        };
+        out["signer"] = json!(operator::agent_api::SIGNER);
+        out["applies"] = json!(match &status {
+            Some(s) => applies(s, s["delaySecs"].as_u64().unwrap_or(0)),
+            None => "at once if it lowers what the agent may do; if it raises it, after the account's delay, and the owner can cancel until then".to_string(),
+        });
+        let asker = tenant.as_ref().and_then(|t| {
+            let b = header(raw, "authorization")?
+                .strip_prefix("Bearer ")?
+                .trim();
+            let h = level1::token_hash(b);
+            t.agent_tokens.iter().find(|k| k.hash == h).map(|k| {
+                if k.label.is_empty() {
+                    k.id.clone()
+                } else {
+                    k.label.clone()
+                }
+            })
+        });
+        out["ownerSees"] = json!(match asker {
+            Some(by) => {
+                ask["by"] = json!(by);
+                ask["at"] = json!(now_secs());
+                match operator::agent_api::record_ask(&self.dir, &format!("{policy:#x}"), kind, ask)
+                {
+                    Ok(()) => {
+                        "one row on the account page with your reason; the owner's one tap there signs it. Tell your user to open the account page."
+                    }
+                    Err(_) => "the owner signs it on the account page",
+                }
+            }
+            None => "sign it on this page",
+        });
+        json_reply("200 OK", out)
+    }
+
+    async fn level1_prepare_payees(&self, body: &str, raw: &str) -> Vec<u8> {
         let v: Value = match serde_json::from_str(body) {
             Ok(v) => v,
             Err(e) => return json_reply("400 Bad Request", json!({ "error": e.to_string() })),
@@ -1832,7 +1891,14 @@ impl App {
         // F10 (PLAN 5.47): never attest an address the issuer has frozen.
         let tenant = level1::load(&self.dir, &format!("{policy:#x}")).filter(|_| allow);
         if let Some(t) = tenant {
-            let frozen = level1::issuer_frozen(&t, &payees).await;
+            // P-184: a stalled RPC read held this answer for 60 s. Five seconds,
+            // then open: USDC itself refuses a transfer to a frozen address.
+            let frozen = tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                level1::issuer_frozen(&t, &payees),
+            )
+            .await
+            .unwrap_or_default();
             if !frozen.is_empty() {
                 return json_reply(
                     "422 Unprocessable Entity",
@@ -1841,10 +1907,15 @@ impl App {
             }
         }
         let call = level1::prepare_payees_with(policy, &payees, allow);
-        json_reply(
-            "200 OK",
+        self.prepared(
+            policy,
+            "payees",
+            raw,
             json!({ "to": format!("{:#x}", call.to), "data": call.data, "summary": call.summary }),
+            json!({ "payees": payees.iter().map(|a| format!("{a:#x}")).collect::<Vec<_>>(), "allow": allow, "reason": v["reason"] }),
+            move |_, delay| operator::agent_api::payees_apply(allow, delay),
         )
+        .await
     }
 
     fn level1_prepare_cancel(&self, body: &str) -> Vec<u8> {
@@ -2086,7 +2157,7 @@ impl App {
         )
     }
 
-    fn level1_prepare_limits(&self, body: &str) -> Vec<u8> {
+    async fn level1_prepare_limits(&self, body: &str, raw: &str) -> Vec<u8> {
         let v: Value = match serde_json::from_str(body) {
             Ok(v) => v,
             Err(e) => return json_reply("400 Bad Request", json!({ "error": e.to_string() })),
@@ -2108,10 +2179,31 @@ impl App {
             );
         };
         match level1::prepare_limits(policy, per, day, floor) {
-            Ok(call) => json_reply(
-                "200 OK",
-                json!({ "to": format!("{:#x}", call.to), "data": call.data, "summary": call.summary }),
-            ),
+            Ok(call) => {
+                let asked = [per.to_minor(), day.to_minor(), floor.to_minor()];
+                self.prepared(
+                    policy,
+                    "limits",
+                    raw,
+                    json!({ "to": format!("{:#x}", call.to), "data": call.data, "summary": call.summary }),
+                    json!({ "perAction": per.to_string(), "daily": day.to_string(), "floor": floor.to_string(), "reason": v["reason"] }),
+                    move |s, delay| {
+                        let m = |k: &str| {
+                            ledger::Money::parse(
+                                s["caps"][k].as_str().unwrap_or("0").trim_end_matches(" USDC").trim(),
+                                ledger::Currency::Usdc,
+                            )
+                            .map_or(0, |x| x.to_minor())
+                        };
+                        operator::agent_api::limits_apply(
+                            [m("perAction"), m("daily"), m("floor")],
+                            asked,
+                            delay,
+                        )
+                    },
+                )
+                .await
+            }
             Err(e) => json_reply("400 Bad Request", json!({ "error": e })),
         }
     }
@@ -3484,6 +3576,140 @@ impl App {
                 "nextDue": b.next_due,
             })).collect::<Vec<_>>(),
         });
+        // UAT U3 (docs/60 P-180…P-182): what an outside agent is told — its own
+        // requests as one-tap rows for the owner, what it may still spend and
+        // whom it may pay (read from the contract), and one list of everything
+        // that waits for the owner: the same items the page counts.
+        {
+            let now = now_secs();
+            let usdc = |s: &str| {
+                ledger::Money::parse(s.trim_end_matches(" USDC").trim(), ledger::Currency::Usdc)
+                    .ok()
+            };
+            let asks = operator::agent_api::asks(&self.dir, &tenant.policy, now);
+            let delay = status["delaySecs"].as_u64().unwrap_or(0);
+            // P-182: an agent's limits request, shown where the page already puts
+            // the agent's limit suggestion (one tap, "Set it").
+            if let Some(a) = asks.get("limits") {
+                let asked = ["perAction", "daily", "floor"].map(|k| a[k].as_str().and_then(usdc));
+                let cur = ["perAction", "daily", "floor"]
+                    .map(|k| status["caps"][k].as_str().and_then(usdc));
+                if asked.iter().all(Option::is_some) && asked != cur {
+                    let change = |i: usize, name: &str| match (&cur[i], &asked[i]) {
+                        (Some(c), Some(n)) if c != n => Some(format!("{name} {c} → {n}")),
+                        _ => None,
+                    };
+                    let changes: Vec<String> = [
+                        change(0, "per payment"),
+                        change(1, "per day"),
+                        change(2, "floor"),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect();
+                    let minor =
+                        |x: [Option<ledger::Money>; 3]| x.map(|m| m.map_or(0, |m| m.to_minor()));
+                    let applies =
+                        operator::agent_api::limits_apply(minor(cur), minor(asked), delay);
+                    let [p, d, f] = asked.map(|m| m.map(|m| m.to_string()).unwrap_or_default());
+                    reply["suggestedLimit"] = json!({
+                        "perAction": p, "daily": d, "floor": f, "byAgent": true, "askedAt": a["at"],
+                        "basis": format!(
+                            "your agent ({}) asked: {}{}; it applies {applies}",
+                            a["by"].as_str().unwrap_or("an agent key"),
+                            changes.join(", "),
+                            a["reason"].as_str().filter(|r| !r.is_empty()).map(|r| format!(" (\"{r}\")")).unwrap_or_default()
+                        ),
+                    });
+                }
+            }
+            // P-182: an agent's request for Autopilot, where the page already asks
+            // for it ("Turn autopilot on").
+            if asks["mode"]["mode"].as_u64() == Some(2)
+                && status["mode"] != "Autopilot"
+                && status["pending"].is_null()
+                && !tenant.keyless
+            {
+                reply["recommendAutopilot"] = json!(true);
+                reply["autopilotAsk"] = json!({ "by": asks["mode"]["by"], "reason": asks["mode"]["reason"], "at": asks["mode"]["at"] });
+            }
+            // P-182: payees an agent asked for, as one-tap approval rows beside the
+            // sellers it wanted (bound to these terms for ten minutes, as those are).
+            if asks["payees"]["allow"] == true
+                && let (Some(t), Some(client)) = (
+                    terms.as_ref().filter(|t| t.recompute() == t.fingerprint),
+                    rc.as_ref(),
+                )
+            {
+                let wanted: Vec<Address> = asks["payees"]["payees"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|x| x.as_str().and_then(|s| Address::from_str(s).ok()))
+                    .collect();
+                let listed: Vec<String> = reply["sellersToApprove"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|s| s["seller"].as_str().map(str::to_lowercase))
+                    .collect();
+                if let Ok(Some(approved)) = client.attested_among(policy, &wanted).await {
+                    let deadline = now + 600;
+                    for a in wanted.iter().filter(|a| {
+                        let a = format!("{a:#x}");
+                        !approved.contains(&a) && !listed.contains(&a)
+                    }) {
+                        let call = arc::prepare_payee_batch_bound(
+                            policy,
+                            &[*a],
+                            true,
+                            t.fingerprint,
+                            deadline,
+                        );
+                        if let Some(rows) = reply["sellersToApprove"].as_array_mut() {
+                            rows.push(json!({
+                                "seller": format!("{a:#x}"), "host": "a payee it asked for", "amount": status["caps"]["perAction"],
+                                "reason": asks["payees"]["reason"], "askedBy": asks["payees"]["by"],
+                                "to": format!("{:#x}", call.to), "data": call.data, "summary": call.summary, "boundUntil": deadline,
+                            }));
+                        }
+                    }
+                }
+            }
+            // P-181: spent and left in the trailing 24 hours, and whom the agent may
+            // pay and from when, read from the contract (not learned from refusals).
+            if let (Some(client), true) = (rc.as_ref(), tenant.deployed) {
+                let named = operator::parties::named_in(&reply);
+                let (auth, left, since) = tokio::join!(
+                    client.authority(policy),
+                    client.remaining_allowance(policy),
+                    client.attested_since_among(policy, &named),
+                );
+                if let Ok(a) = auth {
+                    reply["caps"]["spent24h"] = json!(a.spent_today.to_string());
+                }
+                if let Ok(l) = left {
+                    reply["caps"]["leftNow"] = json!(l.to_string());
+                }
+                if let Ok(list) = since {
+                    reply["payees"] = json!(list
+                        .into_iter()
+                        .filter(|(_, at)| *at > 0)
+                        .map(|(a, at)| json!({ "address": format!("{a:#x}"), "approvedAt": at, "payableFrom": at + delay, "payableNow": now >= at + delay }))
+                        .collect::<Vec<_>>());
+                }
+            }
+            // P-180: everything that waits for the owner, in one list.
+            let list = |k: &str| reply[k].as_array().cloned().unwrap_or_default();
+            let waiting = operator::agent_api::waiting(
+                &list("needsYou"),
+                &list("sellersToApprove"),
+                &list("invoices"),
+            );
+            reply["waitingCount"] = json!(waiting.len());
+            reply["waiting"] = json!(waiting);
+            reply["agentAsks"] = asks;
+        }
         // docs/81: every party in this reply, named for a person. The owner's
         // names go to the owner's device (`X-Tameion-Device`), or to an agent
         // key — on an account with keys the gate has already checked one.
@@ -6137,7 +6363,7 @@ impl App {
         }
     }
 
-    fn level1_prepare_mode(&self, body: &str) -> Vec<u8> {
+    async fn level1_prepare_mode(&self, body: &str, raw: &str) -> Vec<u8> {
         let v: Value = match serde_json::from_str(body) {
             Ok(v) => v,
             Err(e) => return json_reply("400 Bad Request", json!({ "error": e.to_string() })),
@@ -6163,10 +6389,23 @@ impl App {
             );
         }
         match level1::prepare_mode(policy, mode) {
-            Ok(call) => json_reply(
-                "200 OK",
-                json!({ "to": format!("{:#x}", call.to), "data": call.data, "summary": call.summary }),
-            ),
+            Ok(call) => {
+                self.prepared(
+                    policy,
+                    "mode",
+                    raw,
+                    json!({ "to": format!("{:#x}", call.to), "data": call.data, "summary": call.summary }),
+                    json!({ "mode": mode, "reason": v["reason"] }),
+                    move |s, delay| {
+                        operator::agent_api::mode_apply(
+                            operator::agent_api::mode_number(s["mode"].as_str().unwrap_or("")),
+                            mode,
+                            delay,
+                        )
+                    },
+                )
+                .await
+            }
             Err(e) => json_reply("400 Bad Request", json!({ "error": e })),
         }
     }
@@ -7041,10 +7280,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         app.level1_prepare_coowners(&body).await
                     }
                     ("POST", "/api/level1/prepare-payees") => {
-                        app.level1_prepare_payees(&body).await
+                        app.level1_prepare_payees(&body, &req).await
                     }
                     ("POST", "/api/level1/prepare-cancel") => app.level1_prepare_cancel(&body),
-                    ("POST", "/api/level1/prepare-mode") => app.level1_prepare_mode(&body),
+                    ("POST", "/api/level1/prepare-mode") => {
+                        app.level1_prepare_mode(&body, &req).await
+                    }
                     ("POST", "/api/level1/prepare-withdraw") => app.level1_prepare_withdraw(&body),
                     ("POST", "/api/level1/notify") => app.level1_notify(&body).await,
                     ("POST", "/api/level1/push-subscribe") => {
@@ -7256,7 +7497,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         app.level1_invoice_decide(&body).await
                     }
                     ("POST", "/api/level1/buy") => app.level1_buy(&body).await,
-                    ("POST", "/api/level1/prepare-limits") => app.level1_prepare_limits(&body),
+                    ("POST", "/api/level1/prepare-limits") => {
+                        app.level1_prepare_limits(&body, &req).await
+                    }
                     ("POST", "/api/level1/prepare-recovery") => app.level1_prepare_recovery(&body),
                     ("POST", "/api/level1/prepare-fund") => app.level1_prepare_fund(&body).await,
                     ("POST", "/api/level1/prepare-schedule") => {

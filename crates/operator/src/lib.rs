@@ -25,6 +25,7 @@
 //! container and a fresh machine. The log is the audit record; the chain is
 //! the authority on what has already been paid.
 
+pub mod agent_api;
 pub mod audit;
 pub mod claude;
 pub mod desk;

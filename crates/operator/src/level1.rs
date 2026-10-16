@@ -2277,14 +2277,25 @@ pub async fn mode_action(t: &Tenant, action: &str) -> Result<Value, String> {
         "explorerTx": tx.map(|h| format!("{}/tx/{h:#x}", c.explorer)),
         "mode": g.mode.label(),
         "delaySecs": g.delay_secs,
-        "pending": g.pending.as_ref().map(|p| json!({
-            "kinds": p.kinds,
-            "mode": p.mode.label(),
-            "perActionCap": p.per_action_cap.to_string(),
-            "dailyCap": p.daily_cap.to_string(),
-            "reserveFloor": p.reserve_floor.to_string(),
-            "eta": p.eta_unix,
-        })),
+        // Only what is pending (bit 0 limits, bit 1 mode): a mode-only change
+        // printed its unused cap slots, "0.000000 USDC" (docs/60 P-181).
+        "pending": g.pending.as_ref().map(|p| {
+            let caps = [p.per_action_cap.to_string(), p.daily_cap.to_string(), p.reserve_floor.to_string()];
+            let mut v = json!({
+                "kinds": p.kinds,
+                "eta": p.eta_unix,
+                "words": crate::agent_api::pending_words(u64::from(p.kinds), p.mode.label(), [&caps[0], &caps[1], &caps[2]], p.eta_unix),
+            });
+            if p.kinds & 1 != 0 {
+                v["perActionCap"] = json!(caps[0]);
+                v["dailyCap"] = json!(caps[1]);
+                v["reserveFloor"] = json!(caps[2]);
+            }
+            if p.kinds & 2 != 0 {
+                v["mode"] = json!(p.mode.label());
+            }
+            v
+        }),
         "explorer": c.explorer,
     }))
 }
