@@ -1,0 +1,66 @@
+# The sixth review's findings against the fixed verifiers, pages and service (docs/99 W1-W11)
+# written 2026-10-16 06:09:50 +0800; service rebuilt and restarted 06:09; console export 06:09
+# venue replay: the reviewer's stub answers Hyperliquid's position and fills as the account stood at VENUE_NOW_MS, rebuilt
+# from its real fills (review6/fills-real.json); candles, funding and both chain nodes are the real network
+
+## W1: the real 05:33 whole-stock file with STOCK-B's kit deleted (nothing re-signed), replayed at 05:35:00
+   FAIL: this file leaves out stock: its deals hold 0.128603 oz, the desk says it holds 0.321507 oz; ask for the whole file
+   exit 1
+## W2: both statements re-signed (throwaway key as the trader's) with the short read as 0.193 instead of 0.321, at 05:35:00
+   ===== STOCK-A-1792100001 (1 of 2)
+      the statement read a short of 0.193000; the account held 0.321 then
+   e. PAXG position of 0x557e1e07… at the statement's time: -0.193 now, less 3 fills since = -0.321; short the statement read 0.193000: False
+   FAIL: e
+   ===== STOCK-B-1792100001 (2 of 2)
+      the statement read a short of 0.193000; the account held 0.321 then
+   e. PAXG position of 0x557e1e07… at the statement's time: -0.193 now, less 3 fills since = -0.321; short the statement read 0.193000: False
+   FAIL: e
+   FAIL: STOCK-A-1792100001, STOCK-B-1792100001
+   exit 1
+## Control: the real file, untouched, at 05:33:40 (before the sale) — must still PASS
+   ===== STOCK-A-1792100001 (1 of 2)
+   e. PAXG position of 0x557e1e07… at the statement's time: -0.321 now, less 0 fills since = -0.321; short the statement read 0.321000: True
+   w. 2 statements at this root: they state 1 desk total(s); 0.321507 oz held against 0.321507; 0.321000 oz offset against the 0.321000 short, 0.321 now: True
+   PASS
+   ===== STOCK-B-1792100001 (2 of 2)
+   e. PAXG position of 0x557e1e07… at the statement's time: -0.321 now, less 0 fills since = -0.321; short the statement read 0.321000: True
+   w. 2 statements at this root: they state 1 desk total(s); 0.321507 oz held against 0.321507; 0.321000 oz offset against the 0.321000 short, 0.321 now: True
+   PASS
+   PASS
+   exit 0
+
+## The page's verifier on the same files (the reviewer's tsprobe6, which composes run() as of 05:28; W1 on the page
+## is bookError, now applied to every kits file — see the node test below)
+   W2    e: PAXG position of the exchange account at the statement's time, from Hyperliquid: -0.193000 now, less 3 fills since = -0.321000; the statement read a short of 0.193000. | The statement read a short of 0.193000; the account held 0.321000 then. | The desk s
+   W2    e: PAXG position of the exchange account at the statement's time, from Hyperliquid: -0.193000 now, less 3 fills since = -0.321000; the statement read a short of 0.193000. | The statement read a short of 0.193000; the account held 0.321000 then. | The desk s
+   W2 verdict: Do not lend on this file: STOCK-A-1792100001, STOCK-B-1792100001 failed. Open each below to see why.
+   control verdict: The whole stock holds as of 10/16/2026, 5:33:36 AM: 2 deals, 10.000 g eligible; after each deal's maximum loss, 1,313.40 USDC in all.
+
+## Unit tests: python (verify_desk.py) and node (desk-verify.ts), and the refusal words in Rust (W3)
+   test_v2_v6_refused_books (scripts.test_verify_desk.VerifyDesk.test_v2_v6_refused_books) ... ok
+   test_v5_funding_share (scripts.test_verify_desk.VerifyDesk.test_v5_funding_share) ... ~/Documents/Github/Tameion-Hack/scripts/test_verify_desk.py:44: ResourceWarning: unclosed file <_io.TextIOWrapper name='~/Documents/Github/Tameion-Hack/scripts/../apps/console/test/fixtures/desk-statements-funding.json' mode='r' encoding='UTF-8'>
+   test_v6_empty_book (scripts.test_verify_desk.VerifyDesk.test_v6_empty_book) ... ok
+   test_w1_book_that_leaves_out_a_deal (scripts.test_verify_desk.VerifyDesk.test_w1_book_that_leaves_out_a_deal) ... ok
+   Ran 4 tests in 0.225s
+   OK
+   ✔ V2: a whole-stock file is one moment of one desk, each deal once (0.284625ms)
+   ✔ V1: the morning file fails w once the short falls below what it counts (04:59:13, short 0.193) (0.053ms)
+   ✔ V3: a kit of another desk fails f under the set-up of the desk it is presented as (9.089875ms)
+   ✔ V5: the service's own statements pass g at any funding; a doubled share still fails (0.183625ms)
+   ✔ W1: a whole-stock file that leaves out a deal is refused, even with one deal left (0.099958ms)
+   ✔ W8: forty honest deals at one root pass w despite 6-place rounding (1.487334ms)
+   ℹ pass 24
+   ℹ fail 0
+   test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 125 filtered out; finished in 0.02s
+
+## W11: offset moves split by who released them (scripts/desk_metrics.py)
+   all desks {"deals": "25", "steps": "77", "signed": "67", "bought g": "135.000", "sold g": "127.500", "statements": "23", "whole-stock files": "2", "anchors": "17", "offset moves, by itself": "37", "unsigned": "10", "offset moves, owner released": "2"}
+
+## /desk in the browser, 06:09 (venue flat, no gold): "You hold no gold right now: nothing is at risk and the exchange account is flat."
+
+## Not run
+- W4, W5, W7, W10 on /desk: typecheck and lint, the flat state seen; the unread, position-left and offset-grew states not
+  produced (they need the exchange to fail a read, or a position left without gold).
+- W9: the morning task stops for the day after a 'was sent' error and logs once per reason without the hash; built, not run.
+- W2's second half (statements_all reads the exchange once for the whole book): not done; a book whose kits read different
+  shorts is refused by both verifiers (V2), so the failure is safe.

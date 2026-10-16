@@ -1,0 +1,71 @@
+# The desk on Arc testnet: desk-arc-0223 (0xcc480edeeb5b95e2fb4e8719f9139f188c2adcee, chain 5042002), the same Hyperliquid testnet account, connected from the API
+# written 2026-10-16 03:03:48 +0800 · relayer 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25 native USDC on Arc before: 0.016946066673488846
+## the venue is flat before the run
+   venue position: 0
+## hand the account over: desk-gold-2329 disconnects (one tap, instant), desk-arc-0223 connects (its owner chip)
+   {"disconnected":true}
+   {"connected":"0x557e1e07652b75abaa667223b11704165fc94d09"}
+
+# desk API proof · account 0xcc480edeeb5b95e2fb4e8719f9139f188c2adcee (chain 5042002) · deal GOLD-1792091029 · http://127.0.0.1:7880
+## the book is the owner's: no token → refused; the owner's device → the book
+{"error":"the desk is the owner's: open it on the device that opened the account, or with an agent key that can read"}
+deals 0 parties 0 venue 0x557e1e07652b75abaa667223b11704165fc94d09
+## the owner approves who may sign (a trust decision: the owner's passkey — here the Mac's Secure Enclave — signs each)
+{"parties":[{"address":"0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904","approval":{"auth":{"authenticatorData":"0x49960de5880e8c687434170f6476605b8fe4aeb9a28632c79
+{"parties":[{"address":"0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904","approval":{"auth":{"authenticatorData":"0x49960de5880e8c687434170f6476605b8fe4aeb9a28632c79
+{"parties":[{"address":"0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904","approval":{"auth":{"authenticatorData":"0x49960de5880e8c687434170f6476605b8fe4aeb9a28632c79
+## an approval without the owner's passkey → refused
+{"error":"approving who may sign needs the owner's passkey: send issued and auth (a passkey assertion over the challenge)"}
+## the owner states who holds the venue's master key (docs/87 option A), and keeps no unhedged base for this run
+{"control":"the venue master key is held by the Tameion team on testnet; no lender holds it yet"}
+{"offsetTarget":"0","unhedgedBase":"0.000 g gold"}
+## 1. the supplier's priced purchase, signed (the service moves the offset by itself)
+{"booked":"GOLD-1792091029 · bought 10.000 g of gold for 1338.27 USDC · PO-GOLD-1792091029 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)","offset":{"coins":[{"action":"Traded { size_delta: -0.321, is_buy: false, worst_px: 4141.224825, statuses: [Filled { total_sz: 0.321, avg_px: 4158.972, oid: 62814237092 }], filled_size: -0.321, read_back: -0.321 }","before":"0","coin":"PAXG","target":"-0.321507"}],"live":true,"movedError":null,"readBack":"-0.321","readBackError":null},"priceNote":null,"root":"0x19a3351614c9687fa4e344184ba1febdba49249354fb5f107bf06f421b07000a","signer":"0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904"}
+## a purchase confirmation signed by the buyer's key but naming the Supplier → refused
+{"error":"signed by 0x328fb78926cee49691851ca84f226d1c08edacb4, but Supplier signs as 0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904"}
+## an unsigned step without the owner's passkey → refused
+{"error":"a step of your own needs the owner's passkey: send issued and auth (a passkey assertion over the challenge)"}
+## 2. the vault's receipt, signed (gold flies into a vault; docs/84 §1b)
+{"booked":"GOLD-1792091029 · 10.000 g of gold into stock · VR-GOLD-1792091029 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542)","offset":null,"priceNote":null,"root":"0x16f16006bdcfc1534ea54745f8196fc61878d536beb8362ae80c93c3f8f0e779","signer":"0x8b95fdedb647236da0f266231f71440d2714d542"}
+## 3. the offset as the venue reports it (read only)
+{'account': '0x557e1e07652b75abaa667223b11704165fc94d09', 'error': None, 'mark': '4160.7', 'market': 'PAXG', 'position': '-0.321', 'readAt': 1792091047}
+## 4. the owner sends 2 g to fabrication (unsigned: the owner's own entry)
+{"booked":"GOLD-1792091029 · 2.000 g of gold to fabrication · JOB-GOLD-1792091029 · entered by the owner (their passkey; no counterparty signature)","offset":null,"priceNote":null,"root":"0xe7183774a5492f6c0781b868eb54bc1121f5732afbf3a44f96349e4d2b9bc71e","signer":""}
+## 5. the lender's kit, root anchored now
+{'held': '10.000 g gold', 'stage': 'in stock', 'eligible': {'grams': '8.000 g gold', 'valueUsdc': '1070.156890'}, 'ineligible': {'grams': '2.000 g gold', 'valueUsdc': '267.539222'}, 'offsetShareBps': '9984', 'maxLossUsdc': '27.387346', 'eligibleUsdc': '1042.769544', 'fundingUsdc': '0', 'hedgeControl': "The desk trades Hyperliquid account 0x557e1e07652b75abaa667223b11704165fc94d09 with a trade-only key: it can trade and cannot withdraw (the venue refused one, proof/hedge-testnet-nowithdraw-2026-10-13.txt); only the account's master key can withdraw. The trader states: the venue master key is held by the Tameion team on testnet; no lender holds it yet."}
+anchor {'chainId': 5042002, 'contract': '0xdab65a5380bcc2eebc3a3a91d0ad11eec95994db', 'from': '0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25', 'tx': '0x34556ccbaf3ce60779664f8f18b740f0c7a00dc2e5f4403f11b51590778ec429'}
+### the lender's check, pinned: statement key 0x62f82e3494eb9c446c161a9f52f0a90b986e5062, venue 0x557e1e07652b75abaa667223b11704165fc94d09, 6 party flags
+a. statementHash recomputed 0x2ae07c77cf610676… matches
+b. statement signature recovers to 0x62f82e3494eb9c446c161a9f52f0a90b986e5062
+c. 3 of 3 steps disclosed, at positions [0, 1, 2]; each reaches root 0xe7183774a5492f6c… from its own position, none twice: True
+   step 0: bought 10.000 g · PO-GOLD-1792091029 · Supplier's signature recovers to 0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904
+   step 1: arrived 10.000 g · VR-GOLD-1792091029 · Vault's signature recovers to 0x8b95fdedb647236da0f266231f71440d2714d542
+   step 2: to_fabrication 2.000 g · JOB-GOLD-1792091029 · entered by the trader, unsigned (no counterparty vouches for it)
+f. counterparty signatures for desk 0xcc480edeeb5b95e2fb4e8719f9139f188c2adcee: True
+h. from the steps: in_stock 8.000 g, in_fabrication 2.000 g — matches the statement
+m. value, classes, offset share, maximum loss and eligible value follow from the steps at 4160.7/oz: True
+p. PAXG traded 4156.6–4163.7 in the two minutes around the statement; mark 4160.7: True
+   https://rpc.testnet.arc.network: block 67376141, carries the root in the pinned contract: True
+   https://explorer.testnet.arc.io/api/eth-rpc: block 67376141, carries the root in the pinned contract: True
+d. root anchored in 0x34556ccbaf3ce607… on 2 node(s): True
+e. PAXG position of 0x557e1e07… at the statement's time: -0.321 now, less 0 fills since = -0.321; offset claimed 0.321000: True
+g. funding on the account's PAXG short since the deal's first step: 0; claimed 0: True
+
+what the statement says: 10.000 g gold in stock, worth 1337.696112 USDC at 4160.7/oz; 99.84% offset; maximum loss 27.387346 USDC at a 30.0% fall + 2.0% basis; eligible after it 1042.769544 USDC
+PASS
+### the same kit, nothing pinned (must not say PASS)
+CONSISTENT, NOT PINNED (--signer, --venue, --party): the trader could have made this kit; pin them to PASS
+## 6. the fabrication job comes back, the buyer's sale is signed, the offset closes
+{"booked":"GOLD-1792091029 · 2.000 g of gold back into stock · JOB-GOLD-1792091029-DONE · entered by the owner (their passkey; no counterparty signature)","offset":null,"priceNote":null,"root":"0x2054b60af94bc1be3c8f8054d8f80a4b453fdbd8dc8e78eaee9578830f020439","signer":""}
+{"booked":"GOLD-1792091029 · sold 10.000 g of gold for 1358.34 USDC · SO-GOLD-1792091029 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)","offset":{"coins":[{"action":"Traded { size_delta: 0.321, is_buy: true, worst_px: 4178.1870, statuses: [Filled { total_sz: 0.321, avg_px: 4157.822, oid: 62814294661 }], filled_size: 0.321, read_back: 0 }","before":"-0.321","coin":"PAXG","target":"-0"}],"live":true,"movedError":null,"readBack":"0","readBackError":null},"priceNote":null,"root":"0xdfcf38c30e7219b63c749659a47dc00edd4704b989485ffafe9ae9151932fd21","signer":"0x328fb78926cee49691851ca84f226d1c08edacb4"}
+## the statements this desk issued (owner only), newest first
+1 kits; newest: GOLD-1792091029 27.387346 0x34556ccbaf3ce60779664f8f18b740f0c7a00dc2e5f4403f11b51590778ec429
+## the book now
+GOLD-1792091029 sold 0.000 g gold ['GOLD-1792091029 · bought 10.000 g of gold for 1338.27 USDC · PO-GOLD-1792091029 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)', 'GOLD-1792091029 · 10.000 g of gold into stock · VR-GOLD-1792091029 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542)', 'GOLD-1792091029 · 2.000 g of gold to fabrication · JOB-GOLD-1792091029 · entered by the owner (their passkey; no counterparty signature)', 'GOLD-1792091029 · 2.000 g of gold back into stock · JOB-GOLD-1792091029-DONE · entered by the owner (their passkey; no counterparty signature)', 'GOLD-1792091029 · sold 10.000 g of gold for 1358.34 USDC · SO-GOLD-1792091029 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)']
+exposure [{'autoLimit': '1000.000 g gold', 'autoMoved': '19.968 g', 'goods': 'gold', 'held': '0.000 g gold', 'market': 'PAXG', 'offsetTarget': '0', 'unhedgedBase': '0.000 g gold'}]
+root 0xdfcf38c30e7219b63c749659a47dc00edd4704b989485ffafe9ae9151932fd21
+
+## hand the account back to desk-gold-2329
+   {"disconnected":true}
+   {"connected":"0x557e1e07652b75abaa667223b11704165fc94d09"}
+# relayer native USDC on Arc after: 0.013297031673488846

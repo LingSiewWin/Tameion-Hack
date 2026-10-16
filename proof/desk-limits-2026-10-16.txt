@@ -1,0 +1,29 @@
+# desk limits · account 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308 (chain 421614) · run 1792087101 · PAXG 4139.1 · 2026-10-16 01:58:22 +0800
+   held 10.000 g gold | target 0.321507 | venue -0.321 | moved by itself since you last confirmed: 0 g of 5.000 g gold
+## R3. Two supplier-signed purchases of 3 g: the first moves by itself, the second would pass the 5 g the desk may move alone
+   L1-1792087101 · bought 3.000 g of gold for 399.23 USDC · BOUGHT-L1-1792087101 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904) | offset: -0.417
+   L2-1792087101 · bought 3.000 g of gold for 399.23 USDC · BOUGHT-L2-1792087101 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904) | offset: this would trade 3.030 g of gold on the venue, after 2.986 g it moved by itself since you last confirmed, above the 5.000 g gold you let the desk move by itself; it waits for your tap
+   held 16.000 g gold | target 0.514412 | venue -0.417 | moved by itself since you last confirmed: 2.986 g of 5.000 g gold
+## R6. The tap with the device token alone is refused past the limit; the owner's passkey releases it and resets the count
+   moving the offset past your limit needs the owner's passkey: send issued and auth (a passkey assertion over the challenge)
+   readBack -0.469, by the owner: True
+   held 16.000 g gold | target 0.514412 | venue -0.469 | moved by itself since you last confirmed: 0 g of 5.000 g gold
+## R3 again on the way out: the buyer's first sale moves by itself, the second waits, the owner's passkey closes it
+   L1-1792087101 · sold 3.000 g of gold for 399.23 USDC · SOLD-L1-1792087101 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4) | offset: -0.418
+   L2-1792087101 · sold 3.000 g of gold for 399.23 USDC · SOLD-L2-1792087101 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4) | offset: -0.322
+   readBack -0.322, by the owner: False
+   readBack -0.322, by the owner: True
+   held 10.000 g gold | target 0.321507 | venue -0.322 | moved by itself since you last confirmed: 0 g of 5.000 g gold
+
+## Reading this run (2026-10-16 01:59 +0800)
+- R3 held: L2 (3 g) was booked but not traded — 3.030 g on top of the 2.986 g already moved by itself passes the 5 g limit
+  (service started with TAMEION_DESK_AUTO_GRAMS=5; the default is 1,000 g).
+- R6 held: the tap with the device token alone was refused past the limit (401, "needs the owner's passkey"); the owner's
+  passkey (this Mac's Secure Enclave, offset challenge over the target 0.514412) released it, and the count went back to 0.
+- The released trade stopped at -0.469, not the -0.514 target: the hedge engine's 2x leverage cap on the account's ~990 USDC
+  (0.469 x 4139 = 1,941 USDC notional). That is the safety rule, not a fault; it is why D8 (margin profile, docs/83 §5) matters
+  for any desk holding more than ~15 g per 1,000 USDC of margin.
+- On the way out the buyer's sales moved by themselves (1.6 g + 3.0 g = 4.6 g, inside 5 g): with the engine's cap the way in
+  moved less, so the way out had less to undo. Below the limit the device token still taps (by the owner: False).
+- The offset ends at -0.322 against the open HOLD deal's 0.321507 target (inside the band).
+- The script's last heading was reworded after this run to say what happens; the commands are unchanged.

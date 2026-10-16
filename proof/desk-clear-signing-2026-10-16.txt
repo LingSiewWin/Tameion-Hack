@@ -1,0 +1,31 @@
+# Clear-signing through the Secure Enclave bridge: the bridge computes what the chip signs from the decision's fields and
+# words the Touch ID prompt from the same fields (docs/91 R18)
+# written 2026-10-16 02:34:20 +0800 · desk desk-init-0132 (0x048a9a549f19be4aa04a84dbcc51007f57d0160a, Arbitrum Sepolia, no venue)
+
+## What changed
+- apps/desk-se/main.swift: `sign <challenge> --reason "<text>"` opens the key with an LAContext whose localizedReason is the text
+  (SecureEnclave.P256.Signing.PrivateKey(dataRepresentation:authenticationContext:)); compiled with swiftc, selftest 16/16.
+- scripts/desk_se_bridge.py: POST /sign {"decision": {kind, chainId, desk, issued, …}} → the challenge from target/debug/examples/
+  desk_challenge (the Rust the service verifies with) and the sentence from the same fields; returns the challenge it signed.
+  A raw challenge (the account's other owner actions) gets "Sign a Tameion request from this Mac (no details given)";
+  --clear-only refuses those.
+- apps/console/src/lib/tameion.ts passkeyAssert(…, decision): sends the decision, and refuses the assertion if the bridge's
+  challenge is not the page's own (guard.ts). Callers: approve a counterparty, the unhedged base, an unsigned step, the offset.
+
+## curl, 02:3x
+bridge challenge: 0xf0c8868566e8a38a2d055d38269bd58e419212550bb87968960542b124574d7f
+tool challenge:   0xf0c8868566e8a38a2d055d38269bd58e419212550bb87968960542b124574d7f   (desk_challenge party … Buyer … sold,returned)
+bridge reason:    Approve Buyer (0x328f…acb4) to sign sold, returned on desk ••160A
+service:          POST /api/desk/party with that assertion -> Buyer approved for sold, returned
+raw challenge:    reason "Sign a Tameion request from this Mac (no details given)"
+bad decision:     {"error": "a decision is party, base, control, offset or step"}
+
+## the page, 02:34 (Playwright, /desk on desk-init-0132): Stock you keep unoffset -> 1 -> Set it
+bridge log: desk-se bridge: signed 0x079e03d4… saying: Keep 1.000 g of gold unoffset on desk ••160A
+book line:  {"type":"policy","goods":"gold","unhedgedBase":"1.000","approval":{…}}   page: "Now 1 g"
+
+## Not shown
+- The Touch ID prompt itself. This desk's key was made without Touch ID (unattended proofs), so no prompt appears; the sentence
+  reaches the chip's context but nobody saw it on screen. The founder's ten minutes at the Mac (RESUME, morning list) prove both.
+- A local program can still ask the bridge to sign a raw challenge with the generic prompt; start the bridge with --clear-only
+  once every owner action the account uses is a decision the bridge can word.

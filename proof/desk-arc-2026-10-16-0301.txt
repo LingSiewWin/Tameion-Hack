@@ -1,0 +1,71 @@
+# The desk on Arc testnet: desk-arc-0223 (0xcc480edeeb5b95e2fb4e8719f9139f188c2adcee, chain 5042002), the same Hyperliquid testnet account, connected from the API
+# written 2026-10-16 03:01:57 +0800 · relayer 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25 native USDC on Arc before: 0.016946066673488846
+## the venue is flat before the run
+   venue position: 0
+## hand the account over: desk-gold-2329 disconnects (one tap, instant), desk-arc-0223 connects (its owner chip)
+   {"disconnected":true}
+   {"connected":"0x557e1e07652b75abaa667223b11704165fc94d09"}
+
+# desk API proof · account 0xcc480edeeb5b95e2fb4e8719f9139f188c2adcee (chain 421614) · deal GOLD-1792090920 · http://127.0.0.1:7880
+## the book is the owner's: no token → refused; the owner's device → the book
+{"error":"the desk is the owner's: open it on the device that opened the account, or with an agent key that can read"}
+deals 0 parties 0 venue 0x557e1e07652b75abaa667223b11704165fc94d09
+## the owner approves who may sign (a trust decision: the owner's passkey — here the Mac's Secure Enclave — signs each)
+{"error":"the assertion signs a different challenge"}
+{"error":"the assertion signs a different challenge"}
+{"error":"the assertion signs a different challenge"}
+## an approval without the owner's passkey → refused
+{"error":"approving who may sign needs the owner's passkey: send issued and auth (a passkey assertion over the challenge)"}
+## the owner states who holds the venue's master key (docs/87 option A), and keeps no unhedged base for this run
+{"error":"the assertion signs a different challenge"}
+{"error":"the assertion signs a different challenge"}
+## 1. the supplier's priced purchase, signed (the service moves the offset by itself)
+{"error":"Supplier is not an approved counterparty on this desk"}
+## a purchase confirmation signed by the buyer's key but naming the Supplier → refused
+{"error":"Supplier is not an approved counterparty on this desk"}
+## an unsigned step without the owner's passkey → refused
+{"error":"a step of your own needs the owner's passkey: send issued and auth (a passkey assertion over the challenge)"}
+## 2. the vault's receipt, signed (gold flies into a vault; docs/84 §1b)
+{"error":"Vault is not an approved counterparty on this desk"}
+## 3. the offset as the venue reports it (read only)
+{'account': '0x557e1e07652b75abaa667223b11704165fc94d09', 'error': None, 'mark': '4159.0', 'market': 'PAXG', 'position': '0', 'readAt': 1792090944}
+## 4. the owner sends 2 g to fabrication (unsigned: the owner's own entry)
+{"error":"the assertion signs a different challenge"}
+## 5. the lender's kit, root anchored now
+no deal GOLD-1792090920 on this desk
+anchor None
+### the lender's check, pinned: statement key 0x62f82e3494eb9c446c161a9f52f0a90b986e5062, venue 0x557e1e07652b75abaa667223b11704165fc94d09, 6 party flags
+Traceback (most recent call last):
+  File "scripts/verify_desk.py", line 442, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "scripts/verify_desk.py", line 250, in main
+    signed, disc, anchor = kit["signed"], kit["disclosure"], kit["anchor"]
+                           ~~~^^^^^^^^^^
+KeyError: 'signed'
+### the same kit, nothing pinned (must not say PASS)
+Traceback (most recent call last):
+  File "scripts/verify_desk.py", line 442, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "scripts/verify_desk.py", line 250, in main
+    signed, disc, anchor = kit["signed"], kit["disclosure"], kit["anchor"]
+                           ~~~^^^^^^^^^^
+KeyError: 'signed'
+## 6. the fabrication job comes back, the buyer's sale is signed, the offset closes
+{"error":"the assertion signs a different challenge"}
+{"error":"Buyer is not an approved counterparty on this desk"}
+## the statements this desk issued (owner only), newest first
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import sys,json; l=json.load(sys.stdin)["statements"]; print(len(l), "kits; newest:", l[0]["deal"], l[0]["maxLossUsdc"], l[0]["anchorTx"])
+                                                                                          ~^^^
+IndexError: list index out of range
+## the book now
+exposure [{'autoLimit': '1000.000 g gold', 'autoMoved': '0 g', 'goods': 'gold', 'held': '0.000 g gold', 'market': 'PAXG', 'offsetTarget': '0', 'unhedgedBase': '0.000 g gold'}]
+root 0x0000000000000000000000000000000000000000000000000000000000000000
+
+## hand the account back to desk-gold-2329
+   {"disconnected":true}
+   {"connected":"0x557e1e07652b75abaa667223b11704165fc94d09"}
+# relayer native USDC on Arc after: 0.016946066673488846

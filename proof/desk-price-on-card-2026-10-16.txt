@@ -1,0 +1,27 @@
+# A price far from the market stays on the deal card (docs/83 §11 row 'Price notes on the deal cards')
+# written 2026-10-16 01:41:25 +0800 · desk desk-init-0132 (0x048a9a549f19be4aa04a84dbcc51007f57d0160a, Arbitrum Sepolia, no venue connected: nothing trades)
+# PAXG mark 4139.55 · 3 g fair = 399.27 USDC, padded +15 % = 459.16 USDC · band TAMEION_DESK_PRICE_BAND_BPS default 500
+
+## 1. Supplier-signed purchase at +15 %
+  reply: PAD-1792086084 · bought 3.000 g of gold for 459.16 USDC · PO-PAD-1792086084 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)
+  priceNote: priced 14.9% above the market (4760.49 vs 4141.6 USDC per troy ounce on PAXG): check it with Supplier
+  offset: None
+
+## 2. Supplier-signed purchase at the market
+  reply: FAIR-1792086084 · bought 3.000 g of gold for 399.27 USDC · PO-FAIR-1792086084 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)
+  priceNote: None
+  offset: None
+
+## 3. Read later: GET /api/desk, each milestone's priceNote (the mark kept on the book line, read again from disk)
+   FAIR-1792086084 | FAIR-1792086084 · bought 3.000 g of gold for 399.27 USDC · P | priceNote: None
+   PAD-1792086084 | PAD-1792086084 · bought 3.000 g of gold for 459.16 USDC · PO | priceNote: priced 14.9% above the market (4760.49 vs 4141.6 USDC per troy ounce on PAXG): check it with Supplier
+
+## 4. The book line keeps the mark, unsigned (not part of the signed step)
+   PAD-1792086084 mark 4141.6 signed fields ['at', 'counterparty', 'deal', 'document', 'goods', 'kind', 'quantity', 'signer', 'usdc']
+   FAIR-1792086084 mark 4141.6 signed fields ['at', 'counterparty', 'deal', 'document', 'goods', 'kind', 'quantity', 'signer', 'usdc']
+
+## 5. Service restarted, read again (the note survives a restart: replayed from the file)
+  restarted 01:41:44, pid 43525
+   FAIR-1792086084 | priceNote: None
+   PAD-1792086084 | priceNote: priced 14.9% above the market (4760.49 vs 4141.6 USDC per troy ounce on PAXG): check it with Supplier
+  screenshot: proof/desk-console-14-price-on-card-2026-10-16.png

@@ -1,0 +1,70 @@
+# A deal held across Hyperliquid funding hours: the funding on its offset, from the statement and checked by the lender (docs/83 §11)
+# written 2026-10-16 02:15:17 +0800 · desk desk-gold-2329 (0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308) · deal HOLD-1792085890 (opened 01:38:10, supplier-signed 10 g, vault receipt, short -0.321 PAXG filled at 4142.11)
+
+## the venue funding record for the account since the deal opened (Hyperliquid public API, userFunding)
+   02:00 PAXG usdc -0.005724 on szi -0.322 rate -0.0000042772
+
+## statement A (02:1x): POST /api/desk/statement
+   held 10.000 g gold | offset 0.321507 | fundingUsdc -0.005724 | maxLoss 26.655541 | anchor 0x7dd5d34e6b5717a4ea737d5768878113725dc71b83a57136b820d0668bf44024
+
+## the lender check, every pin, roles pinned
+a. statementHash recomputed 0x9241b6eab91218ca… matches
+b. statement signature recovers to 0x62f82e3494eb9c446c161a9f52f0a90b986e5062
+c. 2 of 20 steps disclosed, at positions [14, 15]; each reaches root 0x813e4ea3a34a9883… from its own position, none twice: True
+   step 14: bought 10.000 g · PO-HOLD-1792085890 · Supplier's signature recovers to 0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904
+   step 15: arrived 10.000 g · VR-HOLD-1792085890 · Vault's signature recovers to 0x8b95fdedb647236da0f266231f71440d2714d542
+f. counterparty signatures for desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308: True
+h. from the steps: in_stock 10.000 g — matches the statement
+m. value, classes, offset share, maximum loss and eligible value follow from the steps at 4145.4/oz: True
+p. PAXG traded 4145.4–4145.4 in the two minutes around the statement; mark 4145.4: True
+   https://sepolia-rollup.arbitrum.io/rpc: block 319499901, carries the root in the pinned contract: True
+   https://arbitrum-sepolia-rpc.publicnode.com: block 319499901, carries the root in the pinned contract: True
+d. root anchored in 0x7dd5d34e6b5717a4… on 2 node(s): True
+e. PAXG position of 0x557e1e07… at the statement's time: -0.322 now, less 0 fills since = -0.322; offset claimed 0.321507: True
+g. funding on the account's PAXG short since the deal's first step: -0.005724; claimed -0.005724: True
+
+what the statement says: 10.000 g gold in stock, worth 1332.777048 USDC at 4145.4/oz; 100.0% offset; maximum loss 26.655541 USDC at a 30.0% fall + 2.0% basis; eligible after it 1306.121507 USDC
+PASS
+exit 0
+
+## statement B, 03:00:10, after the 03:00 funding
+## the venue's funding record since the deal opened
+   02:00 usdc -0.005724 on szi -0.322 rate -0.0000042772
+   03:00 usdc -0.013675 on szi -0.322 rate -0.0000102072
+   held 10.000 g gold | fundingUsdc -0.019399 | maxLoss 26.683191 | anchor 0x7dd5d34e6b5717a4ea737d5768878113725dc71b83a57136b820d0668bf44024 | same anchor as A (book unchanged): True
+## the lender's check, every pin, roles pinned, statement A as the earlier one
+a. statementHash recomputed 0x658f569f6baf4274… matches
+b. statement signature recovers to 0x62f82e3494eb9c446c161a9f52f0a90b986e5062
+c. 2 of 20 steps disclosed, at positions [14, 15]; each reaches root 0x813e4ea3a34a9883… from its own position, none twice: True
+f. counterparty signatures for desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308: True
+h. from the steps: in_stock 10.000 g — matches the statement
+m. value, classes, offset share, maximum loss and eligible value follow from the steps at 4149.7/oz: True
+p. the venue has no PAXG candles around the statement's time
+d. root anchored in 0x7dd5d34e6b5717a4… on 2 node(s): True
+e. PAXG position of 0x557e1e07… at the statement's time: -0.322 now, less 0 fills since = -0.322; offset claimed 0.321507: True
+g. funding on the account's PAXG short since the deal's first step: -0.019399; claimed -0.019399: True
+n. the book of 20 steps extends the one of 20 at your earlier statement (HOLD-1792085890, root 0x813e4ea3a34a9883…): True
+
+what the statement says: 10.000 g gold in stock, worth 1334.159530 USDC at 4149.7/oz; 100.0% offset; maximum loss 26.683191 USDC at a 30.0% fall + 2.0% basis; eligible after it 1307.476339 USDC
+FAIL: p
+## the buyer signs the sale: the deal and the offset close
+{"booked":"HOLD-1792085890 · sold 10.000 g of gold for 1347.94 USDC · SO-HOLD-1792085890 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)","offset":{"coins":[{"action":"Traded { size_delta: 0.322, is_buy: true, worst_px: 4171.3530, statuses: [Filled { total_sz: 0.322, avg_px: 4154.684, oid: 62814028609 }], filled_size: 0.322, read_back: 0 }","before":"-0.322","coin":"PAXG","target":"-0"}],"live":true,"movedError":null,"readBack":"0","readBackError":null},"priceNote":null,"root":"0xacf081b224b81d73b6f95ed008b0c1e8b4cee3815b152f95f8cc8586a48c988c","signer":"0x328fb78926cee49691851ca84f226d1c08edacb4"}
+exposure [{'autoLimit': '1000.000 g gold', 'autoMoved': '10.015 g', 'goods': 'gold', 'held': '0.000 g gold', 'market': 'PAXG', 'offsetTarget': '0', 'unhedgedBase': '0.000 g gold'}]
+venue {'account': '0x557e1e07652b75abaa667223b11704165fc94d09', 'error': None, 'mark': '4156.6', 'market': 'PAXG', 'position': '0', 'readAt': 1792090839}
+
+## the same check of statement B again at 03:01:04 (p had found no candles at 03:00:10: the venue's 1-minute feed lagged the turn of the hour)
+p. PAXG traded 4149.3–4156.6 in the two minutes around the statement; mark 4149.7: True
+e. PAXG position of 0x557e1e07… at the statement's time: 0 now, less 4 fills since = -0.322; offset claimed 0.321507: True
+g. funding on the account's PAXG short since the deal's first step: -0.019399; claimed -0.019399: True
+n. the book of 20 steps extends the one of 20 at your earlier statement (HOLD-1792085890, root 0x813e4ea3a34a9883…): True
+PASS
+
+## Reading it
+- The deal was held 01:38 → 03:00 across two funding hours. Both hours the rate was negative, so the short paid: 02:00 −0.005724,
+  03:00 −0.013675 USDC on −0.322 PAXG. The statement claims −0.019399 for the deal (its share of the account's short: all of it),
+  and the lender's check g finds the venue's own record says the same, to the micro-USDC.
+- Statements A (02:15), A2 (02:19) and B (03:00) over the same book share one anchor transaction: no new gas (docs/91 R15).
+- The buyer-signed sale closed the deal and the offset by itself (0.322 bought back at 4154.684, read back 0); it counts 10.015 g
+  toward what the desk moved without the owner since the owner last confirmed (inside the 1,000 g default).
+- 30-day context (docs/83 §8b item 7, measured for docs/84): shorts received funding on 710 of 720 hours. These two hours were among the few where the short paid instead.
+  Say "the exchange's own figure", never that the offset earns.

@@ -1,0 +1,66 @@
+# The third review's forgeries against the fixed verifiers (docs/92 T1-T8)
+# written 2026-10-16 03:37:18 +0800; forged kits re-signed by the reviewer with throwaway key 0xae04d8a8cb1c2c0e021ac41e058d0c74a78d6b41
+
+## the live kit issued after the fix (GOLD-1792092934, 03:36, the short and the desk holding in the statement), every pin
+m. value, classes, offset share, maximum loss and eligible value follow from the steps at 4161.395/oz: True
+t. issued 2026-10-15 19:36:03 UTC, 0.0 h ago (at most 24 h), after its last step: True
+PASS
+
+## F1 hidden steps (T1), with the lender's earlier kit of the same deal
+   the statement does not say the short it read or the desk's whole holding; ask for a new one
+m. value, classes, offset share, maximum loss and eligible value follow from the steps at 4149.7/oz: False
+   step 11 (to_fabrication 2.000 g), shown in your earlier statement, is missing
+n. the book of 20 steps extends the one of 12 at your earlier statement (GOLD-1792085266, root 0x88747ae7a799b0b5…): False
+t. issued 2026-10-15 19:00:10 UTC, 0.6 h ago (at most 24 h), after its last step: True
+FAIL: m, n
+
+## F3 gold priced on BTC (T2)
+   the statement does not say the short it read or the desk's whole holding; ask for a new one
+   the statement prices gold on BTC; gold is priced on PAXG (docs/92 T2)
+m. value, classes, offset share, maximum loss and eligible value follow from the steps at 82009.0/oz: False
+t. issued 2026-10-15 17:28:14 UTC, 2.2 h ago (at most 24 h), after its last step: True
+FAIL: m, p
+
+## F4 stress and basis 0 (T3)
+   the statement does not say the short it read or the desk's whole holding; ask for a new one
+   the maximum loss is sized at a 0.0% fall and 0.0% basis; you asked for at least 30.0% and 2.0% (--stress, --basis)
+m. value, classes, offset share, maximum loss and eligible value follow from the steps at 4143.3/oz: False
+t. issued 2026-10-15 17:28:14 UTC, 2.2 h ago (at most 24 h), after its last step: True
+FAIL: m
+
+## F5 an invented cost (T3)
+   the statement does not say the short it read or the desk's whole holding; ask for a new one
+   costUsdc 1000000.000000; the signed purchase says 1332.100000 USDC
+m. value, classes, offset share, maximum loss and eligible value follow from the steps at 4143.3/oz: False
+t. issued 2026-10-15 17:28:14 UTC, 2.2 h ago (at most 24 h), after its last step: True
+FAIL: m
+
+## a real statement from before the fix (HOLD-1792085890 B, 03:00): no short or desk holding stated (T4) -> ask for a new one
+   the statement does not say the short it read or the desk's whole holding; ask for a new one
+m. value, classes, offset share, maximum loss and eligible value follow from the steps at 4149.7/oz: False
+t. issued 2026-10-15 19:00:10 UTC, 0.6 h ago (at most 24 h), after its last step: True
+FAIL: m
+
+## a statement older than the lender allows (T8): the 01:28 kit with --max-age 1
+t. issued 2026-10-15 17:28:14 UTC, 2.2 h ago (at most 1 h), after its last step: False
+FAIL: m, t
+
+## T6 live (03:38:01): the page connection keeps its owner
+   desk-gold-2329 disconnects (device token): {"disconnected":true}
+   the claim now: {'policy': '0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308', 'connected': False}
+   desk-init-0132 (set up on this Mac, its own chip) tries to take the account: {"error":"this Mac's exchange account belongs to desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308; moving it is done on this Mac by hand (runtime/app/desk-venue.json)"}
+   desk-gold-2329 connects again (its chip): {"connected":"0x557e1e07652b75abaa667223b11704165fc94d09"}
+   claim file mode: -rw-------
+
+## T5: the Touch ID sentence (bridge started by scripts/dev.sh, --clear-only)
+   Approve Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904) to sign bought on desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308
+   Approve Supplier (0x85e1000000000000000000000000000000008904) to sign bought on desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308
+   a raw challenge: HTTP 403
+
+## T7: unit test crates/operator/src/desk.rs a_stopped_counterparty_books_nothing… (the same approval after a stop, and after reopening the book: refused)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 118 filtered out; finished in 0.18s
+
+## The /lender page in a browser (03:44:05): kit GOLD-1792092934, every pin, roles pinned, floor 30 % / 2 % (new fields)
+"Every check passed": a b c f h m p d e g t (eleven; n needs an earlier file)
+  t: "Issued 2026-10-15 19:36:03 UTC, 0.1 h ago (at most 24 h)."
+  screenshot proof/desk-lender-page-third-review-2026-10-16.png

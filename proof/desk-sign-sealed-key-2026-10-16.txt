@@ -1,0 +1,26 @@
+# The phone key sealed behind the phone's fingerprint or face (WebAuthn PRF), signing a desk step; without the passkey nothing signs
+# (docs/100 X7 upgrade). Desk desk-gold-2329 (0xcd8d…4308), Arbitrum Sepolia, Hyperliquid testnet.
+# written 2026-10-16 06:59:42 +0800; console export 06:58; Playwright Chromium with a CDP virtual authenticator
+# (ctap2.1, internal, user verification, hasPrf) standing in for the phone's passkey — not a real phone
+
+06:55 /sign (zh), storage cleared, "在这部手机上生成签名密钥": the page made a passkey (rp localhost) with the PRF extension, read its
+  PRF secret with one assertion, made a secp256k1 key, encrypted it with AES-GCM under that secret and kept only
+  {addr, cred, iv, ct} in localStorage ("tameion.sign.key" (plain) absent; ct 48 bytes = 32-byte key + 16-byte tag).
+  The page: "密钥由这部手机的指纹或面容锁住:每次签名都会要求确认。" address 0xDA5618E717fBac01c22ea6615f239ba9d6b6583b
+06:56 /desk (owner): Approve Workshop (role Workshop: to_fabrication, returned) — bridge log:
+  signed 0x25ac42d4… saying: Approve Workshop (0xDA5618E717fBac01c22ea6615f239ba9d6b6583b) to sign to fabrication, returned on desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308
+06:56:56 LOCK-1792105015: bought 2.000 g (Supplier) | offset -0.064 read back; arrived (Vault)
+06:57 /sign, "用这部手机上的密钥签名": one more passkey assertion opened the key, the step was signed and booked:
+  "已记入交易商的账本 · LOCK-1792105015 · 2.000 g of gold to fabrication · JOB-0701 · signed by Workshop"
+  the virtual authenticator's sign count for this credential: 3 (create, the unlock when the key was made, the unlock to sign)
+06:57 the authenticator removed (no passkey on the "phone"); the same page asks to sign "returned · RT-0701": nothing signed;
+  after the 60 s WebAuthn timeout: "没有完成指纹/面容确认,没有签名。"; the step is not in the book
+06:59:13 the buyer signs the sale: LOCK-1792105015 · sold 2.000 g … signed by Buyer | offset: 0 (venue flat)
+the deal's journal lines (runtime/app/tenants/0xcd8d…/desk.jsonl):
+   bought 2.000 Supplier 0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904 signed
+   arrived 2.000 Vault 0x8b95fdedb647236da0f266231f71440d2714d542 signed
+   to_fabrication 2.000 Workshop 0xda5618e717fbac01c22ea6615f239ba9d6b6583b signed
+   sold 2.000 Buyer 0x328fb78926cee49691851ca84f226d1c08edacb4 signed
+
+Where the phone's passkeys offer no PRF (older iOS, some in-app browsers), the page keeps the key in the browser as before and
+says so ("这个浏览器不能用指纹锁住密钥…"). Not run: a real phone (iOS 18 Safari, Android Chrome).

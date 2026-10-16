@@ -1,0 +1,28 @@
+# Stopping a counterparty is instant and needs no passkey; approving it again needs the passkey (docs/91 R4)
+# written 2026-10-16 01:59:47 +0800 · desk desk-init-0132 (0x048a9a549f19be4aa04a84dbcc51007f57d0160a, no venue connected: nothing trades) · deal PAD-1792086084
+## 0. Vault signs a 1 g receipt: booked
+   PAD-1792086084 · 1.000 g of gold into stock · VR-A · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542)
+## 1. a stranger (no device token) tries to stop Vault
+{"error":"only the owner's device or a run key stops a counterparty"}
+## 2. the owner device stops Vault (one tap, no passkey)
+{"stopped":"Vault"}
+   [('Supplier', False), ('Vault', True)]
+## 3. Vault signs another receipt with its real key: refused
+   Vault was stopped on this desk; its signature books nothing until you approve it again
+## 4. the book still opens and keeps the receipt signed before the stop
+   PAD-1792086084 ['PO-PAD-1792086084', 'VR-A']
+## 5. approving Vault again needs the owner passkey: without it refused, with the chip approved
+{"error":"approving who may sign needs the owner's passkey: send issued and auth (a passkey assertion over the challenge)"}
+   approved: Supplier, Vault
+   [('Supplier', False), ('Vault', False)]
+## 6. Vault signs again: booked
+   PAD-1792086084 · 1.000 g of gold into stock · VR-C · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542)
+
+## 7. The same in the browser (Playwright, 02:00:44, /desk on desk-init-0132)
+- Tap x on Vault: the chip reads "Stop Vault?" (proof/desk-console-15-stop-confirm-2026-10-16.png); a second tap stops it:
+  toast "Vault is stopped: its signature books nothing until you approve it again.", the chip reads "Vault ••D542 stopped".
+- Approve who may sign -> Vault, 0x8b95…d542 -> Check: the box shows the whole address, 0x8b95fdedb647236da0f266231f71440d2714d542,
+  with "Check every character with Vault before you approve" (docs/91 R8; proof/desk-console-16-full-address-2026-10-16.png).
+- Approve Vault: the page asked the Secure Enclave through the bridge (log below), the service took the passkey, Vault signs again.
+  bridge log: desk-se bridge: "OPTIONS /sign HTTP/1.1" 204 -
+  bridge log: desk-se bridge: "POST /sign HTTP/1.1" 200 -

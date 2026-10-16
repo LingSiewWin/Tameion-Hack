@@ -1,0 +1,21 @@
+# A counterparty signs only its own kinds of step (docs/91 R7)
+# written 2026-10-16 02:11:18 +0800 · desk desk-init-0132 (0x048a9a549f19be4aa04a84dbcc51007f57d0160a, no venue: nothing trades) · deal PAD-1792086084
+## 0. Vault, approved for any step (v1, before roles), signs a 0.5 g sale: booked (the gap R7 closes)
+   PAD-1792086084 · sold 0.500 g of gold for 66.00 USDC · SO-R7-A · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542)
+## 1. the owner re-approves Vault for arrived and returned only: party challenge v2 (mask 0x24), signed by this Mac chip
+   [('Supplier', None), ('Vault', ['arrived', 'returned'])]
+## 2. a fresh chip assertion over arrived+returned (mask 0x24), sent with kinds arrived, returned AND sold: refused,
+##    because the service recomputes the challenge from the kinds it was sent (mask 0x64) and the passkey did not sign that
+{"error":"the assertion signs a different challenge"}
+## 3. Vault signs a sale: refused
+   Vault may sign arrived, returned on this desk, not sold
+## 4. Vault signs a 0.5 g receipt: booked
+   PAD-1792086084 · 0.500 g of gold into stock · VR-R7-C · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542)
+## 5. the book reopens; parties as the console reads them
+   [('Supplier', None, False), ('Vault', ['arrived', 'returned'], False)]
+
+## 6. The same from the page (Playwright, 02:12:00): Approve who may sign -> name "Buyer" picks the role "Buyer: the sale",
+##    the box says "Buyer will sign the sale as this key…" with the whole address; Approve Buyer -> the bridge asked the chip
+##    (v2 challenge computed by the page, apps/console/src/lib/guard.ts deskPartyChallengeV2); parties now:
+   [('Supplier', None), ('Vault', ['arrived', 'returned']), ('Buyer', ['sold'])]
+   screenshot: proof/desk-console-17-roles-2026-10-16.png

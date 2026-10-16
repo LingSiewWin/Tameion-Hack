@@ -1,0 +1,49 @@
+# The fourth review's forgeries against the fixed verifiers (docs/94 U1-U8)
+# written 2026-10-16 04:14:05 +0800; forged kits re-signed by the reviewer with throwaway key 0xae04d8a8cb1c2c0e021ac41e058d0c74a78d6b41
+
+## U2: the real kit GOLD-1792092934 (03:36), whose deal was sold and short closed 13 s later
+c. 3 of 24 steps disclosed, at positions [21, 22, 23]; each reaches root 0x554cd51594dfe42c… from its own position, none twice: True
+h. from the steps: in_stock 8.000 g, in_fabrication 2.000 g — matches the statement
+m. value, classes, offset share, maximum loss and eligible value follow from the steps at 4161.395/oz: True
+   since the statement the account's short fell to 0; the 0.321000 oz this statement counts is not there now: ask for a new one
+e. PAXG position of 0x557e1e07… at the statement's time: 0 now, less 12 fills since = -0.321; short the statement read 0.321000: False
+g. funding on the account's PAXG short since the deal's first step: 0; claimed 0: True
+   the desk says it holds 0.321507 oz in all; this file cannot prove that total. The short is the account's and backs every deal of this desk: check its statements together (--with)
+FAIL: e
+
+## U1 + U5: K1 (HOLD on the same root, claiming the whole short, funding 0) checked with the real kit (--with)
+c. 2 of 24 steps disclosed, at positions [14, 15]; each reaches root 0x554cd51594dfe42c… from its own position, none twice: True
+h. from the steps: in_stock 10.000 g — matches the statement
+m. value, classes, offset share, maximum loss and eligible value follow from the steps at 4161.395/oz: True
+   since the statement the account's short fell to 0; the 0.321000 oz this statement counts is not there now: ask for a new one
+e. PAXG position of 0x557e1e07… at the statement's time: 0 now, less 12 fills since = -0.321; short the statement read 0.321000: False
+g. funding on the account's PAXG short since the deal's first step: -0.019399; claimed 0: False
+   the desk says it holds 0.321507 oz in all; this file cannot prove that total. The short is the account's and backs every deal of this desk: check its statements together (--with)
+w. 2 statements at this root: they state 1 desk total(s); 0.643014 oz held against 0.321507; 0.642000 oz offset against the 0.321000 short: False
+FAIL: e, g, w
+
+## U4: K2 (control text, eligible grams rewritten)
+c. 3 of 24 steps disclosed, at positions [21, 22, 23]; each reaches root 0x554cd51594dfe42c… from its own position, none twice: True
+   the grams by class (eligible, consigned, not eligible) are not what the steps add up to
+h. from the steps: in_stock 8.000 g, in_fabrication 2.000 g — does NOT match the statement
+m. value, classes, offset share, maximum loss and eligible value follow from the steps at 4161.395/oz: True
+   since the statement the account's short fell to 0; the 0.321000 oz this statement counts is not there now: ask for a new one
+e. PAXG position of 0x557e1e07… at the statement's time: 0 now, less 12 fills since = -0.321; short the statement read 0.321000: False
+g. funding on the account's PAXG short since the deal's first step: 0; claimed 0: True
+   the desk says it holds 0.321507 oz in all; this file cannot prove that total. The short is the account's and backs every deal of this desk: check its statements together (--with)
+FAIL: h, e
+
+## U3: K3 in Python (positions out of order) — Python refused it before the fix too
+c. 3 of 13 steps disclosed, at positions [1, 10, 9]; each reaches root 0x9c5b0e636ed1821a… from its own position, none twice: False
+FAIL: c, d, e
+## U3 on the page's code: node --test (positions as text refused before any check; out of order as numbers fails c)
+✔ U3: positions written as text are refused before any check; out of order as numbers fails c (5.918958ms)
+✔ U4: eligible grams the steps do not give fail h (4.551291ms)
+ℹ pass 17
+ℹ fail 0
+
+## U7: the bridge refuses a decision too long to show whole on the Touch ID prompt
+   {"error": "this decision is too long to show whole on the Touch ID prompt; shorten its deal or document name"}
+## U6 and U8: unit tests (crates/operator/src/desk.rs: a released move's approval stays spent after a restart; a venue
+## approval used twice, or issued before a disconnect, is refused); the verifiers' tolerance for a tiny holding
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 118 filtered out; finished in 0.15s

@@ -1,0 +1,37 @@
+# The owner approves a counterparty from the console, signed by this Mac's Secure Enclave through the local bridge
+# written 2026-10-16 01:36:36 +0800
+
+desk: desk-init-0132, account 0x048a9a549f19be4aa04a84dbcc51007f57d0160a (Arbitrum Sepolia, reserved, scripts/desk_init.sh)
+owner: P-256 key inside the Secure Enclave, blob ~/.tameion/desks/desk-init-0132.blob, made with --no-presence (unattended proof:
+       no Touch ID prompt; a real desk is made without that flag and asks the person on every signature)
+bridge: SE_BLOB=~/.tameion/desks/desk-init-0132.blob python3 scripts/desk_se_bridge.py --unattended  (127.0.0.1:7898)
+page: http://127.0.0.1:7880/desk, owner record has credentialId "secure-enclave" (apps/console/src/lib/tameion.ts passkeyAssert falls back to the bridge)
+
+## What the person did on the page
+  Who may sign -> Approve who may sign -> name Vault, address 0x8b95fdedb647236da0f266231f71440d2714d542 -> Check
+  page: "Vault will sign as the key ending D542, from the address you typed. Steps they sign move your offset."
+  Approve Vault -> toast "Vault may now sign steps for your desk."; list now Supplier ••8904, Vault ••D542
+  screenshot: proof/desk-console-13-se-bridge-approve-2026-10-16.png
+
+## Network (Playwright, this tab, filtered 7898|/api/desk)
+  43. [POST] http://127.0.0.1:7898/sign => [200] OK          (page computed the party challenge, the chip signed it)
+  44. [POST] http://127.0.0.1:7880/api/desk/party => [200] OK (service verified the P-256 assertion against the owner key, spent the challenge)
+
+## The book on disk (runtime/app/tenants/0x048a9a549f19be4aa04a84dbcc51007f57d0160a/desk.jsonl), Vault line, approval kept with it
+  type: party  name: Vault  address: 0x8b95fdedb647236da0f266231f71440d2714d542
+  approval keys: ['auth', 'challenge', 'issued']
+  authenticatorData: 0x49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97630500000000 (flags 0x05 = UP|UV)
+  clientDataJSON: {"type":"webauthn.get","challenge":"jI7t6d9yG7W-2x4j2vjEUr85fehOEltyS0VuWkCkZYk","origin":"http://localhost:7880","crossOrigin":false}
+  r: 0x2d9640664d60fbfb0492b2a21c0f1a6cbb45009788751143d54a03af179e2344
+  s: 0x2f71b124ab1da82b169d43184f6c2b46a4e17255bd85389aed6894a984dd8fd8
+
+## The bridge refuses everything else (restarted with flushed log, then probed with curl)
+  Origin http://evil.example -> 403 ; no Origin -> 403 ; challenge 0x12 -> 400 {"error": "a challenge is 32 bytes of hex"}
+
+## What this does not show
+  - No Touch ID prompt was seen by a person: the key was made --no-presence for an unattended run. With a Touch ID key the
+    same POST /sign waits for the finger; that run needs the founder at the Mac (RESUME morning list).
+  - The bridge is not a boundary against other programs on this Mac: any local process can send an Origin header.
+    Touch ID is the consent; the bridge refuses to serve a no-presence key unless started --unattended.
+  - clientDataJSON.origin reads http://localhost:7880 although the page ran on 127.0.0.1:7880: apps/desk-se/main.swift
+    writes the browser's shape; the contract and the service do not read the origin (main.swift:28-31).

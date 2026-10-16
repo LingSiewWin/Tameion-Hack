@@ -1,0 +1,25 @@
+# A trader connects the desk to their own exchange account from the page: no environment, no restart
+# written 2026-10-16 02:40:53 +0800 · service started WITHOUT TAMEION_DESK_POLICY / TAMEION_DESK_VENUE · HEDGE_LIVE=1
+## 0. desk-gold-2329, with an open deal (HOLD-1792085890), not connected: books, trades nothing
+   venueAccount: None | venue position: None
+## 1. what the page reads: this Mac's trade-only key and the account Hyperliquid says approved it (userRole)
+   {"account":"0x557e1e07652b75abaa667223b11704165fc94d09","agent":"0x22d3a1b3757e9ff4a83df9fc4447f16dfe4afca3","byEnvironment":false,"connected":null}
+## 2. connect without the owner's passkey: refused
+   {"error":"letting the desk trade on an exchange account needs the owner's passkey: send issued and auth (a passkey assertion over the challenge)"}
+## 3. connect to an account that did not approve this Mac's key: refused before any passkey
+   {"error":"this Mac's trade-only key 0x22d3a1b3757e9ff4a83df9fc4447f16dfe4afca3 was approved by 0x557e1e07652b75abaa667223b11704165fc94d09, not 0x000000000000000000000000000000000000dead"}
+## 4. connect with the owner's passkey (this Mac's chip, se-owner.blob, desk::venue_challenge)
+   {"connected":"0x557e1e07652b75abaa667223b11704165fc94d09"}
+   venueAccount: 0x557e1e07652b75abaa667223b11704165fc94d09 | venue position: -0.322
+## 5. another desk on this Mac (desk-init-0132) connects the same account with its own owner chip: refused (one desk per account)
+   {"error":"this Mac's exchange account already offsets for desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308; disconnect it there first"}
+## 6. the claim on disk
+   {'policy': '0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308', 'account': '0x557e1e07652b75abaa667223b11704165fc94d09', 'at': 1792089656} approval kept: ['auth', 'challenge', 'issued']
+
+## 7. The same from the page (Playwright, 02:42:00, /desk on desk-init-0132, owner key in the chip through the bridge)
+   the box: "This Mac's trade-only key (••FCA3) was approved by Hyperliquid testnet account 0x557e…4d09. Connected, the desk offsets on
+   it by itself; the key can trade on that account and cannot withdraw from it."  [Connect it]
+   tap -> bridge: signed 0xb2c87c3e… saying: Let the desk trade on exchange account 0x557e…4d09 on desk ••160A
+   toast: "this Mac's exchange account already offsets for desk 0xcd8d…4308; disconnect it there first"  (one desk per account)
+   screenshot: proof/desk-console-20-venue-connect-2026-10-16.png
+   (first tap hit a bridge started before the venue kind existed: "a decision is party, base, control, offset or step"; restarted)

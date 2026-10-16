@@ -1,0 +1,19 @@
+# The whole book at once: two open deals, one file, checked together (docs/94 U1)
+# written 2026-10-16 04:46:34 +0800 · desk-gold-2329 · PAXG 4173.7
+## two supplier-signed purchases, each received by the vault
+   BOOK-A-1792097193 · bought 3.000 g of gold for 402.56 USDC · BOUGHT-BOOK-A-1792097193 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904) | offset: -0.096
+   BOOK-A-1792097193 · 3.000 g of gold into stock · ARRIVED-BOOK-A-1792097193 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542) | offset: -
+   BOOK-B-1792097193 · bought 5.000 g of gold for 670.94 USDC · BOUGHT-BOOK-B-1792097193 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904) | offset: -0.257
+   BOOK-B-1792097193 · 5.000 g of gold into stock · ARRIVED-BOOK-B-1792097193 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542) | offset: -
+## POST /api/desk/statements/all
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json,sys; b=json.load(open(sys.argv[1])); print("  ", len(b.get("kits",[])), "kits at", b.get("at"), "| one anchor:", len({k["anchor"]["tx"] for k in b["kits"]}) == 1, "| deals:", [(k["signed"]["statement"]["deal"], k["signed"]["statement"]["heldContracts"], k["signed"]["statement"]["offsetContracts"], k["signed"]["statement"]["deskHeldContracts"]) for k in b["kits"]])
+                                                                                                                                                                 ~^^^^^^^^
+KeyError: 'kits'
+## the lender's check of the whole file, every pin, roles
+FAIL: not a lender's kit: BOOK-B-1792097193: venue api: error sending request for url (https://api.hyperliquid-testnet.xyz/info)
+## both sold by the buyer: the offset closes
+   BOOK-A-1792097193 · sold 3.000 g of gold for 402.56 USDC · SOLD-BOOK-A-1792097193 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4) | offset: -0.161
+   BOOK-B-1792097193 · sold 5.000 g of gold for 670.94 USDC · SOLD-BOOK-B-1792097193 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4) | offset: 0
+BOOK=runtime/desk/book-1792097193.lender.json

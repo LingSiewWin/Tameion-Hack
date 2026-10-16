@@ -1,0 +1,39 @@
+# Nothing removed since an earlier statement (docs/89 H5 (3)): RFC 9162 consistency proofs in the kit, checked by the lender
+# written 2026-10-16 02:19:15 +0800 · desk desk-gold-2329 (0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308) · deal HOLD-1792085890
+
+## statement A2 on the same deal, book unchanged since statement A (02:15): POST /api/desk/statement
+   root 0x813e4ea3a34a9883 | anchor 0x7dd5d34e6b5717a4ea737d5768878113725dc71b83a57136b820d0668bf44024 | same anchor as statement A (R15, no new gas): True
+   history: [(3, '0x07ef3d68', 6), (3, '0xae3616ab', 6), (11, '0x6c7b0584', 6), (12, '0x88747ae7', 4), (14, '0x5d1fd958', 5), (18, '0x64ddd317', 3), (20, '0x813e4ea3', 0)]
+
+## n against an earlier v2 statement of another deal on this desk (GOLD-1792085266, 12 steps, 01:34)
+n. the book of 20 steps extends the one of 12 at your earlier statement (GOLD-1792085266, root 0x88747ae7a799b0b5…): True
+PASS
+## n against the first v2 statement (GOLD-1792081694, 3 steps, 00:28)
+n. the book of 20 steps extends the one of 3 at your earlier statement (GOLD-1792081694, root 0x07ef3d68afb99dfb…): True
+PASS
+## n against a statement from before the 00:28 rewrite (v1 book, GOLD-MCP-1792079112, 18 steps): the book was rewritten, and it shows
+n. the book of 20 steps extends the one of 18 at your earlier statement (GOLD-MCP-1792079112, root 0x64ddd3174229e8c7…): False
+FAIL: n
+## n against statement A with one consistency hash changed in the new kit
+n. the book of 20 steps extends the one of 12 at your earlier statement (GOLD-1792085266, root 0x88747ae7a799b0b5…): False
+FAIL: n
+
+## Reading it
+- The kit now carries `history`: for every earlier statement this desk kept, its size, root and an RFC 9162 consistency path to
+  the current root (crates/ledger/src/log.rs consistency_from_leaves / verify_consistency; 40 x 40 prefixes verified, an edited
+  step refused, unit test). Paths are a few hashes: nothing about other deals is revealed beyond subtree roots.
+- A lender who kept any earlier kit from this desk passes it with --previous: n is true only if the book now is the book then
+  plus steps after it. A deleted or edited step between the two statements fails n.
+- The v1 kits failing is true history: the desk's book was rewritten at 00:28 when steps moved to desk-bound signatures
+  (docs/89 H3; v1 book archived as desk.v1-2026-10-15.jsonl). A lender holding a v1 kit would see it, which is the point.
+- Statement A2 reused statement A's anchor (same root; docs/91 R15): no relayer gas for a statement whose book did not change.
+- Not covered: completeness of one deal (a sale never booked never appears; n shows nothing was removed, not that all was added).
+
+## The /lender page in a browser (Playwright, 02:21:51): statement A2 of HOLD-1792085890, the earlier statement of
+## GOLD-1792085266 as "an earlier statement from the same desk", every pin, roles pinned (Supplier:bought, Vault:arrived,returned, Buyer:sold)
+"Every check passed": a b c f h m p d e g n
+  n: "The book of 20 steps extends the book of 12 steps at your statement on GOLD-1792085266."
+  g: "Funding on the account's PAXG short since this deal's first step, from Hyperliquid: -0.005724 USDC; this deal's share claimed: -0.005724"
+  screenshot proof/desk-lender-page-append-only-2026-10-16.png
+(First try showed a bug: role-pinned parties failed the page's address check and the page would have called the result "not
+pinned"; fixed in apps/console/src/app/lender/page.tsx before this run, docs/60 P-123.)

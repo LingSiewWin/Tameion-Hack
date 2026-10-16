@@ -1,0 +1,47 @@
+# The product seat's findings (docs/95) after the fixes, read in a browser (Playwright)
+# written 2026-10-16 04:41:03 +0800
+
+## P5 + needs you — /desk on desk-init-0132 (no exchange connected), 1280 wide
+headline: "You hold 5.5 g of gold and none of it is offset. A 30 % fall would cost you up to about 236.10 USDC (not yet signed for your lender)."
+needs you: "Supplier's price on PAD-1792086084 is 14.9% above the market (4760.49 vs 4141.6 USDC per troy ounce on PAXG): check it with Supplier"
+           "No exchange account is connected: nothing is offset."
+tiles: Held = 5.5 g | 0.177 oz of gold · Offset = 0 g | not connected to an exchange account ·
+       Max loss at a 30 % fall = ≈ 236.10 | USDC, live estimate: not yet signed for your lender
+screenshot proof/desk-console-21-needs-you-live-loss-2026-10-16.png
+
+## P3 — a step signed elsewhere comes back as a link and is booked on opening it
+link: http://127.0.0.1:7880/desk#step=<base64 of {policy, milestone, signature}> (a Supplier-signed 2 g purchase, LINK-1792096665,
+      signed with ~/.tameion/test-keys/desk-supplier.key by crates/operator/examples/desk_sign.rs, as /sign does with a wallet)
+opened: the hash is cleared, the deal appears; book line: LINK-1792096665 bought 2.000 signed by 0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904
+asks on the new deal: "Ask Vault: arrived", "Ask Buyer: sold" (prefilled links: deal, kind, name, grams, where to send it back, who asks)
+screenshot proof/desk-console-22-returned-step-and-asks-2026-10-16.png
+not seen: /sign producing the link (needs a wallet in the browser); a public copy of the pages (TAMEION_PUBLIC_URL unset: links
+say they open only on this Mac)
+
+## P4, P6, P7 — /lender with the 04:12 kit (its deal sold since), every pin, roles
+verdict, first on the page: "Do not lend on this statement. The offset it counts was closed after it was issued: the gold was sold or
+  the hedge was taken off. Ask the trader which; if the gold is still held, ask for a statement issued today."
+  at 390 × 844: verdict heading at y = 303 (was 8,130); at 1280 it is above the set-up block
+title: "Deal GOLD-1792095172: 10.000 g of gold — 8.000 g in stock, 2.000 g in fabrication" (figures greyed on failure)
+at RM 528 per gram and 75 %: "Up to RM 3,086.90 — 75% of (8.000 g × RM 528.00 less the maximum loss at your price, RM 108.13)."
+"What this file does not prove": six lines (metal exists, your charge, the offset stays, your reference price and ringgit, the desk
+  total, Hyperliquid is not an approved broker)
+set-up: labelled fields with where each value comes from; "Use the values saved in this browser" restored the key and the account
+screenshots proof/desk-lender-phone-verdict-first-2026-10-16.png
+
+## P1, P2, P8 — /desk on desk-gold-2329 (connected from the page), 1280 wide
+closed deals: "Sold Oct 16, 03:36 AM — nothing left to finance. If your lender has the statement of Oct 16, 03:36 AM, tell them this
+  deal is closed." · "Download for your lender" buttons on the page: 0
+tiles: Offset = 0 g | flat, read back · Margin at the exchange = 961.99 | USDC · 0.00 in use
+tab title: "Tameion Desk"; control text without a file path or a double stop ("Who can close this offset: the trader's desk, at any
+  time; its key can trade on Hyperliquid account … and cannot withdraw from it. Who can withdraw its margin: whoever holds that
+  account's master key.")
+not seen: the liquidation price line with a short open (none open now); it reads Hyperliquid's own liquidationPx
+screenshot proof/desk-console-23-sold-and-margin-2026-10-16.png
+
+## P2 with a short open (04:44:07): two supplier-signed 3 g purchases on desk-gold-2329 (LIQ-1792096898, LIQ2-1792096944)
+tiles: Held = 6 g · Offset = 5.972 g · Max loss ≈ 17.23 USDC (live estimate) ·
+       Margin at the exchange = 961.41 | USDC · covers gold up to 8,741.86/oz (+110 %)   (Hyperliquid's own liquidationPx)
+screenshot proof/desk-console-24-margin-closing-price-2026-10-16.png
+closed by the buyer's signed sales: offset -0.097, then 0 (service log: "desk 0xcd8d… LIQ-1792096898 Sold: offset "-0.097"", "… LIQ2-… Sold: offset "0"")
+note: the first purchase did not trade by itself (no "moved" line; the tap traded it) — docs/60 P-129

@@ -1,0 +1,138 @@
+# The fifth review's findings against the fixed verifiers and pages (docs/96 V1-V9)
+# written 2026-10-16 05:38:13 +0800; service rebuilt 05:32 with the fixes; console export 05:32 and 05:37
+
+## V2, V6 offline (verify_desk.py, every pin incl. --desk): the reviewer's mixed.json, dup.json, empty.json
+-- empty.json
+   FAIL: not a statement of the whole stock (it lists no deals)
+   exit 1
+-- mixed.json
+   FAIL: this is not one statement of the whole stock: its deals differ in moment, root, key, desk, exchange account or totals, or a deal or step appears twice
+   exit 1
+-- dup.json
+   FAIL: this is not one statement of the whole stock: its deals differ in moment, root, key, desk, exchange account or totals, or a deal or step appears twice
+   exit 1
+
+## V1 replay (the reviewer's venue replay of the real fills): the real 04:55 morning file at 04:59:13 and at 04:57:00
+-- at 04:59:13 (STOCK-A sold 04:59:06, short 0.193)
+   ===== STOCK-A-1792097690 (1 of 2)
+      since these statements the short fell from 0.321000 to 0.193, below the 0.321000 oz they count: a deal was sold or the offset reduced; ask for today's file
+   w. 2 statements at this root: they state 1 desk total(s); 0.321507 oz held against 0.321507; 0.321000 oz offset against the 0.321000 short, 0.193 now: False
+   FAIL: w
+   ===== STOCK-B-1792097690 (2 of 2)
+      since these statements the short fell from 0.321000 to 0.193, below the 0.321000 oz they count: a deal was sold or the offset reduced; ask for today's file
+   w. 2 statements at this root: they state 1 desk total(s); 0.321507 oz held against 0.321507; 0.321000 oz offset against the 0.321000 short, 0.193 now: False
+   FAIL: w
+   FAIL: STOCK-A-1792097690, STOCK-B-1792097690
+   exit 1
+-- at 04:57:00 (short 0.321, nothing sold)
+   ===== STOCK-A-1792097690 (1 of 2)
+   w. 2 statements at this root: they state 1 desk total(s); 0.321507 oz held against 0.321507; 0.321000 oz offset against the 0.321000 short, 0.321 now: True
+   PASS
+   ===== STOCK-B-1792097690 (2 of 2)
+   w. 2 statements at this root: they state 1 desk total(s); 0.321507 oz held against 0.321507; 0.321000 oz offset against the 0.321000 short, 0.321 now: True
+   PASS
+   PASS
+   exit 0
+
+## V3: the real STOCK-A kit re-signed by another key (review 3's throwaway), checked under that trader's set-up
+-- their key 0xae04…, their desk 0x048a… (pinned)
+      this file is for desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308, not the one you set up (0x048a9a549f19be4aa04a84dbcc51007f57d0160a)
+   f. counterparty signatures for desk 0x048a9a549f19be4aa04a84dbcc51007f57d0160a: False
+   FAIL: f
+-- the same without --desk
+   f. counterparty signatures for desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308: True  (NOT PINNED: the desk the kit names)
+   CONSISTENT, NOT PINNED (--desk): the trader could have made this kit; pin them to PASS
+
+## V2, V3, V5, V6 as unit tests (python unittest on verify_desk.py; node --test on the page's desk-verify.ts)
+   test_v2_v6_refused_books (scripts.test_verify_desk.VerifyDesk.test_v2_v6_refused_books) ... ok
+   ok
+   test_v6_empty_book (scripts.test_verify_desk.VerifyDesk.test_v6_empty_book) ... ok
+   Ran 3 tests in 0.166s
+   OK
+   ✔ V2: a whole-stock file is one moment of one desk, each deal once (0.26525ms)
+   ✔ V1: the morning file fails w once the short falls below what it counts (04:59:13, short 0.193) (0.054917ms)
+   ✔ V3: a kit of another desk fails f under the set-up of the desk it is presented as (8.452ms)
+   ✔ V5: the service's own statements pass g at any funding; a doubled share still fails (0.189959ms)
+   ℹ pass 22
+   ℹ fail 0
+
+## V1 live on Hyperliquid testnet and Arbitrum Sepolia (scratchpad v-live.sh)
+   # The whole-stock file after a sale, live (docs/96 V1, V3 pin, V4/V7 list fields)
+   # written 2026-10-16 05:33:21 +0800 · desk-gold-2329 · service built 05:32 with the docs/96 fixes
+   ## two deals in stock (supplier and vault signed)
+      STOCK-A-1792100001 · bought 4.000 g of gold for 536.61 USDC · BOUGHT-STOCK-A-1792100001 ·  | offset: -0.128
+      STOCK-A-1792100001 · 4.000 g of gold into stock · ARRIVED-STOCK-A-1792100001 · signed by V | offset: -
+      STOCK-B-1792100001 · bought 6.000 g of gold for 804.91 USDC · BOUGHT-STOCK-B-1792100001 ·  | offset: -0.321
+      STOCK-B-1792100001 · 6.000 g of gold into stock · ARRIVED-STOCK-B-1792100001 · signed by V | offset: -
+   ## POST /api/desk/statements/all
+      2 kits at 1792100016 | one anchor: True | [('STOCK-A-1792100001', '0.128400', '0.321000'), ('STOCK-B-1792100001', '0.192600', '0.321000')] 
+   ## GET /api/desk/statements: the rows now carry offsetContracts and steps
+      STOCK-B-1792100001 6.000 g gold offset 0.192600 steps 2
+      STOCK-A-1792100001 4.000 g gold offset 0.128400 steps 2
+   ## the lender checks the file, every pin including the desk
+   ===== STOCK-A-1792100001 (1 of 2)
+   f. counterparty signatures for desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308: True
+   e. PAXG position of 0x557e1e07… at the statement's time: -0.321 now, less 0 fills since = -0.321; short the statement read 0.321000: True
+   w. 2 statements at this root: they state 1 desk total(s); 0.321507 oz held against 0.321507; 0.321000 oz offset against the 0.321000 short, 0.321 now: True
+   PASS
+   ===== STOCK-B-1792100001 (2 of 2)
+   f. counterparty signatures for desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308: True
+   e. PAXG position of 0x557e1e07… at the statement's time: -0.321 now, less 0 fills since = -0.321; short the statement read 0.321000: True
+   w. 2 statements at this root: they state 1 desk total(s); 0.321507 oz held against 0.321507; 0.321000 oz offset against the 0.321000 short, 0.321 now: True
+   PASS
+   the book: 2 open deals, 0.321507 oz held; eligible after each deal's maximum loss 1313.395032 USDC in all
+   PASS
+   ## STOCK-A-1792100001 sold by the buyer (05:33:48)
+      STOCK-A-1792100001 · sold 4.000 g of gold for 535.93 USDC · SOLD-STOCK-A-1792100001 · sign | offset: -0.193
+   ## the same file checked again (05:33:56)
+   ===== STOCK-A-1792100001 (1 of 2)
+   e. PAXG position of 0x557e1e07… at the statement's time: -0.193 now, less 3 fills since = -0.321; short the statement read 0.321000: True
+      since these statements the short fell from 0.321000 to 0.193, below the 0.321000 oz they count: a deal was sold or the offset reduced; ask for today's file
+   w. 2 statements at this root: they state 1 desk total(s); 0.321507 oz held against 0.321507; 0.321000 oz offset against the 0.321000 short, 0.193 now: False
+   FAIL: w
+   ===== STOCK-B-1792100001 (2 of 2)
+   e. PAXG position of 0x557e1e07… at the statement's time: -0.193 now, less 3 fills since = -0.321; short the statement read 0.321000: True
+      since these statements the short fell from 0.321000 to 0.193, below the 0.321000 oz they count: a deal was sold or the offset reduced; ask for today's file
+   w. 2 statements at this root: they state 1 desk total(s); 0.321507 oz held against 0.321507; 0.321000 oz offset against the 0.321000 short, 0.193 now: False
+   FAIL: w
+   the book: 2 open deals, 0.321507 oz held; eligible after each deal's maximum loss 1313.395032 USDC in all
+   FAIL: STOCK-A-1792100001, STOCK-B-1792100001
+   ## STOCK-A-1792100001's statement alone, from that file: e passes on STOCK-B-1792100001's short, and the verdict says so
+   e. PAXG position of 0x557e1e07… at the statement's time: -0.193 now, less 3 fills since = -0.321; short the statement read 0.321000: True
+   PASS — a sale of this deal does not show here while other stock of this desk is offset: ask for the whole-stock file
+   BOOK=runtime/desk/v-book.lender.json  OPEN=STOCK-B-1792100001
+
+## V6 temp copies: after the book checks above, the deal copies the verifier writes are gone (TemporaryDirectory);
+## the four copies from runs before the fix (04:48, 04:56) were deleted at 05:38; none written since.
+
+## In the browser (Playwright, the 05:32 export; owner tab localhost:7880 = desk-gold-2329, bridge approvals in its log)
+- 05:34 /desk, STOCK-A sold, STOCK-B 6 g open, short 0.193 (what the book file's STOCK-B counted, 0.1926):
+  headline "You hold 6 g of gold, 100 % of it offset. A 30 % fall costs you at most 16.47 USDC, and your lender would
+  count 788.04 USDC." — the whole-stock download is gone; in its place: "The 05:33 AM statement of your whole stock no
+  longer matches it (a deal or the offset changed since): issue today's above."                       (docs/96 V1 (2))
+- 05:35 "Stock you keep unoffset" set to 3 g from the page; bridge log: signed 0x5a6b281b… saying: Keep 3.000 g of gold
+  unoffset on desk 0xcd8d…4308. Short unchanged at 0.193: headline still the signed 16.47 (the offset still matches),
+  Needs you: "The offset is 0.097 oz away from what the book needs: bring it in line below."
+- 05:36 "Bring the offset in line now" → POST /api/desk/offset read back -0.097. Reloaded /desk:
+  "You hold 6 g of gold, 50.28 % of it offset. A 30 % fall would cost you up to about 136.12 USDC (not yet signed for
+  your lender)." Needs you: "Your last statements counted 0.193 oz of offset; the exchange shows 0.097 oz now. The
+  figure above is live: issue new statements before your lender relies on the old ones."        (docs/96 V4)
+  The tile: "≈ 136.12 · USDC, live estimate: not yet signed for your lender".
+- 05:36 /lender (127.0.0.1), set-up with the desk account of ANOTHER desk (0x048a…, desk-init-0132), the real key, the
+  exchange account and the three counterparties, file runtime/desk/v-book.lender.json: "Do not lend on this statement";
+  "This file is for desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308, not the one you set up (0x048a…160a)." (V3);
+  "Since these statements the short fell to 0.097000, below the 0.321000 oz they count: a deal was sold or the offset
+  reduced. Ask for today's file." (V1, check w with check e's read).
+- 05:37 /lender with test/fixtures/desk-book-mixed.json: "this is not one statement of the whole stock: its deals differ
+  in moment, root, key, desk, exchange account or totals, or a deal or step appears twice"          (V2)
+- 05:37 base back to 0 g (page, passkey); STOCK-B sold by the buyer: offset 0 (venue flat again).
+- Seen on the way: when the exchange did not answer a read (05:35, first load), the headline said "none of it is
+  offset" — a failed read shown as no offset. Fixed in the 05:37 export (docs/60 P-131).
+
+## Not run
+- V8 (the morning task's silence with no open deal, once-per-reason lines, per-deal files only after the whole book):
+  built and read, not run — the running service already holds today's book, so the task skips before that path.
+- V8 (c) a receipt error after an anchor was sent (crates/arc anchor_root): not changed, not run.
+- V9 on a phone: /sign now takes its prefill from the fragment (query still read) and shares with navigator.share; the
+  system share sheet was not opened here.
+- V7 (a move to fabrication with the same grams hides the per-deal download): code read and typechecked, not clicked.

@@ -1,0 +1,56 @@
+# The seventh review's findings against the fixed verifiers, desk crate, service and pages (docs/100 X1-X11)
+# written 2026-10-16 06:52:09 +0800; service rebuilt and restarted 06:50; console export 06:50
+# venue replay: the reviewers' stub answers Hyperliquid's position and fills as the account stood at VENUE_NOW_MS, from the
+# real fills (review7/fills-now.json) or with the reviewer's two extra trades (fills-around.json); the rest is the real network
+
+## X1: STOCK-B deleted, STOCK-A re-signed (throwaway key as the trader's) with the desk total lowered to its own 0.128603, at 05:35:00
+      the account is short 0.321000 oz, more than the 0.128603 oz the desk says it holds: stock is left out of the desk's total, or the account is short beyond the stock (that loses on a rise)
+   m. value, classes, offset share, maximum loss and eligible value follow from the steps at 4170.5/oz: False
+   e. PAXG position of 0x557e1e07… at the statement's time: -0.193 now, less 3 fills since = -0.321; short the statement read 0.321000: False
+   FAIL: m, e
+   FAIL: STOCK-A-1792100001
+   exit 1
+## X2: the statement read a cut short (0.193) and the short was restored 4 s later (fills-around.json), at 05:35:00
+   ===== STOCK-A-1792100001 (1 of 2)
+      the account bought back 0.128 oz of its PAXG short since this statement: a deal was sold or the offset taken off; ask for a statement issued after it
+   e. PAXG position of 0x557e1e07… at the statement's time: -0.193 now, less 4 fills since = -0.193; short the statement read 0.193000: False
+   FAIL: e
+   ===== STOCK-B-1792100001 (2 of 2)
+      the account bought back 0.128 oz of its PAXG short since this statement: a deal was sold or the offset taken off; ask for a statement issued after it
+   e. PAXG position of 0x557e1e07… at the statement's time: -0.193 now, less 4 fills since = -0.193; short the statement read 0.193000: False
+   FAIL: e
+   FAIL: STOCK-A-1792100001, STOCK-B-1792100001
+   exit 1
+## Control: the real 05:33 file, untouched, at 05:33:40
+   PASS
+   PASS
+   PASS
+   exit 0
+## The page's verifier (the reviewer's tsprobe7, which composes run())
+   X1    m: The account is short 0.321000 oz, more than the 0.128603 oz the desk says it holds: stock is left out of the desk's total, or the account is short beyond the stock.
+   X1 PAGE: Do not lend on this statement — Do not lend on this file: STOCK-A-1792100001 failed. Open each below to see why.
+   X2 PAGE: Do not lend on this statement — Do not lend on this file: STOCK-A-1792100001, STOCK-B-1792100001 failed. Open each below to see why.
+   control PAGE: You can lend against these figures — The whole stock holds as of 10/16/2026, 5:33:36 AM: 2 deals, 10.000 g eligible; after each deal's maximum loss, 1,313.40 USDC in all.
+
+## X4, X6: the desk crate refuses a step booked twice under one document and a document number with a direction mark
+   test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+   the three desks' journals still replay under the guard (06:50): desk-gold-2329 22 deals, desk-init-0132 3, desk-arc-0223 1
+## X10: "nothing was sent" is not a send; arc's own "transaction 0x… was sent" is
+   test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 125 filtered out; finished in 0.02s
+## X1 offline on the page's code
+   ✔ X1: a desk total lowered below the account's short fails m (8.809791ms)
+   ℹ pass 25
+   ℹ fail 0
+
+## X3, X8 on /sign in the browser (06:51; Playwright Chromium): a link for desk-init-0132 with back=https://other-desk.example
+   "Distributor 确认:1.000 克黄金已退回库存,单据 RT-1,交易 PAD。
+    签给这个账本:0x048a9a549f19be4aa04a84dbcc51007f57d0160a(链 421614)。
+    签名会发回到 other-desk.example。
+    这个密钥从未给这个账本签过名:签名前请和交易商逐字核对上面的账本地址。"
+
+## Gate 06:51: forge 187, Rust 400 + clippy + fmt, python (evidence, verifier 4), node 15 + 35, ERC-7730 — all passed
+
+## Not run / not done
+- X5 (the statement's time is taken before the exchange is read; a fill in between fails an honest file): fails safe, not changed.
+- X7: /classic has no Content-Security-Policy; the phone key shares the origin. Not changed (the frozen page).
+- X9 (/desk tile with no gold and a position left), X4's greyed button, X7's in-app note: typecheck only.

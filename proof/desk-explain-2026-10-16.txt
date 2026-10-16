@@ -1,0 +1,111 @@
+# 2026-10-16 01:11:37 +0800 — POST /api/desk/explain: the latest statement of deal GOLD-1792081694 in words, written by the model on this Mac (Ollama llama3.1:8b), every number checked against the statement
+## run 1
+{
+    "by": "template",
+    "checked": true,
+    "deal": "GOLD-1792081694",
+    "ms": 15100,
+    "rejected": "ollama:llama3.1:8b wrote 319, which the statement does not hold; its text was set aside",
+    "statementAt": 1792081713,
+    "text": "You hold 10.000 g of gold, in stock. 99.8% of it is offset on the exchange. If gold fell 30%, the most you would lose is 27.30 USDC. Your lender would count 1039.39 USDC after that loss."
+}
+## run 2
+{
+    "by": "template",
+    "checked": true,
+    "deal": "GOLD-1792081694",
+    "ms": 6571,
+    "rejected": "ollama:llama3.1:8b wrote 319, which the statement does not hold; its text was set aside",
+    "statementAt": 1792081713,
+    "text": "You hold 10.000 g of gold, in stock. 99.8% of it is offset on the exchange. If gold fell 30%, the most you would lose is 27.30 USDC. Your lender would count 1039.39 USDC after that loss."
+}
+## a stranger
+{"error":"statements are the owner's"}
+
+# 2026-10-16 01:12:31 +0800 — after rounding the facts for the model and telling it to copy, not compute (the set-aside text is now returned)
+## run 1
+{
+    "by": "template",
+    "checked": true,
+    "deal": "GOLD-1792081694",
+    "ms": 7389,
+    "rejected": "ollama:llama3.1:8b wrote 6, which the statement does not hold; its text was set aside",
+    "setAside": "The lender is eligible for 1066.68 USD after a potential loss of up to 27.30 USD, which represents a 2% basis percentage. The dealer has 10 grams of gold in stock and 8 grams are eligible for lending, but only 6 grams (8 - 2) can be lent because 2 grams are not eligible.",
+    "statementAt": 1792081713,
+    "text": "You hold 10.000 g of gold, in stock. 99.8% of it is offset on the exchange. If gold fell 30%, the most you would lose is 27.30 USDC. Your lender would count 1039.39 USDC after that loss."
+}
+## run 2
+{
+    "by": "template",
+    "checked": true,
+    "deal": "GOLD-1792081694",
+    "ms": 6072,
+    "rejected": "ollama:llama3.1:8b wrote 6, which the statement does not hold; its text was set aside",
+    "setAside": "The lender is eligible for 1066.68 USD after a potential loss of up to 27.30 USD, which represents a 2% basis percentage. The dealer has 10 grams of gold in stock and 8 grams are eligible for lending, but only 6 grams (8 - 2) can be lent because 2 grams are not eligible.",
+    "statementAt": 1792081713,
+    "text": "You hold 10.000 g of gold, in stock. 99.8% of it is offset on the exchange. If gold fell 30%, the most you would lose is 27.30 USDC. Your lender would count 1039.39 USDC after that loss."
+}
+## run 3
+{
+    "by": "template",
+    "checked": true,
+    "deal": "GOLD-1792081694",
+    "ms": 6446,
+    "rejected": "ollama:llama3.1:8b wrote 6, which the statement does not hold; its text was set aside",
+    "setAside": "The lender is eligible for 1066.68 USD after a potential loss of up to 27.30 USD, which represents a 2% basis percentage. The dealer has 10 grams of gold in stock and 8 grams are eligible for lending, but only 6 grams (8 - 2) can be lent because 2 grams are not eligible.",
+    "statementAt": 1792081713,
+    "text": "You hold 10.000 g of gold, in stock. 99.8% of it is offset on the exchange. If gold fell 30%, the most you would lose is 27.30 USDC. Your lender would count 1039.39 USDC after that loss."
+}
+
+# 2026-10-16 01:13:44 +0800 — the model writes words and names numbers as {placeholders}; code writes the numbers (a digit of its own, or an unknown name, sets the text aside)
+## run 1
+{
+    "by": "ollama:llama3.1:8b",
+    "checked": true,
+    "deal": "GOLD-1792081694",
+    "ms": 8738,
+    "statementAt": 1792081713,
+    "text": "The dealer has 10.000 g grams of gold, worth 1333.36. They have 8.000 g grams that a lender can use to make money, which is currently worth 1066.68. If the price falls by 30, the dealer will lose up to 27.30. The exchange has already paid or charged nothing for offsetting some of this gold.",
+    "words": "The dealer has {held} grams of gold, worth {valueUsdc}. They have {eligibleGrams} grams that a lender can use to make money, which is currently worth {eligibleValueUsdc}. If the price falls by {fallPercent}, the dealer will lose up to {maxLossUsdc}. The exchange has already paid or charged nothing for offsetting some of this gold."
+}
+## run 2
+{
+    "by": "ollama:llama3.1:8b",
+    "checked": true,
+    "deal": "GOLD-1792081694",
+    "ms": 6753,
+    "statementAt": 1792081713,
+    "text": "The dealer has 10.000 g grams of gold, worth 1333.36. They have 8.000 g grams that a lender can use to make money, which is currently worth 1066.68. If the price falls by 30, the dealer will lose up to 27.30. The exchange has already paid or charged nothing for offsetting some of this gold.",
+    "words": "The dealer has {held} grams of gold, worth {valueUsdc}. They have {eligibleGrams} grams that a lender can use to make money, which is currently worth {eligibleValueUsdc}. If the price falls by {fallPercent}, the dealer will lose up to {maxLossUsdc}. The exchange has already paid or charged nothing for offsetting some of this gold."
+}
+## run 3
+{
+    "by": "ollama:llama3.1:8b",
+    "checked": true,
+    "deal": "GOLD-1792081694",
+    "ms": 6939,
+    "statementAt": 1792081713,
+    "text": "The dealer has 10.000 g grams of gold, worth 1333.36. They have 8.000 g grams that a lender can use to make money, which is currently worth 1066.68. If the price falls by 30, the dealer will lose up to 27.30. The exchange has already paid or charged nothing for offsetting some of this gold.",
+    "words": "The dealer has {held} grams of gold, worth {valueUsdc}. They have {eligibleGrams} grams that a lender can use to make money, which is currently worth {eligibleValueUsdc}. If the price falls by {fallPercent}, the dealer will lose up to {maxLossUsdc}. The exchange has already paid or charged nothing for offsetting some of this gold."
+}
+
+# 2026-10-16 01:14:38 +0800 — bare numbers in the placeholders; the model writes the units
+## run 1
+{
+ "by": "ollama:llama3.1:8b",
+ "ms": 8353,
+ "text": "The dealer has 10.000 g of gold, worth 1333.36 USDC at the market. The lender can count a portion of this value, which is currently 1066.68 USDC for 8.000 g of gold. If the price falls by 30%, the maximum loss to the dealer would be 27.30 USDC.",
+ "rejected": null
+}
+## run 2
+{
+ "by": "ollama:llama3.1:8b",
+ "ms": 6803,
+ "text": "The dealer has 10.000 g of gold, worth 1333.36 USDC at the market. The lender can count a portion of this value, which is currently 1066.68 USDC for 8.000 g of gold. If the price falls by 30%, the maximum loss to the dealer would be 27.30 USDC.",
+ "rejected": null
+}
+
+## 2026-10-16 01:16:27 +0800 — in the browser: /desk → closed deal GOLD-1792081694 → "Explain it in words"
+shown: "The dealer has 10.000 g of gold, worth 1333.36 USDC at the market. The lender can count a portion of this value, which is currently 1066.68 USDC for 8.000 g of gold. If the price falls by 30%, the maximum loss to the dealer would be 27.30 USDC."
+caption: "Written by llama3.1:8b on this Mac in 7.5 s; nothing left the machine, and every number was put in by code from the signed statement."
+screenshot: proof/desk-console-12-explain-on-this-mac.png

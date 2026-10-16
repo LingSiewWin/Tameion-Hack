@@ -1,0 +1,37 @@
+# 2026-10-16 00:28:05 +0800 — the review fixes (docs/89) on the running service: C1 strict desk auth, C2 one venue for one desk
+## C1: a made-up bearer on desk-gold-2329 (it has one agent key) and on names-2156 (no agent key)
+desk-gold-2329, Bearer anything: 403
+names-2156 (no agent key), Bearer anything: 403
+names-2156, Bearer anything, POST /api/desk/offset: {"error":"only the owner's device or a run key moves the offset"} 403
+desk-gold-2329, the real agent key (read): 200
+## C2: names-2156's own owner (device token) asks for an offset — the venue belongs to desk-gold-2329 only
+{"error":"no venue account is connected to this desk (TAMEION_DESK_VENUE)"}
+names-2156's view names no venue: venueAccount None venue None
+
+## H3: the supplier's signed purchase from the lender kit, posted again
+{"error":"this exact step is already booked; a signed step counts once"}
+
+## H1 (00:29:37): the auto limit is on what a step would trade (service restarted with TAMEION_DESK_AUTO_GRAMS=5 for this check)
+a signed 8 g purchase (would trade 8 g):
+  GOLD-H1A-1792081777 · bought 8.000 g of gold for 1066.74 USDC · PO-GOLD-H1A-1792081777 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)
+   offset: this would trade 8.000 g of gold on the venue, above the 5.000 g gold you let the desk move by itself; it waits for your tap
+   venue position: 0
+then a signed 1 g purchase (under the limit by itself, but would trade 9 g):
+  GOLD-H1B-1792081777 · bought 1.000 g of gold for 133.34 USDC · PO-GOLD-H1B-1792081777 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)
+   offset: this would trade 9.000 g of gold on the venue, above the 5.000 g gold you let the desk move by itself; it waits for your tap
+   venue position: 0
+   owner tap → read back -0.289
+both sold (signed); each waits; the owner closes:
+  GOLD-H1A-1792081777 · sold 8.000 g of gold for 1066.74 USDC · SO-GOLD-H1A-1792081777 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)
+   offset: this would trade 7.989 g of gold on the venue, above the 5.000 g gold you let the desk move by itself; it waits for your tap
+  GOLD-H1B-1792081777 · sold 1.000 g of gold for 133.34 USDC · SO-GOLD-H1B-1792081777 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)
+   offset: this would trade 8.989 g of gold on the venue, above the 5.000 g gold you let the desk move by itself; it waits for your tap
+   owner tap → read back 0
+   venue position: 0
+
+## M5 (01:21:32): approving a signer needs the owner's passkey (docs/89 M5)
+the owner's device token alone (no passkey): {"challenge":"keccak256(\"tameion.desk.party.v1\" ‖ chainId u64 ‖ policy ‖ len(name) u32 ‖ name ‖ address ‖ issued u64)","error":"approving who may sign needs the owner's passkey"}
+a software P-256 key's assertion over the same challenge: {"error":"the signature does not verify against the owner's key"}
+the Secure Enclave owner key's assertion: ['Supplier', 'Vault', 'Buyer', 'Courier2']
+the same assertion replayed: {"error":"that challenge was already used"}
+the book line keeps the owner's assertion: party Courier2 approval.challenge 0x8882d1caf835b1fb… auth.r 0x6b6a66b94cd8…

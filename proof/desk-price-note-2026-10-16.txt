@@ -1,0 +1,9 @@
+# 2026-10-16 00:02:37 +0800 — a signed contract priced far from the market is named in the reply and the owner's push (band 500 bps); PAXG mid 4146.15
+## a 3 g purchase signed by the Supplier at 459.9 USDC (fair ≈ 399.91)
+GOLD-PRICE-1792080156 · bought 3.000 g of gold for 459.9 USDC · PO-GOLD-PRICE-1792080156 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)
+  priceNote: priced 15.1% above the market (4768.16 vs 4143.9 USDC per troy ounce on PAXG): check it with Supplier
+  offset read back: None
+## the Buyer's 3 g sale at a fair price
+GOLD-PRICE-1792080156 · sold 3.000 g of gold for 399.91 USDC · SO-GOLD-PRICE-1792080156 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)
+  priceNote: None
+  offset read back: 0

@@ -1,0 +1,20 @@
+# The desk issues the lender's statement of the whole stock by itself, once a day (surface rule: not a trust decision)
+# written 2026-10-16 04:56:04 +0800 · service started with TAMEION_DESK_STATEMENT_UTC_HOUR=20 (the current UTC hour, to see it run; 0 = 08:00 in Malaysia)
+## the service log
+   desk: the whole-stock statement is issued daily at 20:00 UTC
+   desk: the morning statement of 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308 (2 deals) is ready
+## the file it wrote: runtime/app/tenants/0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308/statements/book-1792097734.json
+   2 deals at 1792097734 | one anchor: True | [('STOCK-A-1792097690', '4.000 g gold'), ('STOCK-B-1792097690', '6.000 g gold')]
+## the lender's check of that file, every pin, roles
+===== STOCK-A-1792097690 (1 of 2)
+w. 2 statements at this root: they state 1 desk total(s); 0.321507 oz held against 0.321507; 0.321000 oz offset against the 0.321000 short: True
+PASS
+===== STOCK-B-1792097690 (2 of 2)
+w. 2 statements at this root: they state 1 desk total(s); 0.321507 oz held against 0.321507; 0.321000 oz offset against the 0.321000 short: True
+PASS
+the book: 2 open deals, 0.321507 oz held; eligible after each deal's maximum loss 1313.376137 USDC in all
+PASS
+## the task does not issue a second one the same day: restarted at 04:57 with the same hour, its check 30 s later skipped
+##   (still one book-*.json file); GET /api/desk/statements lists it under "books"
+## /desk (04:59:17): "Download the 04:55 AM statement of your whole stock" → book-statement-1792097734.json
+## both deals then sold by the buyer; the offset closed

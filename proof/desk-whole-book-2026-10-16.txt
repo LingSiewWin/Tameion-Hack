@@ -1,0 +1,38 @@
+# The whole book at once: two open deals, one file, checked together (docs/94 U1)
+# written 2026-10-16 04:47:53 +0800 · desk-gold-2329 · PAXG 4173.0
+## two supplier-signed purchases, each received by the vault
+   BOOK-A-1792097273 · bought 3.000 g of gold for 402.5 USDC · BOUGHT-BOOK-A-1792097273 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904) | offset: -0.096
+   BOOK-A-1792097273 · 3.000 g of gold into stock · ARRIVED-BOOK-A-1792097273 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542) | offset: -
+   BOOK-B-1792097273 · bought 5.000 g of gold for 670.83 USDC · BOUGHT-BOOK-B-1792097273 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904) | offset: -0.257
+   BOOK-B-1792097273 · 5.000 g of gold into stock · ARRIVED-BOOK-B-1792097273 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542) | offset: -
+## POST /api/desk/statements/all
+   2 kits at 1792097283 | one anchor: True | deals: [('BOOK-A-1792097273', '0.096452', '0.096375', '0.257206'), ('BOOK-B-1792097273', '0.160754', '0.160625', '0.257206')]
+## the lender's check of the whole file, every pin, roles
+===== BOOK-A-1792097273 (1 of 2)
+m. value, classes, offset share, maximum loss and eligible value follow from the steps at 4171.0/oz: True
+e. PAXG position of 0x557e1e07… at the statement's time: -0.257 now, less 0 fills since = -0.257; short the statement read 0.257000: True
+w. 2 statements at this root: they state 1 desk total(s); 0.257206 oz held against 0.257206; 0.257000 oz offset against the 0.257000 short: True
+PASS
+===== BOOK-B-1792097273 (2 of 2)
+m. value, classes, offset share, maximum loss and eligible value follow from the steps at 4171.0/oz: True
+e. PAXG position of 0x557e1e07… at the statement's time: -0.257 now, less 0 fills since = -0.257; short the statement read 0.257000: True
+w. 2 statements at this root: they state 1 desk total(s); 0.257206 oz held against 0.257206; 0.257000 oz offset against the 0.257000 short: True
+PASS
+the book: 2 open deals, 0.257206 oz held; eligible after each deal's maximum loss 1051.092256 USDC in all
+PASS
+## both sold by the buyer: the offset closes
+   BOOK-A-1792097273 · sold 3.000 g of gold for 402.5 USDC · SOLD-BOOK-A-1792097273 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4) | offset: -0.161
+   BOOK-B-1792097273 · sold 5.000 g of gold for 670.83 USDC · SOLD-BOOK-B-1792097273 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4) | offset: 0
+BOOK=runtime/desk/book-1792097273.lender.json
+
+## The same from the pages (04:51:52): two open deals STOCK-A-1792097415 (4 g) and STOCK-B-1792097415 (6 g)
+/desk "Statement of your whole stock for your lender" → downloaded book-statement-1792097444.json (one moment, one anchor)
+/lender with that file, the saved set-up: "The whole stock holds as of 10/16/2026, 4:50:44 AM: 2 deals, 10.000 g eligible; after
+  each deal's maximum loss, 1,313.54 USDC in all." · w: "2 statements at this root (of 2 given): 1 desk total(s); 0.321507 oz held
+  against 0.321507; 0.321000 oz offset against the 0.321000 short." · a button per deal opens its own checks
+screenshot proof/desk-lender-whole-stock-2026-10-16.png
+then both sold by the buyer: "STOCK-A-1792097415 · sold 4.000 g … | offset: -0.193", "STOCK-B-1792097415 · sold 6.000 g … | offset: 0"
+
+## The first try (proof/desk-whole-book-first-try-2026-10-16.txt) failed on the second deal: "venue api: error sending request for
+## url (https://api.hyperliquid-testnet.xyz/info)" — the testnet API drops requests; every read the statement needs now retries
+## three times (docs/60 P-130).

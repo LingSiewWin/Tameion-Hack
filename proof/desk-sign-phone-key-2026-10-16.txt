@@ -1,0 +1,42 @@
+# A counterparty with no wallet signs its step with a key /sign makes on its phone, in Chinese (docs/97: the first firms are
+# WhatsApp-first and Chinese-owned; few hold a wallet). Desk desk-gold-2329 (0xcd8d…4308), Arbitrum Sepolia, Hyperliquid testnet.
+# written 2026-10-16 06:16:28 +0800; console export 06:12 and 06:15; the browser is Playwright's Chromium (no wallet extension)
+
+06:13 /sign#desk=0xcd8d…4308&chain=421614&kind=consigned&qty=4.000&as=Distributor&doc=CN-0610&lang=zh (no wallet in the browser)
+  page, in Chinese: "确认您的这一步 … Distributor 确认:4.000 克黄金已寄售,单据 CN-0610,交易 …。" and one button: "在这部手机上生成签名密钥"
+  tap → "您在这部手机上的签名密钥 … 把这个地址发给交易商一次,他会把它登记在您的名下。…" 0x1225320B01c193e9DadBe5F4b276692a1b06B377
+06:13 /desk (owner): Approve who may sign → Distributor, role Retailer (consigned, returned), that address → Approve
+  toast: "Distributor may now sign steps for your desk."
+  bridge log: signed 0x31c40995… saying: Approve Distributor (0x1225320B01c193e9DadBe5F4b276692a1b06B377) to sign consigned, returned on desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308
+06:14:07 supplier-signed purchase and vault-signed receipt (scripts, desk_sign with the test keys):
+  PHONE-1792102446 · bought 4.000 g of gold for 536.77 USDC · signed by Supplier | offset: -0.128 (read back)
+  PHONE-1792102446 · 4.000 g of gold into stock · signed by Vault
+06:14 /sign, deal PHONE-1792102446, tap "用这部手机上的密钥签名" (the phone key signs EIP-712 ShipmentEvent v2, as a wallet would):
+  "已记入交易商的账本 · 已记录 · PHONE-1792102446 · 4.000 g of gold consigned · CN-0610 · signed by Distributor"
+06:14:40 POST /api/desk/statement → runtime/desk/phone-PHONE-1792102446.lender.json, anchor tx
+  0x7837d2b7b76075104b7539dac30eb5b484d7c6f3473f75e948d11a5d932deea1 (Arbitrum Sepolia)
+  the lender's check, every pin incl. --desk and --party Distributor=0x1225…B377:consigned,returned:
+    a. statementHash recomputed 0xf6814849d6c1b25a… matches
+    b. statement signature recovers to 0x62f82e3494eb9c446c161a9f52f0a90b986e5062
+    c. 3 of 68 steps disclosed, at positions [65, 66, 67]; each reaches root 0x85c9f3fa495ce5fb… from its own position, none twice: True
+       step 65: bought 4.000 g · BOUGHT-PHONE-1792102446 · Supplier's signature recovers to 0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904
+       step 66: arrived 4.000 g · ARRIVED-PHONE-1792102446 · Vault's signature recovers to 0x8b95fdedb647236da0f266231f71440d2714d542
+       step 67: consigned 4.000 g · CN-0610 · Distributor's signature recovers to 0x1225320b01c193e9dadbe5f4b276692a1b06b377
+    f. counterparty signatures for desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308: True
+    h. from the steps: consigned 4.000 g — matches the statement
+    m. value, classes, offset share, maximum loss and eligible value follow from the steps at 4172.165/oz: True
+    p. PAXG traded 4171.2–4172.4 in the two minutes around the statement; mark 4172.165: True
+    d. root anchored in 0x7837d2b7b7607510… on 2 node(s): True
+    e. PAXG position of 0x557e1e07… at the statement's time: -0.128 now, less 0 fills since = -0.128; short the statement read 0.128000: True
+    g. funding on the account's PAXG short since the deal's first step: 0; claimed 0: True
+    t. issued 2026-10-15 22:14:40 UTC, 0.0 h ago (at most 24 h), after its last step: True
+    PASS
+06:15 the phone key asks to sign the sale (outside its role): refused; the page says, in Chinese,
+  "「Distributor」只能签:已寄售、已退回库存;不能签:从交易商买入(有价格的销售)。" (before the 06:15 export: the service's English
+  "Distributor may sign consigned, returned on this desk, not sold")
+06:15:09 the buyer signs the sale: PHONE-1792102446 · sold 4.000 g … signed by Buyer | offset: 0 (venue flat again)
+
+Screenshot: proof/desk-sign-phone-key-zh-2026-10-16.png (the refusal, Chinese, the key panel with the address).
+Limit: the key lives in the phone browser's storage (localStorage), readable by any script on that origin; clearing the browser
+loses it (make a new one, the trader approves the new address and stops the old). A passkey-bound key (WebAuthn P-256) is the upgrade.
+Not run: on a real phone (Safari/Chrome on iOS or Android) — Playwright's desktop Chromium only.

@@ -1,0 +1,134 @@
+# The lender verifiers recompute the money and check each step at its own position (docs/91 R1, R2, R12)
+# written 2026-10-16 01:50:27 +0800 · scripts/verify_desk.py and apps/console/src/lib/desk-verify.ts
+# Forged kits: built by the second reviewer from the live kit, re-signed with a throwaway statement key 0xc876…84cd
+# standing in for the trader own key (so b passes, as it would for a dishonest trader). Before this change P1 and P2 PASSed.
+
+## live kit runtime/desk/api-GOLD-1792085266.lender.json, every pin
+a. statementHash recomputed 0xec77a42b4411fb10… matches
+b. statement signature recovers to 0x62f82e3494eb9c446c161a9f52f0a90b986e5062
+c. 3 of 12 steps disclosed, at positions [9, 10, 11]; each reaches root 0x88747ae7a799b0b5… from its own position, none twice: True
+   step 9: bought 10.000 g · PO-GOLD-1792085266 · Supplier's signature recovers to 0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904
+   step 10: arrived 10.000 g · VR-GOLD-1792085266 · Vault's signature recovers to 0x8b95fdedb647236da0f266231f71440d2714d542
+   step 11: to_fabrication 2.000 g · JOB-GOLD-1792085266 · entered by the trader, unsigned (no counterparty vouches for it)
+f. counterparty signatures for desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308: True
+h. from the steps: in_stock 8.000 g, in_fabrication 2.000 g — matches the statement
+m. value, classes, offset share, maximum loss and eligible value follow from the steps at 4143.3/oz: True
+p. PAXG traded 4140.1–4147.0 in the two minutes around the statement; mark 4143.3: True
+   https://sepolia-rollup.arbitrum.io/rpc: block 319489177, carries the root in the pinned contract: True
+   https://arbitrum-sepolia-rpc.publicnode.com: block 319489177, carries the root in the pinned contract: True
+d. root anchored in 0xdc21e9434c52ee1f… on 2 node(s): True
+e. PAXG position of 0x557e1e07… at the statement's time: -0.321 now, less 8 fills since = -0.321; offset claimed 0.321000: True
+g. funding on the account's PAXG short since the deal's first step: 0; claimed 0: True
+
+what the statement says: 10.000 g gold in stock, worth 1332.101883 USDC at 4143.3/oz; 99.84% offset; maximum loss 27.272812 USDC at a 30.0% fall + 2.0% basis; eligible after it 1038.408694 USDC
+PASS
+exit 0
+
+## p1-money
+# mark x10, valueUsdc x10, maxLoss 0, eligibleUsdc 1,000,000, offsetShareBps 10000
+a. statementHash recomputed 0xdd3a72443364829f… matches
+b. statement signature recovers to 0xc876312d40df412c467e0eeca812d80b5d4884cd
+c. 3 of 12 steps disclosed, at positions [9, 10, 11]; each reaches root 0x88747ae7a799b0b5… from its own position, none twice: True
+f. counterparty signatures for desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308: True
+h. from the steps: in_stock 8.000 g, in_fabrication 2.000 g — matches the statement
+   maxLossUsdc 0, the steps give 272.728124
+   eligibleUsdc 1000000, the steps give 10384.086937
+   offsetShareBps 10000, the steps give 9984.216053
+   eligible.valueUsdc 1000000, the steps give 10656.815061
+   ineligible.valueUsdc 266.420377, the steps give 2664.203765
+m. value, classes, offset share, maximum loss and eligible value follow from the steps at 41433/oz: False
+p. PAXG traded 4140.1–4147.0 in the two minutes around the statement; mark 41433: False
+d. root anchored in 0xdc21e9434c52ee1f… on 2 node(s): True
+e. PAXG position of 0x557e1e07… at the statement's time: -0.321 now, less 8 fills since = -0.321; offset claimed 0.321000: True
+g. funding on the account's PAXG short since the deal's first step: 0; claimed 0: True
+
+what the statement says: 10.000 g gold in stock, worth 13321.01883 USDC at 41433/oz; 100.0% offset; maximum loss 0 USDC at a 30.0% fall + 2.0% basis; eligible after it 1000000 USDC
+FAIL: m, p
+exit 1
+
+## p2-twice
+# the signed purchase and the vault receipt each disclosed twice; held 20 g
+a. statementHash recomputed 0x19b8fffeeff3fb3c… matches
+b. statement signature recovers to 0xc876312d40df412c467e0eeca812d80b5d4884cd
+c. 5 of 12 steps disclosed, at positions [9, 9, 10, 10, 11]; each reaches root 0x88747ae7a799b0b5… from its own position, none twice: False
+f. counterparty signatures for desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308: True
+h. the steps do not add up: step 9: a deal is one purchase, booked first (the desk refuses a second)
+   no grams to compute from (h)
+m. value, classes, offset share, maximum loss and eligible value follow from the steps at 4143.3/oz: False
+p. PAXG traded 4140.1–4147.0 in the two minutes around the statement; mark 4143.3: True
+d. root anchored in 0xdc21e9434c52ee1f… on 2 node(s): True
+e. PAXG position of 0x557e1e07… at the statement's time: -0.321 now, less 8 fills since = -0.321; offset claimed 0.321000: True
+g. funding on the account's PAXG short since the deal's first step: 0; claimed 0: True
+
+what the statement says: 20.000 g gold in stock, worth 1332.101883 USDC at 4143.3/oz; 99.84% offset; maximum loss 27.272812 USDC at a 30.0% fall + 2.0% basis; eligible after it 1038.408694 USDC
+FAIL: c, h, m
+exit 1
+
+## p3-reorder
+# P1 with the vault receipt shown before the purchase (real paths)
+a. statementHash recomputed 0xdd3a72443364829f… matches
+b. statement signature recovers to 0xc876312d40df412c467e0eeca812d80b5d4884cd
+c. 3 of 12 steps disclosed, at positions [10, 9, 11]; each reaches root 0x88747ae7a799b0b5… from its own position, none twice: False
+f. counterparty signatures for desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308: True
+h. the steps do not add up: step 10: a deal is one purchase, booked first (the desk refuses a second)
+   no grams to compute from (h)
+m. value, classes, offset share, maximum loss and eligible value follow from the steps at 41433/oz: False
+p. PAXG traded 4140.1–4147.0 in the two minutes around the statement; mark 41433: False
+d. root anchored in 0xdc21e9434c52ee1f… on 2 node(s): True
+e. PAXG position of 0x557e1e07… at the statement's time: -0.321 now, less 8 fills since = -0.321; offset claimed 0.321000: True
+g. funding on the account's PAXG short since the deal's first step: 0; claimed 0: True
+
+what the statement says: 10.000 g gold in stock, worth 13321.01883 USDC at 41433/oz; 100.0% offset; maximum loss 0 USDC at a 30.0% fall + 2.0% basis; eligible after it 1000000 USDC
+FAIL: c, h, m, p
+exit 1
+
+## p4-position
+# P1 with two steps swapped, each claiming the other position
+a. statementHash recomputed 0xdd3a72443364829f… matches
+b. statement signature recovers to 0xc876312d40df412c467e0eeca812d80b5d4884cd
+c. 3 of 12 steps disclosed, at positions [9, 10, 11]; each reaches root 0x88747ae7a799b0b5… from its own position, none twice: False
+f. counterparty signatures for desk 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308: True
+h. the steps do not add up: step 10 moves more than the deal holds
+   no grams to compute from (h)
+m. value, classes, offset share, maximum loss and eligible value follow from the steps at 41433/oz: False
+p. PAXG traded 4140.1–4147.0 in the two minutes around the statement; mark 41433: False
+d. root anchored in 0xdc21e9434c52ee1f… on 2 node(s): True
+e. PAXG position of 0x557e1e07… at the statement's time: -0.321 now, less 8 fills since = -0.321; offset claimed 0.321000: True
+g. funding on the account's PAXG short since the deal's first step: 0; claimed 0: True
+
+what the statement says: 10.000 g gold in stock, worth 13321.01883 USDC at 41433/oz; 100.0% offset; maximum loss 0 USDC at a 30.0% fall + 2.0% basis; eligible after it 1000000 USDC
+FAIL: c, h, m, p
+exit 1
+
+## the same in the browser code (node --test apps/console/test/*.mts)
+✔ decimals become minor units exactly (0.822709ms)
+✔ canonical JSON sorts keys at every level (0.103958ms)
+✔ each signed step re-encodes to the disclosed line (0.095ms)
+✔ the steps add up to the statement's grams (check h) (0.783958ms)
+✔ the real kit passes every offline check when pinned (24.374416ms)
+✔ a changed number, a changed step, a wrong signer, another desk, an unapproved party each fail (28.627083ms)
+✔ R1: invented money fails m (price x10, max loss 0, eligible 1,000,000) (5.139917ms)
+✔ R2: a step disclosed twice, reordered, or shown at another position fails c (17.1265ms)
+✔ off-chain challenges match the Rust byte for byte (1.674583ms)
+✔ a button signs only its own function, on its own contract (3.790292ms)
+✔ a pay row signs exactly its payee and amount (2.468125ms)
+✔ the pairing code is 48 bits and the same as the classic page's (2.209125ms)
+✔ only https receipts open (0.076708ms)
+✔ the desk's party challenge is the Rust bytes (desk::party_challenge) (0.193875ms)
+✔ the desk's owner challenges are the Rust bytes (desk::{base,control,step}_challenge, event_digest) (0.970209ms)
+✔ the root rebuilt from the events is the one the agent anchored (1.689875ms)
+✔ one changed byte changes the root (0.998417ms)
+✔ RFC 6962 shape: empty, one leaf, uneven split (0.1285ms)
+ℹ tests 18
+ℹ pass 18
+ℹ fail 0
+
+## the /lender page in a browser (Playwright, 02:01:50, http://127.0.0.1:7880/lender, all three pins typed)
+live kit api-GOLD-1792085266 -> "Every check passed": a b c f h m p d e g all passed
+  m: "Value, each class, the offset share, the maximum loss and the eligible value recomputed at 4143.3 per ounce."
+  p: "PAXG traded 4140.1–4147 in the two minutes around the statement; the statement uses 4143.3."
+  e: "-0.322000 now, less 17 fills since = -0.321000; the statement claims 0.321000."   (docs/91 R12: position now less fills since)
+  screenshot proof/desk-lender-page-money-2026-10-16.png
+forged P1 (signer pinned to the forger's key) -> "A check failed": m failed ("maxLossUsdc 0; the steps give 272.728124. eligibleUsdc
+  1000000; the steps give 10384.086937. …"), p failed ("…the statement uses 41433"); everything else passed, as it should
+  screenshot proof/desk-lender-page-forged-2026-10-16.png

@@ -1,0 +1,7 @@
+# An agent stops a counterparty over MCP (trust-shrinking: an agent key with run may; re-approval needs the owner's passkey)
+# written 2026-10-16 02:26:54 +0800 · desk desk-gold-2329 (0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308) · tameion-mcp with the desk's agent key (TAMEION_TOKEN, not printed)
+tools/list: 21 tools; stop_counterparty annotations: {'destructiveHint': False, 'idempotentHint': True, 'openWorldHint': True, 'readOnlyHint': False, 'title': 'Stop a counterparty'}
+stop_counterparty Courier2 -> {
+  "stopped": "Courier2"
+}
+desk parties -> [('Supplier', None, False), ('Vault', None, False), ('Buyer', None, False), ('Courier2', None, True)]

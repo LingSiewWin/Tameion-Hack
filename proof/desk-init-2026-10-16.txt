@@ -1,0 +1,41 @@
+# 2026-10-16 01:32:25 +0800 — scripts/desk_init.sh desk-init-0132 arbitrum-sepolia --no-presence (unattended, so no Touch ID; a real desk omits the flag)
+1. the owner key, inside this Mac's Secure Enclave
+   made ~/.tameion/desks/desk-init-0132.blob (NO Touch ID: unattended proofs only)
+2. the account, reserved on arbitrum-sepolia (nothing on chain until money arrives)
+   account 0x048a9a549f19be4aa04a84dbcc51007f57d0160a
+3. the owner's device token
+   issued with the reservation
+4. opening it in a browser
+   ~/.tameion/desks/desk-init-0132-console.js
+
+Desk "desk-init-0132" is open: account 0x048a9a549f19be4aa04a84dbcc51007f57d0160a on arbitrum-sepolia.
+To let it offset on Hyperliquid testnet, restart the service with (one desk per service):
+  TAMEION_DESK_POLICY=0x048a9a549f19be4aa04a84dbcc51007f57d0160a TAMEION_DESK_VENUE=<your Hyperliquid testnet account> HEDGE_LIVE=1 \
+    PORT=7880 nohup ./target/debug/tameion-app > runtime/tameion-app.log 2>&1 &
+  (the trade-only key that account approved goes in ~/.tameion/hedge-agent.key; docs/88 §2)
+Then approve who may sign on /desk (your Touch ID signs each), or with
+  SE_BLOB=~/.tameion/desks/desk-init-0132.blob scripts/prove_desk_api.sh 0x048a9a549f19be4aa04a84dbcc51007f57d0160a ~/.tameion/desks/desk-init-0132.token   (a full test run: trades on the venue)
+
+## the files (mode)
+-rw-------@ desk-init-0132-console.js
+-rw-------@ desk-init-0132.blob
+-rw-------@ desk-init-0132.blob.presence
+-rw-------@ desk-init-0132.policy
+-rw-------@ desk-init-0132.token
+## the desk opens for its owner (device token), not for a stranger
+owner: 200
+stranger: 403
+## running it again reuses the key and takes a fresh token with one chip signature
+warning: signing with a key that asks for no person; the UV flag claims a check that did not happen
+1. the owner key, inside this Mac's Secure Enclave
+   reusing ~/.tameion/desks/desk-init-0132.blob
+2. the account, reserved on arbitrum-sepolia (nothing on chain until money arrives)
+   account 0x048a9a549f19be4aa04a84dbcc51007f57d0160a
+3. the owner's device token
+   taken with one chip signature
+4. opening it in a browser
+   ~/.tameion/desks/desk-init-0132-console.js
+## the new desk: approving the Supplier with its own chip key (desk_challenge party → desk-se sign → POST /api/desk/party)
+{"parties":[{"address":"0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904","approval":{"auth":{"authenticatorData":"0x49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97630500000000","challengeIndex":23,"clientDataJSON":"{\"type\":\"webauthn.get\",\"challenge\":\"atabbmcq-KNrnZwaSREJIuvIy6gHJynqzptFKuP8dCo\",\"origin\":\"http://localhost:7880\",\"crossOrigin\":false}","r":"0x36361e899a3a8334426780a5cc8780c3b3710b79f53037a1032c9e1ac07c7be4","s":"0x0e71d597eefa2fb3390338707e43254ad8bc746df094eff2a960ea30c51e8630","typeIndex":1},"challenge":"0x6ad69b6e672af8a36b9d9c1a49110922ebc8cba8072729eace9b452ae3fc742a","issued":1792085558},"name":"Supplier"}]}
+## the test desk's chip key over the same kind of challenge for the new desk → refused (another owner)
+{"error":"the signature does not verify against the owner's key"}
