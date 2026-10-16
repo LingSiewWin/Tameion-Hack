@@ -437,28 +437,34 @@ function FromAnotherChain() {
   );
 }
 
-/** What the bill wallet holds outside dollars, in days of bills. */
+/** What the bill wallet holds outside dollars, in days of bills. The offset is optional (docs/109 §10): only an account
+ *  whose exchange is really connected (`exposure.hedge.on`) reads about one; any other is told what is true of USDC. */
 function Protection() {
   const { inbox } = useAccount();
   const e = inbox?.exposure;
   if (!e?.holdings?.length || !num(e.notionalUsd)) return null;
   const $$ = (x?: string) => Number(x).toLocaleString("en-US", { maximumFractionDigits: 2 });
+  const hedged = !!e.hedge?.on;
   return (
-    <Panel title="Protection" icon={Shield}>
+    <Panel title={hedged ? "Protection" : "Held outside USDC"} icon={Shield}>
       <p>
         Your bill wallet also holds {Number(e.ethTotal).toLocaleString("en-US", { maximumFractionDigits: 4 })} ETH (${$$(e.notionalUsd)} at ${$$(e.ethMark)}). A 30% fall
         would cost ${$$(e.fall30Usd)}
         {e.fall30Days != null ? ` — about ${e.fall30Days} day${e.fall30Days === 1 ? "" : "s"} of your bills` : ""}.
       </p>
-      <p className="text-caption text-muted-foreground">
-        {e.hedge?.on ? "On: the agent keeps an offsetting position." : "Off for this account."}{" "}
-        <Why label="How">
-        {e.hedge?.on
-          ? "The agent keeps an offsetting short on Hyperliquid (testnet), sized to your bills, at most 2x, never closer than four times the venue's liquidation line; its key can trade on that account and cannot withdraw."
-          : "Protection is off for this account: it needs a trade-only Hyperliquid key (it can trade on that account and cannot withdraw). Until then the agent reports the exposure and nothing else."}{" "}
-        {e.source}
-        </Why>
-      </p>
+      {hedged ? (
+        <p className="text-caption text-muted-foreground">
+          On: the agent keeps an offsetting position.{" "}
+          <Why label="How">
+            The agent keeps an offsetting short on Hyperliquid (testnet), sized to your bills, at most 2x, never closer than four times the venue&apos;s liquidation line;
+            its key can trade on that account and cannot withdraw. {e.source}
+          </Why>
+        </p>
+      ) : (
+        <p className="text-caption text-muted-foreground">
+          The account your agents pay from holds USDC, so a fall in ETH does not touch it: only what the bill wallet keeps outside dollars moves with the price.
+        </p>
+      )}
     </Panel>
   );
 }
