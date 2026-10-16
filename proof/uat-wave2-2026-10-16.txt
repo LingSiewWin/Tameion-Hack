@@ -1,0 +1,83 @@
+# 2026-10-16 22:01:58 +0800 UAT fix wave 2 (docs/60 P-175, P-170, P-176, P-177, P-171, P-173, P-174) on the seat's own instance :7903 (TAMEION_APP_DIR=runtime/seat-S3; the UAT tenants and their pass records copied in; :7880 untouched). Tokens are read from files and never printed.
+
+## P-175: uat-u2-fin's third ask, as the inbox now offers it
+{
+ "counterparty": "0x179dca89f69faef5765d2e7445aa5452b8159520",
+ "amount": "0.050000 USDC",
+ "actionHash": "0xde5b25316c033861cc7168b2b129b833017fc0d92e3670e8d246d76c239f5434",
+ "settlementKey": "0xf39a6156a544af2b1965d16d1ce40bfb73b73ad47f192f60c2db0649d38f256f",
+ "cycleKey": "0x179dca89f69faef5765d2e7445aa5452b8159520@1792156029",
+ "reason": "a bill the owner typed: 0.050000 USDC every 30 days",
+ "askedBy": "the agent",
+ "boundUntil": 1792159920
+}
+bound settle call keyed to the settlement key: True | to the pass's proposal hash: False
+paid rows:
+  {"counterparty": "0x179dca89f69faef5765d2e7445aa5452b8159520", "amount": "0.050000 USDC", "tx": "0x20f53fac615b6b15007c5d7e8a9a65507cbeeaf43cb0fd4d94dd99f1e74f1e84", "by": "you", "reason": "paid by the owner; the agent asked: a bill the owner typed: 0.050000 USDC every 30 days"}
+  {"counterparty": "0x179dca89f69faef5765d2e7445aa5452b8159520", "amount": "0.050000 USDC", "tx": "0x06a344a58ef817491949a6ab49638a204f8414aad4322ba46d587e926d41067c", "by": "you", "reason": "paid by the owner; the agent asked: a bill the owner typed: 0.050000 USDC every 30 days"}
+
+Simulated with eth_call from the owner contract (0xf12f47e643d3aadc42c70430f26dd58ef0dd228a) on Arbitrum Sepolia, nothing sent:
+  the inbox's call, keyed to the bill-cycle 0xf39a…256f (unspent): 0x
+  the same call under a key already spent (0x85dc…1969, the first tap's): execution reverted, data: 0xd1d36dcd85dcc14b8c469d30b6e7edd45f28d92267583487c27c38111089a41008861969
+  AlreadyExecuted(bytes32) = 0xd1d36dcd: once the first tap lands under 0xf39a…, every second tap (another check, another tab) is this same call and reverts like this.
+
+The next pass: the rule it now applies to the owner's own SettledByPrincipal payments (unit test lib.rs a_cycle_the_owner_paid_by_hand_is_not_asked_again, with these numbers): the bill-cycle due 1792156029 (21:07:09) is answered by tx 0x06a3…067c (21:09:26), the next by tx 0x20f5…1e84 (21:17:45 by its block, paid ahead), so the pass steps to the cycle due 30 days later and asks nothing now; the third ask leaves Needs you on the next pass.
+
+## P-170: the owner's device on a keyed account (desk-gold-2329: agent key 'desk agent' [read, run])
+prepare-mode with the owner's device header: 200 Watch: the agent reads and reports, pays nothing | only the owner's passkey can sign this, on the account page; an agent key cannot | at once when signed: it lowers what the agent may do by itself
+the same without it: {"error":"this account's owner requires an agent key: send Authorization: Bearer <token> (the owner mints one on the account page)","scope":"prepare"}
+the desk's device on another account (uat-u1-acme): 401
+
+## P-176: what anyone can check, on the keyed account, with no key
+records: 404 {"error":"no anchored records for that policy"}
+statement (bills, payees) without a key: 401
+
+## P-173: the owner's live stream with the device header (as fetch streaming sends it)
+with the header: HTTP/1.1 200 OK
+without: 401
+records of uat-u1-acme (keyed: research-bot, this browser) with no key: 200 — 3 anchored root(s); first: {"agent": "0x0d6a411b4a0bcb9ded981a3c229027a03443faf3", "anchor": "0xe7c381aafa077cc99359e8b297d2125efd76b8f5", "anchorTx": "0xf102afee1deacdfb03fb2bb44c4a733b8
+its events with no key: 200 —        1 event line(s)
+
+## P-177: uat-u2-fin's signed statement for this week, now with the owner's passkey payments
+totals: {"needsYou": {"amount": "0.150000 USDC", "count": 3}, "paid": {"amount": "0.100000 USDC", "count": 2}, "refused": {"amount": "0.000000 USDC", "count": 0}}
+  paid line: {"at": 1792156166, "payee": "0x179dca89f69faef5765d2e7445aa5452b8159520", "amount": "0.050000 USDC", "tx": "0x06a344a58ef817491949a6ab49638a204f8414aad4322ba46d587e926d41067c", "paidBy": "owner", "detail": "paid by the owner with the passkey; the agent asked: mode: policy is in Propose, not Autopilot; the contract refuses the agent's payment and the owner's passkey settles it"}
+  paid line: {"at": 1792156665, "payee": "0x179dca89f69faef5765d2e7445aa5452b8159520", "amount": "0.050000 USDC", "tx": "0x20f53fac615b6b15007c5d7e8a9a65507cbeeaf43cb0fd4d94dd99f1e74f1e84", "paidBy": "owner", "detail": "paid by the owner with the passkey; the agent asked: mode: policy is in Propose, not Autopilot; the contract refuses the agent's payment and the owner's passkey settles it"}
+signer 0x62f82e3494eb9c446c161a9f52f0a90b986e5062 linesHash 0xd8bfc3cf24a3872595ba1140e7bcbcb7b53a0e373bb75cbf2a780d9869538d77
+CSV (header and paid rows):
+date,payee,amount,kind,tx,paid_by,reason
+2026-10-16T13:09:26Z,0x179dca89f69faef5765d2e7445aa5452b8159520,0.050000 USDC,paid,0x06a344a58ef817491949a6ab49638a204f8414aad4322ba46d587e926d41067c,owner,"paid by the owner with the passkey; the agent asked: mode: policy is in Propose, not Autopilot; the contract refuses the agent's payment and the owner's passkey settles it"
+2026-10-16T13:17:45Z,0x179dca89f69faef5765d2e7445aa5452b8159520,0.050000 USDC,paid,0x20f53fac615b6b15007c5d7e8a9a65507cbeeaf43cb0fd4d94dd99f1e74f1e84,owner,"paid by the owner with the passkey; the agent asked: mode: policy is in Propose, not Autopilot; the contract refuses the agent's payment and the owner's passkey settles it"
+
+## P-174: uat-u1-acme's refused purchase, where the page shows refusals (inbox read with the account's read key)
+  refused: {"counterparty": "0xe7d8d72abade89be5309a6f55031079f0cf62990", "amount": "0.001000 USDC", "why": "a purchase was refused: the account refuses: the account is not on Autopilot; the agent buys only when it may pay by itself", "at": 1792155591}
+  (the words a NotAutopilot revert now carries: "the agent buys only on Autopilot: this account asks before paying, so the purchase was refused; turn Autopilot on to let it buy inside your limits")
+
+## Item 8: the inbox, GET /api/level1/inbox on my instance :7903 (written 2026-10-16 22:51 +0800)
+Accounts: U2 uat-u2-fin 0x48274c7904edb23f75ea607c932d5c441c1a80e3 (no key), U1 uat-u1-acme 0x42463b314d392fe34abe1854b925f0f6e55fa555 (its buy key), U3 0xb32753851113869778fec66c51c3a13405edcfab (its ops key); chain Arbitrum Sepolia, public RPC https://sepolia-rollup.arbitrum.io/rpc.
+Before (UAT and my first measurement): U2 40.4 s and 34.0 s; U1 3-4 s; U3 first call 112.7 s, then 3.2 s.
+Midway (reads in parallel and cached; quick client with a 6 s cap, no retry of a stalled request) - random stalls remained:
+  run 1: U2 200 3.928356s · U1 200 41.613486s · U3 200 4.550148s
+  run 2: U2 200 3.335682s · U1 200 3.068993s · U3 200 3.668161s
+  run 3: U2 200 2.910214s · U1 200 8.226242s · U3 200 3.149866s
+  run 4: U2 200 3.174884s · U1 200 3.276767s · U3 200 3.603579s
+  run 5: U2 200 3.261164s · U1 200 2.938735s · U3 200 30.867433s
+  run 6: U2 200 41.898140s · U1 200 3.426237s · U3 200 3.151142s
+The stall, outside the service (curl, 100 fresh connections to the public RPC; columns: dns connect tls first-byte total code; only those over 1.5 s):
+  0.003894 7.585056 7.693277 8.010702 8.010855 200
+  0.004245 7.564972 7.650275 8.248934 8.260828 200
+  (the TCP connect itself stalls 7.6 s on about 2 in 100 new connections)
+After (connect cap 1 s, request cap 3 s, a stalled request sent again; restarted 22:44:46, so run 1 is the first, cold call):
+  run 1: U2 200 4.668905s · U1 200 4.362829s · U3 200 5.278050s
+  run 2: U2 200 3.433309s · U1 200 3.019483s · U3 200 4.524790s
+  run 3: U2 200 3.344155s · U1 200 3.028567s · U3 200 3.630672s
+  run 4: U2 200 3.614873s · U1 200 3.213549s · U3 200 3.463391s
+  run 5: U2 200 3.263942s · U1 200 3.009955s · U3 200 3.300421s
+  run 6: U2 200 3.432045s · U1 200 3.196029s · U3 200 3.659036s
+  run 7: U2 200 3.118258s · U1 200 3.403136s · U3 200 3.467135s
+  run 8: U2 200 3.707756s · U1 200 3.407911s · U3 200 4.108649s
+  run 9: U2 200 2.997049s · U1 200 3.857830s · U3 200 4.186152s
+  run 10: U2 200 3.701893s · U1 200 3.526455s · U3 200 3.789935s
+  run 11: U2 200 3.353414s · U1 200 3.245365s · U3 200 3.631555s
+  run 12: U2 200 3.170767s · U1 200 3.220950s · U3 200 3.937585s
+  36 calls: first 4.4-5.3 s, warm 3.0-4.2 s; the timing log (TAMEION_INBOX_TIMING=1) shows no step reaching the 3 s cap and no error.
+Test: arc fail_closed_tests::a_stalled_quick_read_is_sent_again_and_answered - a node that never answers the first connection; the read is answered on the retry (3.26 s).
