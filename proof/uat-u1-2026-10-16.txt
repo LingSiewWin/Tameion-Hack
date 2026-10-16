@@ -1,0 +1,119 @@
+UAT U1 — the agent operator (a two-person AI company whose agents buy APIs and pay a few vendors), walked as a first-time customer
+Written 2026-10-16 21:26:16 +0800. Plan: docs/110 §3 U1. Environment: http://localhost:7880/ (service + console export built 20:46), Arbitrum Sepolia (421614),
+a clean Playwright context (new browser context, CDP virtual authenticator ctap2/internal, user verification on), widths 1280 and 390.
+No product code changed. No private key or agent token printed: the buy key went straight from the page to ~/.tameion/test-keys/uat-u1-buy.token (mode 600).
+
+ACCOUNT
+  name uat-u1-acme · policy 0x42463b314d392fe34abe1854b925f0f6e55fa555 · owner (PasskeyPrincipal) 0x8cc403ceae9b831ef871e542661e2008f2c701ba
+  agent 0x0d6a411b4a0bcb9ded981a3c229027a03443faf3 · operator/relayer 0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25 · delay 60 s
+  deployed by the service when money arrived: owner_tx 0xdc834ff9275c2e75f83c060d364b920b37dad019cdbe4798fb18dec122b4e1a8
+                                               policy_tx 0x54dbb164fcdc43dea6822ca84608c5123a679c8422607ebc98de20a103279962
+                                               agent gas 0xb7c76eaeeebc3d603489dd3b40ad46198239f5e688638d0668f3e93c09d35d0b
+  written to the shared persona file at 20:50:38 (U2 waits on it).
+
+TIMELINE (+08; every tx https://sepolia.arbiscan.io/tx/<hash>, all read back status 1 at 21:25)
+  20:46:49 start (read briefs)
+  20:49:43 step1 home loaded 1046 ms (first context; re-made isolated context at 20:50 because run_code globals do not persist)
+  20:50:24 step2 click "Open the account with my passkey" (name uat-u1-acme typed; default chain already Arbitrum Sepolia under "More ways")
+  20:50:25 step2 account page after 1097 ms; policy 0x42463b314d392fe34abe1854b925f0f6e55fa555 reserved (not deployed), agent 0x0d6a411b4a0bcb9ded981a3c229027a03443faf3
+  20:50:38 shared.json written
+  20:51:59-20:52:02 step3 funded 1 USDC tx 0xc3d43745a8c5c37f398a29871b21f05c90ac406580243d22234da0f62c030560; page showed 1.00 at 20:52:31 (29 s), deployed view at 20:52:46 (44 s), no refresh
+     deploy: owner_tx 0xdc834ff9275c2e75f83c060d364b920b37dad019cdbe4798fb18dec122b4e1a8 policy_tx 0x54dbb164fcdc43dea6822ca84608c5123a679c8422607ebc98de20a103279962 agent gas 0xb7c76eaeeebc3d603489dd3b40ad46198239f5e688638d0668f3e93c09d35d0b
+  20:53:58 step4 seller PID 97562 on :7941 PAY_TO 0xE7D8d72abaDE89bE5309A6F55031079F0Cf62990 price 0.001
+  20:54:xx step5 looked for "agent key" on account page: none; found under Settings (icon) > Agents > "Other agents" (~1 min hesitation)
+  20:55:00 step5 minted research-bot key read,run,buy (3.0 s, one tap); token saved ~/.tameion/test-keys/uat-u1-buy.token (mode 600, not printed)
+  20:55:42 step5 buy#1 -> 409 needsYou (0.5 s); page row appeared ~20:57:04 (60 s poll; P-173)
+  20:59:20 step5 approve seller one tap 6.9 s, tx 0x6e088b275414374d14f6b4c8315f4b2ccf26a1c0b001a387813c1ae70d6a9cff, attestedSince 20:59:25 (+60 s cooling-off; page did not say how long)
+  20:59:51 step5 buy#2 -> 409 "not on Autopilot" (P-174: page silent)
+  21:00:04 step6 Turn autopilot on -> 401 "owner requires an agent key: send Authorization: Bearer" (P-170), again 21:01:01
+  21:02:30 step6 workaround: 2nd key "this browser" read,run,prepare (kept by browser), 4.7 s
+  21:02:50 step6 ask Autopilot tx 0x4aee1f16a70c8421a4d419584b15a2de1406d114beb70c927955ef670f5c9e23; cancel shown 21:03:16 ("about 35 s")
+  21:03:27 step6 cancel tapped; execute never answered; page auto-applied 21:03:53 applyPending tx 0x6e070de9fcb0146eae93b5cd5b4b48fc0f136758b957c45bd09f165d294d8ec3; 500 at 21:04:44 (P-171)
+  21:06:08-21:06:45 step6 Pause (setMode 0) execute took 36 s, tx 0xa901f94357046d59b07e2f64e4ec1ebc6eda1d2f2137510c04e2da20306e404d
+  21:07:36 step6 ask Autopilot #2 tx 0xdc2db2781eea22c4caa6730d98fc872df93e5ae8e529df009cae11f20a8b511e; cancel visible after 11.6 s
+  21:07:46-21:07:52 step6 cancel landed 5.6 s tx 0xb6faf150ea5a324cecb6f49f913240a5cf2d0ff58a0a2d8f3b2430cce3fd222d "Cancelled. Nothing changed."
+  21:09:34 step6 ask Autopilot #3 tx 0x02be6adff260a8a279fe5c46267086ebe6d26c0adcfced4979ea79e6a4ae92e5; page applied 21:10:36-38; page shows Autopilot 21:11:03
+  21:11:14 step5 buy#3 -> 200 paid 0.001 USDC tx 0xcfc999c14d8362d6cbc28eb3eb0e1eef53575624a73efd1440f4a38ada6bf665 (8.6 s); Paid row with reason on page within 9 s
+21:13:21 step7 raise per payment 50 -> 60 USDC: tx 0x79040a714371edab0aa3087587c527c8e8f8f68eea2310a273c35436f133f63b (6.0 s); banner "A higher limit applies
+         in about 52 s unless you cancel" + "Cancel the change" at 21:13:38; applied by the page 21:14:3x tx 0xb3e0e8857a870287910fc037ad38dde5ede6fe520a9742d1cffa09244ecf2eab
+         chain after: perActionCap 60000000
+21:15:06 step7 lower to 0.005 per payment / 0.05 a day: tx 0x67fb449585ab6960f2ba145de0bd26f16e6f04623ef0e52223e76efe19eab96b (6.1 s), "Lowered, at once."
+         chain at 21:15:19: perActionCap 5000, dailyCap 50000, pending empty
+21:15:4x step8 Settings > Owners: "Keys — Daily key set / Guardian 1 not set / Guardian 2 not set … Two guardians together can name a new daily key; it
+         waits 1 minute" + a separate "If you lose your phone — spare key" block. No "1 of 3 keys" anywhere on the account page (KeysNag is mounted only on /desk).
+21:16:xx step9 Recent: "Bought from 127.0.0.1 — ETH price for the weekly research report · Receipt — 0.001". Exports downloaded (below).
+21:17-21:19 step10 Check it yourself: both records "Matches … both public nodes hold the same fingerprint"; terminal check below: MATCH on both RPCs.
+21:19:40 step11 /agent opened: "What the desk's agent sees and does on the exchange, live"; Events: "Stream Connected" only (no history).
+21:20:32 step11 buy#4 while /agent open -> 200 paid tx 0x82f50003d084335a8e3617da3bb9e9e0dc4e9bd3d51e4ecbe7f15a548c6d6fda (8.4 s);
+         /agent showed "21:20:40 Account — Account changed: buy" (no amount, seller or reason). Safety panel: "Last pass not recorded · Last anchor not recorded".
+21:21-21:23 scans of every human page; "Every receipt" opens /level1 (classic) with stale "Propose · caps 50 / 100" while chain = Autopilot 0.005 / 0.05.
+21:24:07 account page: GET /api/level1/events -> 401 on every load once keys exist (EventSource sends no device header); same request with the header -> 200.
+21:25 seller PID 97562 stopped by PID; sink PID 99791 had exited by itself.
+
+THE AGENT'S CALLS (POST /api/level1/buy with the research-bot key; token read from its file inside the command, never printed)
+  {"error":"127.0.0.1 asks 0.001000 USDC per call, paid to 0xe7d8d72abade89be5309a6f55031079f0cf62990, which is not one of your approved payees. Approve it once on the account page and the agent buys from it inside your limits.","needsYou":{"amount":"0.001000 USDC","at":1792155342,"host":"127.0.0.1","minor":"1000","network":"eip155:421614","policy":"0x42463b314d392fe34abe1854b925f0f6e55fa555","reason":"ETH price for the weekly research report","seller":"0xe7d8d72abade89be5309a6f55031079f0cf62990","status":"needs-you","url":"http://127.0.0.1:7941/v1/mid?coin=ETH","why":"127.0.0.1 asks 0.001000 USDC per call, paid to 0xe7d8d72abade89be5309a6f55031079f0cf62990, which is not one of your approved
+  HTTP 409 0.501243s
+  {"error":"the account refuses: the account is not on Autopilot; the agent buys only when it may pay by itself","purchase":{"amount":"0.001000 USDC","at":1792155591,"host":"127.0.0.1","minor":"1000","network":"eip155:421614","policy":"0x42463b314d392fe34abe1854b925f0f6e55fa555","reason":"ETH price for the weekly research report","seller":"0xe7d8d72abade89be5309a6f55031079f0cf62990","status":"refused","url":"http://127.0.0.1:7941/v1/mid?coin=ETH","why":"the account refuses: the account is not on Autopilot; the agent buys only when it may pay by itself"}}
+  HTTP 409 1.428277s
+  {"body":"{\"coin\": \"ETH\", \"mid\": \"2460.75\", \"source\": \"hyperliquid allMids\"}","contentType":"application/json","paid":true,"purchase":{"actionHash":"0x2ea136b72668bf5b5dc25a1c2134a3ba49acb338078a9bbe8c63abd653d13ec5","amount":"0.001000 USDC","at":1792156274,"explorer":"https://sepolia.arbiscan.io/tx/0xcfc999c14d8362d6cbc28eb3eb0e1eef53575624a73efd1440f4a38ada6bf665","host":"127.0.0.1","id":"0xcfc999c14d8362d6cbc28eb3eb0e1eef53575624a73efd1440f4a38ada6bf665","idFrom":"transaction","minor":"1000","network":"eip155:421614","policy":"0x42463b314d392fe34abe1854b925f0f6e55fa555","reason":"ETH price for the weekly research report","seller":"0xe7d8d72abade89be5309a6f55031079f0cf62990","
+  HTTP 200 8.581329s
+  {"body":"{\"coin\": \"BTC\", \"mid\": \"81973.5\", \"source\": \"hyperliquid allMids\"}","contentType":"application/json","paid":true,"purchase":{"actionHash":"0xdc6630944fcec983b3dbdbcc06eff47dc3e73a40b0c646336b6358a98c597b90","amount":"0.001000 USDC","at":1792156832,"explorer":"https://sepolia.arbiscan.io/tx/0x82f50003d084335a8e3617da3bb9e9e0dc4e9bd3d51e4ecbe7f15a548c6d6fda","host":"127.0.0.1","id":"0x82f50003d084335a8e3617da3bb9e9e0dc4e9bd3d51e4ecbe7f15a548c6d6fda","idFrom":"transaction","minor":"1000","network":"eip155:421614","policy":"0x42463b314d392fe34abe1854b925f0f6e55fa555","reason":"BTC price for the investor update","seller":"0xe7d8d72abade89be5309a6f55031079f0cf62990","sha256"
+  HTTP 200 8.386546s
+
+PAGE AGAINST CHAIN at 21:23-21:25
+  chain: mode 2 (Autopilot), perActionCap 0.005, dailyCap 0.05, balance 0.998, spentInWindow 0.002; payee 0xE7D8…2990 holds 0.002
+  account page: Autopilot · 'up to 0.05 USDC a day' · 'Agents can spend now 0.005 … 0.048 of the 0.05 a day is left' · Paid 2 = 0.002 USDC   AGREES
+  GET /api/level1/tenant/<policy>: mode 1, per_action 50.000000, daily 100.000000 (stale) -> /level1 summary row shows Propose 50 / 100   DISAGREES (P-172 #11)
+  /agent Safety: Last pass / Last anchor 'not recorded' while anchor tx 0x9a155f3d…7cd9 exists   DISAGREES (P-172 #10)
+
+EXPORTS (Recent > Statement, Recent > For Xero / QuickBooks), as downloaded
+  -- tameion-0x42463b31-statement.csv
+  date_utc,payee,amount_usdc,paid_by,transaction,explorer,account
+  2026-10-16T13:11:14.000Z,127.0.0.1 (0xe7d8d72abade89be5309a6f55031079f0cf62990),0.001,agent,0xcfc999c14d8362d6cbc28eb3eb0e1eef53575624a73efd1440f4a38ada6bf665,https://sepolia.arbiscan.io/tx/0xcfc999c14d8362d6cbc28eb3eb0e1eef53575624a73efd1440f4a38ada6bf665,0x42463b314d392fe34abe1854b925f0f6e55fa555
+
+  -- tameion-0x42463b31-bank-statement.csv
+  *Date,*Amount,Payee,Description,Reference
+  2026-10-16,-0.001,127.0.0.1,USDC payment to 0xe7d8d72abade89be5309a6f55031079f0cf62990 by the agent from 0x42463b314d392fe34abe1854b925f0f6e55fa555,0xcfc999c14d8362d6cbc28eb3eb0e1eef53575624a73efd1440f4a38ada6bf665
+
+  (taken before buy#4; neither carries the reason the page shows; no deposit line)
+
+CHECK IT YOURSELF FROM A TERMINAL: TAMEION_TOKEN=<read key from file> scripts/verify_tenant.sh http://localhost:7880 0x42463b31…a555
+  policy  0x42463b314d392fe34abe1854b925f0f6e55fa555
+  root    0xf78d7fba4c55ece8e994c9fb1df26ce05fb9aaf24dc620bf2525ba5c59418669  (anchored in 0x9a155f3d615179dc9a680a996a396c818e06b607ffeac69095b94651b9177cd9)
+  events  4 lines downloaded
+  chain   arbitrum-sepolia
+  -- against https://sepolia-rollup.arbitrum.io/rpc (block 319762864)
+  # audit /var/folders/g4/1m9xkbrd2cv9js0zzsrn5gfh0000gn/T/tmp.EvINXtzbNo/0xf78d7fba4c55ece8e994c9fb1df26ce05fb9aaf24dc620bf2525ba5c59418669.events.jsonl
+  [0000] ESCALATION  needs-you x402 http://127.0.0.1:7941/v1/mid?coin=ETH: ETH price for the weekly research report
+  [0001] ESCALATION  refused x402 http://127.0.0.1:7941/v1/mid?coin=ETH: ETH price for the weekly research report
+  [0002] SETTLEMENT  bought x402 http://127.0.0.1:7941/v1/mid?coin=ETH: ETH price for the weekly research report
+  [0003] OBSERVATION Holding 0.999000 USDC. Read 2 transfers (1 of them my own payments, which are not evidence) and recovered 0 recurring obligations, of which 0 fall due within 30.0 days totalling 0.000000 USDC; 0 within 3.0 days (or a tenth of their interval), which is when I pay.
+  events          : 4
+  recomputed root : 0xf78d7fba4c55ece8e994c9fb1df26ce05fb9aaf24dc620bf2525ba5c59418669
+  file name       : 0xf78d7fba4c55ece8e994c9fb1df26ce05fb9aaf24dc620bf2525ba5c59418669   MATCH
+  chain rootOf    : 0xf78d7fba4c55ece8e994c9fb1df26ce05fb9aaf24dc620bf2525ba5c59418669   (anchor 0xe7c381aafa077cc99359e8b297d2125efd76b8f5, agent 0x0d6a411b4a0bcb9ded981a3c229027a03443faf3)   MATCH
+  RESULT          : PASS
+  -- against https://arbitrum-sepolia-rpc.publicnode.com (block 319762924)
+  # audit /var/folders/g4/1m9xkbrd2cv9js0zzsrn5gfh0000gn/T/tmp.EvINXtzbNo/0xf78d7fba4c55ece8e994c9fb1df26ce05fb9aaf24dc620bf2525ba5c59418669.events.jsonl
+  [0000] ESCALATION  needs-you x402 http://127.0.0.1:7941/v1/mid?coin=ETH: ETH price for the weekly research report
+  [0001] ESCALATION  refused x402 http://127.0.0.1:7941/v1/mid?coin=ETH: ETH price for the weekly research report
+  [0002] SETTLEMENT  bought x402 http://127.0.0.1:7941/v1/mid?coin=ETH: ETH price for the weekly research report
+  [0003] OBSERVATION Holding 0.999000 USDC. Read 2 transfers (1 of them my own payments, which are not evidence) and recovered 0 recurring obligations, of which 0 fall due within 30.0 days totalling 0.000000 USDC; 0 within 3.0 days (or a tenth of their interval), which is when I pay.
+  events          : 4
+  recomputed root : 0xf78d7fba4c55ece8e994c9fb1df26ce05fb9aaf24dc620bf2525ba5c59418669
+  file name       : 0xf78d7fba4c55ece8e994c9fb1df26ce05fb9aaf24dc620bf2525ba5c59418669   MATCH
+  chain rootOf    : 0xf78d7fba4c55ece8e994c9fb1df26ce05fb9aaf24dc620bf2525ba5c59418669   (anchor 0xe7c381aafa077cc99359e8b297d2125efd76b8f5, agent 0x0d6a411b4a0bcb9ded981a3c229027a03443faf3)   MATCH
+  RESULT          : PASS
+  verify_tenant: MATCH on both RPCs
+
+BANNED WORDS / BARE 0x / JARGON, scanned on every human page at 21:21 (regex over innerText)
+  account page, Settings Alerts/Owners/Agents/Bills, /agent, /pay?to=uat-u1-acme: none found in that state.
+  Settings > Agents before the first key (20:54): 'The first key you make locks the account to keys.' (banned word; settings.tsx:462).
+  Check-it-yourself dialog: bare account address inside the terminal command.
+  /level1 (reached from 'Every receipt'): 7 bare 0x values incl. the passkey's public-key coordinates (qx/qy JSON), 'mode', 'On Arc testnet'.
+  Agent card after the first buy key: 'send Authorization: Bearer <token>' (developer sentence, P-170).
+
+SCREENSHOTS: proof/uat-u1-*-2026-10-16.png (01 home 1280/390 … 26 final). The minted key is redacted in 06/10 before the shot.
+
+SPEND: 1.000 USDC from the relayer to the account (tx 0xc3d4…0560); the account paid 0.002 USDC to the seller; gas from the relayer/facilitator.
+RESULT: 6 of 11 steps pass (1, 2, 3, 4, 7, 10); 9 partial; 5, 6, 8, 11 fail. docs/60 P-170…P-174.
