@@ -180,14 +180,21 @@ pub struct Line {
     pub tx: Option<String>,
     /// The agent's reason (refused, needs-you) or note (paid), as recorded.
     pub detail: String,
+    /// `Some("owner")` for a payment the owner settled with the passkey, read
+    /// from the chain; `None` for a line decoded from the agent's record.
+    pub by: Option<&'static str>,
 }
 
 impl Line {
     pub fn to_json(&self) -> Value {
-        json!({
+        let mut v = json!({
             "at": self.at, "seq": self.seq, "root": self.root, "kind": self.kind,
             "payee": self.payee, "amount": self.amount.to_string(), "tx": self.tx, "detail": self.detail,
-        })
+        });
+        if let Some(by) = self.by {
+            v["paidBy"] = json!(by);
+        }
+        v
     }
 }
 
@@ -214,6 +221,7 @@ fn decode(canonical: &[u8], root: &str) -> Result<Option<Line>, String> {
         amount,
         tx,
         detail,
+        by: None,
     };
     Ok(match r.u8().ok_or_else(short)? {
         // Decision: counterparty, amount, verdict, action hash, confidence,
@@ -432,9 +440,57 @@ pub struct Scope<'a> {
     pub to: i64,
 }
 
+/// A payment the owner settled with the passkey (`SettledByPrincipal`), read
+/// from the chain: the agent's record never holds it, so in "asks before
+/// paying" a statement built from the record alone said "paid 0" while the
+/// chain showed the payments (docs/60 P-177).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnerPaid {
+    pub at: i64,
+    pub payee: String,
+    pub amount: Money,
+    pub tx: String,
+}
+
 /// The whole statement for one account and week, signed.
 pub fn build(log_dir: &Path, s: &Scope<'_>) -> Result<Value, String> {
-    let lines = lines_for(log_dir, s.from, s.to)?;
+    build_with(log_dir, s, &[])
+}
+
+/// [`build`] with the owner's own payments of the week as `paid` lines
+/// (`paidBy: "owner"`, with the transaction anyone can check), each with the
+/// agent's latest ask for that payee and amount as its reason.
+pub fn build_with(log_dir: &Path, s: &Scope<'_>, owner: &[OwnerPaid]) -> Result<Value, String> {
+    let mut lines = lines_for(log_dir, s.from, s.to)?;
+    let mut added = Vec::new();
+    for o in owner.iter().filter(|o| o.at >= s.from && o.at < s.to) {
+        let asked = lines
+            .iter()
+            .rev()
+            .find(|l| {
+                l.kind == "needs-you"
+                    && l.payee.eq_ignore_ascii_case(&o.payee)
+                    && l.amount == o.amount
+                    && l.at <= o.at
+            })
+            .map(|l| l.detail.clone());
+        added.push(Line {
+            at: o.at,
+            seq: 0,
+            root: String::new(),
+            kind: "paid",
+            payee: o.payee.clone(),
+            amount: o.amount,
+            tx: Some(o.tx.clone()),
+            detail: match asked {
+                Some(r) => format!("paid by the owner with the passkey; the agent asked: {r}"),
+                None => "paid by the owner with the passkey".into(),
+            },
+            by: Some("owner"),
+        });
+    }
+    lines.extend(added);
+    lines.sort_by(|a, b| (a.at, &a.root, a.seq).cmp(&(b.at, &b.root, b.seq)));
     let line_values: Vec<Value> = lines.iter().map(Line::to_json).collect();
     // Totals count every line; the amount sums USDC, the only currency the
     // accounts settle in. A line in another currency still shows its own.
@@ -507,15 +563,31 @@ pub fn build(log_dir: &Path, s: &Scope<'_>) -> Result<Value, String> {
 /// The same statement as CSV for an accountant's import: one line per row,
 /// the signature and what it covers in trailing `#` comment lines.
 pub fn csv(statement: &Value) -> String {
-    let mut out = String::from("date,payee,amount,kind,tx\n");
+    // A field with a comma, a quote or a line break is quoted (RFC 4180).
+    let field = |s: &str| {
+        if s.contains([',', '"', '\n', '\r']) {
+            format!("\"{}\"", s.replace('"', "\"\""))
+        } else {
+            s.to_string()
+        }
+    };
+    let mut out = String::from("date,payee,amount,kind,tx,paid_by,reason\n");
     for l in statement["lines"].as_array().into_iter().flatten() {
+        let kind = l["kind"].as_str().unwrap_or("");
+        let by = match (kind, l["paidBy"].as_str()) {
+            (_, Some(b)) => b,
+            ("paid", None) => "agent",
+            _ => "",
+        };
         out.push_str(&format!(
-            "{},{},{},{},{}\n",
+            "{},{},{},{},{},{},{}\n",
             iso8601(l["at"].as_i64().unwrap_or(0)),
-            l["payee"].as_str().unwrap_or(""),
-            l["amount"].as_str().unwrap_or(""),
-            l["kind"].as_str().unwrap_or(""),
-            l["tx"].as_str().unwrap_or(""),
+            field(l["payee"].as_str().unwrap_or("")),
+            field(l["amount"].as_str().unwrap_or("")),
+            field(kind),
+            field(l["tx"].as_str().unwrap_or("")),
+            by,
+            field(l["detail"].as_str().unwrap_or("")),
         ));
     }
     let r = &statement["record"];
@@ -828,12 +900,37 @@ mod tests {
             lh2,
         );
         assert_ne!(sig.recover_address_from_prehash(&d2).unwrap(), signer);
-        // CSV: one row, the signature in a comment.
+        // CSV: one row, who paid and why, the signature in a comment.
         let c = csv(&st);
-        assert!(c.starts_with("date,payee,amount,kind,tx\n"));
-        assert!(
-            c.contains(",0x2222222222222222222222222222222222222222,0.003000 USDC,paid,0xabc\n")
+        assert!(c.starts_with("date,payee,amount,kind,tx,paid_by,reason\n"));
+        assert!(c.contains(
+            ",0x2222222222222222222222222222222222222222,0.003000 USDC,paid,0xabc,agent,paid\n"
+        ));
+        // docs/60 P-177: the owner's passkey payment of the week is a paid line,
+        // signed with the rest, in the CSV with who paid and why.
+        let owner = [OwnerPaid {
+            at: from + 40,
+            payee: "0x3333333333333333333333333333333333333333".into(),
+            amount: usdc("0.05"),
+            tx: "0xowner".into(),
+        }];
+        let st2 = build_with(&log_dir, &scope, &owner).unwrap();
+        assert_eq!(st2["totals"]["paid"]["count"], 2);
+        assert_eq!(st2["totals"]["paid"]["amount"], "0.053000 USDC");
+        let line = st2["lines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|l| l["tx"] == "0xowner")
+            .unwrap()
+            .clone();
+        assert_eq!(line["paidBy"], "owner");
+        assert_eq!(line["detail"], "paid by the owner with the passkey");
+        assert_ne!(
+            st2["record"]["linesHash"], st["record"]["linesHash"],
+            "the signature covers it"
         );
+        assert!(csv(&st2).contains(",0x3333333333333333333333333333333333333333,0.050000 USDC,paid,0xowner,owner,paid by the owner with the passkey\n"));
         assert!(c.contains(&format!(
             "# signature eip712 signer={}",
             st["signature"]["signer"].as_str().unwrap()

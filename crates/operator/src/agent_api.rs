@@ -44,6 +44,59 @@ pub fn waiting(needs_you: &[Value], sellers: &[Value], invoices: &[Value]) -> Ve
     out
 }
 
+/// Why a bill exists, in words, from a pass's `obligationsList` entry: the
+/// reason every payment row, CSV line and Needs-you row carries (docs/60
+/// P-177: "why" was missing from the book).
+pub fn bill_reason(o: &Value) -> String {
+    let amount = o["amount"].as_str().unwrap_or("?");
+    let days = o["intervalSecs"].as_u64().map_or(0, |s| s / 86_400);
+    let every = if days > 0 {
+        format!("{amount} every {days} days")
+    } else {
+        amount.to_string()
+    };
+    match o["provenance"].as_str().unwrap_or("") {
+        "imported" => format!("a bill the owner typed: {every}"),
+        "x402 receipt" => format!("a paid API the agent buys from on a cadence: {every}"),
+        p if p.starts_with("invoice") => format!("an invoice the payee signed: {every}"),
+        _ => format!(
+            "a bill found in the payment history: paid {} times, {every}",
+            o["samples"].as_u64().unwrap_or(0)
+        ),
+    }
+}
+
+/// The reason for a payment to `counterparty`, from the newest pass report
+/// that knows the bill; `None` when no pass has seen it.
+pub fn reason_for(obligations: &[Value], counterparty: &str) -> Option<String> {
+    obligations
+        .iter()
+        .find(|o| {
+            o["counterparty"]
+                .as_str()
+                .is_some_and(|c| c.eq_ignore_ascii_case(counterparty))
+        })
+        .map(bill_reason)
+}
+
+/// Whether an owner call relayed to the account only shrinks what the agent
+/// may do — a cancel of the pending change, a pause, revoking payees — and
+/// which (docs/60 P-171). Such a call must never lose a race to the automatic
+/// apply of the very raise it answers. Calldata as hex.
+pub fn shrinks_trust(data: &str) -> Option<&'static str> {
+    let hex = data.trim().trim_start_matches("0x").to_lowercase();
+    let arg = |i: usize| hex.get(8 + 64 * i..8 + 64 * (i + 1));
+    let zero = |w: Option<&str>| w.is_some_and(|w| w.bytes().all(|b| b == b'0'));
+    match hex.get(..8)? {
+        "dedad97d" => Some("cancel"),
+        // setMode(uint8) with 0 (Watch): a pause.
+        "21175b4a" if zero(arg(0)) => Some("pause"),
+        // setPayees(address[],bool) / setPayeesIf(address[],bool,bytes32,uint64) with false.
+        "48a56503" | "3948f4ff" if zero(arg(1)) => Some("revoke"),
+        _ => None,
+    }
+}
+
 /// Who signs every prepared call: the owner's passkey, never the caller.
 pub const SIGNER: &str =
     "only the owner's passkey can sign this, on the account page; an agent key cannot";
@@ -223,6 +276,50 @@ mod tests {
         assert!(mode_apply(2, 0, 3600).starts_with("at once"));
         assert!(payees_apply(true, 60).contains("1 minute(s)"));
         assert!(payees_apply(false, 60).starts_with("at once"));
+    }
+
+    #[test]
+    fn a_cancel_a_pause_and_a_revoke_are_trust_shrinking() {
+        let word = |v: u64| format!("{v:064x}");
+        assert_eq!(shrinks_trust("0xdedad97d"), Some("cancel"));
+        assert_eq!(
+            shrinks_trust(&format!("0x21175b4a{}", word(0))),
+            Some("pause")
+        );
+        assert_eq!(
+            shrinks_trust(&format!("0x21175b4a{}", word(2))),
+            None,
+            "Autopilot is a raise"
+        );
+        assert_eq!(
+            shrinks_trust(&format!("0x48a56503{}{}", word(64), word(0))),
+            Some("revoke")
+        );
+        assert_eq!(
+            shrinks_trust(&format!("0x48a56503{}{}", word(64), word(1))),
+            None,
+            "approving payees widens trust"
+        );
+        assert_eq!(shrinks_trust("0x"), None);
+    }
+
+    #[test]
+    fn every_payment_says_why_the_bill_exists() {
+        let typed = json!({ "amount": "0.050000 USDC", "counterparty": "0xAbC", "intervalSecs": 2_592_000, "provenance": "imported", "samples": 0 });
+        assert_eq!(
+            bill_reason(&typed),
+            "a bill the owner typed: 0.050000 USDC every 30 days"
+        );
+        let found = json!({ "amount": "1 USDC", "counterparty": "0xd", "intervalSecs": 604_800, "provenance": "history", "samples": 6 });
+        assert_eq!(
+            bill_reason(&found),
+            "a bill found in the payment history: paid 6 times, 1 USDC every 7 days"
+        );
+        assert_eq!(
+            reason_for(&[typed, found], "0xabc").as_deref(),
+            Some("a bill the owner typed: 0.050000 USDC every 30 days")
+        );
+        assert_eq!(reason_for(&[], "0xabc"), None);
     }
 
     #[test]
