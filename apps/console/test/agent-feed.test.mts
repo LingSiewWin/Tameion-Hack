@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   age,
+  askRows,
   bandOf,
   clock,
   createSseParser,
@@ -13,12 +14,15 @@ import {
   fixed,
   MINUS,
   money,
+  paidRows,
   places,
   ratioText,
   readFrame,
+  refusedRows,
   shortTx,
   signed,
   signedAt,
+  spentShare,
   STALE_AFTER_MS,
   stamp,
   VENUE_STALE_AFTER_MS,
@@ -227,3 +231,73 @@ test("account events in words: known ones read like a log, unknown ones are show
   assert.deepEqual(describeEvent("desk", { offset: "0.3", nested: { a: 1 } }), { source: "desk", text: 'offset: 0.3, nested: {"a":1}', tone: "info" });
   assert.equal(describeEvent("pass", "not an object").text, "Check update");
 });
+
+const NAMES: Record<string, string> = { "0xaa": "Weather API", "0xbb": "Supplier" };
+const nameOf = (a: string) => NAMES[a] ?? `••${a.slice(-4)}`;
+
+test("an account's payments: newest first, the payee by the account's own name, the reason the agent gave", () => {
+  const rows = paidRows(
+    [
+      { counterparty: "0xaa", amount: "0.002000 USDC", at: 100, reason: "ETH price for the weekly report", by: "agent", explorer: "https://x/tx/1" },
+      { counterparty: "0xcc00000000000000000000000000000000000c0d", amount: "1.000000 USDC", at: 300, bought: "api.example.com" },
+      { counterparty: "0xbb", amount: "0.500000 USDC", reason: "  " },
+    ],
+    nameOf,
+  );
+  assert.deepEqual(rows.map((r) => r.to), ["••0c0d", "Weather API", "Supplier"], "newest first, no time last; an unnamed payee is the last four, never the address");
+  assert.equal(rows[0].why, "api.example.com", "no reason given: what was bought");
+  assert.equal(rows[1].why, "ETH price for the weekly report");
+  assert.equal(rows[2].why, "", "nothing is made up");
+  assert.equal(rows[1].receipt, "https://x/tx/1");
+});
+
+test("what was refused is in words: the checks' reason, the purchase's own sentence, and why the agent wanted it", () => {
+  const plain = (w?: string | null) => (w === "per-action-cap" ? "More than one payment may be on its own." : (w ?? ""));
+  const rows = refusedRows(
+    [{ counterparty: "0xbb", amount: "9.000000 USDC", why: "per-action-cap" }],
+    [
+      { at: 50, host: "127.0.0.1", amount: "0.002000 USDC", status: "refused", why: "the price 0.002000 USDC is above the most you allowed for one call (0.001000 USDC)", reason: "ETH mid price, cheap only" },
+      { at: 60, host: "paid.example", amount: "0.001000 USDC", status: "paid" },
+      { at: 70, seller: "0xaa", amount: "0.004000 USDC", status: "refused" },
+    ],
+    plain,
+    nameOf,
+  );
+  assert.equal(rows.length, 3, "a paid purchase is not a refusal");
+  assert.deepEqual(rows.map((r) => r.what), ["Weather API", "127.0.0.1", "Supplier"], "purchases newest first, then the bills that carry no time");
+  assert.equal(rows[0].why, "refused by the checks", "no sentence from the service: say only what is known");
+  assert.match(rows[1].why, /above the most you allowed/);
+  assert.equal(rows[1].reason, "ETH mid price, cheap only");
+  assert.equal(rows[2].why, "More than one payment may be on its own.");
+});
+
+test("what the agents asked of the owner, each with its reason; a malformed ask is skipped, not guessed", () => {
+  const rows = askRows(
+    {
+      limits: { at: 200, by: "uat-u3-ops", perAction: "0.004000 USDC", daily: "0.008000 USDC", reason: "the weather API now costs 0.004 a call" },
+      mode: { at: 100, by: "uat-u3-ops", mode: 2, reason: "lower the risk" },
+      payees: { at: 150, by: "uat-u3-ops", payees: ["0x1", "0x2"], allow: true },
+      broken: 7,
+    },
+    [{ what: "approve 127.0.0.1 so the agent may pay it", why: "SOL mid price" }],
+  );
+  assert.deepEqual(rows.map((r) => r.text), [
+    "uat-u3-ops asked for the limits 0.004000 USDC a payment, 0.008000 USDC a day",
+    "uat-u3-ops asked to pay 2 payees",
+    "uat-u3-ops asked to move to Autopilot",
+    "Approve 127.0.0.1 so the agent may pay it",
+  ]);
+  assert.equal(rows[0].why, "the weather API now costs 0.004 a call");
+  assert.equal(rows[1].why, null);
+  assert.deepEqual(askRows(null, []), [], "no asks, no rows");
+  assert.deepEqual(askRows("junk", []), []);
+});
+
+test("the spent share of the daily cap comes from the two figures the service sent, or from nothing", () => {
+  assert.equal(spentShare("0.002000 USDC", "0.008000 USDC"), 0.25);
+  assert.equal(spentShare("0.008000 USDC", "0.008000 USDC"), 1);
+  assert.equal(spentShare("0.010000 USDC", "0.008000 USDC"), 1.25, "over the cap is over 1");
+  assert.equal(spentShare(undefined, "0.008000 USDC"), null);
+  assert.equal(spentShare("0.002000 USDC", "0.000000 USDC"), null, "a daily cap of zero has no share");
+});
+
