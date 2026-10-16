@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, CircleAlert, ExternalLink, Loader2, OctagonAlert, RefreshCw, ShieldCheck, TriangleAlert, X } from "lucide-react";
+import { Check, CircleAlert, Loader2, OctagonAlert, RefreshCw, ShieldCheck, TriangleAlert, X } from "lucide-react";
 import { Why } from "@/components/layout/section";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,7 +15,6 @@ import {
   money,
   places,
   ratioText,
-  shortTx,
   STALE_AFTER_MS,
   stamp,
   VENUE_STALE_AFTER_MS,
@@ -64,64 +63,54 @@ export function AsOf({ at, state, venue = false }: { at: number; state: FeedStat
   );
 }
 
-const venueText = (v: string | null) => (v ? (isAddr(v) ? `••${tail(v)}` : v) : "—");
+export const venueText = (v: string | null) => (v ? (isAddr(v) ? `••${tail(v)}` : v) : "—");
 
 // ---- the strip over everything: alive, how old, which account, halted ------------------------------------
-export function Strip({ link, last, state, rejected, retry, now }: { link: Link; last: { frame: Frame; seenAt: number } | null; state: FeedState; rejected: string | null; retry: () => void; now: number }) {
-  const f = last?.frame;
+export type Chip = { tone: "live" | "stale" | "down" | "connecting"; label: string };
+export type StripFact = { label: string; value: React.ReactNode; sub?: React.ReactNode };
+
+/** The bar over everything: is it alive, then the few facts that decide whether to look closer. The page chooses the facts:
+ *  an account's mode, what waits for the owner, the last pass; an exchange's account and last tick when one is connected. */
+export function Strip({ chip, facts, action, note }: { chip: Chip; facts: StripFact[]; action?: { label: string; onClick: () => void }; note?: string | null }) {
   return (
     <div className="rounded-lg border bg-card px-3 py-2.5">
       <div className="flex flex-wrap items-center gap-x-8 gap-y-2.5">
         <div role="status" className="flex w-full items-center gap-2 text-caption font-medium sm:w-auto sm:min-w-[8rem]">
-          {state.kind === "live" ? (
+          {chip.tone === "live" ? (
             <>
               <span aria-hidden className="size-2 animate-pulse rounded-full bg-protect" />
-              Live
+              {chip.label}
             </>
-          ) : state.kind === "stale" ? (
+          ) : chip.tone === "stale" ? (
             <span className="flex items-center gap-1.5 text-attention">
-              <TriangleAlert aria-hidden className="size-4" /> {link.kind === "down" ? "Reconnecting" : "No update"}
+              <TriangleAlert aria-hidden className="size-4" /> {chip.label}
             </span>
-          ) : state.kind === "down" ? (
+          ) : chip.tone === "down" ? (
             <span className="flex items-center gap-1.5 text-destructive">
-              <CircleAlert aria-hidden className="size-4" /> Feed unavailable
+              <CircleAlert aria-hidden className="size-4" /> {chip.label}
             </span>
           ) : (
             <span className="flex items-center gap-1.5 text-muted-foreground">
-              <Loader2 aria-hidden className="size-4 animate-spin" /> Connecting
+              <Loader2 aria-hidden className="size-4 animate-spin" /> {chip.label}
             </span>
           )}
         </div>
-        <dl className="grid w-full grid-cols-3 gap-x-3 sm:flex sm:w-auto sm:gap-x-8">
-          <Fact label="Last tick" sub={f && now > 0 && state.quietMs != null ? `${age(state.quietMs)} ago` : undefined}>
-            {f ? clock(f.at) : "—"}
-          </Fact>
-          <Fact label="Venue">{venueText(f?.venue ?? null)}</Fact>
-          <Fact label="Halt">
-            {!f ? (
-              "—"
-            ) : f.halt ? (
-              <span className="inline-flex items-center gap-1 text-destructive">
-                <OctagonAlert aria-hidden className="size-3.5" /> Halted
-              </span>
-            ) : state.kind === "stale" ? (
-              <span className="text-muted-foreground">None at the last tick</span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-protect">
-                <ShieldCheck aria-hidden className="size-3.5" /> None
-              </span>
-            )}
-          </Fact>
+        <dl className="grid w-full grid-cols-2 gap-x-3 gap-y-2.5 sm:flex sm:w-auto sm:flex-wrap sm:gap-x-8">
+          {facts.map((f) => (
+            <Fact key={f.label} label={f.label} sub={f.sub}>
+              {f.value}
+            </Fact>
+          ))}
         </dl>
-        {state.kind === "stale" && (
-          <Button size="sm" variant="outline" onClick={retry} className="sm:ml-auto">
-            <RefreshCw aria-hidden className="size-3.5" /> Try now
+        {action && (
+          <Button size="sm" variant="outline" onClick={action.onClick} className="sm:ml-auto">
+            <RefreshCw aria-hidden className="size-3.5" /> {action.label}
           </Button>
         )}
       </div>
-      {rejected && last && (
+      {note && (
         <p role="status" className="mt-2 text-xs text-attention">
-          A frame this page cannot read was skipped: {rejected}.
+          {note}
         </p>
       )}
     </div>
@@ -139,43 +128,6 @@ export function HaltBanner({ halt, now }: { halt: NonNullable<Frame["halt"]>; no
           {halt.at != null && <span className="text-foreground/80"> · since {stamp(halt.at, now || halt.at * 1000)}</span>}
         </p>
         <p className="mt-0.5 text-foreground/80">Nothing trades until a person clears it.</p>
-      </div>
-    </div>
-  );
-}
-
-/** Why there is no frame to draw: the service has no such route, the desk is not this device's, it did not answer, or
- *  it answered something unreadable. Tried again by itself; the button tries now. */
-export function FeedDown({ link, rejected, retry }: { link: Link; rejected: string | null; retry: () => void }) {
-  const why = rejected
-    ? `The feed answered, but this page cannot read it: ${rejected}.`
-    : link.kind !== "down"
-      ? null
-      : link.status === 404
-        ? "This service does not offer the live feed yet (it answered 404). Start it on the latest build."
-        : link.status === 401 || link.status === 403
-          ? "The live view is the owner's: open it on the device that opened this account."
-          : `The service did not answer: ${link.message}.`;
-  if (!why) {
-    return (
-      <div role="status" aria-label="Connecting to the live feed" className="grid gap-3 lg:grid-cols-12">
-        {["lg:col-span-7", "lg:col-span-5", "lg:col-span-7", "lg:col-span-5"].map((c, i) => (
-          <div key={i} aria-hidden className={cn("h-36 animate-pulse rounded-lg border bg-card", c)} />
-        ))}
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-col items-start gap-3 rounded-lg border border-attention/45 bg-card p-4">
-      <p className="flex items-center gap-2 text-title font-medium">
-        <CircleAlert aria-hidden className="size-4 text-attention" /> No live feed
-      </p>
-      <p className="max-w-[60ch] text-sm text-muted-foreground">{why}</p>
-      <div className="flex flex-wrap items-center gap-3">
-        <Button size="sm" variant="outline" onClick={retry}>
-          <RefreshCw aria-hidden className="size-3.5" /> Try now
-        </Button>
-        <p className="text-caption text-muted-foreground">It also tries again by itself.</p>
       </div>
     </div>
   );
@@ -409,14 +361,12 @@ export function FundingPanel({ frame, state }: { frame: Frame; state: FeedState 
 }
 
 // ---- safety: halt, pass, anchor -----------------------------------------------------------------------------------------
-export function SafetyPanel({ frame, state, now, explorer }: { frame: Frame; state: FeedState; now: number; explorer: string | null }) {
+export function HedgePanel({ frame, state, now }: { frame: Frame; state: FeedState; now: number }) {
   const when = (at: number | null) => (at == null ? "not recorded" : stamp(at, now || at * 1000));
   const ago = (at: number | null) => (at == null || now === 0 ? null : age(Math.max(0, now - at * 1000)));
-  const tx = frame.anchor?.tx;
-  const href = explorer && tx && /^0x[0-9a-fA-F]{64}$/.test(tx) && /^https:\/\//i.test(explorer) ? `${explorer}/tx/${tx}` : null;
   const row = "flex items-baseline justify-between gap-4 px-3 py-2";
   return (
-    <Panel title="Safety" sub="halt · pass · anchor">
+    <Panel title="Hedge" sub="the exchange offset's halt and passes">
       <dl className="divide-y text-caption">
         <div className={row}>
           <dt className="text-muted-foreground">Halt</dt>
@@ -443,25 +393,6 @@ export function SafetyPanel({ frame, state, now, explorer }: { frame: Frame; sta
           <dd className="figures">
             {when(frame.lastPassAt)}
             {ago(frame.lastPassAt) && <span className="text-muted-foreground"> · {ago(frame.lastPassAt)} ago</span>}
-          </dd>
-        </div>
-        <div className={row}>
-          <dt className="text-muted-foreground">Last anchor</dt>
-          <dd className="figures min-w-0 text-right">
-            {frame.anchor ? (
-              <>
-                {when(frame.anchor.at)}{" "}
-                {href ? (
-                  <a href={href} target="_blank" rel="noopener" className="inline-flex items-center gap-1 font-medium underline-offset-4 hover:underline" aria-label={`${shortTx(frame.anchor.tx)}, the anchor transaction, opens the explorer`}>
-                    {shortTx(frame.anchor.tx)} <ExternalLink aria-hidden className="size-3" />
-                  </a>
-                ) : (
-                  <span className="text-muted-foreground">{shortTx(frame.anchor.tx)}</span>
-                )}
-              </>
-            ) : (
-              "not recorded"
-            )}
           </dd>
         </div>
       </dl>

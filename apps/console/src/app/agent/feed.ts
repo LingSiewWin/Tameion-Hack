@@ -283,3 +283,70 @@ export function describeEvent(name: string, data: unknown): Pick<EventRow, "sour
     .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`.slice(0, 60));
   return { source: name, text: pairs.length ? pairs.join(", ") : name, tone: "info" };
 }
+
+// ---- the account's own record: what its agents did ------------------------------------------------------------
+// The inbox (`GET /api/level1/inbox`) is the account's book. Its strings are the service's own ("0.002000 USDC", "the price … is above the
+// most you allowed"); the only things computed here are an order (newest first) and a share (spent of the daily cap).
+// Structural types, not the console's `Inbox`: this file stays free of `@/` imports so the tests can run it.
+export type PaidIn = { counterparty: string; amount: string; at?: number; bought?: string; reason?: string; by?: string; explorer?: string; tx?: string };
+export type RefusedIn = { counterparty: string; amount: string; why?: string };
+export type PurchaseIn = { at: number; host?: string; seller?: string; amount: string; status: string; why?: string; reason?: string; url?: string };
+
+export type PaidRow = { at: number | null; to: string; amount: string; why: string; by: string | null; receipt: string | null };
+export type RefusedRow = { at: number | null; what: string; amount: string; why: string; reason: string | null };
+export type AskRow = { at: number | null; text: string; why: string | null };
+
+/** Newest first; a row with no time goes last. */
+const byTimeDesc = <T extends { at: number | null }>(rows: T[]) => [...rows].sort((a, b) => (b.at ?? -1) - (a.at ?? -1));
+
+/** What was paid, to whom (the account's own name for the payee), and why the agent said it paid. */
+export function paidRows(paid: PaidIn[], nameOf: (address: string) => string): PaidRow[] {
+  return byTimeDesc(
+    paid.map((p) => ({
+      at: num(p.at),
+      to: nameOf(p.counterparty),
+      amount: p.amount,
+      why: p.reason?.trim() || p.bought?.trim() || "",
+      by: p.by ?? null,
+      receipt: p.explorer ?? null,
+    })),
+  );
+}
+
+/** What the checks turned away, in words: the bills the agent was told to refuse (`refused`, no time) and the x402 purchases the
+ *  mandate would not let through (`purchases` with status "refused", which carry their own sentence). `plain` turns the checks'
+ *  codes into words (the console's `plainWhy`). */
+export function refusedRows(refused: RefusedIn[], purchases: PurchaseIn[], plain: (why?: string | null) => string, nameOf: (address: string) => string): RefusedRow[] {
+  const bills = refused.map((r) => ({ at: null, what: nameOf(r.counterparty), amount: r.amount, why: plain(r.why) || "refused by the checks", reason: null }));
+  const buys = purchases
+    .filter((p) => p.status === "refused")
+    .map((p) => ({ at: num(p.at), what: p.host || (p.seller ? nameOf(p.seller) : p.url) || "a seller", amount: p.amount, why: p.why?.trim() || "refused by the checks", reason: p.reason?.trim() || null }));
+  return [...byTimeDesc(buys), ...bills];
+}
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** What the agents' keys asked of the owner, each with the reason they gave (`agentAsks`), then what else waits (`waiting`). The
+ *  words are the service's; a malformed entry is skipped, not guessed. */
+export function askRows(agentAsks: unknown, waiting: { what: string; why?: string }[]): AskRow[] {
+  const a = obj(agentAsks) ?? {};
+  const rows: AskRow[] = [];
+  const by = (v: Record<string, unknown>) => str(v.by) ?? "an agent key";
+  const limits = obj(a.limits);
+  if (limits) rows.push({ at: secs(limits.at), text: `${by(limits)} asked for the limits ${str(limits.perAction) ?? "?"} a payment, ${str(limits.daily) ?? "?"} a day`, why: str(limits.reason) });
+  const mode = obj(a.mode);
+  if (mode) rows.push({ at: secs(mode.at), text: `${by(mode)} asked to move to ${["Watch", "Propose", "Autopilot"][num(mode.mode) ?? -1] ?? "another mode"}`, why: str(mode.reason) });
+  const payees = obj(a.payees);
+  if (payees) {
+    const n = Array.isArray(payees.payees) ? payees.payees.length : 0;
+    rows.push({ at: secs(payees.at), text: `${by(payees)} asked to ${payees.allow === false ? "stop paying" : "pay"} ${n} payee${n === 1 ? "" : "s"}`, why: str(payees.reason) });
+  }
+  return [...byTimeDesc(rows), ...waiting.map((w) => ({ at: null, text: cap(w.what), why: w.why ?? null }))];
+}
+
+/** The part of the daily cap spent in the trailing 24 hours, 0 and up (over 1 is over the cap); null when either figure is not there. */
+export function spentShare(spent: string | null | undefined, daily: string | null | undefined): number | null {
+  const s = parseFloat(spent ?? "");
+  const d = parseFloat(daily ?? "");
+  return Number.isFinite(s) && Number.isFinite(d) && d > 0 ? Math.max(0, s / d) : null;
+}
+
