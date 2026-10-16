@@ -48,6 +48,8 @@ export type NeedRow = {
   data: string;
   actionHash?: string;
   attest?: Call | null;
+  /** What the agent said it is for, when it asked (docs/60 P-177). */
+  reason?: string;
 };
 
 export type Invoice = {
@@ -77,7 +79,11 @@ export type Paid = {
   dueAt?: number;
 };
 
-export type Seller = Call & { host?: string; amount: string; seller: string; reason?: string };
+/** A seller to approve, or (`askedBy`) a payee an outside agent asked for: then `amount` is the per-payment limit, not a price. */
+export type Seller = Call & { host?: string; amount: string; seller: string; reason?: string; askedBy?: string };
+
+/** One x402 purchase the agent tried, as the service recorded it (paid, refused, or waiting on the owner). */
+export type Purchase = { at: number; host?: string; seller?: string; amount: string; status: string; why?: string; reason?: string; tx?: string; url?: string };
 
 export type Runway = {
   basis?: string;
@@ -128,10 +134,17 @@ export type Inbox = {
   readAt?: number;
   policy: string;
   mode: "Watch" | "Propose" | "Autopilot" | string;
-  caps: { perAction: string; daily: string; floor: string };
+  /** `spent24h` and `leftNow` are the contract's own trailing-24-hour figures (deployed accounts only). */
+  caps: { perAction: string; daily: string; floor: string; spent24h?: string; leftNow?: string };
   balance: string;
   /** One trust-raising change waiting for the delay. `kinds` bit 0 = limits, bit 1 = mode. */
-  pending?: { mode?: string; eta?: number; kinds?: number; perActionCap?: string; dailyCap?: string } | null;
+  pending?: { mode?: string; eta?: number; kinds?: number; perActionCap?: string; dailyCap?: string; words?: string } | null;
+  /** Everything that waits for the owner, in one list (the same items the page counts), and how many. */
+  waiting?: { kind: string; what: string; counterparty?: string; amount?: string; why?: string }[];
+  waitingCount?: number;
+  /** Payees the contract attests, and from when the agent may pay each (the waiting period). */
+  payees?: { address: string; approvedAt: number; payableFrom: number; payableNow: boolean }[];
+  purchases?: Purchase[];
   protectedPerDay: string;
   chosenDaily?: string;
   deployed?: boolean;
@@ -175,7 +188,7 @@ export type Inbox = {
     revokeData: string;
     error?: string | null;
   } | null;
-  suggestedLimit?: { daily: string; perAction: string; basis: string } | null;
+  suggestedLimit?: { daily: string; perAction: string; basis: string; floor?: string; byAgent?: boolean } | null;
   recommendAutopilot?: boolean;
   /** docs/81: the bills the owner typed (before the first pass turns them into candidates) */
   typedBills?: { payee: string; amount: string; everySecs: number; nextDue: number }[];

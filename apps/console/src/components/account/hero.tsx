@@ -94,7 +94,8 @@ export function Hero() {
     sentence = `Every bill for the next ${rw.horizonDays} days is covered.`;
   }
 
-  const waiting = inbox.needsYou.length + (inbox.sellersToApprove?.length ?? 0) + (inbox.invoices?.length ?? 0);
+  // The service's own count of what waits for the owner (the list an agent reads too); the page's sum on an older service.
+  const waiting = inbox.waitingCount ?? inbox.needsYou.length + (inbox.sellersToApprove?.length ?? 0) + (inbox.invoices?.length ?? 0);
   const found = inbox.lastPass?.obligations ?? inbox.preview?.bills?.length ?? 0;
   const anchor = inbox.lastPass?.anchorTx;
 
@@ -160,28 +161,28 @@ function ProtectionLine() {
 }
 
 /** What an agent operator reads instead of a hedge tile (docs/109 §10): the most the agents can still spend now — the
- *  smaller of the cap on one payment, what is left of the 24-hour cap, and what the account holds above the amount kept.
- *  The contract's own 24-hour total is not served to the page, so "left" subtracts every payment this page lists from the
- *  last 24 hours (as of when it read them): it can come out lower than the contract's figure, never higher. */
+ *  smaller of the cap on one payment, what the contract says is left of the 24-hour cap (`caps.leftNow`, read from
+ *  `remainingAllowance`), and what the account holds above the amount kept. An older service does not send `leftNow`:
+ *  then "left" subtracts every payment this page lists from the last 24 hours (never higher than the contract's figure).
+ *  On "Asks before paying" the agents pay nothing by themselves (docs/60 P-172 item 8, P-174): the tile says 0 and what
+ *  one tap of the owner's can pay. */
 function AgentsCanSpend() {
   const { inbox } = useAccount();
   if (!inbox) return null;
   const label = "Agents can spend now";
   if (inbox.keyless) return <Stat label={label} value="0.00" sub="USDC: no agent key, so every payment waits for your tap" />;
-  if (inbox.mode === "Watch") return <Stat label={label} value="0.00" sub="USDC: the agent pays nothing for now" />;
+  if (inbox.mode === "Watch") return <Stat label={label} value="0.00" sub="USDC: paused, the agent pays nothing" />;
   const since = inbox.readAt ? inbox.readAt / 1000 - 86_400 : 0;
-  const spent = inbox.paid.reduce((a, p) => ((p.at ?? 0) >= since ? a + num(p.amount) : a), 0);
+  const spent = inbox.caps.spent24h != null ? num(inbox.caps.spent24h) : inbox.paid.reduce((a, p) => ((p.at ?? 0) >= since ? a + num(p.amount) : a), 0);
   const per = num(inbox.caps.perAction);
-  const left = Math.max(0, num(inbox.caps.daily) - spent);
+  const left = inbox.caps.leftNow != null ? num(inbox.caps.leftNow) : Math.max(0, num(inbox.caps.daily) - spent);
   const above = Math.max(0, num(inbox.balance) - num(inbox.caps.floor));
   const can = Math.min(per, left, above);
-  const why =
-    above < Math.min(per, left)
-      ? `all the account holds above the ${usd(inbox.caps.floor)} USDC you keep`
-      : left < per
-        ? `${usd(left.toFixed(6))} of the ${usd(inbox.caps.daily)} a day is left`
-        : `the cap on one payment; ${usd(left.toFixed(6))} of the ${usd(inbox.caps.daily)} a day is left`;
-  return <Stat label={label} value={usd(can.toFixed(6))} sub={`USDC: ${why}${inbox.mode === "Propose" ? "; each payment waits for your tap" : ""}`} />;
+  const day = `${usd(left.toFixed(6))} of the ${usd(inbox.caps.daily)} a day is left, ${usd(spent.toFixed(6))} spent in the last 24 hours`;
+  const why = above < Math.min(per, left) ? `all the account holds above the ${usd(inbox.caps.floor)} USDC you keep` : left < per ? day : `the cap on one payment; ${day}`;
+  if (inbox.mode !== "Autopilot")
+    return <Stat label={label} value="0.00" sub={`USDC by themselves: on Asks before paying each payment waits for your tap; one tap pays up to ${usd(can.toFixed(6))} — ${why}.`} />;
+  return <Stat label={label} value={usd(can.toFixed(6))} sub={`USDC: ${why}`} />;
 }
 
 /** docs/73 T2/T3. The number is shown only when the served data proves it: the bill
