@@ -163,7 +163,8 @@ pub fn refusal_words(err: &str) -> Option<&'static str> {
     const WORDS: &[(&str, &str)] = &[
         (
             "NotAutopilot(uint8)",
-            "the account is not on Autopilot; the agent buys only when it may pay by itself",
+            // docs/60 P-174: said where the owner reads refusals, so the words name the fix.
+            "the agent buys only on Autopilot: this account asks before paying, so the purchase was refused; turn Autopilot on to let it buy inside your limits",
         ),
         (
             "AgentLapsed(uint64)",
@@ -963,6 +964,11 @@ mod tests {
             Some("the price is above the per-payment limit")
         );
         assert_eq!(refusal_words("something else"), None);
+        // NotAutopilot(uint8) = 0xe264d26a: the words say the fix (docs/60 P-174).
+        assert!(
+            refusal_words("execution reverted: custom error 0xe264d26a0000")
+                .is_some_and(|w| w.starts_with("the agent buys only on Autopilot"))
+        );
     }
 
     #[test]
