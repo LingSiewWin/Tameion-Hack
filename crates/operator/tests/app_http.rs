@@ -1332,3 +1332,87 @@ fn an_agents_prepared_change_says_who_signs_and_is_kept_for_the_owner() {
     );
     assert_eq!(st, 401);
 }
+
+/// UAT wave 2 (docs/60 P-170, P-176, P-173): on an account with agent keys the
+/// owner's own device still prepares changes (the passkey signs them), only for
+/// its own account; the anchored records stay open to anyone; the owner's live
+/// stream opens with the device header; a run or a statement still needs a key.
+#[test]
+fn the_owners_device_prepares_and_anyone_reads_the_records() {
+    let srv = start_with(14, &[("TAMEION_RPC_ARC", "http://127.0.0.1:9")]);
+    let p = srv.port;
+    let dir = std::env::temp_dir().join(format!("tameion-app-test-{}-14", std::process::id()));
+    std::fs::create_dir_all(dir.join("tenants")).unwrap();
+    let tenant = |policy: &str, device: &str| {
+        let read = operator::level1::token_hash("k-read");
+        let dev = operator::level1::token_hash(device);
+        std::fs::write(
+            dir.join("tenants").join(format!("{policy}.json")),
+            format!(
+                r#"{{"chain":"arc-testnet","owner":"0x0000000000000000000000000000000000000001","policy":"{policy}","agent":"0x0000000000000000000000000000000000000003","operator":"0x0000000000000000000000000000000000000004","watched":"0x0000000000000000000000000000000000000005","recovery":"0x0000000000000000000000000000000000000000","per_action":"1","daily":"1","floor":"0","delay_secs":60,"mode":1,"created_block":0,"history_from_block":0,"created":0,"deployed":true,"reserve_token_hash":"{dev}","agent_tokens":[{{"id":"r1","label":"reader","scopes":["read"],"expires":4102444800,"issued":0,"hash":"{read}"}}]}}"#
+            ),
+        )
+        .unwrap();
+    };
+    let (a, b) = (
+        "0x00000000000000000000000000000000000000e1",
+        "0x00000000000000000000000000000000000000e2",
+    );
+    tenant(a, "dev-a");
+    tenant(b, "dev-b");
+    let limits = |policy: &str| {
+        format!(r#"{{"policy":"{policy}","perAction":"0.01","daily":"1","floor":"0"}}"#)
+    };
+    let dev_a = "x-tameion-device: dev-a\r\n";
+    // P-170: the owner's device prepares on its own account, never on another.
+    let (st, _, body) = http_with(p, "POST", "/api/level1/prepare-limits", &limits(a), dev_a);
+    assert_eq!(st, 200, "{body}");
+    assert!(body.contains("owner's passkey"), "{body}");
+    let (st, _, _) = http_with(p, "POST", "/api/level1/prepare-limits", &limits(b), dev_a);
+    assert_eq!(st, 401, "another account's device opens nothing");
+    let (st, _, _) = http_with(p, "POST", "/api/level1/prepare-limits", &limits(a), "");
+    assert_eq!(st, 401, "no credential, no prepare");
+    let (st, _, _) = http_with(
+        p,
+        "POST",
+        "/api/level1/run",
+        &format!(r#"{{"policy":"{a}"}}"#),
+        dev_a,
+    );
+    assert_eq!(st, 401, "a run still needs a key with run");
+    // Agent key scopes unchanged: a read key cannot prepare.
+    let (st, _, _) = http_with(
+        p,
+        "POST",
+        "/api/level1/prepare-limits",
+        &limits(a),
+        "Authorization: Bearer k-read\r\n",
+    );
+    assert_eq!(st, 403);
+    // P-176: the records the page says anyone can check answer without a key.
+    let (st, _, body) = http_with(p, "GET", &format!("/api/level1/records?policy={a}"), "", "");
+    assert_ne!(st, 401, "{body}");
+    let (st, _, body) = http_with(
+        p,
+        "GET",
+        &format!(
+            "/api/level1/record?policy={a}&root=0x1111111111111111111111111111111111111111111111111111111111111111"
+        ),
+        "",
+        "",
+    );
+    assert_ne!(st, 401, "{body}");
+    let (st, _, _) = http_with(
+        p,
+        "GET",
+        &format!("/api/level1/statement?policy={a}"),
+        "",
+        "",
+    );
+    assert_eq!(st, 401, "the statement (bills, payees) stays behind read");
+    // P-173: the owner's stream opens with the device header, as the page sends it.
+    let (st, _) = stream_head(p, &format!("/api/level1/events?policy={a}"), dev_a);
+    assert_eq!(st, 200);
+    let (st, _) = stream_head(p, &format!("/api/level1/events?policy={a}"), "");
+    assert_eq!(st, 401);
+}
