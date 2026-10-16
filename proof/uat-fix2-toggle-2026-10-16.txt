@@ -31,3 +31,17 @@ Found, not changed (another seat's file): the account page "/" has no toggle (co
 GET /api/level1/inbox took 38 s on :7880 (U1) and 38 s on :7903 (U3) at 22:01-22:02, so /agent shows skeleton panels that long on an operator account.
 
 Gates: npx tsc --noEmit exit 0; npx eslint src test exit 0; node --test test/*.test.mts: tests 57, pass 57, fail 0.
+
+4. Update 2026-10-16 22:18 +08: the account page gets the toggle (PM authorised one line, components/account/account.tsx:153 `<TopBar surface="human">`)
+   The line alone made the account page's header row 481 px wide: at 390 the page scrolled sideways by 91 px (Agent segment and theme switch cut off).
+   Fix in brand.tsx: below md (768 px) the two segments are one full-width row under the header (SurfaceToggle fill); from md up they stay in the header row.
+   Operator account uat-u1-acme on :7880, Chromium:
+   / at 1280:  Human -> / (current) | Agent -> /agent   (proof/uat-fix2-toggle-account-1280.png)
+   / at 390:   toggle in its own row at y 69, 358 px wide (proof/uat-fix2-toggle-account-390.png); Tab order: Tameion, account menu, Settings, theme switch, Human, Agent
+   keyboard at 390: Tab to Agent + Enter -> /agent (tameion.surface agent); Tab to Human + Enter -> / (tameion.surface human)
+   keyboard at 1280: Tab x5 reaches Agent, Enter -> /agent; the Human segment -> /
+   overflow (scrollWidth - clientWidth), real name "uat-u1-acme": 0 at 1280, 768, 767, 700, 640, 600, 390, 360
+   overflow with a 40-character name: 0 at every width listed except 360 px: 7 (the account menu button, settings and theme switch alone; before the toggle existed on this page too)
+   overflow with a 34-character name and the toggle in the row at 640 px (the first version, break at sm): 42 px; hence the break at md
+   axe-core (wcag2a, 2aa, 21a, 21aa, 22aa, best-practice), no overflowX: / 1280 dark 0, / 700 dark 0, / 390 dark 0, / 390 light 0, /agent 390 dark 0, /desk 390 light 0, /desk 1280 dark 0 violations
+   gates: tsc exit 0; eslint src test exit 0; node --test test/*.test.mts: tests 57, pass 57, fail 0
