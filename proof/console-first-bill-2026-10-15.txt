@@ -1,0 +1,55 @@
+Empty state = first bill (docs/60 P-77, docs/76 §8b item 2) — live run, Arbitrum Sepolia, 2026-10-15 11:03–11:12 +08.
+
+What was run: the console's Start view (apps/console, static export served by tameion-app) with a wallet that has
+no history, through Playwright with a virtual passkey (CDP WebAuthn, ctap2/internal, user verified). The service
+was a second instance of the rebuilt binary on :7881 (the running :7880 predates the /api/level1/bills change);
+same runtime/app directory, same relayer key, no watch loop. Nothing on chain until money landed.
+
+The wallet pasted (no history on any chain; keccak("tameion-p77-first-bill-2026-10-15")[-20:], no key exists):
+  0x74858f049E471962588a726e48264E448cadAd02
+Chain: Arbitrum Sepolia (chosen in "More ways to set it up"; the default is Arc testnet).
+Read: "No recurring bill in 0 payments over 90 days. Add the first one:"  →  screenshot
+  proof/console-first-bill-2026-10-15.png  (row: 0x1111…1111 · 1 USDC · every 30 days; Daily limit prefilled 2 =
+  twice the typed bill; the mandate reads "Pay this bill when due, up to 2.00 USDC a day"; the row says
+  "a new payee is payable 1 minute after that" — this host's delay is 60 s, read from /api/level1/config delaySecs.
+  Reworded after the run to "it can pay a new payee 1 minute after that": the cooling-off binds the agent's pay,
+  not the owner's own settlement, as the two taps below showed; the rebuilt export carries the new line)
+
+Start with my passkey (one tap):
+  POST /api/level1/deploy  lazy → 200, reserved, deployed:false
+    owner  0xc0554b2f037f41602228c0fff35102c89ce5af2c   policy 0x7bae6c3e651355c0b8bd8810d8dabd9b8e4be6d2
+    recovery 0x74858f049e471962588a726e48264e448cadad02 = watched (the service's new default, P-76)
+  POST /api/level1/bills   {policy, qx, qy, bills:[{payee 0x1111…1111, amount "1", everyDays 30}]} → 200
+    runtime/app/tenants/0x7bae…e6d2.json: deployed false, bills [{payee 0x1111…1111, amount 1, every_days 30}]
+  Account page, Fund panel → screenshot proof/console-first-bill-fund-2026-10-15.png
+    "If we ever disappear, the wallet you pasted can recover this account after 1 minute; you can cancel."
+
+Money lands (2 USDC from the relayer wallet, by hand — the page's address box):
+  https://sepolia.arbiscan.io/tx/0x4f13efcb0edfbddb50ecb1129087cd7cc0ffa227c75aadf8f119f0af058730c3  (block 319287972)
+
+First pass (POST /api/level1/run, job 6ad042e3-0002): ensure_deployed put both contracts on chain, then the pass
+found the typed bill (obligations: 1, transfers: 1, mode Propose, balance 2.000000 USDC):
+  owner (PasskeyPrincipal)  https://sepolia.arbiscan.io/tx/0xe0ce623dbe22e45608e48ddba22519ef8c13e97925a6a95122df73dd8930825e
+  policy (BudgetPolicy)     https://sepolia.arbiscan.io/tx/0x530a03f7ee150d1e367263bf214c839c352be11a9c185d3f15ee289c0fba1c1e
+  agent gas top-up          https://sepolia.arbiscan.io/tx/0x444e47f6ebcc6015562eb1e4f0dacff9353f96230b27e697e888013cbcb1f4d9
+  anchor (the pass's root)  https://sepolia.arbiscan.io/tx/0x0eba8510f179bf325953fd7c78c463635744451ba28674cd443697154c937a52
+  pendingSignature: 0x1111…1111 1.000000 USDC, attest: true
+  escalated: REVIEW "payee-attested: 0x1111…1111 is not attested on chain, so the contract would refuse it"
+  Account page: Needs you · 1 · "Pay 1.00 USDC to 0x1111…1111 — Not one of your approved payees yet. “Approve & pay”
+  approves it and pays."
+
+Approve & pay (one tap, two passkey signatures through the owner contract, relayed by 0x6c1c…9a25):
+  attest (setPayees)        https://sepolia.arbiscan.io/tx/0x2344ae9e07429555ea42fb7d4ef1b15917f0cfc70521d1e1ad7bff3256a14a3b
+                            status 1, block 319288446, to 0xc055…af2c (owner), 2 logs, 147769 gas, nonce 0
+  pay (settleAsPrincipal)   https://sepolia.arbiscan.io/tx/0x748aec7bfaa97d26fcc9d082ee739b922c8d330c3a71edc7c2850719fa8b31fe
+                            status 1, block 319288468, 3 logs, 135345 gas, nonce 1
+  Page: "Paid 1.00 USDC. Receipt"
+  After: policy USDC balance 1000000 (1.0 USDC = 2 − 1); 0x1111…1111 received it.
+  Owner contract reads back: recovery() = 0x74858f049E471962588a726e48264E448cadAd02, recoveryDelay() = 60.
+
+Relayer gas (P-14): 0.001400 ETH before → 0.001185 after the deploy → 0.001179 after the two taps. The floor for the
+next account on this chain is 0.001 ETH (level1::relayer_floor_wei): top up before another live account.
+
+Not done here: the agent paying the bill by itself after the delay (the owner settled by hand inside the delay,
+which the contract allows for the principal; the agent's own `pay` waits `attestedSince + delay`). The seat's
+"the row says payable after the N-day delay" is therefore phrased on the row as the agent's wait, not the owner's.

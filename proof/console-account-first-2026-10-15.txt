@@ -1,0 +1,72 @@
+Console: open an account by name, not by pasting a wallet (docs/79 §6a Console 1-5)
+2026-10-15 15:39-15:46 +08, http://localhost:7880/ (static export apps/console/out, service pid 39716),
+headless Chromium 1243 + CDP WebAuthn virtual authenticator (ctap2, internal, UV). Driver: a Playwright
+script kept in the session scratchpad (prove.cjs); its log lines are quoted below verbatim (UTC times).
+Nothing was funded. Relayer gas was spent: the spare-key tap puts a reserved account on chain first.
+
+Checks before the run (apps/console):
+  npx tsc --noEmit                 -> exit 0
+  npx eslint . --max-warnings 0    -> exit 0
+  node --test test/*.mts           -> tests 8, pass 8, fail 0 (incl. setRecovery: owner contract only, bytes must match)
+  npm run build                    -> routes / , /_not-found , /pay , /watch exported
+
+A. Arbitrum Sepolia, name uat-1539, wallet 0x74858f049e471962588a726e48264e448cadad02 (the one asked for)
+  07:39:08 availability: uat-1539 is free.
+  07:39:10 HTTP 200 /api/level1/deploy {... "caps_provisional":true,"chain":"arbitrum-sepolia", ... "deployed":false ...}
+           (the body sent: chain, qx, qy, name, keyless, days, invite, lazy -- no watched, no caps)
+  07:39:14 title: uat-1539
+  07:39:14 bring: Bring money in Send USDC on Arbitrum Sepolia to your account. It is the same address on every
+           supported chain, and only your passkey can take money back out. 0xcae9b13dba62e828e4702221af34d7cf0fb7708e
+           A link for anyone who pays you: http://localhost:7880/pay?to=uat-1539 From another chain Testnet USDC: ...
+  07:39:14 mandate: ... up to 100.00 USDC a day ... A starting limit, sized from the bills it knows: it moves as you
+           add bills, and you confirm it with your passkey when money arrives.
+  07:39:14 HTTP 200 /api/level1/wallets {"caps":{"daily":"100.000000 USDC","perAction":"50.000000 USDC","provisional":true},
+           "deployed":false,"policy":"0xcae9...708e","recovery":"0x000...000","spareKey":"0x74858f04...ad02", ...}
+  07:39:16 owe: ... Connected 0x7485…ad02. 0x7485…ad02 Make 0x74858f049e471962588a726e48264e448cadad02 your spare key
+           — confirm with your passkey. ... No recurring bill in what it read. Type the first one below. ...
+           (correct: on Arbitrum Sepolia this wallet has nonce 0 and 0 USDC -- `cast nonce`, `cast call balanceOf`;
+           docs/60 P-91. Found bills are proved in B.)
+  07:39:17 settings before: If you lose your phone ... Make 0x7485...ad02 your spare key — confirm with your passkey.
+  07:39:17 HTTP 200 /api/level1/prepare-recovery {"data":"0xf0d85c89...74858f04...ad02", "to":"0x7ac931c2...4fb69"}
+           (the page built setRecovery(0x7485...) itself and held the service's call against it: lib/guard.ts)
+  07:39:28 HTTP 200 /api/level1/challenge {"chainId":421614,"challenge":"0x45628e32...dc27","nonce":"0"}
+  07:39:32 HTTP 200 /api/level1/execute {"tx":"0xa992fe4d9196c0d68132a8a79dc9fb2c8bec5a65dffa9981f793afeb36e215f3"}
+           https://sepolia.arbiscan.io/tx/0xa992fe4d9196c0d68132a8a79dc9fb2c8bec5a65dffa9981f793afeb36e215f3
+  07:39:36 settings after: If you lose your phone ... Spare key: 0x7485…ad02 · Change
+  07:39:36 pay: Pay uat-1539 Send USDC to uat-1539's account. ... 0xcae9b13dba62e828e4702221af34d7cf0fb7708e
+           Live on Arbitrum Sepolia ...
+  07:39:36 pay unknown: No account is called no-such-name-zz Check the link with whoever sent it. ...
+  (The one console error on each run is the browser logging the name route's 404 = "this name is free".)
+
+  Read back afterwards:
+    cast receipt 0xa992fe4d...15f3 status                 -> 1 (success)
+    cast call 0x7ac931c2baf2ffd43dc5f50c63475db203d4fb69 "recovery()(address)"
+                                                          -> 0x74858f049E471962588a726e48264E448cadAd02
+    GET /api/level1/name/uat-1539 -> {"account":"0xcae9b13dba62e828e4702221af34d7cf0fb7708e","chains":[{"chainId":421614,
+           "deployed":true,"key":"arbitrum-sepolia","name":"Arbitrum Sepolia",...}],"name":"uat-1539",
+           "owner":"0x7ac931c2baf2ffd43dc5f50c63475db203d4fb69"}
+    GET /api/level1/tenant/0xcae9...708e -> name uat-1539, watched 0x0, wallets [0x7485...], recovery 0x7485...,
+           spare_key None, deployed True, 50 / 100 USDC
+    relayer on Arbitrum Sepolia: 0.101179 ETH before the runs, 0.100747 ETH after (two accounts put on chain by the
+    tap: uat-1534 from a first run whose script stopped on a wait condition, then uat-1539)
+
+  Screenshots: console-account-first-2026-10-15-1-start.png, -2-reserved.png (both cards), -3-connected.png,
+               -4-spare-key-proposed.png, -5-spare-key-set.png, -6-pay.png, -7-pay-unknown.png
+
+B. Arc testnet, name uat-1545-arc, wallet 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25 (the demo treasury: the only
+   wallet this service knows with recurring payments in the last 90 days; on Arbitrum Sepolia its two 3-minute test
+   bills ended 13 days ago, so a read there finds 0 -- 34 transfers, 0 obligations, checked 15:31)
+  07:45:43 availability: uat-1545-arc is free.
+  07:46:12 title: uat-1545-arc
+  07:46:14 owe: ... Connected 0x6c1c…9A25. ... Make 0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25 your spare key — confirm
+           with your passkey. ... 6 bills found · 6 not paid lately 0.002 0x0000…00a1 every 51 seconds · last paid Sep 21
+           0.00535 0x0000…00a2 every 51 seconds · last paid Sep 21 0.03 0x0000…00a3 ... 0.05 0x93f2…9ea8 every 7 hours ·
+           last paid Oct 14 ...
+  GET /api/level1/name/uat-1545-arc -> {"account":"0x546daf1b5135b3c7585bc8c3b0a4f46d5a9ffd28","chains":[{"chainId":
+           5042002,"deployed":false,"key":"arc-testnet",...}],"name":"uat-1545-arc",...}
+  Screenshot: console-account-first-2026-10-15-arc-bills-found.png
+
+Not shown here: funding, Approve & pay (the founder's UAT run); a live account with real bills found on Arbitrum
+Sepolia (no wallet with current bills there); typing a bill on a live account (code path: approve payee with the
+passkey, then POST bills -- not run). Reserved, nothing on chain, left behind by the runs: uat-1525, uat-1526,
+uat-1539-arc, uat-1540-arc, uat-1545-arc.
