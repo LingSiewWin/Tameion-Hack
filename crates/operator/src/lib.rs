@@ -28,6 +28,7 @@
 pub mod agent_api;
 pub mod audit;
 pub mod claude;
+pub mod decide;
 pub mod desk;
 pub mod desk_invite;
 pub mod desk_live;
@@ -1100,6 +1101,13 @@ pub struct RunOutcome {
     pub anchor_error: Option<String>,
     /// Earlier records anchored by this pass, with their transactions.
     pub caught_up: Vec<(Hash32, B256)>,
+    /// Who chose at each decision point this pass (docs/112).
+    pub decider: String,
+    /// Every decision this pass made, in order: the case code built, the
+    /// decision after [`decide::guard`], and -- when the decider's answer was
+    /// not used as given (an error, an action code does not allow, an
+    /// invented number) -- why.
+    pub decisions: Vec<(decide::Case, decide::Decision, Option<String>)>,
 }
 
 /// One escalated payment, encoded for a human signature.
@@ -1464,6 +1472,23 @@ impl<R: Reasoner> Operator<R> {
         history: Option<Vec<Transfer>>,
         execute: bool,
     ) -> Result<RunOutcome, OperatorError> {
+        self.run_once_deciding(now, history, execute, &decide::RuleBased)
+            .await
+    }
+
+    /// [`Operator::run_once`] with `decider` choosing at every decision
+    /// point (docs/112): after the verifier, code lists what it allows for
+    /// the bill, the decider picks one -- pay, pay early, wait, ask the owner,
+    /// refuse -- and [`decide::guard`] holds the answer to that list and to
+    /// the case's own numbers. A decider that fails gives the rule's decision,
+    /// recorded as a fallback. `run_once` is this with the rule.
+    pub async fn run_once_deciding<D: decide::Decider + Sync>(
+        &mut self,
+        now: Timestamp,
+        history: Option<Vec<Transfer>>,
+        execute: bool,
+        decider: &D,
+    ) -> Result<RunOutcome, OperatorError> {
         // The Action IR carries unsigned seconds, so a clock before the
         // epoch has no representation there. Refuse rather than clamp: a
         // silently-clamped timestamp produces an action whose validity
@@ -1628,45 +1653,13 @@ impl<R: Reasoner> Operator<R> {
             },
         );
 
-        for (o, saved) in &early {
-            let full = o
-                .typical_amount
-                .checked_add(*saved)
-                .unwrap_or(o.typical_amount);
-            let lead = self
-                .config
-                .early
-                .iter()
-                .find(|t| t.counterparty == o.counterparty)
-                .map(|t| t.lead)
-                .unwrap_or(self.config.pay_lead);
-            self.log.append(
-                now,
-                EventBody::Observation {
-                    balance,
-                    transfers_seen: history.len(),
-                    obligations_found: obligations.len(),
-                    total_due,
-                    note: format!(
-                        "Paying {} early: its invoice takes {saved} off when paid at least {lead} \
-                         before the due date ({}). Every bill due within {} is covered with the \
-                         floor kept, so I pay {} now instead of {full} later.",
-                        o.counterparty,
-                        o.next_due.as_unix(),
-                        self.config.horizon,
-                        o.typical_amount
-                    ),
-                },
-            );
-        }
-
         let mut outcome = RunOutcome {
             anchor_error: None,
             caught_up: Vec::new(),
-            early: early
-                .iter()
-                .map(|(o, saved)| (o.cycle_key(), *saved))
-                .collect(),
+            // Filled when the decider takes the discount (docs/112).
+            early: Vec::new(),
+            decider: decider.name().to_string(),
+            decisions: Vec::new(),
             balance,
             transfers_seen: history.len(),
             obligations_found: obligations.len(),
@@ -1704,11 +1697,32 @@ impl<R: Reasoner> Operator<R> {
         // Both lists are read at once (docs/68 F4).
         let mut screened = candidates.clone();
         screened.push(self.config.policy);
-        let (onchain_attested, issuer_blocked) = tokio::join!(
+        // docs/112: when the owner approved each payee (`attestedSince`), read
+        // with them; a policy from before it answers nothing (see `payee_age`).
+        let (onchain_attested, issuer_blocked, approved_since) = tokio::join!(
             self.client.attested_among(self.config.policy, &candidates),
             self.client.issuer_blocked_among(&screened),
+            self.client
+                .attested_since_among(self.config.policy, &candidates),
         );
         let onchain_attested = onchain_attested?;
+        let approved_since: BTreeMap<String, u64> = approved_since
+            .map(|v| v.into_iter().map(|(a, t)| (format!("{a:#x}"), t)).collect())
+            .unwrap_or_default();
+        // The decider's facts that are the same for every bill this pass: the
+        // runway against the balance above the floor, and whom a payee could
+        // imitate (the verifier's references for its look-alike rule).
+        let available = balance.to_minor()
+            - governance
+                .as_ref()
+                .map(|g| g.reserve_floor.to_minor())
+                .unwrap_or(0);
+        let runway = decide::runway_days(&upcoming_all, available, now.as_unix());
+        let references: Vec<String> = known_payees
+            .keys()
+            .cloned()
+            .chain(onchain_attested.iter().flatten().cloned())
+            .collect();
 
         // Judgment is the only part of this loop that depends on a service
         // outside it. A model that is rate-limited, timing out, or simply
@@ -2003,6 +2017,80 @@ impl<R: Reasoner> Operator<R> {
 
             let verdict = verify(&action, &world);
 
+            // The decision point (docs/112). Every number in the case is the
+            // pass's own; code lists what it allows from the verdict and the
+            // contract's state; the decider picks inside that list.
+            let early_saved = early
+                .iter()
+                .find(|(e, _)| e.cycle_key() == cycle_key)
+                .map(|(_, saved)| *saved);
+            // An early candidate is cased at its full amount: `pay_early` pays
+            // the discounted one, `wait` the full one later.
+            let full =
+                obligation.typical_amount.to_minor() + early_saved.map_or(0, |s| s.to_minor());
+            let terms = self
+                .config
+                .early
+                .iter()
+                .find(|t| t.counterparty == obligation.counterparty);
+            let payee = obligation.counterparty.as_str().to_lowercase();
+            let on_list = onchain_attested
+                .as_ref()
+                .is_some_and(|l| l.contains(&payee));
+            // ponytail: a policy from before `attestedSince` (10-16) gives no
+            // approval date; an approved payee there counts from the owner's
+            // first payment to it.
+            let payee_age = (on_list || onchain_attested.is_none())
+                .then(|| {
+                    approved_since
+                        .get(&payee)
+                        .copied()
+                        .filter(|t| *t > 0)
+                        .map(|t| t as i64)
+                        .or_else(|| {
+                            history
+                                .iter()
+                                .filter(|t| obligation.evidence.contains(&t.tx_hash))
+                                .map(|t| t.at.as_unix())
+                                .min()
+                        })
+                        .map(|t| u32::try_from((now.as_unix() - t).max(0) / 86_400).unwrap_or(0))
+                })
+                .flatten();
+            let due_in_days = decide::days_until(obligation.next_due.as_unix(), now.as_unix());
+            let case = decide::Case {
+                id: cycle_key.clone(),
+                payee: decide::label(obligation.counterparty.as_str()),
+                amount_minor: u128::try_from(full).unwrap_or(0),
+                usual_minor: (obligation.sample_count > 0)
+                    .then(|| u128::try_from(full).unwrap_or(0)),
+                samples: u32::try_from(obligation.sample_count).unwrap_or(u32::MAX),
+                cadence_days: u32::try_from(obligation.interval.as_i64().max(0) / 86_400).ok(),
+                due_in_days,
+                runway_days: runway,
+                discount_bps: terms.map_or(0, |t| t.discount_bps),
+                early_days: terms.map_or(0, |t| {
+                    u32::try_from(t.lead.as_i64().max(0) / 86_400).unwrap_or(0)
+                }),
+                payee_age_days: payee_age,
+                // As the verifier: a payee the owner attested is never a look-alike.
+                lookalike_of: (!on_list)
+                    .then(|| references.iter().find(|r| ledger::looks_alike(&payee, r)))
+                    .flatten()
+                    .map(|r| decide::label(r)),
+                confidence: obligation.confidence.get(),
+                allowed: decide::allowed_for_bill(
+                    verdict.decision,
+                    !propose_only,
+                    early_saved.is_some(),
+                    due_in_days,
+                ),
+                kind: Some(decide::CaseKind::Bill),
+                cap_minor: u128::try_from(authority.per_action_cap.to_minor()).ok(),
+            };
+            let (decided, decided_note) = decide::decide_or_rule(decider, &case).await;
+            let decided_line = decide::record_line(&decided, decided_note.as_deref());
+
             self.log.append(
                 now,
                 EventBody::Decision {
@@ -2015,7 +2103,7 @@ impl<R: Reasoner> Operator<R> {
                     weakest_evidence: action.weakest_provenance(),
                     evidence: obligation.evidence.clone(),
                     note: format!(
-                        "{} for {}. {} Basis: {}",
+                        "{} for {}. {} Basis: {} {decided_line}",
                         verdict.decision,
                         obligation.counterparty,
                         item.rationale,
@@ -2023,8 +2111,49 @@ impl<R: Reasoner> Operator<R> {
                     ),
                 },
             );
+            outcome
+                .decisions
+                .push((case, decided.clone(), decided_note.clone()));
 
             match verdict.decision {
+                // The decider refused what the checks allowed or escalated:
+                // its own record, so the statement lists it as refused.
+                _ if decided.action == decide::Action::Refuse => {
+                    if verdict.decision != Decision::Block {
+                        self.log.append(
+                            now,
+                            EventBody::Decision {
+                                counterparty: obligation.counterparty.clone(),
+                                amount: obligation.typical_amount,
+                                decision: Decision::Block,
+                                action_hash: hash,
+                                confidence: obligation.confidence,
+                                balance_seen: balance,
+                                weakest_evidence: action.weakest_provenance(),
+                                evidence: obligation.evidence.clone(),
+                                note: format!(
+                                    "Refused for {}, which the checks did not refuse. {decided_line}",
+                                    obligation.counterparty
+                                ),
+                            },
+                        );
+                    }
+                    outcome.blocked.push((obligation, verdict));
+                }
+                _ if decided.action == decide::Action::Wait => {
+                    self.log.append(
+                        now,
+                        EventBody::Skipped {
+                            counterparty: obligation.counterparty.clone(),
+                            cycle_key: cycle_key.clone(),
+                            note: format!(
+                                "Waiting this pass; the next pass decides again. {decided_line}"
+                            ),
+                        },
+                    );
+                    outcome.skipped.push(obligation);
+                }
+                // Only `refuse` is allowed on a block; kept so the match is total.
                 Decision::Block => {
                     outcome.blocked.push((obligation, verdict));
                 }
@@ -2089,6 +2218,35 @@ impl<R: Reasoner> Operator<R> {
                         outcome.escalated.push((obligation, verdict));
                         continue;
                     }
+                    // docs/112: the decider chose to ask although the agent
+                    // could pay; the owner gets the same calldata and its why.
+                    if decided.action == decide::Action::Ask && !propose_only {
+                        let reason = format!("the agent asks: {}", decided.why);
+                        self.log.append(
+                            now,
+                            EventBody::Escalation {
+                                counterparty: obligation.counterparty.clone(),
+                                amount: obligation.typical_amount,
+                                reason: reason.clone(),
+                                note: format!(
+                                    "Prepared for the owner, not paid: everything the verifier \
+                                     checked passed, and I chose to ask. {decided_line}"
+                                ),
+                            },
+                        );
+                        self.hand_over(
+                            &mut outcome,
+                            now,
+                            &obligation,
+                            &cycle_key,
+                            key,
+                            &hash,
+                            &verdict,
+                            false,
+                        );
+                        outcome.escalated.push((obligation, verdict));
+                        continue;
+                    }
                     if propose_only {
                         // The verifier would let this through; the contract
                         // would not. Hand it to the owner with the same
@@ -2134,6 +2292,37 @@ impl<R: Reasoner> Operator<R> {
                         );
                         outcome.escalated.push((obligation, verdict));
                         continue;
+                    }
+                    // PLAN 5.56: the decider took the discount (`pay_early` is
+                    // allowed only for the pass's own early candidates, so the
+                    // amount here is already the discounted one).
+                    if decided.action == decide::Action::PayEarly
+                        && let Some(saved) = early_saved
+                    {
+                        let full_amount = obligation
+                            .typical_amount
+                            .checked_add(saved)
+                            .unwrap_or(obligation.typical_amount);
+                        let lead = terms.map(|t| t.lead).unwrap_or(self.config.pay_lead);
+                        self.log.append(
+                            now,
+                            EventBody::Observation {
+                                balance,
+                                transfers_seen: history.len(),
+                                obligations_found: obligations.len(),
+                                total_due,
+                                note: format!(
+                                    "Paying {} early: its invoice takes {saved} off when paid at least {lead} \
+                                     before the due date ({}). Every bill due within {} is covered with the \
+                                     floor kept, so I pay {} now instead of {full_amount} later.",
+                                    obligation.counterparty,
+                                    obligation.next_due.as_unix(),
+                                    self.config.horizon,
+                                    obligation.typical_amount
+                                ),
+                            },
+                        );
+                        outcome.early.push((cycle_key.clone(), saved));
                     }
                     let to = parse_address(obligation.counterparty.as_str())
                         .ok_or_else(|| OperatorError::Unpayable(cycle_key.clone()))?;
@@ -2833,5 +3022,278 @@ mod schedules_read_tests {
             "nothing paid: {seen:?}"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod decide_pass_tests {
+    //! docs/112: the pass acts on the decider's choice, inside what code allows.
+    use super::*;
+    use decide::{Action, Basis, Decider};
+    use ledger::{Counterparty, Currency, Direction};
+    use serde_json::{Value, json};
+    use std::sync::{Arc, Mutex};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    fn selector(sig: &str) -> String {
+        alloy::hex::encode(&alloy::primitives::keccak256(sig)[..4])
+    }
+
+    fn word(v: u128) -> String {
+        format!("0x{v:064x}")
+    }
+
+    /// A policy node: `mode` as given, no standing orders, every payee
+    /// approved, big caps; every call's method and selector recorded. Sending
+    /// a transaction fails (so a pass that tried to pay would fail loudly).
+    async fn node(mode: u128, seen: Arc<Mutex<Vec<String>>>) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut sock, _)) = listener.accept().await else {
+                    return;
+                };
+                let seen = seen.clone();
+                tokio::spawn(async move {
+                    let mut buf = Vec::new();
+                    let mut chunk = [0u8; 4096];
+                    let body = loop {
+                        let n = sock.read(&mut chunk).await.unwrap_or(0);
+                        if n == 0 {
+                            return;
+                        }
+                        buf.extend_from_slice(&chunk[..n]);
+                        let text = String::from_utf8_lossy(&buf).to_string();
+                        if let Some(end) = text.find("\r\n\r\n") {
+                            let len: usize = text[..end]
+                                .lines()
+                                .find_map(|l| {
+                                    let (k, v) = l.split_once(':')?;
+                                    k.eq_ignore_ascii_case("content-length")
+                                        .then(|| v.trim().parse().ok())?
+                                })
+                                .unwrap_or(0);
+                            if buf.len() >= end + 4 + len {
+                                break text[end + 4..end + 4 + len].to_string();
+                            }
+                        }
+                    };
+                    let req: Value = serde_json::from_str(&body).unwrap();
+                    let method = req["method"].as_str().unwrap_or("").to_string();
+                    let call = &req["params"][0];
+                    let data = call["input"]
+                        .as_str()
+                        .or(call["data"].as_str())
+                        .unwrap_or("");
+                    let sel = data
+                        .trim_start_matches("0x")
+                        .get(..8)
+                        .unwrap_or("")
+                        .to_string();
+                    seen.lock().unwrap().push(format!("{method} {sel}"));
+                    let big = 1_000_000_000_000u128;
+                    let result: Result<Value, &str> = match method.as_str() {
+                        "eth_blockNumber" => Ok(json!("0x10")),
+                        "eth_getLogs" => Ok(json!([])),
+                        "eth_call" => match sel.as_str() {
+                            s if s == selector("mode()") => Ok(json!(word(mode))),
+                            s if s == selector("agentExpiry()") => Ok(json!(word(u64::MAX.into()))),
+                            s if s == selector("balanceUsdc()")
+                                || s == selector("perActionCap()")
+                                || s == selector("dailyCap()") =>
+                            {
+                                Ok(json!(word(big)))
+                            }
+                            s if s == selector("attestedPayee(address)") => Ok(json!(word(1))),
+                            _ => Ok(json!(format!("0x{}", "0".repeat(64 * 8)))),
+                        },
+                        _ => Err("unsupported"),
+                    };
+                    let reply = match result {
+                        Ok(r) => json!({"jsonrpc": "2.0", "id": req["id"], "result": r}),
+                        Err(m) => {
+                            json!({"jsonrpc": "2.0", "id": req["id"], "error": {"code": -32000, "message": m}})
+                        }
+                    };
+                    let out = reply.to_string();
+                    let resp = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{out}",
+                        out.len()
+                    );
+                    let _ = sock.write_all(resp.as_bytes()).await;
+                });
+            }
+        });
+        url
+    }
+
+    /// A decider that answers `Some(action)` as a model would, or fails.
+    struct Fake(Option<Action>);
+
+    impl Decider for Fake {
+        async fn decide(&self, _case: &decide::Case) -> Result<decide::Decision, ReasonerError> {
+            match self.0 {
+                Some(action) => Ok(decide::Decision {
+                    action,
+                    basis: Basis::AmountDeviates,
+                    why: format!("The fake model chose {}.", action.as_str()),
+                    by: ActorKind::Model,
+                    model: Some("fake-model".into()),
+                }),
+                None => Err(ReasonerError::Transient("the fake model is down".into())),
+            }
+        }
+
+        fn name(&self) -> &str {
+            "fake-model"
+        }
+
+        fn kind(&self) -> ActorKind {
+            ActorKind::Model
+        }
+    }
+
+    /// One pass over six monthly payments of 20 USDC, the last 31 days ago
+    /// (one cycle due, a day overdue), with `decider`, against a policy in `mode`.
+    async fn pass<D: Decider + Sync>(
+        mode: u128,
+        decider: &D,
+        tag: &str,
+    ) -> (RunOutcome, Vec<String>, Vec<String>) {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let url = node(mode, seen.clone()).await;
+        let client = ArcClient::with_signer(&url, &format!("0x{}", "11".repeat(32))).unwrap();
+        let policy = Address::repeat_byte(0xcc);
+        let mut config = Config::new(policy, policy, Address::repeat_byte(0xdd));
+        let dir = std::env::temp_dir().join(format!("op-decide-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        config.audit_dir = Some(dir.clone());
+        let mut op = Operator::new_unchecked(client, config, reasoner::RuleBased);
+        const DAY: i64 = 86_400;
+        let now = Timestamp::from_unix(1_800_000_000);
+        let history: Vec<Transfer> = (0..6)
+            .map(|i| Transfer {
+                tx_hash: format!("0xseed{i:02}"),
+                counterparty: Counterparty::new("0x1111111111111111111111111111111111111111"),
+                amount: Money::minor(20_000_000, Currency::Usdc),
+                at: Timestamp::from_unix(now.as_unix() - (31 + (5 - i) * 30) * DAY),
+                direction: Direction::Out,
+            })
+            .collect();
+        let outcome = op
+            .run_once_deciding(now, Some(history), true, decider)
+            .await
+            .unwrap();
+        let log = replay(op.log());
+        let _ = std::fs::remove_dir_all(&dir);
+        let seen = seen.lock().unwrap().clone();
+        (outcome, log, seen)
+    }
+
+    fn paid(seen: &[String]) -> bool {
+        let pay = selector("pay(address,uint256,bytes32)");
+        seen.iter().any(|s| s.ends_with(&pay))
+    }
+
+    #[tokio::test]
+    async fn a_model_ask_is_one_needs_you_row_with_its_why_and_nothing_is_paid() {
+        let (o, log, seen) = pass(2, &Fake(Some(Action::Ask)), "ask").await;
+        assert_eq!(
+            (
+                o.pending_signature.len(),
+                o.escalated.len(),
+                o.settled.len()
+            ),
+            (1, 1, 0)
+        );
+        assert!(!paid(&seen), "nothing paid: {seen:?}");
+        let (case, d, note) = &o.decisions[0];
+        assert_eq!(case.allowed, vec![Action::Pay, Action::Ask, Action::Refuse]);
+        assert_eq!(
+            (d.action, d.by, d.model.as_deref(), note),
+            (Action::Ask, ActorKind::Model, Some("fake-model"), &None)
+        );
+        assert_eq!(o.decider, "fake-model");
+        let line = log
+            .iter()
+            .find(|l| l.contains("Decided by model fake-model: ask"))
+            .expect("in the record");
+        assert!(line.contains("The fake model chose ask."), "{line}");
+        assert!(
+            log.iter()
+                .any(|l| l.contains("ESCALATION") && l.contains("I chose to ask")),
+            "{log:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_model_refusal_lands_in_refused_with_its_own_record() {
+        let (o, log, seen) = pass(2, &Fake(Some(Action::Refuse)), "refuse").await;
+        assert_eq!(
+            (o.blocked.len(), o.pending_signature.len(), o.settled.len()),
+            (1, 0, 0)
+        );
+        assert!(!paid(&seen));
+        assert!(
+            log.iter()
+                .any(|l| l.contains("Refused for")
+                    && l.contains("Decided by model fake-model: refuse")),
+            "{log:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_failing_model_gives_the_rules_decision_recorded_as_a_fallback() {
+        // Propose: the rule hands the bill to the owner, as before docs/112.
+        let (o, log, _) = pass(1, &Fake(None), "fallback").await;
+        assert_eq!(o.pending_signature.len(), 1);
+        let (_, d, note) = &o.decisions[0];
+        assert_eq!(
+            (d.action, d.by, d.model.as_deref()),
+            (Action::Ask, ActorKind::Rule, None)
+        );
+        assert!(
+            note.as_deref()
+                .unwrap()
+                .contains("fake-model failed [reasoner-transient]"),
+            "{note:?}"
+        );
+        assert!(
+            log.iter()
+                .any(|l| l.contains("Decided by rule: ask") && l.contains("fake-model failed")),
+            "{log:?}"
+        );
+        // An action code does not allow is the rule's decision too: in Propose
+        // the contract refuses the agent's payment, so `pay` is not offered.
+        let (o, _, seen) = pass(1, &Fake(Some(Action::Pay)), "illegal").await;
+        assert!(!paid(&seen));
+        let (case, d, note) = &o.decisions[0];
+        assert!(!case.allowed.contains(&Action::Pay));
+        assert_eq!((d.action, d.by), (Action::Ask, ActorKind::Rule));
+        assert!(
+            note.as_deref().unwrap().contains("does not allow"),
+            "{note:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_rule_decider_keeps_todays_pass() {
+        // Propose, rule: one Needs-you row; the record names the rule.
+        let (o, log, _) = pass(1, &decide::RuleBased, "rule").await;
+        assert_eq!(
+            (o.pending_signature.len(), o.decider.as_str()),
+            (1, "rule-based")
+        );
+        assert_eq!(
+            (o.decisions[0].1.action, o.decisions[0].1.by),
+            (Action::Ask, ActorKind::Rule)
+        );
+        assert!(
+            log.iter()
+                .any(|l| l.contains("Decided by rule: ask (usual)")),
+            "{log:?}"
+        );
     }
 }
