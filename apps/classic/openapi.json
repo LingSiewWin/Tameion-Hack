@@ -296,7 +296,7 @@
     },
     "/api/level1/record": {
       "get": {
-        "summary": "The events behind one anchored root of one tenant (NDJSON), as written before anchoring; recompute the root with `operator --example audit` and compare with rootOf on the chain.",
+        "summary": "The events behind one anchored root (NDJSON, in order), as written before anchoring. Recompute: leaf = keccak256(0x00 || canonical bytes); for n > 1 leaves split at k = the largest power of two below n, node = keccak256(0x01 || left || right); one leaf is its own root (RFC 6962 with Keccak-256). Compare with rootOf(agent) on the anchor contract. A match covers `canonical`; `kind` and `note` are carried for people and not hashed (the note is inside `canonical` as an 8-byte big-endian length then UTF-8).",
         "parameters": [
           {
             "name": "policy",

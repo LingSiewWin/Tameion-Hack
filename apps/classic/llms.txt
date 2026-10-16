@@ -35,9 +35,15 @@ them.
 ## What an agent may usefully do
 
 - Read the account: `GET /api/level1/inbox?policy=0x…` — mode, caps, balance,
-  what was paid, what waits for the owner ("needsYou", with the agent's
-  reason), `run` (every waiting bill as one call the owner approves with one
-  tap), runway (days until the first bill the policy could not cover) and
+  what was paid, what waits for the owner: `waiting` (and `waitingCount`) is
+  every bill to approve, seller to approve and invoice, the same items the
+  account page counts (`needsYou` alone is only the bills). `caps.spent24h`
+  and `caps.leftNow` (spent in the trailing 24 hours, and what the contract
+  still allows now), `payees` (approved, with `payableFrom` when each one's
+  cooling-off ends) and `pending.words` (a change waiting its delay, only what
+  is pending) are read from the contract. `run` (every waiting bill as one
+  call the owner approves with one tap), runway (days until the first bill
+  the policy could not cover) and
   `runway.idleCover` (the part no bill in 90 days needs — report it, never
   suggest where it should earn), `holdingsElsewhere` (USDC in Circle Gateway
   on other chains), `deployed` (false: the address is reserved and the first
@@ -50,8 +56,12 @@ them.
   early for the discount only when every bill in the next 30 days stays
   covered; the Paid row says what it saved.
 - Prepare, never sign: `POST /api/level1/prepare-*` returns `{to, data,
-  summary}` for the owner's passkey; the account page decodes and shows the
-  call in words before the passkey signs.
+  summary}` for the owner's passkey, plus for payees, limits and mode
+  `signer` (only the owner's passkey), `applies` (a cut or a revocation at
+  once; a raise, Autopilot or a new payee after the account's delay, and the
+  owner can cancel until then) and `ownerSees`. Sent with an agent key and a
+  `reason`, the request appears on the account page as one row with one tap;
+  the page decodes and shows the call in words before the passkey signs.
 - Standing orders anyone may trigger on their day: `POST /api/level1/pay-due`.
 - Buy a paid API (x402): `POST /api/level1/buy {"policy", "url", "method"?,
   "body"?, "maxUsdc", "reason"}` with a `buy` agent key. The service answers
@@ -132,6 +142,14 @@ while on testnet); Tameion takes nothing per payment.
 
 - OpenAPI: /api/openapi.json
 - Account page: / · receipts and proof: /level1 · read-only report: /watch
-- Verify any record on your own machine: download it from
-  `/api/level1/record?policy=…&root=…` and recompute its root against the
-  anchor contract on chain.
+- Verify any record on your own machine: download its events from
+  `/api/level1/record?policy=…&root=…` (one JSON line per event, in order).
+  Recompute: leaf = keccak256(0x00 ‖ the line's `canonical` bytes); with n > 1
+  leaves, split at k = the largest power of two below n, node =
+  keccak256(0x01 ‖ root(leaves[0:k]) ‖ root(leaves[k:n])); one leaf is its own
+  root (RFC 6962 with Keccak-256, not SHA3-256). Compare with `rootOf(agent)`
+  on the anchor contract named in `/api/level1/records` (or the anchor
+  transaction's input). A match covers the `canonical` bytes; `kind` and
+  `note` are carried for people and are not hashed — the note's words sit
+  inside `canonical` as an 8-byte big-endian length then UTF-8, so compare
+  them before acting on the words.
