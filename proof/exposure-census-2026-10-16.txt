@@ -1,0 +1,104 @@
+Exposure census (docs/109 §6 K1-K3, seat S7). Written 2026-10-16 19:51 +0800 by the command:
+  /opt/homebrew/bin/python3 -I scripts/research/exposure_census.py all
+Per-address data (other people's addresses) stays in runtime/research/exposure-census/addresses.tsv; none are printed here.
+
+Endpoints
+  Base logs   Tenderly public gateway (gateway.tenderly.co/public/base, base.gateway.tenderly.co): eth_getLogs, 1,000 blocks
+              per call. mainnet.base.org answered every eth_getLogs 429 -32011; base-rpc.publicnode.com refused old ranges
+              ("Archive requests require a personal token") - docs/60 P-158. Block times: mainnet.base.org.
+  State       ownerOf through Multicall3 tryAggregate, 1,000 ids per eth_call (mainnet.base.org; ethereum-rpc.publicnode.com),
+              each decoding checked against 20 direct ownerOf calls; eth_getCode in batches of 20 (Base) / 100 (Ethereum)
+  Holdings    base.blockscout.com, eth.blockscout.com /api/v2/addresses/{a} and /token-balances (exchange_rate)
+  Venue       api.hyperliquid.xyz/info clearinghouseState + extraAgents
+
+K1 - who pays by EIP-3009 authorization on Base (x402 `exact` settles this way)
+  window       blocks 51,381,105..52,677,104 = 2026-09-16 09:39 UTC .. 2026-10-16 09:39 UTC (30 days; K5 fallback not used)
+  found        2,768,695 AuthorizationUsed logs from 150,399 distinct authorizers (median 1 each);
+               the top 300 made 54.5% of all authorizations
+  second node  last 500 blocks of the window from publicnode vs Tenderly: 1,074 vs 1,074 logs, identical by (tx, log index): True
+  sampled      600 (300 top by count + 300 random, seed 109); holdings read for 600
+  >= $1,000 non-stable   3/600 = 0.5%   [top 2/300 = 0.7%; random 1/300 = 0.3%, 95% CI 0.1-1.9%]
+  K1 threshold <10%: TRIPS
+  population-weighted estimate (top stratum exact + random stratum for the other 150,099): 0.33%
+  median non-stable value  $0 (top $0, random $0)
+  payer accounts  EOA 564, EIP-7702-delegated EOA 33, contract 3 (code size > 0: 36)
+  unpriced     163 sampled payers hold at least one token without an exchange rate (5169 positions)
+  robustness   native ETH alone >= $1,000: 2/600 = 0.3%; without unlisted ~$1 tokens (rate 0.98-1.02): 3/600 = 0.5%; without tokens Blockscout flags: 3/600 = 0.5%
+
+K2 - who owns the ERC-8004 agents (IdentityRegistry 0x8004A169...a432, verified in erc-8004/erc-8004-contracts README)
+  Base       153,986 agents (ownerOf over ids 0..154,459 at blocks 52,677,874..52,677,967; newest Registered on Blockscout: 153979), 103,690 distinct owners (61 agents sent to a burn address left out); top 300 hold 20.9% of agents
+             sampled 600 (300 top by agents + 300 random), holdings read for 600: >= $1,000 non-stable top 2/300 = 0.7%, random 0/300 = 0.0%; median $0
+             estimate for all owners: 2 (95% CI 2-1,309); accounts EOA 461, 7702 77, contract 62; unpriced in 342
+  Ethereum   54,162 agents (ownerOf over ids 0..54,661 at blocks 26,204,397..26,204,401; newest Registered on Blockscout: 54161), 12,497 distinct owners (8 agents sent to a burn address left out); top 300 hold 68.6% of agents
+             sampled 600 (300 top by agents + 300 random), holdings read for 600: >= $1,000 non-stable top 5/300 = 1.7%, random 2/300 = 0.7%; median $0
+             estimate for all owners: 86 (95% CI 27-297); accounts EOA 388, 7702 98, contract 114; unpriced in 347
+  K2 count in the samples (distinct addresses, each on its registration chain): 9 - a lower bound for all owners
+  K2 threshold <30 owners: does not trip: 147 owners counted over every owner (ETH + top tokens), a lower bound
+
+Every payer and every agent owner, not a sample (nearest measurable thing to K2's count; a LOWER bound: native ETH
+  + the 8 priced non-stable tokens most held in that chain's samples, via Multicall3; read 2026-10-16 19:51 +0800)
+  base  counted: ETH at $2,450, ZORA, WETH, CBBTC, TOBY, AWETH, ALIGN, HIVE, CLAWD
+  eth   counted: ETH at $2,446, WETH, UNI, FWA, HEX, FOXE, FJO, G, ASTETH
+  K1 payers (Base)      150,399: >= $1,000 366 (0.24%; ETH alone 198); >= $100 996; under $0.01 138,974; median $0; 99th percentile $43
+  K2 owners (Base)      103,690: >= $1,000 103 (0.10%; ETH alone 73); >= $100 614; under $0.01 77,640; median $0; 99th percentile $45
+  K2 owners (Ethereum)   12,497: >= $1,000 45 (0.36%; ETH alone 41); >= $100 177; under $0.01 7,910; median $0; 99th percentile $179
+  K2 owners on either chain with >= $1,000: 147 of 114,998
+
+K3 - already on Hyperliquid (same address)
+  checked      1784 of 1784 distinct sampled addresses (K1 sample + K2 samples)
+  open position 4; API wallet 21; either 24/1784 = 1.3%
+  by set       K1 payers 10/600 = 1.7%; K2 owners 14/1184 = 1.2%
+  (secondary)  Hyperliquid account value > 0: 10
+  K3 reading: between 0 and 10%
+
+Top 10 non-stable tokens held (priced value >= $1), by number of holders - K1 sample
+    44  ETH (native)
+     2  WETH (L2 Standard Bridged WETH (Base))
+     2  CBBTC (Coinbase Wrapped BTC)
+     2  ZORA (Zora)
+     1  MOG (Mog Coin)
+     1  VVV (Venice Token)
+     1  WBTC (Wrapped Bitcoin)
+     1  TOBY (Toby ToadGod)
+     1  AUSD (AUSD)
+     1  OWB (OWB)
+
+Top 10 non-stable tokens held (priced value >= $1), by number of holders - K2 samples
+   343  ETH (native)
+    17  WETH (WETH)
+     7  ZORA (Zora)
+     5  WETH (L2 Standard Bridged WETH (Base))
+     5  UNI (Uniswap)
+     4  FWA (Fake World Assets)
+     3  AWETH (Aave v3 WETH)
+     2  TOBY (Toby ToadGod)
+     2  ASTETH (Aave Interest Bearing STETH)
+     2  FJO (Fjord Foundry)
+
+x402 Bazaar (not a K; the earn side): 42,746 resources listed (pagination total 42,757), read 2026-10-16 17:48 +0800, 2,476 distinct (network, payTo) sellers
+  resources accepting at least one asset of each class: USDC 42744/42746 = 100.0%; other USD stablecoin 2937/42746 = 6.9%; volatile 1154/42746 = 2.7%; non-USD stablecoin 861/42746 = 2.0%; unnamed asset id 628/42746 = 1.5%
+  resources that do not accept USDC at all: 2; that accept a volatile asset as one option: 1,154
+  top 15 (network, asset) by accepts:
+   43385  eip155:8453  USD Coin
+    9141  solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp  EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+    6095  eip155:137  USD Coin
+    4013  eip155:42161  USD Coin
+    1777  eip155:143  USDC
+    1582  eip155:84532  USDC
+    1535  eip155:480  USDC
+    1502  xrpl:0  524C555344000000000000000000000000000000
+    1314  eip155:5042  GatewayWalletBatched
+    1125  eip155:8453  GatewayWalletBatched
+    1093  eip155:10  GatewayWalletBatched
+     982  xrpl:0  XRP
+     979  eip155:56  World Liberty Financial USD
+     872  eip155:196  USD₮0
+     868  eip155:4663  Global Dollar
+
+Rate-limit and error incidents during the run (host, kind, count; every one was retried)
+  base-rpc.publicnode.com  HTTP 429  55
+  base.blockscout.com  HTTP 524  1
+  base.blockscout.com  URLError  2
+  eth.blockscout.com  URLError  1
+  mainnet.base.org  HTTP 502  1
+Holdings not read: 0 token lists failed, 0 addresses unknown to Blockscout; ETH balance read from the chain where Blockscout had none: 1001 addresses, 323 of them non-zero

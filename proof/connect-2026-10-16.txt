@@ -1,0 +1,93 @@
+# 2026-10-16 18:10:16 +0800 scripts/prove_connect.sh — connect the exchange with one wallet signature (:7903)
+desk policy 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308; stand-in wallet = ~/.tameion/hedge-margin.key (0xD2CE2AB7d070a7117140231182D827935C24a66F) on 127.0.0.1:7904
+
+## the master on Hyperliquid testnet before (userRole, account value, API wallets)
+userRole: {"role":"missing"}
+extraAgents: []
+accountValue: 0.0
+
+## 1. POST /api/desk/venue/connect {policy} (the owner's device)
+{
+    "agent": "0x782ce1373d6e33bc8cae1c9ad0aa675c65fdd2f7",
+    "name": "desk-cd8d71",
+    "nonce": 1792145352521,
+    "typedData": {
+        "domain": {
+            "chainId": 421614,
+            "name": "HyperliquidSignTransaction",
+            "verifyingContract": "0x0000000000000000000000000000000000000000",
+            "version": "1"
+        },
+        "message": {
+            "agentAddress": "0x782ce1373d6e33bc8cae1c9ad0aa675c65fdd2f7",
+            "agentName": "desk-cd8d71",
+            "hyperliquidChain": "Testnet",
+            "nonce": 1792145352521
+        },
+        "primaryType": "HyperliquidTransaction:ApproveAgent",
+        "types": {
+            "EIP712Domain": [
+                {
+                    "name": "name",
+                    "type": "string"
+                },
+                {
+                    "name": "version",
+                    "type": "string"
+                },
+                {
+                    "name": "chainId",
+                    "type": "uint256"
+                },
+                {
+                    "name": "verifyingContract",
+                    "type": "address"
+                }
+            ],
+            "HyperliquidTransaction:ApproveAgent": [
+                {
+                    "name": "hyperliquidChain",
+                    "type": "string"
+                },
+                {
+                    "name": "agentAddress",
+                    "type": "address"
+                },
+                {
+                    "name": "agentName",
+                    "type": "string"
+                },
+                {
+                    "name": "nonce",
+                    "type": "uint64"
+                }
+            ]
+        }
+    },
+    "words": "Your exchange wallet signs once. It lets this desk's own key trade on your Hyperliquid account; that key cannot withdraw, and the desk's limits still apply."
+}
+the desk's pending key on this Mac (mode and size only):
+  -rw-------@ 119 bytes ~/.tameion/desks/0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308.agent.pending
+
+## 2. the wallet signs the typed data (eth_signTypedData_v4 stand-in)
+signature: 0xd51fd89be3102f40e14a416ca1ada457d4d66580c01b4bf415e4db0fa5dc0d8b26c2f3deab2817c51b154177ac301533fbc9a5b8bcf9d9d2d3ae9ce6bbfd0ceb1c
+
+the desk's venue claim before approve: account 0x557e1e07652b75abaa667223b11704165fc94d09; desk key file: absent
+
+## 3a. the same request without the owner's passkey (a stolen device token or run key must not move the offset's account)
+{"error":"connecting the desk to an exchange account needs the owner's passkey: send issued and auth (a passkey assertion over the challenge)"}
+
+## 3b. POST /api/desk/venue/approve {policy, signature, master, issued, auth, agent} (auth = the owner's passkey over desk::venue_challenge; agent = the key the wallet was shown)
+challenge (chain 421614, issued 1792145420): 0x2b8a44071e9e0bff13ffdea9a3d31e231302a9cf56d8fd26c24992696b817a8d
+{
+    "agent": "0x782ce1373d6e33bc8cae1c9ad0aa675c65fdd2f7",
+    "error": "venue api: Must deposit before performing actions. User: 0xd2ce2ab7d070a7117140231182d827935c24a66f",
+    "words": "Hyperliquid testnet does not know this wallet yet. An account exists there only after a first deposit, and the testnet faucet pays only wallets that already exist on Hyperliquid mainnet. Sign with a wallet that has a Hyperliquid account, or have one send it test USDC, then connect again. Nothing was approved."
+}
+
+The venue named 0xd2ce2ab7d070a7117140231182d827935c24a66f as the signer: it recovered the stand-in wallet from our typed data and signature,
+so the message is the one Hyperliquid verifies; it refused only because that address has no testnet account (docs/60 P-147).
+after the refusal (docs/103 S3-2: the key file and the claim are written before the venue sees the key, and put back when it refuses):
+  the desk's venue claim: account 0x557e1e07652b75abaa667223b11704165fc94d09; desk key file: absent
+RESULT: the venue did not approve the key; nothing was approved and nothing traded (its answer and the owner's words are above)
+saved: proof/connect-2026-10-16.txt

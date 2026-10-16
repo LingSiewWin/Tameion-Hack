@@ -1,0 +1,50 @@
+Lighthouse 12.8.2 accessibility — /agent and /desk (docs/107), 2026-10-16 18:13 +08
+
+METHOD
+- `npx lighthouse@12 <url> --port=9333 --disable-storage-reset --only-categories=accessibility --throttling-method=provided --max-wait-for-load=25000`
+  against a headless Chrome 155 (attached over its debugging port, so the account in localStorage and the theme survive: the run audits the page the
+  owner sees, not the "Open your account first" state). Form factor "mobile" is Lighthouse's default emulation (412 px wide), "desktop" its preset (1350 px).
+- URL origin: http://localhost:3094 = a test-only proxy outside the repo in front of the console dev server (docs/60 P-152). Per row:
+  * `sample`  /agent fed by the test proxy's sample frames (the states the real desk is not in: live, halt with a mismatch, no route 404)
+  * `REAL`    /agent and /desk on the real service :7880 (desk-gold-2329 with its real KeysNag, desk-init-0132 with three open deals and the real
+    price warning, desk-arc-0223 with nothing waiting)
+- Theme: stored in localStorage (`theme` = dark or light) by a seed page before each run. The score is the weighted accessibility category; "failing"
+  lists every binary audit under 1, weighted or not.
+
+RESULT (verbatim from the run summaries; score 100 = no weighted audit failed)
+  agent-REAL-gold2329-desktop-dark                   desktop  score=100 failing=none slow-warning=yes page=1350x940 weighted-audits-run=25 not-applicable=37
+  agent-sample-404-mobile-dark                       mobile   score=100 failing=none slow-warning=yes page=412x840 weighted-audits-run=27 not-applicable=34
+  agent-sample-halt-mobile-dark                      mobile   score=100 failing=none slow-warning=yes page=412x1825 weighted-audits-run=28 not-applicable=32
+  agent-sample-live-desktop-dark                     desktop  score=100 failing=none slow-warning=yes page=1350x940 weighted-audits-run=28 not-applicable=32
+  agent-sample-live-mobile-dark                      mobile   score=100 failing=none slow-warning=yes page=412x1640 weighted-audits-run=28 not-applicable=32
+  desk-REAL-arc0223-empty-mobile-dark                mobile   score=100 failing=none slow-warning=no page=412x1827 weighted-audits-run=25 not-applicable=38
+  desk-REAL-gold2329-mobile-dark                     mobile   score=100 failing=none slow-warning=no page=412x1960 weighted-audits-run=25 not-applicable=38
+  desk-REAL-init0132-desktop-dark                    desktop  score=100 failing=none slow-warning=no page=1350x2834 weighted-audits-run=25 not-applicable=38
+  desk-REAL-init0132-mobile-dark                     mobile   score=100 failing=none slow-warning=no page=412x4570 weighted-audits-run=25 not-applicable=38
+  agent-REAL-gold2329-desktop-light                  desktop  score=100 failing=none slow-warning=yes page=1350x940 weighted-audits-run=25 not-applicable=37
+  agent-sample-404-mobile-light                      mobile   score=100 failing=none slow-warning=yes page=412x840 weighted-audits-run=27 not-applicable=34
+  agent-sample-halt-mobile-light                     mobile   score=100 failing=none slow-warning=yes page=412x1825 weighted-audits-run=28 not-applicable=32
+  agent-sample-live-desktop-light                    desktop  score=100 failing=none slow-warning=yes page=1350x940 weighted-audits-run=28 not-applicable=32
+  agent-sample-live-mobile-light                     mobile   score=100 failing=none slow-warning=yes page=412x1640 weighted-audits-run=28 not-applicable=32
+  desk-REAL-arc0223-empty-mobile-light               mobile   score=100 failing=none slow-warning=no page=412x1827 weighted-audits-run=25 not-applicable=38
+  desk-REAL-gold2329-mobile-light                    mobile   score=100 failing=none slow-warning=no page=412x1960 weighted-audits-run=25 not-applicable=38
+  desk-REAL-init0132-desktop-light                   desktop  score=100 failing=none slow-warning=no page=1350x2834 weighted-audits-run=25 not-applicable=38
+  desk-REAL-init0132-mobile-light                    mobile   score=100 failing=none slow-warning=no page=412x4570 weighted-audits-run=25 not-applicable=38
+  18 runs; scores: [100]
+
+READ THIS BEFORE TRUSTING THE /agent ROWS
+- Every /agent run carries Lighthouse's warning "The page loaded too slowly to finish within the time limit. Results may be incomplete." The page holds two
+  Server-Sent Events streams open for as long as it is open, so the network is never idle and Lighthouse stops waiting at 25 s. The audit still ran on the
+  live page: the full-page screenshot Lighthouse itself took (extracted from the report JSON and looked at for halt-mobile-light, REAL-gold2329-desktop-light,
+  desk REAL-gold2329-mobile-light) shows the finished UI in the right theme.
+- Cross-check that does not depend on Lighthouse's wait: axe-core 4.10.2 on the live DOM of 27 page, state, width and theme combinations, no violations
+  (proof/design-agent-view-2026-10-16.txt §2).
+
+WHAT WENT WRONG ON THE WAY (docs/60 P-154)
+- The first Lighthouse set said 100 for every page. The Chrome it attached to follows the Mac's appearance (dark), so it never audited light; axe on light then found
+  6 contrast violations (the inactive Events tabs, the halt banner's secondary lines) and one label-in-name mismatch (weight 0, so the score stayed 100). Fixed.
+- The second set was meant to cover both themes by seeding the theme, and the "light" half was still dark: the seed page was opened through the DevTools
+  endpoint with an unencoded `&theme=light`, which the endpoint drops. I only saw it by looking at the screenshots Lighthouse had taken. The seed URL is now
+  percent-encoded and the nine light runs above were taken again (their screenshots are light). The table above is the corrected one: nine dark, nine light.
+
+NOT RUN: Safari, Firefox, a real phone, a screen reader; Lighthouse "navigation" is a cold load, not a session of use (the live panels change every second; axe covers a later moment).

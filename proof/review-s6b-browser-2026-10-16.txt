@@ -1,0 +1,68 @@
+S6b (reviewer, continued) — browser runs and probes for docs/103 "S4", "S1 re-review — fix round 1", "S2 re-review — fix round 1"
+Written 2026-10-16 19:52:59 +0800. Every run by S6b; nothing restarted; only contexts this reviewer opened were closed.
+
+ENVIRONMENT
+- :7880 = the PM's service, process started 19:20:55 (binary with every seat's fix round 1), serving the console export built 19:21:12
+  (apps/console/out/agent.html exists). :3000 = the PM's next dev (restarted 18:15:06 after next.config.ts got compress:false).
+- Browser: the Playwright MCP's Chromium; each actor in its own new context (clean storage), a CDP virtual authenticator for the
+  passkeys, clipboard granted; contexts closed at the end of each run. The MCP's default page (another seat's, s1b.localhost:3000) untouched.
+- Every name below that a person "typed" was typed by a counterparty into its own name field; the owner typed nothing.
+
+RUN A — :7880, 11:33:56–11:34:26Z (19:33:56–19:34:26 +08), verbatim log lines
+[11:33:56Z] owner: http://localhost:7880/ clean profile; name prefilled "desk-gold-3422"
+[11:33:58Z] owner: one tap -> /desk; account 0xaaecf970b9a4605b8b91f2f261144a94bc0185c6 (desk-gold-3422) on arbitrum-sepolia
+[11:33:59Z] supplier: answered invite 1 as "Lim Brothers Gold"; key ••5365, code 558C C2BF   <- regex took the DESK code (see RUN B for the key code check)
+[11:33:59Z] owner: second supplier invite (a different link: true)
+[11:34:00Z] stranger on invite 2: zero-width space "Lim Brothers Gold​" -> refused: The trader's desk refused this step: Lim Brothers Gold is already another key's name on this desk, or reads like it: choose another name
+[11:34:01Z] stranger on invite 2: Cyrillic o "Lim Brоthers Gold" -> refused: The trader's desk refused this step: Lim Brоthers Gold is already another key's name on this desk, or reads like it: choose another name
+[11:34:02Z] stranger on invite 2: digit zero for o "Lim Brothers G0ld" -> refused: The trader's desk refused this step: Lim Brothers G0ld is already another key's name on this desk, or reads like it: choose another name
+[11:34:03Z] stranger on invite 2: fullwidth L "Ｌim Brothers Gold" -> refused: The trader's desk refused this step: Lim Brothers Gold is already another key's name on this desk, or reads like it: choose another name
+[11:34:03Z] stranger on invite 2: raw zero-width past the page (request body rewritten by the test to 'Tan Bullion'+U+200B after the page cleaned it) -> refused: The trader's desk refused this step: this name changes when it is cleaned (invisible characters, compatibility forms, extra spaces): sign the cleaned name
+[11:34:05Z] supplier's phone on a VAULT invite (prefilled "Vault", button "Send my name and key") answers "Harbour Vault": refused: The trader's desk refused this step: this key already signs for this desk as Lim Brothers Gold: one key, one name; make a new key for this invite
+[11:34:11Z] owner Needs you: Needs you | Each one is your decision. The reason is under it. | Approve Lim Brothers Gold ••5365 as Supplier? | They will sign the purchase, and what they sign moves your offset. Their phone shows code 1539 E9D0; on a call they can read it to you. It answers the supplier invite you made at Oct 16, 07:33 PM. | Approve Lim Brothers Gold
+[11:34:11Z] rows reading "Approve Lim Br…" / "Approve Tan" / "Approve Harbour": 2 / 0 / 0      <- the 2 are the row's title and its button: one row
+[11:34:11Z] owner /desk vertical order (px from top): {"keysNag":158,"needsYou":245,"sentence":440,"held":508,"whoMaySign":796,"nagText":"1 of 3 keys set — add two guardians before raising a limit. Today one lost device loses this account's key for good.Add guardians"}
+[11:34:11Z] owner /desk scan (one answer waiting): bare=[] banned=[] mech=["[Agent] Agent","[Hyperliquid] ) was approved by your Hyperliquid testnet"]
+[11:34:12Z] owner /desk at 390 light: scrollWidth 375, clientWidth 375, html.dark false
+[11:34:12Z] owner keydown events from / to here: 0
+[11:34:12Z] owner taps Approve (passkey): "Supplier approved: Lim Brothers Gold may now sign the purchase for your desk."
+[11:34:14Z] Who may sign now: Who may sign | A step they sign is booked, and the offset follows it by itself up to your limit; above it, it waits for your tap. | Lim Brothers Gold@arbitrum-sepolia | · the purchase | …
+[11:34:17Z] forged #join= -> toasts now on screen: ["This answer is not signed properly; ask them to open your invite again."]
+[11:34:17Z] owner keydown events from / through Approve and the forged link: 0
+[11:34:17Z] Tab path: 1:A:Tameion > 2:A:Payments > 3:A:Human > 4:A:Agent
+[11:34:17Z] toggle "Agent" reached by Tab #4; focus outline "solid 2px"; aria-current on Agent before Enter: null
+[11:34:17Z] Enter -> http://localhost:7880/agent; segments ["Human:null","Agent:page"]; tameion.surface=agent
+[11:34:21Z] one frame read by the page's own origin: status 200, content-encoding null, {"accountValue":null,"at":1792150461,"funding24h":null,"fundingLastHour":null,"fundingReadAt":null,"halt":null,"kPolicy":4,"kRatio":null,"lastAnchor":null,"lastOrders":[],"lastPassAt":null,"maintenanceMarginUsed":null,"marginUsed":null,"passLatencyMs":null,"positions":null,"venue":null,"venueError":"no exchange account is connected to this desk","venueTime":null}
+[11:34:21Z] /agent text: Agent | What the desk's agent sees and does on the exchange, live. | Live | Last tick | 19:34:21 | 0 s ago | Venue | — | Halt | None | The venue's numbers are not shown: no exchange account is connected to this desk. | MARGIN | account value ÷ maintenance | as of 19:34:21 | — | Not known right now (see the note above). | Account value | — | Margin used | — | Maintenance | — | USDC, from the venue's own account state. What is the ratio? | SAFETY | halt · pass · anchor | Halt | None | Pass latency | — | Last pass | — | Last anchor | — | FUNDING | USDC | as of 19:34:21 | Last hour | — | 24 hours | — | + the desk received · − the desk paid | POSITIONS | USDC | as of 19:34:21 | The venue's positions are not known right now (see the note above). | ORDERS | position read back after each | as of 19:34:21 | No order yet from this desk. | EVENTS | the account, as this page saw it | All | Checks | Account | Seen Source What happened | 19:34:17 Stream Connected
+[11:34:21Z] /agent scan: bare=[] banned=[]
+[11:34:22Z] /agent at 390 light: scrollWidth 375, clientWidth 375
+[11:34:22Z] from /agent: "Human" reached by Tab #3; Enter -> http://localhost:7880/desk; tameion.surface=human
+[11:34:26Z] a fresh tab opened on /desk after Agent was chosen -> http://localhost:7880/desk (history.length 2)   <- Playwright's newPage starts at about:blank (S4 saw the same; window.open works, design-toggle proof run 2)
+Screenshots: proof/review-s4-desk-inbox-1280-dark.png, review-s4-desk-inbox-390-light.png, review-s4-toggle-focus-1280-dark.png,
+review-s4-agent-novenue-1280-dark.png, review-s4-agent-novenue-390-light.png, review-s2-fix1-lookalike-refused-390.png.
+(A first attempt at 11:32 opened invite 1 for the stranger by mistake — the clipboard still held it — and got "this invite was already answered:
+ask the trader for a new link"; a used link refused. That attempt's desk desk-gold-3653 0x4600ab31…1250 is left with one pending answer.)
+
+RUN B — :3000 (next dev → :7880), 11:35:53–11:36:08Z, verbatim
+[11:35:53Z] owner on :3000: one tap -> /desk; account 0x98b1ccc036510fc11639521c96358a1f67340457 (desk-gold-1965)
+[11:35:54Z] phone after sending: … For the desk desk-gold-1965@arbitrum-sepolia · desk code BD22 4F59. | desk-gold-1965 is that desk's name on this service. | … | Sent. desk-gold-1965 now sees "Approve Kim Seng Refinery as Supplier?" … | Your key ••262F · code E4BB E7AD | If they call to check, read them this code: their screen shows the same. …
+[11:36:03Z] owner row: Needs you | … | Approve Kim Seng Refinery ••262F as Supplier? | They will sign the purchase, and what they sign moves your offset. Their phone shows code E4BB E7AD; on a call they can read it to you. It answers the supplier invite you made at Oct 16, 07:35 PM. | Approve Kim Seng Refinery
+[11:36:03Z] code check (key's code): phone ••262F E4BB E7AD vs owner's row ••262F E4BB E7AD -> same
+[11:36:04Z] /agent on :3000 strip after 0.5 s: "Live"
+[11:36:08Z] fetch /api/desk/live through :3000 for 4 s: status 200, content-encoding null, 1505 bytes, 4 frames
+Screenshots: proof/review-s2-fix1-join-sent-390.png, proof/review-s4-agent-3000-1280-dark.png.
+
+PROBE — the PM's chip bridge :7898 (19:52:18 +08; nonce 999999 so a signature, had one been made, could never be used)
+setGuardians call    -> {"error": "guardian and recovery changes need a key that asks for Touch ID"} [HTTP 403]
+cancelRecovery call  -> {"error": "guardian and recovery changes need a key that asks for Touch ID"} [HTTP 403]
+bare challenge       -> {"error": "this bridge signs only decisions it can put in words"} [HTTP 403]
+wrong Origin         -> {"error": "only the service's own pages may ask this Mac to sign"} [HTTP 403]
+scripts/desk_se_bridge.py mtime 2026-10-16 19:23:34 (S1 fix round 2).
+
+CHAIN READ — the demo desk desk-gold-2329 (policy 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308, owner 0xc00a8891f8ab621ed0c1966fefbeadfa37dee03c),
+19:44:25 +08: guardianCount 0, threshold 0, recovery 0x0, pending 0.
+
+GATES — apps/console, 19:25:47–19:25:58 +08: npx tsc --noEmit exit 0; npx eslint (S4's files) exit 0; node --test test/agent-feed.test.mts 12 pass, 0 fail.
+
+LEFT BEHIND — three lazy test desks in runtime/app/tenants (nothing on chain, nothing traded): desk-gold-3653 0x4600ab31…1250,
+desk-gold-3422 0xaaecf970…85c6 (one approved supplier), desk-gold-1965 0x98b1ccc0…0457 (one pending answer).
