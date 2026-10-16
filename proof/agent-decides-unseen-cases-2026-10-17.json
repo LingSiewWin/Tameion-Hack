@@ -1,0 +1,241 @@
+{
+ "about": "Unseen cases written by seat S10 on 2026-10-17 before any decider ran on them (labels first); not part of S11's frozen fixture.",
+ "scenarios": [
+  {
+   "name": "usage bill 10% above its usual, due today",
+   "case": {
+    "id": "bill:u1",
+    "payee": "Cobalt Cloud",
+    "amount_minor": 22000000,
+    "usual_minor": 20000000,
+    "samples": 12,
+    "cadence_days": 30,
+    "due_in_days": 0,
+    "runway_days": null,
+    "discount_bps": 0,
+    "early_days": 0,
+    "payee_age_days": 200,
+    "lookalike_of": null,
+    "confidence": 0.92,
+    "allowed": [
+     "pay",
+     "ask",
+     "refuse"
+    ],
+    "kind": "bill",
+    "cap_minor": 50000000
+   },
+   "golden": {
+    "action": "pay",
+    "basis": "due_now"
+   },
+   "why": "Inside a quarter of the usual for a usage-based bill, due today, a long-approved payee: pay it."
+  },
+  {
+   "name": "invoice at the usual amount from a known payee",
+   "case": {
+    "id": "invoice:u2",
+    "payee": "Harbor Freight Ltd",
+    "amount_minor": 4000000,
+    "usual_minor": 4000000,
+    "samples": 8,
+    "cadence_days": 30,
+    "due_in_days": 20,
+    "runway_days": null,
+    "discount_bps": 0,
+    "early_days": 0,
+    "payee_age_days": 90,
+    "lookalike_of": null,
+    "confidence": 0.88,
+    "allowed": [
+     "ask",
+     "refuse"
+    ],
+    "kind": "invoice",
+    "cap_minor": 50000000
+   },
+   "golden": {
+    "action": "ask",
+    "basis": "usual"
+   },
+   "why": "Code offers only ask or refuse for an invoice; nothing is unusual, so ask (the owner's tap pays invoices)."
+  },
+  {
+   "name": "bill three days overdue, usual amount",
+   "case": {
+    "id": "bill:u3",
+    "payee": "Delta Payroll Tools",
+    "amount_minor": 9000000,
+    "usual_minor": 9000000,
+    "samples": 10,
+    "cadence_days": 30,
+    "due_in_days": -3,
+    "runway_days": null,
+    "discount_bps": 0,
+    "early_days": 0,
+    "payee_age_days": 300,
+    "lookalike_of": null,
+    "confidence": 0.9,
+    "allowed": [
+     "pay",
+     "ask",
+     "refuse"
+    ],
+    "kind": "bill",
+    "cap_minor": 50000000
+   },
+   "golden": {
+    "action": "pay",
+    "basis": "due_now"
+   },
+   "why": "Overdue, usual amount, long history: pay now."
+  },
+  {
+   "name": "bill due in 2 days while a larger bill due tomorrow needs the cash",
+   "case": {
+    "id": "bill:u4",
+    "payee": "Echo Analytics",
+    "amount_minor": 6000000,
+    "usual_minor": 6000000,
+    "samples": 9,
+    "cadence_days": 30,
+    "due_in_days": 2,
+    "runway_days": 1,
+    "discount_bps": 0,
+    "early_days": 0,
+    "payee_age_days": 120,
+    "lookalike_of": null,
+    "confidence": 0.9,
+    "allowed": [
+     "pay",
+     "ask",
+     "wait",
+     "refuse"
+    ],
+    "kind": "bill",
+    "cap_minor": 50000000
+   },
+   "golden": {
+    "action": "wait",
+    "basis": "runway_short"
+   },
+   "why": "The balance runs short in 1 day; holding a bill due in 2 days lets the earlier, larger one be paid."
+  },
+  {
+   "name": "x402 purchase above the per-payment cap",
+   "case": {
+    "id": "x402:u5",
+    "payee": "Fjord Maps API",
+    "amount_minor": 3000000,
+    "usual_minor": 500000,
+    "samples": 50,
+    "cadence_days": null,
+    "due_in_days": 0,
+    "runway_days": null,
+    "discount_bps": 0,
+    "early_days": 0,
+    "payee_age_days": 60,
+    "lookalike_of": null,
+    "confidence": 1.0,
+    "allowed": [
+     "ask",
+     "refuse"
+    ],
+    "kind": "purchase",
+    "cap_minor": 1000000
+   },
+   "golden": {
+    "action": "refuse",
+    "basis": "amount_deviates"
+   },
+   "why": "Above the cap the contract will not pay, and a purchase cannot wait for a limit raise: refuse."
+  },
+  {
+   "name": "look-alike of a known payee",
+   "case": {
+    "id": "bill:u6",
+    "payee": "0x7a3b\u202691c2",
+    "amount_minor": 5000000,
+    "usual_minor": null,
+    "samples": 0,
+    "cadence_days": null,
+    "due_in_days": 0,
+    "runway_days": null,
+    "discount_bps": 0,
+    "early_days": 0,
+    "payee_age_days": null,
+    "lookalike_of": "Cobalt Cloud",
+    "confidence": 0.0,
+    "allowed": [
+     "refuse"
+    ],
+    "kind": "invoice",
+    "cap_minor": 50000000
+   },
+   "golden": {
+    "action": "refuse",
+    "basis": "look_alike"
+   },
+   "why": "Imitates a known payee: refuse (the only action code allows)."
+  },
+  {
+   "name": "invoice at 0.6 times the usual from a known payee",
+   "case": {
+    "id": "invoice:u7",
+    "payee": "Granite Legal",
+    "amount_minor": 3000000,
+    "usual_minor": 5000000,
+    "samples": 6,
+    "cadence_days": 30,
+    "due_in_days": 14,
+    "runway_days": null,
+    "discount_bps": 0,
+    "early_days": 0,
+    "payee_age_days": 150,
+    "lookalike_of": null,
+    "confidence": 0.85,
+    "allowed": [
+     "ask",
+     "refuse"
+    ],
+    "kind": "invoice",
+    "cap_minor": 50000000
+   },
+   "golden": {
+    "action": "ask",
+    "basis": "amount_deviates"
+   },
+   "why": "A much lower invoice can mean a changed contract; the owner should see it."
+  },
+  {
+   "name": "first payment of an imported bill to a payee approved two hours ago",
+   "case": {
+    "id": "bill:u8",
+    "payee": "Iris Office Lease",
+    "amount_minor": 15000000,
+    "usual_minor": null,
+    "samples": 0,
+    "cadence_days": 30,
+    "due_in_days": 0,
+    "runway_days": null,
+    "discount_bps": 0,
+    "early_days": 0,
+    "payee_age_days": 0,
+    "lookalike_of": null,
+    "confidence": 1.0,
+    "allowed": [
+     "pay",
+     "ask",
+     "refuse"
+    ],
+    "kind": "bill",
+    "cap_minor": 50000000
+   },
+   "golden": {
+    "action": "ask",
+    "basis": "new_payee"
+   },
+   "why": "No payment history and approved moments ago: the first payment is the owner's to see."
+  }
+ ]
+}
