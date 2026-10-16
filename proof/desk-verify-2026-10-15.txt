@@ -1,0 +1,29 @@
+# 2026-10-15 23:18:45 +0800 python3 scripts/verify_desk.py on the lender kit of the live deal (proof/desk-gold-live-2026-10-15-2316.txt)
+## the kit as written
+a. statementHash recomputed 0xf025af4df7d5ce70… matches
+b. signature recovers to 0x62f82e3494eb9c446c161a9f52f0a90b986e5062
+   milestone 0: bought 10.000 g gold · PO-1792077375 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904) · reaches the root
+   milestone 1: shipped 10.000 g gold · BL-1792077375 · signed by Carrier (0x7afa9fb48a1311cf99d88876642680ddf1da34be) · reaches the root
+c. 2 of 2 milestones disclosed; all reach root 0xf8425f0094df9533…: True
+   https://sepolia-rollup.arbitrum.io/rpc: block 319459122, from 0x6c1ce01b…, to 0xe7c381aa…, status 1, input carries the root: True
+   https://arbitrum-sepolia-rpc.publicnode.com: block 319459122, from 0x6c1ce01b…, to 0xe7c381aa…, status 1, input carries the root: True
+d. root anchored in 0x6463a469169cb6c0… on 2 node(s): True
+e. PAXG position of 0x557e1e07… at the statement's time, from the venue's fills: -0.321; statement claims an offset of 0.321000: True
+
+what the statement says: 10.000 g gold in transit, worth 1335.782179 USDC at 4154.747/oz; 99.84% offset; maximum loss 27.348161 USDC at a 30.0% fall + 2.0% basis; eligible 1308.434018 USDC
+PASS
+exit 0
+
+## a statement number changed (eligibleUsdc → 1000000)
+a. statementHash recomputed 0x58ae08d04066bf3f… DIFFERS from 0xf025af4df7d5ce70d1c212b1fa078b94fee9858ae897285695a83e33cf2cec52
+b. signature recovers to 0x62f82e3494eb9c446c161a9f52f0a90b986e5062
+FAIL: a
+
+## a disclosed milestone changed (BL- → BX-)
+   milestone 1: shipped 10.000 g gold · BX-1792077375 · signed by Carrier (0x7afa9fb48a1311cf99d88876642680ddf1da34be) · DOES NOT reach the root
+c. 2 of 2 milestones disclosed; all reach root 0xf8425f0094df9533…: False
+FAIL: c
+
+## the right kit, but a different expected signer
+b. signature does NOT recover to 0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904
+FAIL: b

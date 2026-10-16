@@ -1,0 +1,49 @@
+Command: /opt/homebrew/bin/python3 scripts/metrics.py   (run 2026-10-15 00:36 local, UTC+8; service on :7880 busy with five seats working,
+so the inbox read for owner payments timed out on 15 accounts — those owner payments are not counted)
+
+Tameion service metrics — read from its own files
+generated 2026-10-14 16:36 UTC from runtime/app
+ALL ACCOUNTS BELOW WERE MADE BY THE TEAM WHILE BUILDING AND TESTING. No customers yet.
+
+ACCOUNTS
+  arbitrum-sepolia     6 accounts  (6 on chain, 0 reserved — address known, nothing on chain until money arrives)
+  arc-testnet         19 accounts  (16 on chain, 3 reserved — address known, nothing on chain until money arrives)
+  kinds: {'hold': 14, 'pull': 10, 'wallet': 1}; keyless: 3; with agent keys minted: 1; bills added by hand: 9
+
+AGENT PASSES (check history, decide, pay inside the caps, anchor)
+  passes: 68 (38 done, 30 failed, 0 other)
+  payments the agent made by itself: 7, 0.117000 USDC
+    of which early for an invoice discount: 0
+  bills it asked the owner about instead: 111; refused by the checks: 4
+  passes with an anchored record: 38
+  why passes failed (most common first):
+     22 × the service restarted during this pass; run it again
+      2 × contract call: server returned an error response: error code -32003: i
+      1 × top up agent gas: rpc transport: Max retries exceeded server returned 
+      1 × top up agent gas: contract call: server returned an error response: er
+      1 × rpc transport: Max retries exceeded server returned an error response:
+      1 × deploy BudgetPolicy: contract call: server returned an error response:
+
+FIRST CHECK OF AN ACCOUNT (job start to its record written, seconds;
+  for a reserved account it also creates the account on chain)
+  before the history fix (P-38)            n=14  median    632  max   1457
+  after P-38, before receipt fix (P-43)    n= 2  median     74  max     80
+  after both                               n= 2  median     26  max     27
+  account created -> first check written: median 986 s (includes the owner's own wait before funding)
+
+READ-ONLY REPORTS (paste a wallet, see its bills; no key, nothing sent)
+  reports: 17 (12 done) on {'arc-testnet': 7, 'arbitrum-sepolia': 5, 'base': 3, 'ethereum': 1, 'arbitrum': 1}
+  time to answer: median 9.8 s, fastest 4.9 s, slowest 526.7 s
+
+PAID APIS THE AGENT BOUGHT (x402, inside the same caps)
+  attempts: 9 {'refused': 5, 'paid': 3, 'needs-you': 1}; paid 0.003000 USDC
+
+INVOICES SIGNED BY VENDORS (EIP-712, signed by the address to be paid)
+  received: 5 (one-off 4, repeating 1); decisions: {'accepted': 4}
+
+ANCHORED RECORDS (a root of every decision written on chain)
+  roots anchored: 39 across 18 accounts; events under them: 293
+
+PAYMENTS THE OWNERS MADE WITH THEIR PASSKEY (read from chain through the inbox)
+  accounts read: 7; payments: 3, 0.027000 USDC
+  not read (15): 0xb011f7e7… (timed out); 0x075feefb… (timed out); 0xb19f130d… (timed out); 0x224fa9ba… (timed out); 0x16459517… (timed out); 0x11a16695… (timed out); 0xc0111f35… (timed out); 0x5d74363c… (timed out); 0x7839d74d… (timed out); 0x1ea18505… (timed out); 0xf799a854… (HTTP Error 401: Unauthorized); 0x4e0b97f7… (timed out); 0x800d8171… (timed out); 0x2ecdabed… (timed out); 0xa4942884… (timed out)

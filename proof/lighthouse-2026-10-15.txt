@@ -1,0 +1,16 @@
+Lighthouse 12 (npx lighthouse@12, Chrome headless, default mobile emulation: Moto G Power, slow 4G, 4x CPU)
+against the console served by tameion-app on :7880 (static export of apps/console), 2026-10-15 02:24 +08.
+Pages: Start = http://127.0.0.1:7880/ ; Account (read-only) = /?policy=0x1a5121dbabecd0abb8bc8cdb7916748a9a507b88
+
+                 performance  accessibility  best-practices   FCP     LCP     TBT
+before  start        71            100             96         2.7 s   8.2 s   10 ms   (HEAD / answered 404; no compression)
+before  account      70            100             96         2.7 s   8.2 s   60 ms   (+ "Check now" accessible name did not contain its label)
+after   start        89            100            100         0.8 s   3.8 s    0 ms
+after   account      87            100            100         0.8 s   3.8 s   50 ms
+
+What changed (docs/60 P-62, P-63):
+- HEAD is answered like GET without the body (every route answered 404 to HEAD; Lighthouse logged it as a console error).
+- Text replies are gzipped when the client accepts gzip: console JS 1,184,755 -> 380,202 bytes (3.1x); one chunk 255,541 -> 85,845.
+- "Check now" button: aria-label "Check now: 0x1a51…7b88" (WCAG 2.5.3 label in name).
+Remaining: LCP 3.8 s comes from client-side rendering (the static HTML holds a skeleton until the config fetch and
+localStorage decide Start vs Account); a server-known Start hero would cut it further.

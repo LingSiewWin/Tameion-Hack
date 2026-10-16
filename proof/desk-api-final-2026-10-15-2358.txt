@@ -1,0 +1,64 @@
+# 2026-10-15 23:58:15 +0800 scripts/prove_desk_api.sh 0xcd8d…4308 <device token> — the final run of the night with everything built: control statement, unhedged base, auto-offset (default limit 1,000 g), funding in the statement, statements list
+# desk API proof · account 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308 (chain 421614) · deal GOLD-1792079895 · http://127.0.0.1:7880
+## the book is the owner's: no token → refused; the owner's device → the book
+{"error":"the desk is the owner's: open it on the device that opened the account, or with an agent key that can read"}
+deals 8 parties 4 venue 0x557e1e07652b75abaa667223b11704165fc94d09
+## the owner approves who may sign (a trust decision)
+{"parties":[{"address":"0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904","name":"Supplier"},{"address":"0x8b95fdedb647236da0f266231f71440d2714d542","name":"Vault"},{
+{"parties":[{"address":"0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904","name":"Supplier"},{"address":"0x8b95fdedb647236da0f266231f71440d2714d542","name":"Vault"},{
+{"parties":[{"address":"0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904","name":"Supplier"},{"address":"0x8b95fdedb647236da0f266231f71440d2714d542","name":"Vault"},{
+## a stranger approving a counterparty → refused
+{"error":"only the owner's device approves who may sign for this desk"}
+## the owner states who holds the venue's master key (docs/87 option A), and keeps no unhedged base for this run
+{"control":"the venue master key is held by the Tameion team on testnet; no lender holds it yet"}
+{"offsetTarget":"0","unhedgedBase":"0.000 g gold"}
+## 1. the supplier's priced purchase, signed (the service moves the offset by itself)
+{"booked":"GOLD-1792079895 · bought 10.000 g of gold for 1332.21 USDC · PO-GOLD-1792079895 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)","offset":{"coins":[{"action":"Traded { size_delta: -0.321, is_buy: false, worst_px: 4125.5685, statuses: [Filled { total_sz: 0.321, avg_px: 4139.204, oid: 62802455773 }], filled_size: -0.321, read_back: -0.321 }","before":"0","coin":"PAXG","target":"-0.321507"}],"live":true,"readBack":"-0.321"},"root":"0xb5095bc4c34203bc21685167eb93d0b24fecffaf3350af8244729c9b955f9465","signer":"0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904"}
+## a purchase confirmation signed by the buyer's key but naming the Supplier → refused
+{"error":"signed by 0x328fb78926cee49691851ca84f226d1c08edacb4, but Supplier signs as 0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904"}
+## an unsigned milestone from a stranger → refused
+{"error":"an unsigned milestone is the owner's own entry: send it from the owner's device, or have the counterparty sign it"}
+## 2. the vault's receipt, signed (gold flies into a vault; docs/84 §1b)
+{"booked":"GOLD-1792079895 · 10.000 g of gold into stock · VR-GOLD-1792079895 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542)","offset":null,"root":"0x41075cee0520f2aaff6c573c173f9e03217ec7b5f46fe130f6d53a1bdc8729c9","signer":"0x8b95fdedb647236da0f266231f71440d2714d542"}
+## 3. the offset as the venue reports it (read only)
+{'account': '0x557e1e07652b75abaa667223b11704165fc94d09', 'error': None, 'mark': '4142.5', 'market': 'PAXG', 'position': '-0.321', 'readAt': 1792079911}
+## 4. the owner sends 2 g to fabrication (unsigned: the owner's own entry)
+{"booked":"GOLD-1792079895 · 2.000 g of gold to fabrication · JOB-GOLD-1792079895 · entered by the owner, unsigned","offset":null,"root":"0x4c77ecac4ec4af44eb831f61b88dd02f6584ddccc0660127ab891ce9b6a3bf7b","signer":""}
+## 5. the lender's kit, root anchored now
+{'held': '10.000 g gold', 'stage': 'in stock', 'eligible': {'grams': '8.000 g gold', 'valueUsdc': '1065.475741'}, 'ineligible': {'grams': '2.000 g gold', 'valueUsdc': '266.368935'}, 'offsetShareBps': '9984', 'maxLossUsdc': '27.267547', 'eligibleUsdc': '1038.208194', 'fundingUsdc': '0', 'hedgeControl': "The desk trades Hyperliquid account 0x557e1e07652b75abaa667223b11704165fc94d09 with a trade-only key: it can trade and cannot withdraw (the venue refused one, proof/hedge-testnet-nowithdraw-2026-10-13.txt); only the account's master key can withdraw. The trader states: the venue master key is held by the Tameion team on testnet; no lender holds it yet."}
+anchor {'chainId': 421614, 'contract': '0xe7c381aafa077cc99359e8b297d2125efd76b8f5', 'from': '0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25', 'tx': '0x5d8ae2e8d1764b9706868538d2a8fdd3e63a19b0b5b8581e43f229508bffb4ca'}
+a. statementHash recomputed 0x6e6dd27048218396… matches
+b. signature recovers to 0x62f82e3494eb9c446c161a9f52f0a90b986e5062
+   milestone 25: bought 10.000 g gold · PO-GOLD-1792079895 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904) · reaches the root
+   milestone 26: arrived 10.000 g gold · VR-GOLD-1792079895 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542) · reaches the root
+   milestone 27: to_fabrication 2.000 g gold · JOB-GOLD-1792079895 · entered by the owner, unsigned · reaches the root
+c. 3 of 28 milestones disclosed; all reach root 0x4c77ecac4ec4af44…: True
+   milestone 25: re-encodes to the disclosed line: True; Supplier's signature recovers to 0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904
+   milestone 26: re-encodes to the disclosed line: True; Vault's signature recovers to 0x8b95fdedb647236da0f266231f71440d2714d542
+   milestone 27: re-encodes to the disclosed line: True; entered by the owner, unsigned (no counterparty vouches for it)
+f. counterparty signatures re-checked: True
+   https://sepolia-rollup.arbitrum.io/rpc: block 319468715, from 0x6c1ce01b…, to 0xe7c381aa…, status 1, input carries the root: True
+   https://arbitrum-sepolia-rpc.publicnode.com: block 319468715, from 0x6c1ce01b…, to 0xe7c381aa…, status 1, input carries the root: True
+d. root anchored in 0x5d8ae2e8d1764b97… on 2 node(s): True
+e. PAXG position of 0x557e1e07… at the statement's time, from the venue's fills: -0.321; statement claims an offset of 0.321000: True
+g. funding on the account's PAXG short since this deal's first step, from the venue: 0; this deal's share claimed: 0: True
+
+what the statement says: 10.000 g gold in stock, worth 1331.844677 USDC at 4142.5/oz; 99.84% offset; maximum loss 27.267547 USDC at a 30.0% fall + 2.0% basis; eligible 1038.208194 USDC
+PASS
+## 6. the fabrication job comes back, the buyer's sale is signed, the offset closes
+{"booked":"GOLD-1792079895 · 2.000 g of gold back into stock · JOB-GOLD-1792079895-DONE · entered by the owner, unsigned","offset":null,"root":"0x1572aba5dc94a1e54bed5ec98a1f1f850cccb97dd63000bdf57733ee95242237","signer":""}
+{"booked":"GOLD-1792079895 · sold 10.000 g of gold for 1352.19 USDC · SO-GOLD-1792079895 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)","offset":{"coins":[{"action":"Traded { size_delta: 0.321, is_buy: true, worst_px: 4162.6095, statuses: [Filled { total_sz: 0.321, avg_px: 4147.19, oid: 62802471945 }], filled_size: 0.321, read_back: 0 }","before":"-0.321","coin":"PAXG","target":"-0"}],"live":true,"readBack":"0"},"root":"0xbf1d2ce423694c4507134d749c47057d7c457d4f5a37a0c764df39d3aa4f5593","signer":"0x328fb78926cee49691851ca84f226d1c08edacb4"}
+## the statements this desk issued (owner only), newest first
+6 kits; newest: GOLD-1792079895 27.267547 0x5d8ae2e8d1764b9706868538d2a8fdd3e63a19b0b5b8581e43f229508bffb4ca
+## the book now
+GOLD-1792078240 sold 0.000 g gold ['GOLD-1792078240 · bought 10.000 g of gold for 1334.45 USDC · PO-GOLD-1792078240 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)', 'GOLD-1792078240 · 10.000 g of gold into stock · VR-GOLD-1792078240 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542)', 'GOLD-1792078240 · 2.000 g of gold to fabrication · JOB-GOLD-1792078240 · entered by the owner, unsigned', 'GOLD-1792078240 · 2.000 g of gold back into stock · JOB-GOLD-1792078240-DONE · entered by the owner, unsigned', 'GOLD-1792078240 · sold 10.000 g of gold for 1354.47 USDC · SO-GOLD-1792078240 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)']
+GOLD-1792079895 sold 0.000 g gold ['GOLD-1792079895 · bought 10.000 g of gold for 1332.21 USDC · PO-GOLD-1792079895 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)', 'GOLD-1792079895 · 10.000 g of gold into stock · VR-GOLD-1792079895 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542)', 'GOLD-1792079895 · 2.000 g of gold to fabrication · JOB-GOLD-1792079895 · entered by the owner, unsigned', 'GOLD-1792079895 · 2.000 g of gold back into stock · JOB-GOLD-1792079895-DONE · entered by the owner, unsigned', 'GOLD-1792079895 · sold 10.000 g of gold for 1352.19 USDC · SO-GOLD-1792079895 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)']
+GOLD-LIMIT-1792079862 sold 0.000 g gold ['GOLD-LIMIT-1792079862 · bought 8.000 g of gold for 1065.93 USDC · PO-GOLD-LIMIT-1792079862 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)', 'GOLD-LIMIT-1792079862 · sold 8.000 g of gold for 1065.93 USDC · SO-GOLD-LIMIT-1792079862 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)']
+GOLD-MCP-1792079027 sold 0.000 g gold ['GOLD-MCP-1792079027 · bought 3.000 g of gold for 399.85 USDC · PO-GOLD-MCP-1792079027 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)', 'GOLD-MCP-1792079027 · 3.000 g of gold into stock · VR-GOLD-MCP-1792079027 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542)', 'GOLD-MCP-1792079027 · sold 3.000 g of gold for 404.65 USDC · SO-GOLD-MCP-1792079027 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)']
+GOLD-MCP-1792079112 sold 0.000 g gold ['GOLD-MCP-1792079112 · bought 3.000 g of gold for 400.05 USDC · PO-GOLD-MCP-1792079112 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)', 'GOLD-MCP-1792079112 · 3.000 g of gold into stock · VR-GOLD-MCP-1792079112 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542)', 'GOLD-MCP-1792079112 · sold 3.000 g of gold for 404.85 USDC · SO-GOLD-MCP-1792079112 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)']
+GOLD-SIGN-1792078741 sold 0.000 g gold ['GOLD-SIGN-1792078741 · bought 5.000 g of gold for 666.69 USDC · PO-GOLD-SIGN-1792078741 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)', 'GOLD-SIGN-1792078741 · 5.000 g of gold shipped · AWB-GOLD-SIGN-1792078741 · signed by Courier (0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25)', 'GOLD-SIGN-1792078741 · 5.000 g of gold into stock · VR-GOLD-SIGN-1792078741 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542)', 'GOLD-SIGN-1792078741 · sold 5.000 g of gold for 680.00 USDC · SO-GOLD-SIGN-1792078741 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)']
+GOLD-W8-1792078837 sold 0.000 g gold ['GOLD-W8-1792078837 · bought 5.000 g of gold for 667.20 USDC · PO-GOLD-W8-1792078837 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)', 'GOLD-W8-1792078837 · 5.000 g of gold into stock · VR-GOLD-W8-1792078837 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542)', 'GOLD-W8-1792078837 · sold 5.000 g of gold for 672.00 USDC · SO-GOLD-W8-1792078837 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)']
+GOLD-W8B-1792079650 sold 0.000 g gold ['GOLD-W8B-1792079650 · bought 5.000 g of gold for 667.50 USDC · PO-GOLD-W8B-1792079650 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)', 'GOLD-W8B-1792079650 · 5.000 g of gold into stock · VR-GOLD-W8B-1792079650 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542)', 'GOLD-W8B-1792079650 · sold 5.000 g of gold for 671.00 USDC · SO-GOLD-W8B-1792079650 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)']
+GOLD-W8U-1792079119 sold 0.000 g gold ['GOLD-W8U-1792079119 · bought 2.000 g of gold for 266.50 USDC · RCPT-GOLD-W8U-1792079119 · entered by the owner, unsigned', 'GOLD-W8U-1792079119 · sold 2.000 g of gold for 268.00 USDC · INV-GOLD-W8U-1792079119 · entered by the owner, unsigned']
+exposure [{'goods': 'gold', 'held': '0.000 g gold', 'market': 'PAXG', 'offsetTarget': '0', 'unhedgedBase': '0.000 g gold'}]
+root 0xbf1d2ce423694c4507134d749c47057d7c457d4f5a37a0c764df39d3aa4f5593

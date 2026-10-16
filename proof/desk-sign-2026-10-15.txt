@@ -1,0 +1,20 @@
+# 2026-10-15 23:40:40 +0800 — a counterparty confirms its step with its own wallet (/sign), and a signed buy or sell moves the offset with no tap
+Desk: desk-gold-2329, policy 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308, Arbitrum Sepolia (421614); owner key in this Mac's Secure Enclave.
+Service :7880 with TAMEION_DESK_VENUE=0x557E…4d09 and HEDGE_LIVE=1 (Hyperliquid testnet). Console page on next dev :3000 (rewrites /api to :7880).
+Test wallet in the browser: a window.ethereum shim whose eth_signTypedData_v4 goes to ~/.tameion/test-keys/local_signer.py (:7899),
+which signs with the treasury key 0x6c1c…9A25 via cast; approved on the desk under the name "Courier".
+
+1. Owner approves "Courier" = 0x6c1c…9A25 (POST /api/desk/party, device token) → parties: Supplier, Vault, Buyer, Courier.
+2. Supplier's signed purchase via the API (desk_sign CLI): GOLD-SIGN-1792078741 · bought 5.000 g of gold for 666.69 USDC
+   → the service moved the offset by itself: Traded size_delta -0.160, Filled 0.16 @ 4144.143, oid 62801187733, read back -0.16 (live)
+3. /sign?desk=…&deal=GOLD-SIGN-1792078741&kind=shipped&qty=5.000&as=Courier&doc=AWB-… in the browser, "Sign with my wallet"
+   → "Recorded on the trader's desk · GOLD-SIGN-1792078741 · 5.000 g of gold shipped · AWB-GOLD-SIGN-1792078741 · signed by Courier"
+   screenshots: proof/desk-sign-page-1-before.png, proof/desk-sign-page-2-booked.png
+4. The same wallet tries to confirm as "Vault" (kind arrived, doc VR-FAKE)
+   → the desk refused: "signed by 0x6c1c…9a25, but Vault signs as 0x8b95…d542"; the page says: "This wallet is not the one the
+     trader approved for Vault. Ask them to approve this wallet under that name, or sign with the approved one."
+   screenshot: proof/desk-sign-page-3-refused.png
+5. Vault's signed receipt (CLI): 5.000 g of gold into stock · VR-GOLD-SIGN-1792078741 · signed by Vault — no offset change (a movement)
+6. Buyer's signed sale (CLI): sold 5.000 g of gold for 680.00 USDC · signed by Buyer
+   → the service closed the offset by itself: Traded size_delta 0.16, Filled 0.16 @ 4145.94, read back 0
+7. Venue account after: value 993.298924 USDC, no positions.

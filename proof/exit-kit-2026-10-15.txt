@@ -1,0 +1,50 @@
+# Exit kit — anvil only (chain 31337, no public chain, no real key). Command: scripts/exit.sh demo
+# Shows: with no Tameion service, the recovery wallet (anvil #2) puts an openssl P-256 key on the owner contract,
+# waits the 7-day recoveryDelay, and that key signs withdraw(to, 20 USDC); a stranger (anvil #3) submits it.
+
+exit kit on anvil (chain 31337, port 8547) — 2026-10-15 03:06 UTC
+no Tameion service is running; every call below is cast/openssl/python3 against the node
+
+== 1. deploy: test USDC, PasskeyPrincipal(recovery = anvil #2), BudgetPolicyToken ==
+  USDC (test, 6 dp)  0x5FbDB2315678afecb367f032d93F642f64180aa3
+  owner              0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512  recovery() = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC  recoveryDelay() = 604800 s
+  policy             0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0  principal() = 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
+  policy holds 20.000000 USDC · payout 0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65 holds 0.000000 USDC
+
+== 2. the key that replaces the passkey (openssl, no browser) ==
+  new P-256 key at /var/folders/g4/1m9xkbrd2cv9js0zzsrn5gfh0000gn/T/tmp.BYTSGNKJn0/exit.key (mode 600); after apply it is the account's only key
+  qx 0xc6ac89cdf5ce1c57f0498571db9719a837841ecea82427bc697b22bcddd6faf4
+  qy 0xda9f15d3393633737757cb0390d33dd7e87978c54675ca60a20ff4cf1716df10
+
+== 3. the recovery wallet can propose, and can cancel its own proposal ==
+  recovery() 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC · recoveryDelay() 604800 s
+  tx 0xa2af93dad75b66a5595032cf5600de1234cab71cf0871d82af6433fb671ac3b9
+  pendingKey().eta 1792638414
+  tx 0xddb71c6d646fa9547d6de28aa18f7041d163584cb893cc73d5b676589c503782
+  pendingKey().eta 0
+  (eta 0: nothing pending; a proposal the owner did not want dies the same way, by the passkey through execute)
+
+== 4. propose again; too early is refused; the new key cannot sign yet ==
+  recovery() 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC · recoveryDelay() 604800 s
+  tx 0x74751ce1688976c080c89f7e1997aa2b31fe8fc7114c144998c9a5551149086d
+  pendingKey().eta 1792638414
+  refused: TooEarly(1792638414 [1.792e9])
+  withdraw with the new key before apply:
+  refused: BadPasskeySignature
+
+== 5. after the delay: apply (anyone), then withdraw signed by the new key, submitted by a stranger ==
+  anvil: moving the clock 604800 s, past eta
+  tx 0x81219af05b4bf87e4717466221997abad5a9ac09e08fa9ba49415ee5601a07f3
+  qx() 0xc6ac89cdf5ce1c57f0498571db9719a837841ecea82427bc697b22bcddd6faf4
+  withdraw(0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65, 20000000) · nonce 0
+  challengeFor 0x85278d8a519b7e7fa28c1271b609d881ac374f31592b0d346fb287e7c3ef5242
+  0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65 holds 0.000000 USDC before
+  tx 0x575e502382b05e422857ac4cee8c49e72c2030f3598a9f28104005ff802e1ebe (submitted by 0x90F79bf6EB2c4f870365E785982E1f101E93b906)
+  0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65 holds 20.000000 USDC after · policy holds 0.000000 USDC
+
+== 6. what the agent key still cannot do ==
+  refused: NotPrincipal
+
+done: 20.000000 USDC left the account to 0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65 with no Tameion service, no browser, no passkey from a phone.
+
+# exit status: 0

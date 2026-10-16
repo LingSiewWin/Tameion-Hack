@@ -1,0 +1,11 @@
+scripts/seed_bills.sh — fresh recurring bills on the demo bill wallet before a recording (docs/44 beat 0:12).
+Why: Start now says how many found bills were "not paid lately" (more than two cycles overdue); the demo wallet's
+old test bills stopped in September/October, so a recording needs payments that are still recurring.
+
+First live round, 2026-10-15 02:47 +08 (`scripts/seed_bills.sh 1 0`), Arbitrum Sepolia, from 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25:
+round 1: 3000 units to 0x1111111111111111111111111111111111111111  https://sepolia.arbiscan.io/tx/0x17a9e5e19ca42083d29155e67215242e8b4f76a075debfdc60938e36ae87d73b
+round 1: 2000 units to 0x3333333333333333333333333333333333333333  https://sepolia.arbiscan.io/tx/0xc922ffb970d632a4f0095042c488427e9c2676360fdbae6ea2de1f40610ecb6f
+round 1: 1000 units to 0x5555555555555555555555555555555555555555  https://sepolia.arbiscan.io/tx/0xe5ca284a8162eb72b8f748f8439994c7635232e08a15d3ef8c6e75d9ad0e9774
+Gas before: 0.001410 ETH (the wallet is also the relayer); ~0.0000012 ETH per transfer at 0.02 gwei.
+After this run the payees were changed to 0x5555…, 0x7777…, 0x9999… (no earlier history in the wallet).
+Before recording: top up gas from a faucet, then `scripts/seed_bills.sh 4 600` about 40 minutes ahead.

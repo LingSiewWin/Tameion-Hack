@@ -1,0 +1,15 @@
+# 2026-10-15 23:37:43 +0800 — /lender in a real browser (Playwright, Chromium), next dev on :3000, file = apps/console/test/fixtures/desk-kit.json (the kit of deal GOLD-1792078240, proof/desk-api-2026-10-15-2330.txt), pinned signer 0x62f82e3494eb9c446c161a9f52f0a90b986e5062
+
+## the kit as issued → "Every check passed" (screenshot proof/desk-lender-page-1-pass.png)
+a passed · The numbers are the ones that were signed: Recomputed 0xda597aa689528a9f…; the kit says 0xda597aa689528a9f…
+b passed · Signed by the desk's statement key: recovers to 0x62f82E3494eB9c446c161A9F52f0a90B986e5062 (pinned)
+c passed · 3 of 3 steps of the desk are shown; 3 reach the root
+f passed · bought 10.000 g PO-…: Supplier signed it (0x85e1…8904) · arrived 10.000 g VR-…: Vault signed it (0x8b95…d542) · to_fabrication 2.000 g JOB-…: entered by the trader, unsigned
+d passed · sepolia-rollup.arbitrum.io and arbitrum-sepolia-rpc.publicnode.com: block 319462515, the transaction carries this root
+e passed · PAXG position of the venue account at the statement's time, from Hyperliquid's own fills: -0.321000; the statement claims 0.321000
+shown: 10.000 g in stock · value 1,334.19 · offset 99.8% · max loss 27.32 at a 30% fall · eligible 8.000 g 1,067.35 · not eligible 2.000 g 266.84 · eligible after max loss 1,040.04 USDC
+
+## eligibleUsdc changed to 5000 and step 2 changed to_fabrication → returned → "A check failed" (screenshot proof/desk-lender-page-2-tampered.png)
+a FAILED (recomputed 0xb4a355c4… vs 0xda597aa6…) · b passed (the signature is over the original hash) · c FAILED (2 of 3 reach the root) · f FAILED · d passed · e passed
+
+node --test apps/console/test/desk-verify.test.mts: 5 pass, 0 fail (minor units, canonical JSON, re-encoding, the real kit passes offline, tampering fails a/c/f/b)

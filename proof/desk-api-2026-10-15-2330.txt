@@ -1,0 +1,51 @@
+# 2026-10-15 23:30:39 +0800 scripts/prove_desk_api.sh 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308 <device token> — account desk-gold-2329 on Arbitrum Sepolia, owner key in this Mac's Secure Enclave (token issued by /api/level1/reserve-token against a chip-signed assertion)
+# desk API proof · account 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308 (chain 421614) · deal GOLD-1792078240 · http://127.0.0.1:7880
+## the book is the owner's: no token → refused; the owner's device → the book
+{"error":"the desk is the owner's: open it on the device that opened the account, or with an agent key that can read"}
+deals 0 parties 0 venue 0x557e1e07652b75abaa667223b11704165fc94d09
+## the owner approves who may sign (a trust decision)
+{"parties":[{"address":"0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904","name":"Supplier"}]}
+{"parties":[{"address":"0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904","name":"Supplier"},{"address":"0x8b95fdedb647236da0f266231f71440d2714d542","name":"Vault"}]}
+{"parties":[{"address":"0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904","name":"Supplier"},{"address":"0x8b95fdedb647236da0f266231f71440d2714d542","name":"Vault"},{
+## a stranger approving a counterparty → refused
+{"error":"only the owner's device approves who may sign for this desk"}
+## 1. the supplier's priced purchase, signed
+{"booked":"GOLD-1792078240 · bought 10.000 g of gold for 1334.45 USDC · PO-GOLD-1792078240 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)","root":"0xb2e326be80be5e0e1c53a10ef049c017d1b247abdd6d8fc045e99965239ad6cc","signer":"0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904"}
+## a purchase confirmation signed by the buyer's key but naming the Supplier → refused
+{"error":"signed by 0x328fb78926cee49691851ca84f226d1c08edacb4, but Supplier signs as 0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904"}
+## an unsigned milestone from a stranger → refused
+{"error":"an unsigned milestone is the owner's own entry: send it from the owner's device, or have the counterparty sign it"}
+## 2. the vault's receipt, signed (gold flies into a vault; docs/84 §1b)
+{"booked":"GOLD-1792078240 · 10.000 g of gold into stock · VR-GOLD-1792078240 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542)","root":"0x71d76382efa8dc3fe5e8b0b1751d1ed5929266aaa6c02992a412a73a6abc72f3","signer":"0x8b95fdedb647236da0f266231f71440d2714d542"}
+## 3. the offset follows the book
+{"accountValue":"994.22577","coins":[{"action":"Traded { size_delta: -0.321, is_buy: false, worst_px: 4131.6380, statuses: [Filled { total_sz: 0.321, avg_px: 4147.663, oid: 62800592279 }], filled_size: -0.321, read_back: -0.321 }","before":"0","coin":"PAXG","mark":"4152.4"}],"live":true,"readBack":null,"target":"0.321507","venueAccount":"0x557e1e07652b75abaa667223b11704165fc94d09"}
+## 4. the owner sends 2 g to fabrication (unsigned: the owner's own entry)
+{"booked":"GOLD-1792078240 · 2.000 g of gold to fabrication · JOB-GOLD-1792078240 · entered by the owner, unsigned","root":"0xae3616ab7ef3ebccdadeac06292a91e882dfa69297abbf313cefd244102ec02e","signer":""}
+## 5. the lender's kit, root anchored now
+{'held': '10.000 g gold', 'stage': 'in stock', 'eligible': {'grams': '8.000 g gold', 'valueUsdc': '1067.353345'}, 'ineligible': {'grams': '2.000 g gold', 'valueUsdc': '266.838336'}, 'offsetShareBps': '9984', 'maxLossUsdc': '27.315598', 'eligibleUsdc': '1040.037747', 'hedgeControl': "the trader's trade-only key on Hyperliquid account 0x557e1e07652b75abaa667223b11704165fc94d09: it can trade and cannot withdraw; the lender is not a signer on that account yet"}
+anchor {'chainId': 421614, 'contract': '0xe7c381aafa077cc99359e8b297d2125efd76b8f5', 'from': '0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25', 'tx': '0xa723601f3a9f338c67378e8da6b120991525d4c6f02b0bd9697749a58951063c'}
+a. statementHash recomputed 0xda597aa689528a9f… matches
+b. signature recovers to 0x62f82e3494eb9c446c161a9f52f0a90b986e5062
+   milestone 0: bought 10.000 g gold · PO-GOLD-1792078240 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904) · reaches the root
+   milestone 1: arrived 10.000 g gold · VR-GOLD-1792078240 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542) · reaches the root
+   milestone 2: to_fabrication 2.000 g gold · JOB-GOLD-1792078240 · entered by the owner, unsigned · reaches the root
+c. 3 of 3 milestones disclosed; all reach root 0xae3616ab7ef3ebcc…: True
+   milestone 0: re-encodes to the disclosed line: True; Supplier's signature recovers to 0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904
+   milestone 1: re-encodes to the disclosed line: True; Vault's signature recovers to 0x8b95fdedb647236da0f266231f71440d2714d542
+   milestone 2: re-encodes to the disclosed line: True; entered by the owner, unsigned (no counterparty vouches for it)
+f. counterparty signatures re-checked: True
+   https://sepolia-rollup.arbitrum.io/rpc: block 319462515, from 0x6c1ce01b…, to 0xe7c381aa…, status 1, input carries the root: True
+   https://arbitrum-sepolia-rpc.publicnode.com: block 319462515, from 0x6c1ce01b…, to 0xe7c381aa…, status 1, input carries the root: True
+d. root anchored in 0xa723601f3a9f338c… on 2 node(s): True
+e. PAXG position of 0x557e1e07… at the statement's time, from the venue's fills: -0.321; statement claims an offset of 0.321000: True
+
+what the statement says: 10.000 g gold in stock, worth 1334.191681 USDC at 4149.8/oz; 99.84% offset; maximum loss 27.315598 USDC at a 30.0% fall + 2.0% basis; eligible 1040.037747 USDC
+PASS
+## 6. the fabrication job comes back, the buyer's sale is signed, the offset closes
+{"booked":"GOLD-1792078240 · 2.000 g of gold back into stock · JOB-GOLD-1792078240-DONE · entered by the owner, unsigned","root":"0xd8a5955637cee8a2247afd5408974aea914d63384c7a47621ab1c81db8537b9f","signer":""}
+{"booked":"GOLD-1792078240 · sold 10.000 g of gold for 1354.47 USDC · SO-GOLD-1792078240 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)","root":"0xeb61f291b6fa1afef870a33415e95052e81b48d0ab464135389b48fdc3b63265","signer":"0x328fb78926cee49691851ca84f226d1c08edacb4"}
+{"accountValue":"994.183308","coins":[{"action":"Traded { size_delta: 0.321, is_buy: true, worst_px: 4170.0465, statuses: [Filled { total_sz: 0.321, avg_px: 4150.664, oid: 62800623523 }], filled_size: 0.321, read_back: 0 }","before":"-0.321","coin":"PAXG","mark":"4149.3"}],"live":true,"readBack":"0","target":"0","venueAccount":"0x557e1e07652b75abaa667223b11704165fc94d09"}
+## the book now
+GOLD-1792078240 sold 0.000 g gold ['GOLD-1792078240 · bought 10.000 g of gold for 1334.45 USDC · PO-GOLD-1792078240 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)', 'GOLD-1792078240 · 10.000 g of gold into stock · VR-GOLD-1792078240 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542)', 'GOLD-1792078240 · 2.000 g of gold to fabrication · JOB-GOLD-1792078240 · entered by the owner, unsigned', 'GOLD-1792078240 · 2.000 g of gold back into stock · JOB-GOLD-1792078240-DONE · entered by the owner, unsigned', 'GOLD-1792078240 · sold 10.000 g of gold for 1354.47 USDC · SO-GOLD-1792078240 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)']
+exposure [{'goods': 'gold', 'held': '0.000 g gold', 'market': 'PAXG', 'offsetTarget': '0', 'unhedgedBase': '0.000 g gold'}]
+root 0xeb61f291b6fa1afef870a33415e95052e81b48d0ab464135389b48fdc3b63265

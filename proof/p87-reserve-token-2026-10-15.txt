@@ -1,0 +1,170 @@
+# docs/60 P-87 — a reserved account's wallets and first bills take a reserve token, not the public qx/qy
+# 2026-10-15, security engineer (service + console). Live against the service on :7880, Arbitrum Sepolia, no gas.
+# Service rebuilt and restarted 15:59:19 +08 (pid 81261; was 39716) with the RESUME "Local runtime now" environment.
+# Driver: a stdlib-HTTP Python script (same requests curl would send) in the session scratchpad; the WebAuthn assertions
+# are made with throwaway software P-256 keys (python `cryptography`), challenge via `cast keccak`. Only public halves
+# and the first 6 hex chars of each token are printed. Nothing funded or deployed: cast code at owner and account = 0x (h).
+#
+# Decisive lines (details below):
+#  (b) POST /api/level1/deploy {name, lazy}            -> 200, reserveToken returned once (64 hex); the record keeps only
+#        sha256(token) (equal: True; token itself on disk: False); the public view has no hash
+#  (c) GET  /api/level1/tenant/<policy>                -> qx/qy still served (console ownerPub), no reserve_token_hash
+#  (d) stranger with the record's own public qx/qy     -> wallets 403, bills 403; a wrong token 403
+#  (e) the token                                       -> wallets 200, bills 200
+#  (f) re-claim (same qx/qy, same name)                -> 200, reserveToken null; a stranger re-claiming with their own
+#        recovery -> 200 public record, reserveToken null, nothing changed; the held name on another chain -> 409
+#  (g) POST /api/level1/reserve-token                  -> 401 without an assertion; 403 a stranger's passkey; 200 the
+#        owner's passkey over keccak256("tameion.reserve-token.v1" ‖ chainId ‖ policy ‖ issued) -> new token;
+#        replayed -> 400; the old token then 403, the new one 200
+#  (h) eth_getCode owner and account                   -> 0x, 0x
+#
+# Gate after the change: cargo test --locked --workspace 370 passed, 0 failed, 1 ignored; cargo clippy --locked
+# --workspace --all-targets -- -D warnings clean; cargo fmt --all -- --check clean; console tsc + eslint clean,
+# node --test 8 passed 0 failed; npm run build (static export) rebuilt.
+
+# 2026-10-15 16:00:32 +0800  service pid 81261  name=p87-160032  chain arbitrum-sepolia (421614)
+# throwaway P-256 keys made in this run (python cryptography), public halves only:
+#   owner    qx=0xa3997f38bb250edf0ef416195ef37fa5451b18d51d9904d6ddd3e478ab64c945 qy=0xcf452dc8b671f9e51e31e6d9050e2adabe229004e28ee90e87d96e00458a3037
+#   stranger qx=0x6c799e6459296f1d299f4db6df88d24caa4ad1ddfc34074248c627e3c112de9a qy=0x38d576be2f88eee61d76d3fd6b6280adbbf9a87fbd833082fc69893718cee2f2
+
+## (a) the name is free
+$ GET /api/level1/name/p87-160032 
+HTTP 404 {"error": "no account has that name"}
+
+## (b) reserve a new name (lazy, nothing sent)
+$ POST /api/level1/deploy {"chain": "arbitrum-sepolia", "qx": "0xa3997f38bb250edf0ef416195ef37fa5451b18d51d9904d6ddd3e478ab64c945", "qy": "0xcf452dc8b671f9e51e31e6d9050e2adabe229004e28ee90e87d96e00458a3037", "name": "p87-160032", "lazy": true}
+HTTP 200 policy 0x23a0a4f3beae38c0978b958a7e023e046cbfbb8f owner 0x32ad346a5e05c0097f0cfceecfcd2d0abfa1862c deployed False reserveToken ae83ed… (64 hex chars)
+   public view has reserve_token_hash? False
+   record on disk: reserve_token_hash bb970b67b594…; sha256(token) bb970b67b594…; equal: True; token itself on disk: False
+
+## (c) the public tenant route still serves qx/qy (the console's ownerPub reads them)
+$ GET /api/level1/tenant/0x23a0a4f3beae38c0978b958a7e023e046cbfbb8f
+HTTP 200 qx 0xa3997f38bb250edf0ef416195ef37fa5451b18d51d9904d6ddd3e478ab64c945 qy 0xcf452dc8b671f9e51e31e6d9050e2adabe229004e28ee90e87d96e00458a3037 reserve_token_hash present: False
+
+## (d) a stranger with the record's public qx/qy -> wallets
+$ POST /api/level1/wallets {"policy": "0x23a0a4f3beae38c0978b958a7e023e046cbfbb8f", "add": "0x6d9c742f9f4576da020d16c8733f279233594df9", "qx": "0xa3997f38bb250edf0ef416195ef37fa5451b18d51d9904d6ddd3e478ab64c945", "qy": "0xcf452dc8b671f9e51e31e6d9050e2adabe229004e28ee90e87d96e00458a3037"}
+HTTP 403 {"error": "this account is not on chain yet; only the device that opened it can connect a wallet"}
+
+## (d) a stranger with the record's public qx/qy -> bills
+$ POST /api/level1/bills {"policy": "0x23a0a4f3beae38c0978b958a7e023e046cbfbb8f", "bills": [{"payee": "0xb8556e222c8f7b62d17047c303d8e389f6ac2d12", "amount": "30", "everyDays": 30}], "qx": "0xa3997f38bb250edf0ef416195ef37fa5451b18d51d9904d6ddd3e478ab64c945", "qy": "0xcf452dc8b671f9e51e31e6d9050e2adabe229004e28ee90e87d96e00458a3037"}
+HTTP 403 {"error": "this account is not on chain yet; only the device that opened it can add its first bill"}
+
+## (d2) a wrong token
+$ POST /api/level1/wallets {"policy": "0x23a0a4f3beae38c0978b958a7e023e046cbfbb8f", "add": "0x6d9c742f9f4576da020d16c8733f279233594df9", "reserveToken": "000\u20260 (64)"}
+HTTP 403 {"error": "this account is not on chain yet; only the device that opened it can connect a wallet"}
+
+## (e) the token holder -> wallets (a fresh random address, no history)
+$ POST /api/level1/wallets {"policy": "0x23a0a4f3beae38c0978b958a7e023e046cbfbb8f", "add": "0x6d9c742f9f4576da020d16c8733f279233594df9", "reserveToken": "ae83ed\u2026 (64 hex chars)"}
+HTTP 200 {"wallets": ["0x6d9c742f9f4576da020d16c8733f279233594df9"], "spareKey": "0x6d9c742f9f4576da020d16c8733f279233594df9", "recovery": "0x0000000000000000000000000000000000000000", "deployed": false, "caps": {"daily": "100.000000 USDC", "floor": "0.000000 USDC", "perAction": "50.000000 USDC", "provisional": true}}
+
+## (e2) the token holder -> bills
+$ POST /api/level1/bills {"policy": "0x23a0a4f3beae38c0978b958a7e023e046cbfbb8f", "bills": [{"payee": "0xb8556e222c8f7b62d17047c303d8e389f6ac2d12", "amount": "30", "everyDays": 30}], "reserveToken": "ae83ed\u2026 (64 hex chars)"}
+HTTP 200 {"bills": [{"amount": "30", "discount_bps": 0, "early_days": 0, "every_days": 30, "next_due": 1792051235, "payee": "0xb8556e222c8f7b62d17047c303d8e389f6ac2d12"}], "policy": "0x23a0a4f3beae38c0978b958a7e023e046cbfbb8f", "refused": []}
+
+## (f) re-claim: the same passkey's public key reserving the same name again
+$ POST /api/level1/deploy {"chain": "arbitrum-sepolia", "qx": "0xa3997f38bb250edf0ef416195ef37fa5451b18d51d9904d6ddd3e478ab64c945", "qy": "0xcf452dc8b671f9e51e31e6d9050e2adabe229004e28ee90e87d96e00458a3037", "name": "p87-160032", "lazy": true}
+HTTP 200 {"policy": "0x23a0a4f3beae38c0978b958a7e023e046cbfbb8f", "reserveToken": null}
+
+## (f2) a stranger re-claiming with the public qx/qy and their own recovery
+$ POST /api/level1/deploy {"chain": "arbitrum-sepolia", "qx": "0xa3997f38bb250edf0ef416195ef37fa5451b18d51d9904d6ddd3e478ab64c945", "qy": "0xcf452dc8b671f9e51e31e6d9050e2adabe229004e28ee90e87d96e00458a3037", "name": "p87-160032", "lazy": true, "recovery": "0x8bcbb9519d9668b971205d7efd64f10c5c2aff64"}
+HTTP 200 {"policy": "0x23a0a4f3beae38c0978b958a7e023e046cbfbb8f", "reserveToken": null, "error": null}
+
+## (f3) the held name on another chain with the public qx/qy
+$ POST /api/level1/deploy {"chain": "arc-testnet", "qx": "0xa3997f38bb250edf0ef416195ef37fa5451b18d51d9904d6ddd3e478ab64c945", "qy": "0xcf452dc8b671f9e51e31e6d9050e2adabe229004e28ee90e87d96e00458a3037", "name": "p87-160032", "lazy": true, "recovery": "0x8bcbb9519d9668b971205d7efd64f10c5c2aff64"}
+HTTP 409 {"error": "the name p87-160032 is taken", "name": "p87-160032"}
+
+## (g) a new token without the passkey
+$ POST /api/level1/reserve-token {"policy": "0x23a0a4f3beae38c0978b958a7e023e046cbfbb8f"}
+HTTP 401 {"challenge": "keccak256(\"tameion.reserve-token.v1\" \u2016 chainId u64 \u2016 policy \u2016 issued u64)", "error": "a reserve token needs the account's passkey"}
+
+## (g2) a stranger's passkey assertion
+$ POST /api/level1/reserve-token {"policy": "0x23a0a4f3beae38c0978b958a7e023e046cbfbb8f", "issued": 1792051311, "auth": "<stranger's>"}
+HTTP 403 {"error": "the signature does not verify against the owner's key"}
+
+## (g3) the owner's passkey over keccak256("tameion.reserve-token.v1" ‖ 421614 ‖ policy ‖ 1792051311) = 0xa0ec8a42d196d9733ea9dd25a9983865e61cb0422b0345cc7202b52f3edbc162
+$ POST /api/level1/reserve-token {"policy": "0x23a0a4f3beae38c0978b958a7e023e046cbfbb8f", "issued": 1792051311, "auth": "<owner's>"}
+HTTP 200 {"policy": "0x23a0a4f3beae38c0978b958a7e023e046cbfbb8f", "reserveToken": "ae803a\u2026 (64 hex chars)"}
+
+## (g4) the same assertion again
+$ POST /api/level1/reserve-token {"policy": "0x23a0a4f3beae38c0978b958a7e023e046cbfbb8f", "issued": 1792051311, "auth": "<owner's, replayed>"}
+HTTP 400 {"error": "that challenge was already used"}
+
+## (g5) the old token after a passkey re-claim
+$ POST /api/level1/wallets {"policy": "0x23a0a4f3beae38c0978b958a7e023e046cbfbb8f", "remove": "0x6d9c742f9f4576da020d16c8733f279233594df9", "reserveToken": "ae83ed\u2026 (64 hex chars)"}
+HTTP 403 {"error": "this account is not on chain yet; only the device that opened it can connect a wallet"}
+
+## (g6) the new token removes the test wallet (the account keeps none)
+$ POST /api/level1/wallets {"policy": "0x23a0a4f3beae38c0978b958a7e023e046cbfbb8f", "remove": "0x6d9c742f9f4576da020d16c8733f279233594df9", "reserveToken": "ae803a\u2026 (64 hex chars)"}
+HTTP 200 {"wallets": [], "spareKey": null, "deployed": false}
+
+## (h) nothing on chain
+$ cast code 0x32ad346a5e05c0097f0cfceecfcd2d0abfa1862c --rpc-url https://sepolia-rollup.arbitrum.io/rpc   (owner)
+0x
+$ cast code 0x23a0a4f3beae38c0978b958a7e023e046cbfbb8f --rpc-url https://sepolia-rollup.arbitrum.io/rpc   (account)
+0x
+
+################################################################################################################
+# docs/60 P-93 — a deployed account's /wallets is never open: the device token (P-87's reserve token, kept after
+# deploy) or an agent key with the `import` scope. Service rebuilt and restarted 16:09:48 +08 (pid 92873; was 81261),
+# RESUME environment. No transaction: the only chain access is the owner-key read behind (l).
+#
+# Decisive lines (details below):
+#  (j) uat-1539 (deployed, agentTokenCount 0 — open before this fix): a stranger with no credential, with the
+#        record's public qx/qy, or with a made-up token -> 403, 403, 403; its wallets unchanged
+#  (k) 0x35a2…342f (deployed, Arbitrum Sepolia, no agent keys): no credential -> 403
+#  (l) its owner's software passkey -> POST /api/level1/reserve-token 200 (verified against the contract's owner keys)
+#  (m) that device token -> wallets add 200, remove 200 (account back to wallets [])
+#  (n) 0xf799…635d (Arc, agent keys): a buy,read agent key -> 403
+#  (o) the import,run,read agent key -> add 200, remove 200 (back to wallets [])
+# Gate: cargo test --locked --workspace 370 passed, 0 failed, 1 ignored; clippy -D warnings clean; fmt clean;
+# console tsc + eslint clean, node 8/8; static export rebuilt.
+
+# P-93 — 2026-10-15 16:10:40 +0800  service pid 92873
+
+## (i) uat-1539 is on chain
+$ GET /api/level1/name/uat-1539 
+HTTP 200 {"account": "0xcae9b13dba62e828e4702221af34d7cf0fb7708e", "chains": [{"account": "0xcae9b13dba62e828e4702221af34d7cf0fb7708e", "chainId": 421614, "deployed": true, "key": "arbitrum-sepolia", "name": "Arbitrum Sepolia"}], "name": "uat-1539", "owner": "0x7ac931c2baf2ffd43dc5f50c63475db203d4fb69"}
+   GET /api/level1/tenant/0xcae9b13dba62e828e4702221af34d7cf0fb7708e -> HTTP 200 deployed True agentTokenCount 0 wallets ['0x74858f049e471962588a726e48264e448cadad02'] qx 0x16bbafff54…
+
+## (j) a stranger, no credential -> uat-1539 wallets (was open before P-93: no agent keys)
+$ POST /api/level1/wallets {"policy": "0xcae9b13dba62e828e4702221af34d7cf0fb7708e", "add": "0x976d82f87e4d2044981823335f27e535e69e6ff6"}
+HTTP 403 {"error": "only the device that opened this account can change its wallets; on another device, confirm with your passkey first"}
+
+## (j) a stranger, the record's public qx/qy -> uat-1539 wallets (was open before P-93: no agent keys)
+$ POST /api/level1/wallets {"policy": "0xcae9b13dba62e828e4702221af34d7cf0fb7708e", "add": "0x976d82f87e4d2044981823335f27e535e69e6ff6", "qx": "0x16bbafff5465a0a2de2022b4a2cee4a1061f282b71f5152c148fbb83641f48b3", "qy": "0x49bba6def9eadf56b31254c2587ba7b9a288a5a6420a41bbe14ae4fe573b7be5"}
+HTTP 403 {"error": "only the device that opened this account can change its wallets; on another device, confirm with your passkey first"}
+
+## (j) a stranger, a made-up device token -> uat-1539 wallets (was open before P-93: no agent keys)
+$ POST /api/level1/wallets {"policy": "0xcae9b13dba62e828e4702221af34d7cf0fb7708e", "add": "0x976d82f87e4d2044981823335f27e535e69e6ff6", "reserveToken": "bc91a1\u2026 (64 hex chars)"}
+HTTP 403 {"error": "only the device that opened this account can change its wallets; on another device, confirm with your passkey first"}
+   after: wallets ['0x74858f049e471962588a726e48264e448cadad02'] (unchanged)
+
+# account 0x35a2e2701d4d72be257bf7708c67d1433c60342f (arbitrum-sepolia), software passkey qx=0xf80820621c852939135d7fa96a75bf5b6ce696e6506216a3a8dcdda452f3791a
+
+## (k) no credential
+$ POST /api/level1/wallets {"policy": "0x35a2e2701d4d72be257bf7708c67d1433c60342f", "add": "0x976d82f87e4d2044981823335f27e535e69e6ff6"}
+HTTP 403 {"error": "only the device that opened this account can change its wallets; on another device, confirm with your passkey first"}
+
+## (l) the owner's passkey (checked against the contract's owner keys, a chain read) over 0xf2bd15793c617933b3d07b3acc1a9507a508e6cab66f00d99c3aa70ac160f071
+$ POST /api/level1/reserve-token {"policy": "0x35a2e2701d4d72be257bf7708c67d1433c60342f", "issued": 1792051840, "auth": "<owner's>"}
+HTTP 200 {"policy": "0x35a2e2701d4d72be257bf7708c67d1433c60342f", "reserveToken": "6f6233\u2026 (64 hex chars)", "error": null}
+
+## (m) the device token adds a fresh random wallet
+$ POST /api/level1/wallets {"policy": "0x35a2e2701d4d72be257bf7708c67d1433c60342f", "add": "0x976d82f87e4d2044981823335f27e535e69e6ff6", "reserveToken": "6f6233\u2026 (64 hex chars)"}
+HTTP 200 {"wallets": ["0x976d82f87e4d2044981823335f27e535e69e6ff6"], "deployed": true, "spareKey": null}
+
+## (m2) and removes it (the account is back as it was)
+$ POST /api/level1/wallets {"policy": "0x35a2e2701d4d72be257bf7708c67d1433c60342f", "remove": "0x976d82f87e4d2044981823335f27e535e69e6ff6", "reserveToken": "6f6233\u2026 (64 hex chars)"}
+HTTP 200 {"wallets": [], "deployed": true}
+
+## (n) agent key tok-6a08b6b7 scopes ['buy', 'read'] (no import)
+$ POST /api/level1/wallets {"policy": "0xf799a85496580af9a63c35223443688f8693635d", "add": "0x976d82f87e4d2044981823335f27e535e69e6ff6"}
+HTTP 403 {"error": "only the device that opened this account can change its wallets; on another device, confirm with your passkey first"}
+
+## (o) agent key tok-53853423 scopes ['import', 'run', 'read']
+$ POST /api/level1/wallets {"policy": "0xf799a85496580af9a63c35223443688f8693635d", "add": "0x976d82f87e4d2044981823335f27e535e69e6ff6"}
+HTTP 200 {"wallets": ["0x976d82f87e4d2044981823335f27e535e69e6ff6"], "deployed": true}
+
+## (o2) and removes it
+$ POST /api/level1/wallets {"policy": "0xf799a85496580af9a63c35223443688f8693635d", "remove": "0x976d82f87e4d2044981823335f27e535e69e6ff6"}
+HTTP 200 {"wallets": [], "deployed": true}

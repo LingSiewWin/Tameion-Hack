@@ -1,0 +1,7 @@
+# Confidence floor per mode — read-only Watch on Arc testnet, 2026-10-15 11:19 +0800; service :7880 rebuilt 11:12 with docs/76 §8b item 3
+# POST /api/watch {chain: arc-testnet, address: 0xad92baCbCd4e41E63C4b6E25DFfC09903c390dAB, days: 90, caps: {perAction 0.05, daily 0.20, floor 0}} → job 6ad04641-0002
+# Rule (ledger::action): 0.75 where the agent pays alone (Autopilot), 0.60 where it cannot (Propose, a halt, a lapsed agent). docs/21:227 — the 0.60–0.75 bucket was paid on schedule 81.3 % of the time over 123 predictions.
+status done | caps null | transfers 18
+bill …00a3 0.030000 USDC every 5.0m confidence 0.80 -> pay: due now, inside the cap, once you have approved this payee
+bill …00a1 0.002000 USDC every 5.0m confidence 0.77 -> pay: due now, inside the cap, once you have approved this payee
+bill …00a2 0.005350 USDC every 5.0m confidence 0.73 -> ask: confidence 0.73 is below the 0.75 Autopilot floor; in Propose (floor 0.60) the agent would bring it to you

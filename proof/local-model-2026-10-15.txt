@@ -1,0 +1,308 @@
+# Local model as the desk's reasoner -- measured (docs/86, docs/83 W3)
+# written 2026-10-15 23:38:53 +0800 by the tech-lead AI seat
+
+## Machine
+model: Apple M3, 16 GB
+swap now: total = 10240.00M  used = 8509.88M  free = 1730.12M  (encrypted)
+ollama: ollama version is 0.23.2
+NAME                       ID              SIZE      MODIFIED      
+llama3.1:8b                46e0c10c039e    4.9 GB    13 months ago    
+llama3.2:3b                a80c4f17acd5    2.0 GB    13 months ago    
+(during the runs the service on :7880 and other agents' cargo builds were also running; swap was 7.9 GB used at 23:10)
+
+## A. measure_reasoners: 12 scenarios / 54 bills, rule vs ollama llama3.1:8b vs llama3.2:3b vs claude-opus-5 raw vs redacted
+## command: ANTHROPIC_API_KEY=<file> REPEATS=2 CLOUD_REPEATS=1 LOCAL_MODELS=llama3.1:8b,llama3.2:3b target/debug/examples/measure_reasoners
+run started: 2026-10-15 23:22:00 +0800
+12 scenarios, 54 bills; caps per action 2.50 / daily 5.00 USDC; confidence floor 0.75 (Autopilot)
+
+redacted payload for s00 (exactly what RedactedCloud sends):
+  {"balance":"AMT_4","obligation_count":3,"obligations":[{"amount":"AMT_1","amount_variation":0.0,"confidence":0.95,"counterparty":"ADDR_1","cycle_key":"ID_1","due":"OVERDUE by 4.0 days","interval_days":30.0,"interval_variation":0.02,"kind":"subscription","sample_count":6,"share_of_balance_pct":16.0},{"amount":"AMT_2","amount_variation":0.0,"confidence":0.88,"counterparty":"ADDR_2","cycle_key":"ID_2","due":"not yet due, due in 2.0 days","interval_days":30.0,"interval_variation":0.02,"kind":"subscription","sample_count":5,"share_of_balance_pct":72.0},{"amount":"AMT_3","amount_variation":0.0,"confidence":0.62,"counterparty":"ADDR_3","cycle_key":"ID_3","due":"not yet due, due in 1.0 days","interval_days":30.0,"interval_variation":0.02,"kind":"subscription","sample_count":3,"share_of_balance_pct":28.0}],"total_due_pct_of_balance":116.0}
+  leak check: Ok(())
+
+== rule-based ==
+  s00-compare    rep0        0 ms  ok  divergence 0/3  verdicts ALLOW,REVIEW,ALLOW
+  s01-3bills     rep0        0 ms  ok  divergence 0/3  verdicts ALLOW,ALLOW,BLOCK
+  s02-5bills     rep0        0 ms  ok  divergence 0/5  verdicts ALLOW,ALLOW,REVIEW,REVIEW,ALLOW
+  s03-6bills     rep0        0 ms  ok  divergence 0/6  verdicts REVIEW,REVIEW,REVIEW,REVIEW,REVIEW,REVIEW
+  s04-3bills     rep0        0 ms  ok  divergence 0/3  verdicts ALLOW,BLOCK,BLOCK
+  s05-5bills     rep0        0 ms  ok  divergence 0/5  verdicts ALLOW,REVIEW,ALLOW,BLOCK,BLOCK
+  s06-6bills     rep0        0 ms  ok  divergence 0/6  verdicts ALLOW,REVIEW,REVIEW,ALLOW,REVIEW,ALLOW
+  s07-4bills     rep0        0 ms  ok  divergence 0/4  verdicts ALLOW,ALLOW,BLOCK,ALLOW
+  s08-5bills     rep0        0 ms  ok  divergence 0/5  verdicts ALLOW,REVIEW,REVIEW,ALLOW,BLOCK
+  s09-5bills     rep0        0 ms  ok  divergence 0/5  verdicts ALLOW,ALLOW,ALLOW,REVIEW,REVIEW
+  s10-4bills     rep0        0 ms  ok  divergence 0/4  verdicts REVIEW,REVIEW,REVIEW,REVIEW
+  s11-5bills     rep0        0 ms  ok  divergence 0/5  verdicts ALLOW,REVIEW,ALLOW,REVIEW,ALLOW
+
+== local model down (OLLAMA_HOST=127.0.0.1:1) ==
+  error after 2 ms: [reasoner-transient] retryable=true -- Operator::run_once orders by rank_by_urgency and logs 'rule-based (fallback from ollama:llama3.1:8b)'
+
+== ollama:llama3.1:8b (local) ==
+  s00-compare    rep0    10159 ms  ok  divergence 0/3  verdicts ALLOW,REVIEW,ALLOW
+  s00-compare    rep1     6862 ms  ok  divergence 0/3  verdicts ALLOW,REVIEW,ALLOW
+  s01-3bills     rep0     9086 ms  ok  divergence 2/3  verdicts ALLOW,REVIEW,ALLOW
+  s01-3bills     rep1     6729 ms  ok  divergence 2/3  verdicts ALLOW,REVIEW,ALLOW
+  s02-5bills     rep0    16192 ms  ok  divergence 2/5  verdicts ALLOW,ALLOW,REVIEW,REVIEW,ALLOW
+  s02-5bills     rep1    14705 ms  ok  divergence 2/5  verdicts ALLOW,ALLOW,REVIEW,REVIEW,ALLOW
+  s03-6bills     rep0    34112 ms  ok  divergence 3/6  verdicts REVIEW,REVIEW,REVIEW,REVIEW,REVIEW,REVIEW
+  s03-6bills     rep1    32279 ms  ok  divergence 3/6  verdicts REVIEW,REVIEW,REVIEW,REVIEW,REVIEW,REVIEW
+  s04-3bills     rep0    15841 ms  ok  divergence 0/3  verdicts ALLOW,BLOCK,BLOCK
+  s04-3bills     rep1    10676 ms  ok  divergence 0/3  verdicts ALLOW,BLOCK,BLOCK
+  s05-5bills     rep0    24333 ms  ok  divergence 3/5  verdicts REVIEW,ALLOW,ALLOW,BLOCK,BLOCK
+  s05-5bills     rep1    17731 ms  ok  divergence 3/5  verdicts REVIEW,ALLOW,ALLOW,BLOCK,BLOCK
+  s06-6bills     rep0    23404 ms  ok  divergence 3/6  verdicts REVIEW,ALLOW,REVIEW,ALLOW,REVIEW,ALLOW
+  s06-6bills     rep1    18430 ms  ok  divergence 3/6  verdicts REVIEW,ALLOW,REVIEW,ALLOW,REVIEW,ALLOW
+  s07-4bills     rep0    18737 ms  ok  divergence 0/4  verdicts ALLOW,ALLOW,BLOCK,ALLOW
+  s07-4bills     rep1    13853 ms  ok  divergence 0/4  verdicts ALLOW,ALLOW,BLOCK,ALLOW
+  s08-5bills     rep0    21221 ms  ok  divergence 0/5  verdicts ALLOW,REVIEW,REVIEW,ALLOW,BLOCK
+  s08-5bills     rep1    18064 ms  ok  divergence 0/5  verdicts ALLOW,REVIEW,REVIEW,ALLOW,BLOCK
+  s09-5bills     rep0    21518 ms  ok  divergence 2/5  verdicts ALLOW,ALLOW,ALLOW,REVIEW,REVIEW
+  s09-5bills     rep1    17037 ms  ok  divergence 2/5  verdicts ALLOW,ALLOW,ALLOW,REVIEW,REVIEW
+  s10-4bills     rep0    23223 ms  ok  divergence 2/4  verdicts REVIEW,REVIEW,REVIEW,REVIEW
+  s10-4bills     rep1    19449 ms  ok  divergence 2/4  verdicts REVIEW,REVIEW,REVIEW,REVIEW
+  s11-5bills     rep0    27498 ms  ok  divergence 5/5  verdicts ALLOW,ALLOW,REVIEW,ALLOW,REVIEW
+  s11-5bills     rep1    20839 ms  ok  divergence 5/5  verdicts ALLOW,ALLOW,REVIEW,ALLOW,REVIEW
+
+== ollama:llama3.2:3b (local) ==
+  s00-compare    rep0    12864 ms  ok  divergence 2/3  verdicts ALLOW,ALLOW,BLOCK
+  s00-compare    rep1     5729 ms  ok  divergence 2/3  verdicts ALLOW,ALLOW,BLOCK
+  s01-3bills     rep0     7651 ms  ok  divergence 2/3  verdicts ALLOW,REVIEW,ALLOW
+  s01-3bills     rep1     5984 ms  ok  divergence 2/3  verdicts ALLOW,REVIEW,ALLOW
+  s02-5bills     rep0    10597 ms  ok  divergence 5/5  verdicts ALLOW,ALLOW,REVIEW,REVIEW,ALLOW
+  s02-5bills     rep1     7401 ms  ok  divergence 5/5  verdicts ALLOW,ALLOW,REVIEW,REVIEW,ALLOW
+  s03-6bills     rep0    14715 ms  ok  divergence 3/6  verdicts REVIEW,REVIEW,REVIEW,REVIEW,REVIEW,REVIEW
+  s03-6bills     rep1    11445 ms  ok  divergence 3/6  verdicts REVIEW,REVIEW,REVIEW,REVIEW,REVIEW,REVIEW
+  s04-3bills     rep0     8430 ms  ok  divergence 0/3  verdicts ALLOW,BLOCK,BLOCK
+  s04-3bills     rep1     6216 ms  ok  divergence 0/3  verdicts ALLOW,BLOCK,BLOCK
+  s05-5bills     rep0    11271 ms  ok  divergence 5/5  verdicts REVIEW,REVIEW,ALLOW,ALLOW,REVIEW
+  s05-5bills     rep1     7248 ms  ok  divergence 5/5  verdicts REVIEW,REVIEW,ALLOW,ALLOW,REVIEW
+  s06-6bills     rep0    12328 ms  ok  divergence 5/6  verdicts ALLOW,ALLOW,ALLOW,BLOCK,REVIEW,REVIEW
+  s06-6bills     rep1     9204 ms  ok  divergence 5/6  verdicts ALLOW,ALLOW,ALLOW,BLOCK,REVIEW,REVIEW
+  s07-4bills     rep0    10383 ms  ok  divergence 2/4  verdicts ALLOW,ALLOW,BLOCK,ALLOW
+  s07-4bills     rep1     8332 ms  ok  divergence 2/4  verdicts ALLOW,ALLOW,BLOCK,ALLOW
+  s08-5bills     rep0    11886 ms  ok  divergence 4/5  verdicts REVIEW,ALLOW,ALLOW,BLOCK,BLOCK
+  s08-5bills     rep1     7736 ms  ok  divergence 4/5  verdicts REVIEW,ALLOW,ALLOW,BLOCK,BLOCK
+  s09-5bills     rep0    11205 ms  ok  divergence 3/5  verdicts REVIEW,ALLOW,ALLOW,ALLOW,REVIEW
+  s09-5bills     rep1     7921 ms  ok  divergence 3/5  verdicts REVIEW,ALLOW,ALLOW,ALLOW,REVIEW
+  s10-4bills     rep0     7526 ms  ok  divergence 2/4  verdicts REVIEW,REVIEW,REVIEW,REVIEW
+  s10-4bills     rep1     6501 ms  ok  divergence 2/4  verdicts REVIEW,REVIEW,REVIEW,REVIEW
+  s11-5bills     rep0    10920 ms  ok  divergence 3/5  verdicts ALLOW,ALLOW,REVIEW,REVIEW,ALLOW
+  s11-5bills     rep1     8400 ms  ok  divergence 3/5  verdicts ALLOW,ALLOW,REVIEW,REVIEW,ALLOW
+
+== claude-opus-5 (cloud, sees everything) ==
+  s00-compare    rep0     8592 ms  ok  divergence 2/3  verdicts ALLOW,ALLOW,BLOCK
+  s01-3bills     rep0     5276 ms  ok  divergence 0/3  verdicts ALLOW,ALLOW,BLOCK
+  s02-5bills     rep0     8785 ms  ok  divergence 2/5  verdicts ALLOW,ALLOW,REVIEW,REVIEW,ALLOW
+  s03-6bills     rep0    11766 ms  ok  divergence 6/6  verdicts REVIEW,REVIEW,REVIEW,REVIEW,REVIEW,REVIEW
+  s04-3bills     rep0     5369 ms  ok  divergence 0/3  verdicts ALLOW,BLOCK,BLOCK
+  s05-5bills     rep0     9743 ms  ok  divergence 5/5  verdicts ALLOW,ALLOW,REVIEW,BLOCK,BLOCK
+  s06-6bills     rep0    15610 ms  ok  divergence 3/6  verdicts ALLOW,REVIEW,ALLOW,REVIEW,REVIEW,ALLOW
+  s07-4bills     rep0     6989 ms  ok  divergence 0/4  verdicts ALLOW,ALLOW,BLOCK,ALLOW
+  s08-5bills     rep0     7577 ms  ok  divergence 2/5  verdicts ALLOW,REVIEW,ALLOW,BLOCK,BLOCK
+  s09-5bills     rep0    10543 ms  ok  divergence 0/5  verdicts ALLOW,ALLOW,ALLOW,REVIEW,REVIEW
+  s10-4bills     rep0     6537 ms  ok  divergence 2/4  verdicts REVIEW,REVIEW,REVIEW,REVIEW
+  s11-5bills     rep0    10028 ms  ok  divergence 3/5  verdicts ALLOW,ALLOW,REVIEW,REVIEW,ALLOW
+
+== claude-opus-5 (redacted) (cloud, placeholders only) ==
+  s00-compare    rep0     4314 ms  ok  divergence 0/3  verdicts ALLOW,REVIEW,ALLOW
+  s01-3bills     rep0     2964 ms  ok  divergence 0/3  verdicts ALLOW,ALLOW,BLOCK
+  s02-5bills     rep0     6298 ms  ok  divergence 3/5  verdicts ALLOW,ALLOW,REVIEW,ALLOW,REVIEW
+  s03-6bills     rep0     6318 ms  ok  divergence 2/6  verdicts REVIEW,REVIEW,REVIEW,REVIEW,REVIEW,REVIEW
+  s04-3bills     rep0     3227 ms  ok  divergence 0/3  verdicts ALLOW,BLOCK,BLOCK
+  s05-5bills     rep0     4614 ms  ok  divergence 4/5  verdicts ALLOW,REVIEW,ALLOW,BLOCK,BLOCK
+  s06-6bills     rep0     8318 ms  ok  divergence 4/6  verdicts REVIEW,ALLOW,REVIEW,ALLOW,ALLOW,REVIEW
+  s07-4bills     rep0     4471 ms  ok  divergence 0/4  verdicts ALLOW,ALLOW,BLOCK,ALLOW
+  s08-5bills     rep0    10174 ms  ok  divergence 2/5  verdicts ALLOW,REVIEW,ALLOW,BLOCK,BLOCK
+  s09-5bills     rep0     6514 ms  ok  divergence 2/5  verdicts ALLOW,ALLOW,ALLOW,REVIEW,REVIEW
+  s10-4bills     rep0     5905 ms  ok  divergence 2/4  verdicts REVIEW,REVIEW,REVIEW,REVIEW
+  s11-5bills     rep0     4108 ms  ok  divergence 2/5  verdicts ALLOW,ALLOW,REVIEW,REVIEW,ALLOW
+
+== rationales on s00 (rank, payee, reason) ==
+    1. 0xa11ce ranked 1 of 3: overdue by 4.0 days, confidence 0.95, 0.400000 USDC covered
+    2. 0xca101 ranked 2 of 3: due in 1.0 days, confidence 0.62, 0.700000 USDC covered
+    3. 0xb0b ranked 3 of 3: due in 2.0 days, confidence 0.88, 1.800000 USDC not covered by remaining cash
+  ^ rule-based on s00
+    1. 0xa11ce Overdue by 4.0 days.
+    2. 0xca101 Due in 1.0 day, smallest share of balance.
+    3. 0xb0b Due in 2.0 days, largest share of balance.
+  ^ ollama:llama3.1:8b on s00
+    1. 0xa11ce Overdue bill with high confidence (95%)
+    2. 0xb0b Not yet due, but will be in 2 days, high sample count (5)
+    3. 0xca101 Not yet due, low confidence (62%), lowest share_of_balance_pct
+  ^ ollama:llama3.2:3b on s00
+    1. 0xa11ce Already four days overdue on a well-evidenced six-cycle subscription, so it is the only obligation currently in arrears and carries the highest risk of service withdrawal.
+    2. 0xb0b Highest-value and strongly evidenced recurring commitment (5 samples, stable amount and timing); placed ahead of the nearer-dated claim because the evidence is firmer, though its due date is one day later.
+    3. 0xca101 Due soonest of the two not yet late, but rests on only three samples at 0.62 confidence, so it is the weakest claim and ranked last; no signal beyond the numbers about this counterparty's chasing behaviour.
+  ^ claude-opus-5 raw on s00
+    1. 0xa11ce Only overdue bill, high confidence, steady amount, small 16% share of balance.
+    2. 0xca101 Due soonest of remaining; 28% share leaves room, though evidence is weaker.
+    3. 0xb0b Well evidenced but 72% of balance would crowd out both smaller bills.
+  ^ claude-opus-5 (redacted) on s00
+
+== summary ==
+rule-based                   calls  12  ok  12  parse-fail  0 (0%)  other-fail {}
+                             latency first 0 ms, p50 0 ms, p95 0 ms (n=11 after the first)
+                             vs rule: top-1 same 12/12, mean positions moved 0%, repeat-identical 0/0
+                             verifier: verdict agreement 54/54 (100.0%), refused 30 (of which rule-allowed 0), top pick refused 2
+                             paid under this ordering 29.70 USDC vs rule 29.70 USDC
+
+ollama:llama3.1:8b           calls  24  ok  24  parse-fail  0 (0%)  other-fail {}
+                             latency first 10159 ms, p50 18430 ms, p95 32279 ms (n=23 after the first)
+                             vs rule: top-1 same 14/24, mean positions moved 38%, repeat-identical 12/12
+                             verifier: verdict agreement 106/108 (98.1%), refused 60 (of which rule-allowed 0), top pick refused 8
+                             paid under this ordering 59.40 USDC vs rule 59.40 USDC
+
+ollama:llama3.2:3b           calls  24  ok  24  parse-fail  0 (0%)  other-fail {}
+                             latency first 12864 ms, p50 8400 ms, p95 12328 ms (n=23 after the first)
+                             vs rule: top-1 same 10/24, mean positions moved 64%, repeat-identical 12/12
+                             verifier: verdict agreement 92/108 (85.2%), refused 60 (of which rule-allowed 2), top pick refused 10
+                             paid under this ordering 60.60 USDC vs rule 59.40 USDC
+
+claude-opus-5 raw            calls  12  ok  12  parse-fail  0 (0%)  other-fail {}
+                             latency first 8592 ms, p50 8785 ms, p95 15610 ms (n=11 after the first)
+                             vs rule: top-1 same 9/12, mean positions moved 42%, repeat-identical 0/0
+                             verifier: verdict agreement 52/54 (96.3%), refused 30 (of which rule-allowed 0), top pick refused 2
+                             paid under this ordering 29.70 USDC vs rule 29.70 USDC
+
+claude-opus-5 (redacted)     calls  12  ok  12  parse-fail  0 (0%)  other-fail {}
+                             latency first 4314 ms, p50 5905 ms, p95 10174 ms (n=11 after the first)
+                             vs rule: top-1 same 8/12, mean positions moved 34%, repeat-identical 0/0
+                             verifier: verdict agreement 53/54 (98.1%), refused 30 (of which rule-allowed 0), top pick refused 3
+                             paid under this ordering 29.70 USDC vs rule 29.70 USDC
+
+run finished: 2026-10-15 23:36:02 +0800
+
+## B. Token rates, llama3.1:8b, one 5-bill ordering request via curl (23:12)
+total 13.5s load 0.1s prompt 579 tok in 3.6s (161 tok/s) eval 121 tok in 8.5s (14.3 tok/s)
+total 9.6s load 0.1s prompt 579 tok in 0.1s (9103 tok/s) eval 121 tok in 8.2s (14.8 tok/s)   <- second call: prompt cache hit
+cold load of llama3.1:8b (23:07 probe): load_duration 9.23 s, total 10.6 s
+Ollama grammar probe: schema enum [ID_1,ID_2,ID_3] + minItems=maxItems=3, prompt 'return only ID_9 once' -> {"ordering":[ID_1,ID_2,ID_3]} (enum and item count enforced)
+
+## C. BEFORE: prompt v1 (days_until_due only, 20-word rationale), llama3.1:8b, REPEATS=1, no cloud (23:1x)
+== ollama:llama3.1:8b (local) ==
+  s00-compare    rep0    16634 ms  ok  divergence 2/3  verdicts ALLOW,REVIEW,ALLOW
+  s01-3bills     rep0     9943 ms  ok  divergence 3/3  verdicts ALLOW,REVIEW,ALLOW
+  s02-5bills     rep0    15352 ms  ok  divergence 5/5  verdicts ALLOW,REVIEW,ALLOW,REVIEW,ALLOW
+  s03-6bills     rep0    18783 ms  ok  divergence 0/6  verdicts REVIEW,REVIEW,REVIEW,REVIEW,REVIEW,REVIEW
+  s04-3bills     rep0     8234 ms  ok  divergence 0/3  verdicts ALLOW,BLOCK,BLOCK
+  s05-5bills     rep0    17019 ms  ok  divergence 3/5  verdicts REVIEW,REVIEW,ALLOW,ALLOW,BLOCK
+  s06-6bills     rep0    27581 ms  ok  divergence 5/6  verdicts REVIEW,ALLOW,ALLOW,REVIEW,REVIEW,ALLOW
+  s07-4bills     rep0    22686 ms  ok  divergence 3/4  verdicts ALLOW,ALLOW,BLOCK,BLOCK
+  s08-5bills     rep0    20557 ms  ok  divergence 5/5  verdicts REVIEW,ALLOW,ALLOW,BLOCK,BLOCK
+  s09-5bills     rep0    23322 ms  ok  divergence 5/5  verdicts REVIEW,ALLOW,ALLOW,ALLOW,REVIEW
+  s10-4bills     rep0    21342 ms  ok  divergence 4/4  verdicts REVIEW,REVIEW,REVIEW,REVIEW
+  s11-5bills     rep0    22519 ms  ok  divergence 2/5  verdicts ALLOW,REVIEW,ALLOW,ALLOW,REVIEW
+
+(no ANTHROPIC_API_KEY: cloud rows skipped)
+== rationales on s00 (rank, payee, reason) ==
+    1. 0xa11ce ranked 1 of 3: overdue by 4.0 days, confidence 0.95, 0.400000 USDC covered
+    2. 0xca101 ranked 2 of 3: due in 1.0 days, confidence 0.62, 0.700000 USDC covered
+    3. 0xb0b ranked 3 of 3: due in 2.0 days, confidence 0.88, 1.800000 USDC not covered by remaining cash
+  ^ rule-based on s00
+    1. 0xb0b Overdue, with days_until_due of 2.0.
+    2. 0xca101 Overdue, with days_until_due of 1.0.
+    3. 0xa11ce Well-evidenced subscription, with confidence of 0.95 and sample_count of 6.
+  ^ ollama:llama3.1:8b on s00
+
+== summary ==
+rule-based                   calls  12  ok  12  parse-fail  0 (0%)  other-fail {}
+                             latency first 0 ms, p50 0 ms, p95 0 ms (n=11 after the first)
+                             vs rule: top-1 same 12/12, mean positions moved 0%, repeat-identical 0/0
+                             verifier: verdict agreement 54/54 (100.0%), refused 30 (of which rule-allowed 0), top pick refused 2
+                             paid under this ordering 29.70 USDC vs rule 29.70 USDC
+
+ollama:llama3.1:8b           calls  12  ok  12  parse-fail  0 (0%)  other-fail {}
+                             latency first 16634 ms, p50 20557 ms, p95 27581 ms (n=11 after the first)
+                             vs rule: top-1 same 3/12, mean positions moved 69%, repeat-identical 0/0
+                             verifier: verdict agreement 44/54 (81.5%), refused 31 (of which rule-allowed 4), top pick refused 6
+                             paid under this ordering 32.70 USDC vs rule 29.70 USDC
+
+
+## D. End to end: one Operator::run_once on anvil (port 8547, BudgetPolicy Autopilot, 2 attested weekly payees)
+## runner: $SCRATCH/e2e_local.sh = the scripts/prove_e2e.sh deploy on 8547 + target/debug/examples/prove_local_pass
+
+### D.up
+started 2026-10-15 23:38:00 +0800
+anvil 8547: TestUSDC 0x5FbDB2315678afecb367f032d93F642f64180aa3  BudgetPolicy 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 (per-action 1000 / daily 5000 USDC, mode Autopilot)  MemoryAnchor 0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9
+TAMEION_REASONER=local  OLLAMA_HOST=<default>
+history cycle 1: 20 USDC -> 0x1111… 0x8a2bfa5fbed65b54b2d2b03488ee6a5884d3749516609ad934f2118dea67d61a   500 USDC -> 0x2222… 0x4135f3f995c29fa3d6af9cd21c793a10cbd65152d532fe84518eba3428801f81
+history cycle 2: 20 USDC -> 0x1111… 0xddda02585c1b6790ecdb32552149bdf2289c1bd1436468c4a76f1c9212f9b608   620 USDC -> 0x2222… 0xbeeaa8b09d68c5647c1c03f9a180a07b90064bd835cda0e9521cf71552e87732
+history cycle 3: 20 USDC -> 0x1111… 0x3d4c3433b2d14f2b7eac62b4ca4db90dd88cf528a28f91aa39bdce9afc99d115   410 USDC -> 0x2222… 0xb6c0734eb43ed87c198a3a4b77918b2c09861ff5493a87eed45e71ca338a1ff7
+history cycle 4: 20 USDC -> 0x1111… 0xef2567796e145b7ea9ee6ebc7b6176cbad7c83ebe2a5257e68923fffa3df310b   580 USDC -> 0x2222… 0x276cc493306e35902fb935c9d5e5bbebf6047697ed1a892c84e6c531d4beb19c
+history cycle 5: 20 USDC -> 0x1111… 0x284a00ed2caf379d245dbb2ce5103987d56e6c64f72400060366bcf650628fc0   535 USDC -> 0x2222… 0x851046239400bba143066bca1468f8e15be83816e554c4f55d32e1a773a945f5
+
+reasoner chosen: ollama:llama3.1:8b (Model)
+pass took 5.2 s; reasoner recorded: ollama:llama3.1:8b
+balance 5000.000000 USDC · 2 obligations · 2 settled · 0 escalated · 0 blocked · 0 already paid
+  paid 0x2222222222222222222222222222222222222222 535.000000 USDC  0x1369e5a472d087669434bbb4cf72d396a296a5df74220c8d918be1f7f473b4fb
+  paid 0x1111111111111111111111111111111111111111 20.000000 USDC  0x19b35ef072dc2317cef5f6e6b03a6540c251dd8775b27a94983cb9206c3a3cb7
+  anchored 0x1d81ee67ad05d1e43b9b476e0df047b4d231235a48fc229ab5f1c40185a5a726
+
+the record:
+[0000] OBSERVATION Holding 5000.000000 USDC. Read 11 transfers (0 of them my own payments, which are not evidence) and recovered 2 recurring obligations, of which 2 fall due within 120.0 days totalling 555.000000 USDC; 2 within 3.0 days (or a tenth of their interval), which is when I pay.
+[0001] DECISION    ALLOW for 0x2222222222222222222222222222222222222222. Overdue with highest amount Basis: 0x2222222222222222222222222222222222222222 has been paid 5 times every 7.0 days, amounts varying by 15.2% and timing by 0.0%, so this reads as a recurring payment (confidence 0.78).
+[0002] SETTLEMENT  Paid 535.000000 USDC to 0x2222222222222222222222222222222222222222, settled in 0x1369e5a472d087669434bbb4cf72d396a296a5df74220c8d918be1f7f473b4fb. Read back from the receipt: the policy's Paid event matches.
+[0003] DECISION    ALLOW for 0x1111111111111111111111111111111111111111. Low confidence and no variation in samples Basis: 0x1111111111111111111111111111111111111111 has been paid 5 times every 7.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.81).
+[0004] SETTLEMENT  Paid 20.000000 USDC to 0x1111111111111111111111111111111111111111, settled in 0x19b35ef072dc2317cef5f6e6b03a6540c251dd8775b27a94983cb9206c3a3cb7. Read back from the receipt: the policy's Paid event matches.
+exit 0 at 23:38:09
+
+### D.down
+started 2026-10-15 23:38:19 +0800
+anvil 8547: TestUSDC 0x5FbDB2315678afecb367f032d93F642f64180aa3  BudgetPolicy 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 (per-action 1000 / daily 5000 USDC, mode Autopilot)  MemoryAnchor 0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9
+TAMEION_REASONER=local  OLLAMA_HOST=127.0.0.1:1
+history cycle 1: 20 USDC -> 0x1111… 0x8a2bfa5fbed65b54b2d2b03488ee6a5884d3749516609ad934f2118dea67d61a   500 USDC -> 0x2222… 0x4135f3f995c29fa3d6af9cd21c793a10cbd65152d532fe84518eba3428801f81
+history cycle 2: 20 USDC -> 0x1111… 0xddda02585c1b6790ecdb32552149bdf2289c1bd1436468c4a76f1c9212f9b608   620 USDC -> 0x2222… 0xbeeaa8b09d68c5647c1c03f9a180a07b90064bd835cda0e9521cf71552e87732
+history cycle 3: 20 USDC -> 0x1111… 0x3d4c3433b2d14f2b7eac62b4ca4db90dd88cf528a28f91aa39bdce9afc99d115   410 USDC -> 0x2222… 0xb6c0734eb43ed87c198a3a4b77918b2c09861ff5493a87eed45e71ca338a1ff7
+history cycle 4: 20 USDC -> 0x1111… 0xef2567796e145b7ea9ee6ebc7b6176cbad7c83ebe2a5257e68923fffa3df310b   580 USDC -> 0x2222… 0x276cc493306e35902fb935c9d5e5bbebf6047697ed1a892c84e6c531d4beb19c
+history cycle 5: 20 USDC -> 0x1111… 0x284a00ed2caf379d245dbb2ce5103987d56e6c64f72400060366bcf650628fc0   535 USDC -> 0x2222… 0x851046239400bba143066bca1468f8e15be83816e554c4f55d32e1a773a945f5
+
+reasoner chosen: ollama:llama3.1:8b (Model)
+pass took 2.0 s; reasoner recorded: rule-based (fallback from ollama:llama3.1:8b)
+balance 5000.000000 USDC · 2 obligations · 2 settled · 0 escalated · 0 blocked · 0 already paid
+  paid 0x1111111111111111111111111111111111111111 20.000000 USDC  0x72f30958e927a17e9a09cd8819d8db573526a162c4fdfa13147e8f664eee5a40
+  paid 0x2222222222222222222222222222222222222222 535.000000 USDC  0x7017bef0656cd5e993a8cfebc08f2df43b4c71e12879066917908fc619d8ab55
+  anchored 0x37edd2e9836ae1a8bc828bb0dff174d0f0b04f5b57905d47369866579396f44e
+
+the record:
+[0000] OBSERVATION Holding 5000.000000 USDC. Read 11 transfers (0 of them my own payments, which are not evidence) and recovered 2 recurring obligations, of which 2 fall due within 120.0 days totalling 555.000000 USDC; 2 within 3.0 days (or a tenth of their interval), which is when I pay.
+[0001] OBSERVATION Reasoner ollama:llama3.1:8b failed [reasoner-transient], retryable=true: reasoner temporarily unavailable: local model unreachable at http://127.0.0.1:1: error sending request for url (http://127.0.0.1:1/api/chat). Ordered by the deterministic baseline instead. Limits are unchanged.
+[0002] DECISION    ALLOW for 0x1111111111111111111111111111111111111111. ranked 1 of 2: overdue by 0.0 days, confidence 0.81, 20.000000 USDC covered Basis: 0x1111111111111111111111111111111111111111 has been paid 5 times every 7.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.81).
+[0003] SETTLEMENT  Paid 20.000000 USDC to 0x1111111111111111111111111111111111111111, settled in 0x72f30958e927a17e9a09cd8819d8db573526a162c4fdfa13147e8f664eee5a40. Read back from the receipt: the policy's Paid event matches.
+[0004] DECISION    ALLOW for 0x2222222222222222222222222222222222222222. ranked 2 of 2: overdue by 0.0 days, confidence 0.78, 535.000000 USDC covered Basis: 0x2222222222222222222222222222222222222222 has been paid 5 times every 7.0 days, amounts varying by 15.2% and timing by 0.0%, so this reads as a recurring payment (confidence 0.78).
+[0005] SETTLEMENT  Paid 535.000000 USDC to 0x2222222222222222222222222222222222222222, settled in 0x7017bef0656cd5e993a8cfebc08f2df43b4c71e12879066917908fc619d8ab55. Read back from the receipt: the policy's Paid event matches.
+exit 0 at 23:38:23
+
+### D.redacted
+started 2026-10-15 23:38:29 +0800
+anvil 8547: TestUSDC 0x5FbDB2315678afecb367f032d93F642f64180aa3  BudgetPolicy 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 (per-action 1000 / daily 5000 USDC, mode Autopilot)  MemoryAnchor 0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9
+TAMEION_REASONER=cloud-redacted  OLLAMA_HOST=<default>
+history cycle 1: 20 USDC -> 0x1111… 0x8a2bfa5fbed65b54b2d2b03488ee6a5884d3749516609ad934f2118dea67d61a   500 USDC -> 0x2222… 0x4135f3f995c29fa3d6af9cd21c793a10cbd65152d532fe84518eba3428801f81
+history cycle 2: 20 USDC -> 0x1111… 0xddda02585c1b6790ecdb32552149bdf2289c1bd1436468c4a76f1c9212f9b608   620 USDC -> 0x2222… 0xbeeaa8b09d68c5647c1c03f9a180a07b90064bd835cda0e9521cf71552e87732
+history cycle 3: 20 USDC -> 0x1111… 0x3d4c3433b2d14f2b7eac62b4ca4db90dd88cf528a28f91aa39bdce9afc99d115   410 USDC -> 0x2222… 0xb6c0734eb43ed87c198a3a4b77918b2c09861ff5493a87eed45e71ca338a1ff7
+history cycle 4: 20 USDC -> 0x1111… 0xef2567796e145b7ea9ee6ebc7b6176cbad7c83ebe2a5257e68923fffa3df310b   580 USDC -> 0x2222… 0x276cc493306e35902fb935c9d5e5bbebf6047697ed1a892c84e6c531d4beb19c
+history cycle 5: 20 USDC -> 0x1111… 0x284a00ed2caf379d245dbb2ce5103987d56e6c64f72400060366bcf650628fc0   535 USDC -> 0x2222… 0x851046239400bba143066bca1468f8e15be83816e554c4f55d32e1a773a945f5
+
+reasoner chosen: claude-opus-5 (redacted) (Model)
+pass took 3.3 s; reasoner recorded: claude-opus-5 (redacted)
+balance 5000.000000 USDC · 2 obligations · 2 settled · 0 escalated · 0 blocked · 0 already paid
+  paid 0x1111111111111111111111111111111111111111 20.000000 USDC  0xfb428a0d972ba1d093ca617ce9314427e29ee064cee1986b444f30056ecb067b
+  paid 0x2222222222222222222222222222222222222222 535.000000 USDC  0x1733e835f593ab8a7993b566f9ef2358462df5c7baf5791e482b78d980dd167b
+  anchored 0x5eb37ecd67f9e415d66fc365b9f57affd670337106293ef65ef811f46af7d6a9
+
+the record:
+[0000] OBSERVATION Holding 5000.000000 USDC. Read 11 transfers (0 of them my own payments, which are not evidence) and recovered 2 recurring obligations, of which 2 fall due within 120.0 days totalling 555.000000 USDC; 2 within 3.0 days (or a tenth of their interval), which is when I pay.
+[0001] DECISION    ALLOW for 0x1111111111111111111111111111111111111111. Overdue, highest confidence, zero amount variation, negligible share of balance. Basis: 0x1111111111111111111111111111111111111111 has been paid 5 times every 7.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 0.81).
+[0002] SETTLEMENT  Paid 20.000000 USDC to 0x1111111111111111111111111111111111111111, settled in 0xfb428a0d972ba1d093ca617ce9314427e29ee064cee1986b444f30056ecb067b. Read back from the receipt: the policy's Paid event matches.
+[0003] DECISION    ALLOW for 0x2222222222222222222222222222222222222222. Also overdue but more variable amounts and takes 11% of balance. Basis: 0x2222222222222222222222222222222222222222 has been paid 5 times every 7.0 days, amounts varying by 15.2% and timing by 0.0%, so this reads as a recurring payment (confidence 0.78).
+[0004] SETTLEMENT  Paid 535.000000 USDC to 0x2222222222222222222222222222222222222222, settled in 0x1733e835f593ab8a7993b566f9ef2358462df5c7baf5791e482b78d980dd167b. Read back from the receipt: the policy's Paid event matches.
+exit 0 at 23:38:34
+
+## E. Unit tests and lint
+test local::tests::restore_reads_the_longest_token_first ... ok
+test local::tests::the_check_refuses_a_payload_that_still_carries_a_secret ... ok
+test local::tests::no_raw_amount_or_address_survives_redaction ... ok
+test local::tests::restore_maps_placeholders_back_and_the_population_check_still_holds ... ok
+test local::tests::a_model_that_is_down_is_a_fast_transient_error ... ok
+test local::tests::round_trip_against_a_stub_ollama ... ok
+test result: 6 passed (cargo test -p operator --lib local::, 23:39:21)
+cargo clippy -p operator --all-targets --features dev-anvil -- -D warnings: exit 0 (23:39:21)
+cargo fmt -p operator --check: clean, whole crate (23:39:31)

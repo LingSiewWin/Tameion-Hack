@@ -1,0 +1,161 @@
+# Account names and connected wallets (docs/79 §6a Service 1-7) — live on Arbitrum Sepolia, curl only, no gas
+# 2026-10-15, service engineer. Service rebuilt and restarted on :7880 at 15:23:40 +08 (pid 39716; was 45845),
+# with the RESUME "Local runtime now" environment. No browser (the console engineer's proof is separate).
+# Keys: two throwaway P-256 keys made with `openssl ecparam -name prime256v1` in the session scratchpad; only
+# their public halves appear here. Nothing was funded or deployed: eth_getCode at the reserved owner and
+# account answers "0x" after every step (f, k, o).
+#
+# Decisive lines (details below):
+#  (a) GET  /api/level1/name/svc-152419                     -> 404 {"error":"no account has that name"}
+#  (b) POST /api/level1/deploy {name, no watched, no caps}   -> 200 account 0x5d03664e515961250b35b27327994d6d38ce8433,
+#        owner 0x5180c24a4195641905963be3e08d24c89df65a4b, watched 0x000…0, wallets [], caps 50/100 provisional
+#  (c) GET  /api/level1/name/svc-152419                     -> 200 {"account":"0x5d03…8433", chains:[arbitrum-sepolia, deployed:false]}
+#  (d) same name, another passkey                            -> 409 {"error":"the name svc-152419 is taken"}
+#      same name, same passkey                               -> 200, the same account back
+#  (e) stranger's POST /api/level1/wallets                   -> 403 "only the passkey that reserved it can connect a wallet"
+#      owner's  POST /api/level1/wallets add 0x7485…ad02     -> 200 wallets [0x7485…ad02], spareKey 0x7485…ad02,
+#        recovery stays 0x000…0 (see note), spareKeyCall = setRecovery(0x7485…) on the owner, caps 50/100 provisional
+#  (i) a typed first bill of 30 USDC                         -> per_action 60 / daily 60 (twice the largest), still provisional
+#  (l) no wallet connected: inbox preview = null (nothing read, never 0x0)
+#  (n) wallet 0x7bae…e6d2 connected: preview sources [0x7bae…], transfers 2 — the read goes through `wallets`
+#  (p) an old-style reserve with watched + caps: wallets [watched], recovery = watched (P-76), caps as typed, provisional false
+#
+# Notes.
+#  - `recovery` is not set to the first wallet; the wallet is proposed as `spareKey` instead. Recovery is a
+#    PasskeyPrincipal constructor argument, kept in the creation code at reserve (level1.rs keep_initcode/initcode_for);
+#    the owner's CREATE2 address depends on it, and the account's address on the owner's — changing it after
+#    reserve would move the address the owner was given, exactly like `watched` (docs/60 P-88). The owner's
+#    passkey puts it on chain with one tap (the spareKeyCall; `prepare-recovery`), and `execute` then writes it
+#    into the record as `recovery`.
+#  - 0x7485…ad02 has no USDC transfer on Arbitrum Sepolia in 90 days: the read (preview and /api/watch fresh)
+#    says transfers 0, and the receipt of the P-77 funding tx 0x4f13efcb…30c3 shows it came from the relayer
+#    0x6c1c…9a25, not from this wallet. So no bill was found from it; (n) shows a wallet that has history.
+#  - The test account keeps no wallet at the end (j, o): a connected wallet's transfer would start a watcher pass,
+#    and a pass on a reserved account deploys it (relayer gas).
+
+# 2026-10-15 15:24:19 +0800  service pid 39716  name=svc-152419
+# throwaway P-256 keys (openssl ecparam prime256v1), public halves only:
+#   owner    qx=0xf900ae2d28669a23527270a53955096c612580ada3e704225287b2ead97389a8 qy=0x8102c7e456a7666c33cec20a88ca8e49ec8d07f7e1ca88b39053bca65d673681
+#   stranger qx=0x76a7340c5596e0225e51a49370e5fc87436611143b880abecffab93795c79dbc qy=0x08b19ae4a0f0b321bbe654527212b2f1a1ab15a2ea499d2c526798b2d3a35dd0
+
+## (a) the name is free
+$ curl -s -w ' HTTP %{http_code}' http://localhost:7880/api/level1/name/svc-152419
+{"error":"no account has that name"} HTTP 404
+
+## (b) reserve by name, no watched, no caps (lazy: nothing sent)
+$ curl -s -w ' HTTP %{http_code}' -X POST http://localhost:7880/api/level1/deploy -d '{"chain":"arbitrum-sepolia","qx":"0xf900ae2d28669a23527270a53955096c612580ada3e704225287b2ead97389a8","qy":"0x8102c7e456a7666c33cec20a88ca8e49ec8d07f7e1ca88b39053bca65d673681","name":"svc-152419","days":90,"lazy":true}' 
+{"explorer":"https://sepolia.arbiscan.io","tenant":{"agent":"0x7b935540592250be3fd23fdd635fa0ef43f6ed0b","agentTokenCount":0,"agent_gas_tx":null,"billCount":0,"caps_provisional":true,"chain":"arbitrum-sepolia","created":1792049060,"created_block":319348566,"daily":"100.000000 USDC","delay_secs":60,"deployed":false,"floor":"0.000000 USDC","history_from_block":288782528,"keyless":false,"kind":"hold","mode":1,"name":"svc-152419","notifySet":false,"operator":"0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25","owner":"0x5180c24a4195641905963be3e08d24c89df65a4b","owner_tx":null,"partner":null,"per_action":"50.000000 USDC","policy":"0x5d03664e515961250b35b27327994d6d38ce8433","policy_tx":null,"qx":"0xf900ae2d28669a23527270a53955096c612580ada3e704225287b2ead97389a8","qy":"0x8102c7e456a7666c33cec20a88ca8e49ec8d07f7e1ca88b39053bca65d673681","recovery":"0x0000000000000000000000000000000000000000","recovery_explicit":false,"spare_key":null,"telegramSet":false,"wallets":[],"watched":"0x0000000000000000000000000000000000000000"}} HTTP 200
+
+## (c) the name resolves
+$ curl -s -w ' HTTP %{http_code}' http://localhost:7880/api/level1/name/svc-152419
+{"account":"0x5d03664e515961250b35b27327994d6d38ce8433","chains":[{"account":"0x5d03664e515961250b35b27327994d6d38ce8433","chainId":421614,"deployed":false,"key":"arbitrum-sepolia","name":"Arbitrum Sepolia"}],"name":"svc-152419","owner":"0x5180c24a4195641905963be3e08d24c89df65a4b"} HTTP 200
+
+## (d) the same name, another passkey
+$ curl -s -w ' HTTP %{http_code}' -X POST http://localhost:7880/api/level1/deploy -d '{"chain":"arbitrum-sepolia","qx":"0x76a7340c5596e0225e51a49370e5fc87436611143b880abecffab93795c79dbc","qy":"0x08b19ae4a0f0b321bbe654527212b2f1a1ab15a2ea499d2c526798b2d3a35dd0","name":"svc-152419","days":90,"lazy":true}'
+{"error":"the name svc-152419 is taken","name":"svc-152419"} HTTP 409
+
+## (d2) the same name, the same passkey again: its account back
+$ curl -s -w ' HTTP %{http_code}' -X POST http://localhost:7880/api/level1/deploy -d '{"chain":"arbitrum-sepolia","qx":"0xf900ae2d28669a23527270a53955096c612580ada3e704225287b2ead97389a8","qy":"0x8102c7e456a7666c33cec20a88ca8e49ec8d07f7e1ca88b39053bca65d673681","name":"svc-152419","days":90,"lazy":true}' | python3 -c 'import sys,json; t=sys.stdin.read(); j,c=t.rsplit(" HTTP ",1); print("policy", json.loads(j)["tenant"]["policy"], "HTTP", c)'
+policy 0x5d03664e515961250b35b27327994d6d38ce8433 HTTP 200
+
+
+## (e1) a stranger connects a wallet to the reserved account
+$ curl -s -w ' HTTP %{http_code}' -X POST http://localhost:7880/api/level1/wallets -d '{"policy":"0x5d03664e515961250b35b27327994d6d38ce8433","add":"0x74858f049e471962588a726e48264e448cadad02","qx":"0x76a7340c5596e0225e51a49370e5fc87436611143b880abecffab93795c79dbc","qy":"0x08b19ae4a0f0b321bbe654527212b2f1a1ab15a2ea499d2c526798b2d3a35dd0"}'
+{"error":"this account is not on chain yet; only the passkey that reserved it can connect a wallet"} HTTP 403
+
+## (e2) the owner connects 0x74858f049e471962588a726e48264e448cadad02 (the wallet named in the brief; see the note: no USDC history here)
+$ curl -s -w ' HTTP %{http_code}' -X POST http://localhost:7880/api/level1/wallets -d '{"policy":"0x5d03664e515961250b35b27327994d6d38ce8433","add":"0x74858f049e471962588a726e48264e448cadad02","qx":"0xf900ae2d28669a23527270a53955096c612580ada3e704225287b2ead97389a8","qy":"0x8102c7e456a7666c33cec20a88ca8e49ec8d07f7e1ca88b39053bca65d673681"}'
+{"caps":{"daily":"100.000000 USDC","floor":"0.000000 USDC","perAction":"50.000000 USDC","provisional":true},"deployed":false,"policy":"0x5d03664e515961250b35b27327994d6d38ce8433","recovery":"0x0000000000000000000000000000000000000000","spareKey":"0x74858f049e471962588a726e48264e448cadad02","spareKeyCall":{"data":"0xf0d85c8900000000000000000000000074858f049e471962588a726e48264e448cadad02","summary":"name 0x74858f049e471962588a726e48264e448cadad02 as the recovery address that may replace this passkey after the delay","to":"0x5180c24a4195641905963be3e08d24c89df65a4b"},"wallets":["0x74858f049e471962588a726e48264e448cadad02"]} HTTP 200
+
+## (e3) the record
+$ curl -s http://localhost:7880/api/level1/tenant/0x5d03664e515961250b35b27327994d6d38ce8433 | python3 -c 'import json,sys; t=json.load(sys.stdin)["tenant"]; print(json.dumps({k:t.get(k) for k in ["name","policy","owner","chain","deployed","watched","wallets","recovery","recovery_explicit","spare_key","per_action","daily","floor","caps_provisional","owner_tx","policy_tx"]}, indent=1))'
+{
+ "name": "svc-152419",
+ "policy": "0x5d03664e515961250b35b27327994d6d38ce8433",
+ "owner": "0x5180c24a4195641905963be3e08d24c89df65a4b",
+ "chain": "arbitrum-sepolia",
+ "deployed": false,
+ "watched": "0x0000000000000000000000000000000000000000",
+ "wallets": [
+  "0x74858f049e471962588a726e48264e448cadad02"
+ ],
+ "recovery": "0x0000000000000000000000000000000000000000",
+ "recovery_explicit": false,
+ "spare_key": "0x74858f049e471962588a726e48264e448cadad02",
+ "per_action": "50.000000 USDC",
+ "daily": "100.000000 USDC",
+ "floor": "0.000000 USDC",
+ "caps_provisional": true,
+ "owner_tx": null,
+ "policy_tx": null
+}
+
+
+## (f) nothing on chain: code at the reserved addresses (eth_getCode)
+$ curl -s -X POST https://sepolia-rollup.arbitrum.io/rpc -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"eth_getCode","params":["0x5d03664e515961250b35b27327994d6d38ce8433","latest"]}'
+{"jsonrpc":"2.0","id":1,"result":"0x"}
+
+
+$ curl -s -X POST https://sepolia-rollup.arbitrum.io/rpc -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"eth_getCode","params":["0x5180c24a4195641905963be3e08d24c89df65a4b","latest"]}'
+{"jsonrpc":"2.0","id":1,"result":"0x"}
+
+
+
+## (g) the read of the connected wallet (inbox -> preview, read-only, no gas)
+$ curl -s 'http://localhost:7880/api/level1/inbox?policy=0x5d03664e515961250b35b27327994d6d38ce8433' | python3 -c 'import json,sys; d=json.load(sys.stdin); print("deployed", d["deployed"], "| preview", json.dumps(d["preview"])[:300])'
+deployed False | preview {"at": 1792049086, "sources": ["0x74858f049e471962588a726e48264e448cadad02"], "status": "reading"}
+
+
+$ curl -s 'http://localhost:7880/api/level1/inbox?policy=0x5d03664e515961250b35b27327994d6d38ce8433' | python3 -c 'import json,sys; p=json.load(sys.stdin)["preview"]; print(json.dumps({k:p.get(k) for k in ["status","sources","days","transfers","bills","suggestedLimit","error"]}))'
+{"status": "done", "sources": ["0x74858f049e471962588a726e48264e448cadad02"], "days": 90, "transfers": 0, "bills": [], "suggestedLimit": null, "error": null}
+
+
+## (h) caps after the read (no recurring bill found -> the small default stays)
+per_action 50.000000 USDC | daily 100.000000 USDC | provisional True | wallets ['0x74858f049e471962588a726e48264e448cadad02'] | spare_key 0x74858f049e471962588a726e48264e448cadad02 | deployed False
+
+## (i) the owner types a first bill (30 USDC every 30 days): untyped caps follow it, twice the largest
+$ curl -s -w ' HTTP %{http_code}' -X POST http://localhost:7880/api/level1/bills -d '{"policy":"0x5d03664e515961250b35b27327994d6d38ce8433","qx":"0xf900ae2d28669a23527270a53955096c612580ada3e704225287b2ead97389a8","qy":"0x8102c7e456a7666c33cec20a88ca8e49ec8d07f7e1ca88b39053bca65d673681","bills":[{"payee":"0x1111111111111111111111111111111111111111","amount":"30","everyDays":30}]}'
+{"bills":[{"amount":"30","discount_bps":0,"early_days":0,"every_days":30,"next_due":1792049097,"payee":"0x1111111111111111111111111111111111111111"}],"policy":"0x5d03664e515961250b35b27327994d6d38ce8433","refused":[]} HTTP 200
+
+per_action 60.000000 USDC | daily 60.000000 USDC | provisional True | wallets ['0x74858f049e471962588a726e48264e448cadad02'] | spare_key 0x74858f049e471962588a726e48264e448cadad02 | deployed False
+
+## (j) disconnect the wallet again, so this test account's watcher cannot start a pass (a pass deploys: gas)
+$ curl -s -w ' HTTP %{http_code}' -X POST http://localhost:7880/api/level1/wallets -d '{"policy":"0x5d03664e515961250b35b27327994d6d38ce8433","remove":"0x74858f049e471962588a726e48264e448cadad02","qx":"0xf900ae2d28669a23527270a53955096c612580ada3e704225287b2ead97389a8","qy":"0x8102c7e456a7666c33cec20a88ca8e49ec8d07f7e1ca88b39053bca65d673681"}'
+{"caps":{"daily":"60.000000 USDC","floor":"0.000000 USDC","perAction":"60.000000 USDC","provisional":true},"deployed":false,"policy":"0x5d03664e515961250b35b27327994d6d38ce8433","recovery":"0x0000000000000000000000000000000000000000","spareKey":null,"spareKeyCall":null,"wallets":[]} HTTP 200
+
+per_action 60.000000 USDC | daily 60.000000 USDC | provisional True | wallets [] | spare_key None | deployed False
+## (k) still nothing on chain
+$ curl -s -X POST https://sepolia-rollup.arbitrum.io/rpc -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"eth_getCode","params":["0x5d03664e515961250b35b27327994d6d38ce8433","latest"]}'
+{"jsonrpc":"2.0","id":1,"result":"0x"}
+
+
+
+## (l) no wallet connected: the inbox reads nothing (no preview, never 0x0)
+$ pv
+null
+
+
+## (m) connect a wallet that has USDC history on Arbitrum Sepolia (0x7bae6c3e651355c0b8bd8810d8dabd9b8e4be6d2: funded 2 USDC, paid 1 USDC today, P-77)
+$ curl -s -w ' HTTP %{http_code}' -X POST http://localhost:7880/api/level1/wallets -d '{"policy":"0x5d03664e515961250b35b27327994d6d38ce8433","add":"0x7bae6c3e651355c0b8bd8810d8dabd9b8e4be6d2","qx":"0xf900ae2d28669a23527270a53955096c612580ada3e704225287b2ead97389a8","qy":"0x8102c7e456a7666c33cec20a88ca8e49ec8d07f7e1ca88b39053bca65d673681"}'
+{"caps":{"daily":"60.000000 USDC","floor":"0.000000 USDC","perAction":"60.000000 USDC","provisional":true},"deployed":false,"policy":"0x5d03664e515961250b35b27327994d6d38ce8433","recovery":"0x0000000000000000000000000000000000000000","spareKey":"0x7bae6c3e651355c0b8bd8810d8dabd9b8e4be6d2","spareKeyCall":{"data":"0xf0d85c890000000000000000000000007bae6c3e651355c0b8bd8810d8dabd9b8e4be6d2","summary":"name 0x7bae6c3e651355c0b8bd8810d8dabd9b8e4be6d2 as the recovery address that may replace this passkey after the delay","to":"0x5180c24a4195641905963be3e08d24c89df65a4b"},"wallets":["0x7bae6c3e651355c0b8bd8810d8dabd9b8e4be6d2"]} HTTP 200
+
+## (n) the read went through the connected wallet
+$ pv
+{"status": "done", "sources": ["0x7bae6c3e651355c0b8bd8810d8dabd9b8e4be6d2"], "days": 90, "transfers": 2, "bills": [], "error": null}
+
+
+## (o) disconnect it again (no watcher-triggered pass on this test account)
+$ curl -s -w ' HTTP %{http_code}' -X POST http://localhost:7880/api/level1/wallets -d '{"policy":"0x5d03664e515961250b35b27327994d6d38ce8433","remove":"0x7bae6c3e651355c0b8bd8810d8dabd9b8e4be6d2","qx":"0xf900ae2d28669a23527270a53955096c612580ada3e704225287b2ead97389a8","qy":"0x8102c7e456a7666c33cec20a88ca8e49ec8d07f7e1ca88b39053bca65d673681"}'
+{"caps":{"daily":"60.000000 USDC","floor":"0.000000 USDC","perAction":"60.000000 USDC","provisional":true},"deployed":false,"policy":"0x5d03664e515961250b35b27327994d6d38ce8433","recovery":"0x0000000000000000000000000000000000000000","spareKey":null,"spareKeyCall":null,"wallets":[]} HTTP 200
+
+$ curl -s -X POST https://sepolia-rollup.arbitrum.io/rpc -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"eth_getCode","params":["0x5d03664e515961250b35b27327994d6d38ce8433","latest"]}'
+{"jsonrpc":"2.0","id":1,"result":"0x"}
+
+
+
+## (p) an old-style reserve (watched + caps, no name) behaves as before; its watched is also in wallets
+# watched = a fresh random address with no activity (0x6f9a11e43f1f9b186495966923be7928969cb402), so the watcher has nothing to start a pass on
+$ curl -s -X POST localhost:7880/api/level1/deploy -d '{"chain":"arbitrum-sepolia","qx":"0x76a7340c5596e0225e51a49370e5fc87436611143b880abecffab93795c79dbc","qy":"0x08b19ae4a0f0b321bbe654527212b2f1a1ab15a2ea499d2c526798b2d3a35dd0","watched":"0x6f9a11e43f1f9b186495966923be7928969cb402","caps":{"perAction":"5","daily":"10","floor":"0"},"lazy":true}'
+{"policy": "0x1cfbef65d8a33ccb322f22b11b422ba56f980323", "name": null, "watched": "0x6f9a11e43f1f9b186495966923be7928969cb402", "wallets": ["0x6f9a11e43f1f9b186495966923be7928969cb402"], "recovery": "0x6f9a11e43f1f9b186495966923be7928969cb402", "recovery_explicit": false, "spare_key": null, "per_action": "5.000000 USDC", "daily": "10.000000 USDC", "caps_provisional": false, "deployed": false} HTTP 200
+
+

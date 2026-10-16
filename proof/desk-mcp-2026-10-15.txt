@@ -1,0 +1,20 @@
+# 2026-10-15 23:45:13 +0800 — an agent drives the desk over MCP (tameion-mcp, stdio), agent key minted by the Secure Enclave owner (scopes read,run; POST /api/level1/token-signed with a chip-signed assertion); deal GOLD-MCP-1792079112 on desk-gold-2329 (Arbitrum Sepolia), venue Hyperliquid testnet
+[1] initialize: {'name': 'tameion', 'version': '0.1.0'}
+[2] tools/list: 20 tools; desk tools: ['desk', 'send_milestone', 'desk_statement']
+[3] desk: 5 deals; exposure [{'goods': 'gold', 'held': '2.000 g gold', 'market': 'PAXG', 'offsetTarget': '0.064301', 'unhedgedBase': '0.000 g gold'}]; parties ['Supplier', 'Vault', 'Buyer', 'Courier']
+[4] booked: GOLD-MCP-1792079112 · bought 3.000 g of gold for 400.05 USDC · PO-GOLD-MCP-1792079112 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)
+     offset moved by the service: read back -0.16 ['Traded { size_delta: -0.096, is_buy: false, worst_px: 4125.9665, statuses: [Filled { total_sz: 0.096, avg_px: ']
+[5] booked: GOLD-MCP-1792079112 · 3.000 g of gold into stock · VR-GOLD-MCP-1792079112 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542)
+[6] statement: {'held': '3.000 g gold', 'stage': 'in stock', 'offsetShareBps': '9953', 'maxLossUsdc': '8.560935', 'eligibleUsdc': '391.358986'} anchor 0x2b0c37e20cade9a97b5911323baeb957420cfdbfac356e09b62741c3da761999
+[7] booked: GOLD-MCP-1792079112 · sold 3.000 g of gold for 404.85 USDC · SO-GOLD-MCP-1792079112 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)
+     offset moved by the service: read back -0.065 ['Traded { size_delta: 0.095, is_buy: true, worst_px: 4166.374230, statuses: [Filled { total_sz: 0.095, avg_px: ']
+[8] desk: 6 deals; exposure [{'goods': 'gold', 'held': '2.000 g gold', 'market': 'PAXG', 'offsetTarget': '0.064301', 'unhedgedBase': '0.000 g gold'}]; parties ['Supplier', 'Vault', 'Buyer', 'Courier']
+
+## the kit the agent got, checked by the lender script (python3 scripts/verify_desk.py <kit> --signer 0x62f8…5062)
+a. statementHash recomputed 0xc1388e7f8e8211d7… matches
+b. signature recovers to 0x62f82e3494eb9c446c161a9f52f0a90b986e5062
+c. 2 of 18 milestones disclosed; all reach root 0x64ddd3174229e8c7…: True
+f. counterparty signatures re-checked: True
+d. root anchored in 0x2b0c37e20cade9a9… on 2 node(s): True
+e. PAXG position of 0x557e1e07… at the statement's time, from the venue's fills: -0.160; statement claims an offset of 0.096000: True
+PASS

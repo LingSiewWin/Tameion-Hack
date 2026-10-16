@@ -1,0 +1,146 @@
+# 2026-10-15 23:19:48 +0800 scripts/prove_desk.sh dry
+# desk proof · deal GOLD-1792077591 · 10.000 g gold · book runtime/desk/proof-1792077591.jsonl
+# venue: Hyperliquid testnet, account 0x557e1e07652b75abaa667223b11704165fc94d09, mode dry run
+approved by the owner: Supplier signs as 0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904
+approved by the owner: Carrier signs as 0x7afa9fb48a1311cf99d88876642680ddf1da34be
+approved by the owner: Buyer signs as 0x328fb78926cee49691851ca84f226d1c08edacb4
+
+PAXG mark 4154.4 USDC/oz · 10.000 g = 0.321507 oz · cost 1335.67 USDC
+
+## 1. bought (signed by the supplier)
+GOLD-1792077591 · bought 10.000 of gold for 1335.67 USDC · PO-1792077591 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)
+
+### offset after the purchase
+book exposure: 10.000 g gold → target short 0.321507 PAXG (troy oz)
+PAXG: mark 4154.4 · before 0 · target -0.3215074656862798052210034603 · rebalance Trade { size_delta: -0.3215074656862798052210034603, is_buy: false, drift_bps: 10000 }
+  verdict: Allow(Limits { size_delta: -0.321, size_after: -0.321, notional_after: 1333.5624, leverage_after: 1.3474718315934117949018186417, maintenance_rate: 0.05, required_equity: 266.712480 })
+  action: WouldTrade { size_delta: -0.321, is_buy: false, worst_px: 4133.6280, limits: Limits { size_delta: -0.321, size_after: -0.321, notional_after: 1333.5624, leverage_after: 1.3474718315934117949018186417, maintenance_rate: 0.05, required_equity: 266.712480 } }
+account: value 996.345198 · margin used 0.0 · maintenance 66.678120 · health None · halted before: false
+read back from the venue: PAXG position 0
+
+## 2. shipped (bill of lading signed by the carrier)
+forged bill of lading (a stranger's key, naming the Carrier): signed by 0xa5174d6f096956f4a2323f684a76653217619530, but Carrier signs as 0x7afa9fb48a1311cf99d88876642680ddf1da34be
+GOLD-1792077591 · 10.000 of gold shipped · BL-1792077591 · signed by Carrier (0x7afa9fb48a1311cf99d88876642680ddf1da34be)
+
+### offset after shipping (no change in exposure)
+book exposure: 10.000 g gold → target short 0.321507 PAXG (troy oz)
+PAXG: mark 4154.4 · before 0 · target -0.3215074656862798052210034603 · rebalance Trade { size_delta: -0.3215074656862798052210034603, is_buy: false, drift_bps: 10000 }
+  verdict: Allow(Limits { size_delta: -0.321, size_after: -0.321, notional_after: 1333.5624, leverage_after: 1.3474718315934117949018186417, maintenance_rate: 0.05, required_equity: 266.712480 })
+  action: WouldTrade { size_delta: -0.321, is_buy: false, worst_px: 4133.6280, limits: Limits { size_delta: -0.321, size_after: -0.321, notional_after: 1333.5624, leverage_after: 1.3474718315934117949018186417, maintenance_rate: 0.05, required_equity: 266.712480 } }
+account: value 996.345198 · margin used 0.0 · maintenance 66.678120 · health None · halted before: false
+read back from the venue: PAXG position 0
+
+## 3. statement for the lender, while the gold is at sea
+{
+  "domain": {
+    "chainId": 421614,
+    "name": "Tameion Desk",
+    "version": "1"
+  },
+  "signature": "0xd70d9deb29052b8bec6948049117c611050daa7523875734584e253dc7e074ae6e5cb3e06e82aba8428f53872ebdba36e4b7de4ee0666c1f18d5f0d21d4e2ccc1b",
+  "signer": "0x62f82e3494eb9c446c161a9f52f0a90b986e5062",
+  "statement": {
+    "assumptions": "Value at the venue's mark for PAXG; a 30% fall is printed as the stress; 2% of the value is allowed for the goods not tracking the market (grade, location). The offset is the short read back from the venue account, split across deals by what each holds; anyone can read that account's position from the venue's public API.",
+    "at": 1792077597,
+    "basisBps": 200,
+    "costUsdc": "1335.670000 USDC",
+    "deal": "GOLD-1792077591",
+    "eligibleUsdc": "908.256019",
+    "goods": "gold",
+    "held": "10.000 g gold",
+    "heldContracts": "0.321507",
+    "markUsdc": "4154.4",
+    "market": "PAXG",
+    "maxLossUsdc": "427.414597",
+    "milestones": [
+      {
+        "at": 1792077593,
+        "counterparty": "Supplier",
+        "document": "PO-1792077591",
+        "kind": "bought",
+        "quantity": "10.000",
+        "signer": "0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904"
+      },
+      {
+        "at": 1792077595,
+        "counterparty": "Carrier",
+        "document": "BL-1792077591",
+        "kind": "shipped",
+        "quantity": "10.000",
+        "signer": "0x7afa9fb48a1311cf99d88876642680ddf1da34be"
+      }
+    ],
+    "offsetContracts": "0.000000",
+    "offsetShareBps": "0",
+    "root": "0xd9e3c95dd2c1708dfbec4f3faa42206a196cd9d07430a0bff63923a87ab83d8e",
+    "stage": "in transit",
+    "stressBps": 3000,
+    "valueUsdc": "1335.670615",
+    "venueAccount": "0x557e1e07652b75abaa667223b11704165fc94d09"
+  },
+  "statementHash": "0x08f40fdff2f1d6cda47f574adaf84106babcb63af9b8f9924b5838e97742c8de",
+  "types": {
+    "DeskStatement": [
+      {
+        "name": "deal",
+        "type": "string"
+      },
+      {
+        "name": "root",
+        "type": "bytes32"
+      },
+      {
+        "name": "statementHash",
+        "type": "bytes32"
+      },
+      {
+        "name": "at",
+        "type": "uint64"
+      }
+    ],
+    "EIP712Domain": [
+      {
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "name": "version",
+        "type": "string"
+      },
+      {
+        "name": "chainId",
+        "type": "uint256"
+      }
+    ]
+  }
+}
+statement verifies, signer 0x62f82e3494eb9c446c161a9f52f0a90b986e5062
+a changed number: the statement does not hash to the signed statementHash
+
+## 4. the root on chain, and one deal disclosed against it
+anchored root 0xd9e3c95dd2c1708dfbec4f3faa42206a196cd9d07430a0bff63923a87ab83d8e in tx 0x0e74925afd5875c761599e374cc81953fa361619c87a8ad8701121a3b6f1ddfa (https://sepolia.arbiscan.io/tx/0x0e74925afd5875c761599e374cc81953fa361619c87a8ad8701121a3b6f1ddfa)
+rootOf(0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25) on chain = 0xd9e3c95dd2c1708dfbec4f3faa42206a196cd9d07430a0bff63923a87ab83d8e
+tx carries this root, from the anchorer, to the anchor: true
+disclosure: 2 of 2 milestones, root 0xd9e3c95dd2c1708dfbec4f3faa42206a196cd9d07430a0bff63923a87ab83d8e
+disclosure verifies against the root: true
+a changed disclosed line: item 0 does not reach the root
+lender kit: runtime/desk/proof-1792077591.lender.json
+
+## 5. arrived, then sold (signed by the carrier, then the buyer)
+GOLD-1792077591 · 10.000 of gold arrived · AN-1792077591 · signed by Carrier (0x7afa9fb48a1311cf99d88876642680ddf1da34be)
+a sale of more than the deal holds: 1000.000 g gold asked, but the deal holds 10.000 g gold
+GOLD-1792077591 · sold 10.000 of gold for 1355.54 USDC · SO-1792077591 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)
+
+### offset after the sale
+book exposure: 0.000 g gold → target short 0 PAXG (troy oz)
+PAXG: mark 4153.9 · before 0 · target -0 · rebalance Hold { drift_bps: 0 }
+  action: None("inside band")
+account: value 996.345198 · margin used 0.0 · maintenance 0.0 · health None · halted before: false
+read back from the venue: PAXG position 0
+
+## 6. the books
+trial balance g gold: debits 40.000 g gold = credits 40.000 g gold: true
+trial balance USDC: debits 4026.880000 USDC = credits 4026.880000 USDC: true
+book file replays with every signature re-checked: root 0x6795f7405f500a624fbf584844b7c6b8a7c421788d7089d763c51a368aeaa254
+
+summary: short after purchase 0, in transit 0, after sale 0

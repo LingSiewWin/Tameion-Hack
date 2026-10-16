@@ -1,0 +1,85 @@
+x402 receipts as ledger lines — receipt v1 (docs/76 §6, docs/60 P-82)
+2026-10-15 — scripts/acceptance.sh rule 16, inside a full run on anvil (not a public chain: docs/60 P-14).
+Through the hosted service (tameion-app) on a second anvil carrying Arc's chain id 5042002; the seller is
+scripts/x402_seller.py with PAYMENT_IDENTIFIER=1 (its own ERC-7710 facilitator). No key printed here.
+
+== acceptance.sh, rule 16 ==
+16. every purchase is a receipt, and a seller bought from on a cadence is a bill (receipt v1, docs/76 §6)
+Connection to 127.0.0.1 port 8548 [tcp/*] succeeded!
+Connection to 127.0.0.1 port 7881 [tcp/*] succeeded!
+Connection to 127.0.0.1 port 7907 [tcp/*] succeeded!
+  PASS  the service bought, the contract paid, the Paid log read back (paid:true)
+  PASS  the receipt carries the x402 payment identifier the seller required
+  PASS  the identifier is the purchase digest (what the contract refuses twice)
+  PASS  sha256 on the receipt is the hash of the bytes returned
+  PASS  the pass finished
+  PASS  the pass lists the seller as a bill, provenance x402 receipt, four samples
+  PASS  the pass paid nothing by itself (a per-call API is not paid unprompted)
+  PASS  the inbox counts the four purchases under Paid, each with its reason
+  PASS  the inbox proposes no standing order for the seller
+  PASS  purchases.jsonl: four paid lines, each with sha256, the identifier, network and tx
+  PASS  without the agent key the receipts are closed (401)
+  PASS  the MCP tool 'purchases' returns the same four receipts
+
+== whole suite ==
+94 passed, 0 failed
+
+== first purchase, POST /api/level1/buy (the service's reply) ==
+{"paid": true, "status": 200, "contentType": "application/json"}
+purchase line (receipt v1):
+{
+ "actionHash": "0xc6fabd35cf32ec1d66f6ae7615f7f4ba97cfea15b8d6d88a67617d0e70414f63",
+ "amount": "0.500000 USDC",
+ "at": 1792035820,
+ "explorer": "https://explorer.testnet.arc.io/tx/0x3926b339bf5d3db77dbb1b6ec3f809b5fd9369dffae1ae04b1028d3e27681a01",
+ "host": "127.0.0.1",
+ "id": "pay_c6fabd35cf32ec1d66f6ae7615f7f4ba97cfea15b8d6d88a67617d0e70414f63",
+ "idFrom": "payment-identifier",
+ "minor": "500000",
+ "network": "eip155:5042002",
+ "policy": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+ "reason": "ETH mid for the hedge",
+ "seller": "0x00000000000000000000000000000000005e11e2",
+ "sha256": "67f1a0743e44f8193f3764a07187ad14e88a85c05782e71ef2f75f718ad812e4",
+ "status": "paid",
+ "tx": "0x3926b339bf5d3db77dbb1b6ec3f809b5fd9369dffae1ae04b1028d3e27681a01",
+ "url": "http://127.0.0.1:7907/v1/mid?coin=ETH"
+}
+sha256(body returned) recomputed here = 67f1a0743e44f8193f3764a07187ad14e88a85c05782e71ef2f75f718ad812e4  (matches purchase.sha256: True)
+id == 'pay_' + actionHash[2:]: True
+
+== the seller saw the identifier (x402_seller.py log) ==
+seller: payment-identifier pay_c6fabd35cf32ec1d66f6ae7615f7f4ba97cfea15b8d6d88a67617d0e70414f63
+seller: payment-identifier pay_030af1f0f8a11248f6dd729f641ed9d31646a3bb74891016e5c4ca865246cb97
+seller: payment-identifier pay_81d16417d5bc41995cf8ea387049ae4118c7cba18fd52625d4e6dfc793319849
+seller: payment-identifier pay_30543910db97b1b587843caf9b56d28ac8b80ee9ae61fb722aef60126504d2fd
+
+== the pass (POST /api/level1/run → GET /api/watch/<id>): the seller is a bill with x402 provenance ==
+{
+ "amount": "0.500000 USDC",
+ "confidence": 0.5813,
+ "counterparty": "0x00000000000000000000000000000000005e11e2",
+ "evidence": [
+  "0x3926b339bf5d3db77dbb1b6ec3f809b5fd9369dffae1ae04b1028d3e27681a01",
+  "0xf343093708e9e635ef853361212ce08cc76980d950ddb3dbcbef6fc62b8e07dd",
+  "0x6b0c30bc4470c5985c9964c3fc7ec58638b162bd88f2487cc03e3456dffe3708",
+  "0x749e03dd1e3b5fd0b545d295d56072fcc4bb66c27f8ac208878b1d423eec2c72"
+ ],
+ "intervalSecs": 4,
+ "nextDue": 1792035835,
+ "provenance": "x402 receipt",
+ "samples": 4
+}
+settled this pass: 0   obligations: 1   reasoner: rule-based   anchorTx: 0xf1de124cdc55ef143327dc98e02206d1cd7983390f89ca67e50679236aa6da3e
+
+== GET /api/level1/purchases.jsonl?policy=… (Bearer read key) ==
+4 lines; paid with sha256+id+network+tx: 4
+{"at": 1792035820, "seller": "0x00000000000000000000000000000000005e11e2", "amount": "0.500000 USDC", "network": "eip155:5042002", "tx": "0x3926b339bf5d3db77dbb1b6ec3f809b5fd9369dffae1ae04b1028d3e27681a01", "id": "pay_c6fabd35cf32ec1d66f6ae7615f7f4ba97cfea15b8d6d88a67617d0e70414f63", "idFrom": "payment-identifier", "sha256": "67f1a0743e44f8193f3764a07187ad14e88a85c05782e71ef2f75f718ad812e4", "status": "paid", "reason": "ETH mid for the hedge"}
+{"at": 1792035824, "seller": "0x00000000000000000000000000000000005e11e2", "amount": "0.500000 USDC", "network": "eip155:5042002", "tx": "0xf343093708e9e635ef853361212ce08cc76980d950ddb3dbcbef6fc62b8e07dd", "id": "pay_030af1f0f8a11248f6dd729f641ed9d31646a3bb74891016e5c4ca865246cb97", "idFrom": "payment-identifier", "sha256": "67f1a0743e44f8193f3764a07187ad14e88a85c05782e71ef2f75f718ad812e4", "status": "paid", "reason": "ETH mid for the hedge"}
+{"at": 1792035827, "seller": "0x00000000000000000000000000000000005e11e2", "amount": "0.500000 USDC", "network": "eip155:5042002", "tx": "0x6b0c30bc4470c5985c9964c3fc7ec58638b162bd88f2487cc03e3456dffe3708", "id": "pay_81d16417d5bc41995cf8ea387049ae4118c7cba18fd52625d4e6dfc793319849", "idFrom": "payment-identifier", "sha256": "ebed0beb7d9faaf29c79c45eb77616562a9c4a6e2696acd91e73d1f0cf569c13", "status": "paid", "reason": "ETH mid for the hedge"}
+{"at": 1792035831, "seller": "0x00000000000000000000000000000000005e11e2", "amount": "0.500000 USDC", "network": "eip155:5042002", "tx": "0x749e03dd1e3b5fd0b545d295d56072fcc4bb66c27f8ac208878b1d423eec2c72", "id": "pay_30543910db97b1b587843caf9b56d28ac8b80ee9ae61fb722aef60126504d2fd", "idFrom": "payment-identifier", "sha256": "41be74d4df9fc3c7687972a6e326ade53c721227b76705885166f2c47e3c614d", "status": "paid", "reason": "ETH mid for the hedge"}
+
+== not proved here ==
+- a seller that returns a signed offer-receipt (the local seller sends none; receipt_of is unit-tested on the spec's §6.5 example)
+- the chain-row-wins branch of the de-dup: anvil's native transfers write no Transfer log, so the pass's history is empty here;
+  unit test receipts_become_a_bill_without_counting_a_settlement_twice covers it with a chain row at a different time

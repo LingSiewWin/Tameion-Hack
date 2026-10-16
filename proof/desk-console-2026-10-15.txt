@@ -1,0 +1,116 @@
+# 2026-10-15 23:48:27 +0800 — W8 console Desk page (/desk), driven in a real browser (Playwright, Chromium) against the running service http://127.0.0.1:7880
+# account desk-gold-2329, policy 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308, Arbitrum Sepolia (421614); owner device token = <device token> (localStorage, from the Secure Enclave reserve-token run)
+# page source: apps/console/src/app/desk/page.tsx, src/components/desk/{deal,trust}.tsx; served from apps/console/out/desk.html by console_response (no Rust change)
+
+## gate (apps/console): npx tsc --noEmit -> clean · npx eslint src -> clean · npx next build -> ○ /desk exported · node --test test/*.mts -> 13 pass, 0 fail
+
+## 1. 23:40:37 Supplier signs the purchase (desk_sign CLI, key ~/.tameion/test-keys/desk-supplier.key) -> POST /api/desk/milestone
+{"booked":"GOLD-W8-1792078837 · bought 5.000 g of gold for 667.20 USDC · PO-GOLD-W8-1792078837 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)","offset":{"coins":[{"action":"Traded { size_delta: -0.160, is_buy: false, worst_px: 4127.8570, statuses: [Filled { total_sz: 0.16, avg_px: 4145.607, oid: 62801341047 }], filled_size: -0.16, read_back: -0.16 }","before":"0","coin":"PAXG","target":"-0.160754"}],"live":true,"readBack":"-0.16"},"root":"0x1e9540acb266f2c388d3acc88560bd9baeb3276b5760741af71719cc8aa483ba","signer":"0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904"}
+   -> the service opened the offset by itself: short 0.16 PAXG, oid 62801341047, read back -0.16
+
+## 2. 23:41:55 Vault signs the receipt into stock (desk-vault.key)
+{"booked":"GOLD-W8-1792078837 · 5.000 g of gold into stock · VR-GOLD-W8-1792078837 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542)","offset":null,"root":"0x6c7b05844f27c913541e4a9fedc734e948333db15f726d9111fd2081de50262c","signer":"0x8b95fdedb647236da0f266231f71440d2714d542"}
+
+## 3. 23:42 the page, after the trader taps 'Bring the offset in line now' (POST /api/desk/offset, no trade needed)
+lead: "You hold 5 g of gold, 99.53 % of it offset. Issue a statement on a deal to print its maximum loss and what your lender would count."
+stats: Held | 5 g | 0.161 oz of gold | Offset | 0.16 oz | short PAXG, read back 11:42 PM | Max loss at a 30 % fall | — | issue a statement below
+screenshot: proof/desk-console-1-bought.png (after the purchase), proof/desk-console-2-in-stock-offset.png (after the receipt + read-back)
+
+## 4. 23:42:32 'Statement for your lender' tapped on the page -> POST /api/desk/statement -> kit; 'Download for your lender' tapped -> file saved by the browser
+downloaded: proof/desk-console-kit-GOLD-W8-1792078837-statement-1792078952.json (5050 bytes); cmp with the service's own copy runtime/app/tenants/<policy>/statements/GOLD-W8-1792078837-1792078952.lender.json: byte-identical
+anchor tx (Arbitrum Sepolia): https://sepolia.arbiscan.io/tx/0x38a51278421a1322b3d471590e9705f5869ce56682c7262746ef29e4bac7641a
+page then read: "You hold 5 g of gold, 99.53 % of it offset. A 30 % fall costs you at most 14.27 USDC, and your lender would count 652.15 USDC."
+stats: Held | 5 g | 0.161 oz of gold | Offset | 0.16 oz | short PAXG, read back 11:42 PM | Max loss at a 30 % fall | 14.27 | USDC, from your signed statement
+screenshots: proof/desk-console-3-statement.png (page), proof/desk-console-4-deal-statement.png (the deal card with the lender's numbers and 'How your lender checks it' open)
+
+## 5. the lender's check: python3 scripts/verify_desk.py proof/desk-console-kit-GOLD-W8-1792078837-statement-1792078952.json --signer <statementSigner from GET /api/level1/config = 0x62f82e3494eb9c446c161a9f52f0a90b986e5062>
+a. statementHash recomputed 0x03e333848b9a4cff… matches
+b. signature recovers to 0x62f82e3494eb9c446c161a9f52f0a90b986e5062
+   milestone 9: bought 5.000 g gold · PO-GOLD-W8-1792078837 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904) · reaches the root
+   milestone 10: arrived 5.000 g gold · VR-GOLD-W8-1792078837 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542) · reaches the root
+c. 2 of 11 milestones disclosed; all reach root 0x6c7b05844f27c913…: True
+   milestone 9: re-encodes to the disclosed line: True; Supplier's signature recovers to 0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904
+   milestone 10: re-encodes to the disclosed line: True; Vault's signature recovers to 0x8b95fdedb647236da0f266231f71440d2714d542
+f. counterparty signatures re-checked: True
+   https://sepolia-rollup.arbitrum.io/rpc: block 319465071, from 0x6c1ce01b…, to 0xe7c381aa…, status 1, input carries the root: True
+   https://arbitrum-sepolia-rpc.publicnode.com: block 319465071, from 0x6c1ce01b…, to 0xe7c381aa…, status 1, input carries the root: True
+d. root anchored in 0x38a51278421a1322… on 2 node(s): True
+e. PAXG position of 0x557e1e07… at the statement's time, from the venue's fills: -0.160; statement claims an offset of 0.160000: True
+
+what the statement says: 5.000 g gold in stock, worth 666.420675 USDC at 4145.6/oz; 99.53% offset; maximum loss 14.265816 USDC at a 30.0% fall + 2.0% basis; eligible 652.154859 USDC
+PASS
+
+## 6. 23:43:31 Buyer signs the sale (desk-buyer.key) -> the service closed the offset by itself
+{"booked":"GOLD-W8-1792078837 · sold 5.000 g of gold for 672.00 USDC · SO-GOLD-W8-1792078837 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)","offset":{"coins":[{"action":"Traded { size_delta: 0.16, is_buy: true, worst_px: 4164.7200, statuses: [Filled { total_sz: 0.16, avg_px: 4144.463, oid: 62801494841 }], filled_size: 0.16, read_back: 0 }","before":"-0.16","coin":"PAXG","target":"-0"}],"live":true,"readBack":"0"},"root":"0x9ea45cbec795d1da60bf207d951e651007cbf571a71fa7aa395e8a0bf71c5458","signer":"0x328fb78926cee49691851ca84f226d1c08edacb4"}
+   then on the page 'Bring the offset in line now' -> 200 {accountValue 992.885141, coins:[{action: None("inside band"), before 0, coin PAXG, mark 4145.2}], live true, readBack 0, target 0}
+   toast (before the wording fix): "Already in line: short 0 oz on PAXG, read back." -> now reads "The offset is flat, read back from the venue."
+   page: "You hold no gold right now: nothing is at risk and the offset is flat." · Held 0 g | Offset 0 | flat, read back 11:43 PM | Max loss 0.00 USDC: nothing held
+   screenshot: proof/desk-console-5-sold-flat.png (retaken 23:44 once the main session's own GOLD-MCP deal had closed; proof/desk-console-5-after-sale.png caught that deal open)
+
+## 7. 23:45-23:46 'Enter a step yourself' through the page (owner's unsigned entries; each moved the offset live)
+   bought 2 g for 266.50 USDC, deal GOLD-W8U-1792079119 -> 200, booked '… entered by the owner, unsigned', offset short 0.064 PAXG oid 62801608672, read back -0.064
+   sold 2 g for 268.00 USDC -> 200, offset closed oid 62801736592, read back 0; toast 'Entered, unsigned. The offset follows it.'; Offset stat 'flat, read back 11:46 PM' (read-back taken from the milestone reply)
+   row as shown: 'Bought 2 g for 266.50 USDC / Entered by you, unsigned (Walk-in seller has not signed it) · RCPT-GOLD-W8U-1792079119 · Oct 15, 11:45 PM'
+   screenshots: proof/desk-console-6-phone.png, proof/desk-console-7-phone-unsigned-deal.png (390 px wide, no horizontal scroll)
+
+## 8. 'Approve who may sign' -> Check with 'vitalik.eth' as 'Refiner': 'Refiner will sign as the key ending 6045, from vitalik.eth (ens). Steps they sign move your offset.' + button 'Approve Refiner'
+   NOT approved on purpose (it would bind a real ENS owner as a signer on the test desk); the approve route itself is proved in proof/desk-api-2026-10-15-2330.txt. Screenshot proof/desk-console-8-approve-check.png
+
+## 9. DOM check (every non-empty text node in <body>, outside <script>/<style>):
+   23:43 desktop with the statement shown: 257 text nodes; text containing 0x outside <details>: [] ; banned words (guarantee|locked|delta-neutral|yield|an AI agent): [] ; 4 <details> hold addresses
+   23:44 desktop 1280 and phone 390: 278 text nodes each; 0x outside <details>: [] ; banned: [] ; horizontal scroll: false (both)
+   23:47 with the approve form open and resolved: 0x outside <details>: [] (copy rows show 'Statement key ••5062' and 'Signing link for your counterparties'; the full value is only copied)
+   account page (/) header carries the link: header a[href="/desk"] count = 1
+
+## 10. the venue, read from Hyperliquid's own public API (no key), account 0x557e1e07652b75abaa667223b11704165fc94d09
+   23:48:27: positions [] accountValue 992.083846
+   -> flat
+
+## 11. 23:49:38 added after the main session's 23:48 note: base stock + funding
+   'Stock you keep unoffset' -> Change it -> 1 -> POST /api/desk/base 200 {"offsetTarget":"0","unhedgedBase":"1.000 g gold"}; card read 'Now 1 g: …' (proof/desk-console-9-base-stock.png)
+   then 0 -> 200 {"offsetTarget":"0","unhedgedBase":"0.000 g gold"} (restored; the desk held 0 g, so no trade either way)
+   statement 'Cost of the offset so far (funding)' row: shown when the kit carries fundingUsdc; NOT exercised live (the one kit issued here predates the field; a second statement costs relayer gas)
+
+## 12. browser console over the whole run (level warning+): 0 from /desk itself.
+   2 x 401 on /api/level1/inbox and /api/level1/events came from the account page / (this browser holds no agent key for desk-gold-2329; account-page behaviour, not the desk).
+   2 x ERR_CONNECTION_REFUSED on /api/desk during the main session's service restart at ~23:48; the 10 s poll recovered by itself.
+# end 2026-10-15 23:49:38 +0800
+
+## 13. 2026-10-15 23:56:40 +0800 second pass, after the main session's 23:52 routes: venue read-back on load, statements from the service, closed deals folded
+   gate: tsc --noEmit clean · eslint src clean · next build ○ /desk · node --test 13/13
+   23:54:10 Supplier-signed purchase 5 g, deal GOLD-W8B-1792079650 -> service shorted 0.16 PAXG by itself:
+{"booked":"GOLD-W8B-1792079650 · bought 5.000 g of gold for 667.50 USDC · PO-GOLD-W8B-1792079650 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)","offset":{"coins":[{"action":"Traded { size_delta: -0.160, is_buy: false, worst_px: 4124.4740, statuses: [Filled { total_sz: 0.16, avg_px: 4143.568, oid: 62802215281 }], filled_size: -0.16, read_back: -0.16 }","before":"0","coin":"PAXG","target":"-0.160754"}],"live":true,"readBack":"-0.16"},"root":"0xae80d88fe29a1e78847d62cf0d6f975cb9132658849bc294343968d901710b66","signer":"0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904"}
+   Vault-signed receipt:
+{"booked":"GOLD-W8B-1792079650 · 5.000 g of gold into stock · VR-GOLD-W8B-1792079650 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542)","offset":null,"root":"0x62213c42611e60652bac8fccd3660a252685e5111d8d3e6d4bf1897f528d55a0","signer":"0x8b95fdedb647236da0f266231f71440d2714d542"}
+   page loaded with every tameion.desk.* localStorage key removed (2 removed), no tap:
+     "You hold 5 g of gold, 99.53 % of it offset. Issue a statement …" · Held 5 g | Offset, oz 0.16 | short PAXG, read back 11:54 PM | Max loss — | issue a statement below
+     visible deal cards: [GOLD-W8B-1792079650]; fold '6 closed deals, sold'   (proof/desk-console-10-open-onload.png)
+   'Statement for your lender' on the page -> 200 (second and last anchor by this seat); page reloaded (no query cache, no localStorage):
+     requests seen: 200 /api/desk/statements?policy=<policy>, then 200 …&file=GOLD-W8B-1792079650-1792079680.lender.json (+ the 4 older kits)
+     "You hold 5 g of gold, 99.53 % of it offset. A 30 % fall costs you at most 14.26 USDC, and your lender would count 652.03 USDC."
+     Max loss 14.26 | USDC, from your signed statement; card row 'Cost of the offset so far (funding) 0.00 USDC' (fundingUsdc "0")
+     tameion.desk.* keys in localStorage afterwards: []   (proof/desk-console-10-statement-from-list.png, proof/desk-console-10-deal-card.png)
+   'Download for your lender' -> proof/desk-console-kit-GOLD-W8B-1792079650-statement-1792079680.json (5348 bytes), byte-identical to the service's stored kit
+   anchor: https://sepolia.arbiscan.io/tx/0x0762ba62c408a3ca9b45ee30e58267d3f23eeb2ee1bab51ffe294facdccda467
+   python3 scripts/verify_desk.py proof/desk-console-kit-GOLD-W8B-1792079650-statement-1792079680.json --signer <statementSigner>:
+     a. statementHash recomputed 0xc0314046d22929f1… matches
+     b. signature recovers to 0x62f82e3494eb9c446c161a9f52f0a90b986e5062
+        milestone 20: bought 5.000 g gold · PO-GOLD-W8B-1792079650 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904) · reaches the root
+        milestone 21: arrived 5.000 g gold · VR-GOLD-W8B-1792079650 · signed by Vault (0x8b95fdedb647236da0f266231f71440d2714d542) · reaches the root
+     c. 2 of 22 milestones disclosed; all reach root 0x62213c42611e6065…: True
+        milestone 20: re-encodes to the disclosed line: True; Supplier's signature recovers to 0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904
+        milestone 21: re-encodes to the disclosed line: True; Vault's signature recovers to 0x8b95fdedb647236da0f266231f71440d2714d542
+     f. counterparty signatures re-checked: True
+        https://sepolia-rollup.arbitrum.io/rpc: block 319467830, from 0x6c1ce01b…, to 0xe7c381aa…, status 1, input carries the root: True
+        https://arbitrum-sepolia-rpc.publicnode.com: block 319467830, from 0x6c1ce01b…, to 0xe7c381aa…, status 1, input carries the root: True
+     d. root anchored in 0x0762ba62c408a3ca… on 2 node(s): True
+     e. PAXG position of 0x557e1e07… at the statement's time, from the venue's fills: -0.160; statement claims an offset of 0.160000: True
+     
+     what the statement says: 5.000 g gold in stock, worth 666.292072 USDC at 4144.8/oz; 99.53% offset; maximum loss 14.263063 USDC at a 30.0% fall + 2.0% basis; eligible 652.029009 USDC
+     PASS
+   23:55:51 Buyer-signed sale -> service closed the short:
+{"booked":"GOLD-W8B-1792079650 · sold 5.000 g of gold for 671.00 USDC · SO-GOLD-W8B-1792079650 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)","offset":{"coins":[{"action":"Traded { size_delta: 0.16, is_buy: true, worst_px: 4162.1070, statuses: [Filled { total_sz: 0.16, avg_px: 4141.065, oid: 62802309866 }], filled_size: 0.16, read_back: 0 }","before":"-0.16","coin":"PAXG","target":"-0"}],"live":true,"readBack":"0"},"root":"0x2db190482312c7064f330725b4a57da44ed966732f13fe08b3bc6c35d8093634","signer":"0x328fb78926cee49691851ca84f226d1c08edacb4"}   page: "You hold no gold right now: nothing is at risk and the offset is flat." · Offset 0 | flat, read back 11:56 PM | Max loss 0.00 USDC: nothing held
+   (proof/desk-console-10-flat.png, proof/desk-console-10-closed-unfolded.png, proof/desk-console-10-phone.png)
+   DOM: 647 text nodes; 0x outside <details>: [] at 1280 and 390, closed fold shut and open; stricter: all 39 text nodes with 0x sit inside 'Who signed, by address' or 'How your lender checks it'; banned words: []; horizontal scroll: false
+   venue from Hyperliquid at 23:56:40: positions [] accountValue 991.887755 -> flat
+# end 2026-10-15 23:56:41 +0800

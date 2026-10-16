@@ -1,0 +1,13 @@
+# 2026-10-15 23:57:43 +0800 — P-114: a signed step above the owner's auto limit is booked but the offset waits for the owner (service restarted with TAMEION_DESK_AUTO_GRAMS=5 for this check; default 1,000 g)
+## an 8 g purchase signed by the Supplier (above the 5 g limit)
+GOLD-LIMIT-1792079862 · bought 8.000 g of gold for 1065.93 USDC · PO-GOLD-LIMIT-1792079862 · signed by Supplier (0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904)
+  offset: {"waiting": "8.000 g is above the 5.000 g gold you let the desk offset by itself; it waits for your tap"}
+  venue position: 0
+## the owner taps "Bring the offset in line now"
+   -0.257 ['Traded { size_delta: -0.257, is_buy: false, worst_px: 4122.2850, statuses: [Filled { total_sz: 0.257']
+## the Buyer's signed 8 g sale (above the limit): booked, the offset waits
+GOLD-LIMIT-1792079862 · sold 8.000 g of gold for 1065.93 USDC · SO-GOLD-LIMIT-1792079862 · signed by Buyer (0x328fb78926cee49691851ca84f226d1c08edacb4)
+  offset: {"waiting": "8.000 g is above the 5.000 g gold you let the desk offset by itself; it waits for your tap"}
+  venue position: -0.257
+## the owner taps again → flat
+   0 ['Traded { size_delta: 0.257, is_buy: true, worst_px: 4163.5140, statuses: [Filled { total_sz: 0.257, ']

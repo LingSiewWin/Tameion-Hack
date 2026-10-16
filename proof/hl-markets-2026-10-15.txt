@@ -1,0 +1,62 @@
+# Hyperliquid markets for goods and currencies, read 2026-10-15 22:59 +0800
+# source: POST /info metaAndAssetCtxs (core) and with dex=<name> (HIP-3), public API, no key
+
+## mainnet: 10 HIP-3 dexs (xyz, flx, vntl, hyna, km, abcd, cash, para, mkts, io); 12 goods/currency markets
+market                 dex        24h volume  open interest   funding/h         mark lev
+xyz:SILVER             xyz       246,024,458    195,631,795   +0.000006      57.1460 25
+xyz:CL                 xyz       142,647,461    129,481,875   +0.000002      95.1870 20
+xyz:BRENTOIL           xyz        95,143,734    166,297,791   +0.000006     102.8500 20
+xyz:GOLD               xyz        62,712,511    319,514,879   +0.000012   4,160.6000 25
+xyz:NATGAS             xyz        21,248,106     11,446,278   -0.000003       3.5541 10
+xyz:EUR                xyz         8,217,277     26,818,449   +0.000011       1.1207 50
+xyz:COPPER             xyz         8,148,663     13,045,088   +0.000004       6.5599 20
+xyz:JPY                xyz         5,633,850     28,414,272   -0.000017     157.9700 50
+PAXG                   core        5,072,629     23,957,595   +0.000013   4,159.4000 10
+xyz:PLATINUM           xyz         3,849,469      5,256,551   +0.000006   1,622.3000 20
+xyz:GBP                xyz         1,111,609      1,117,917   +0.000000       1.3253 50
+xyz:PALLADIUM          xyz           927,309      2,781,314   +0.000006   1,133.4000 20
+
+## testnet: 272 HIP-3 dexs (test, unit, scam, felix, volmex, angry, TOON, VOLMEX, test21, pluto, zigg, i<3fl, KNETIQ, knetiq, ddot, venone, tstdex, vntls, oracle, hb, sports, aura, hybet, orange, sekai, flow, x, t, sekaw, gpu, qwerty, merrli, dex, olvb, nq, fx, nqz, btcx, woof, shiok, z, hbtwo, tndex, rrrrr, hbhb, stocks, nunchi, sqtwr, y, hypodd, strat, zdex, crayon, walao, slpy, tsts, mbx, food, meng, rawr, mmmg, msdx, wrld, hodd, xyz, flx, nmx, pyth, msda, ho, flsh, hyfl, csan, sedx, rbbt, rbte, demo, flxn, bsx, loh, xvm, dydx, fzx, abdc, fam, gato, bart, sss, owal, gg, fdnk, trve, odd, trv, qwrn, zzzz, gass, whtm, rip, sand, hmax, slob, hyfi, str, trov, erez, paef, mcd, birb, plsh, cnst, trvv, trvo, tvr, torv, tvro, tvor, hyna, tdex, neo, bhpx, yldx, dpro, wa, org, hfx, fxx, pmt, trva, trvb, perp, elxl, ddd, trvc, brd, axx, ddex, ab, etft, llll, nuts, jdo, otcm, xmas, rub, avtr, wgts, vrse, gst, otc, bee, trvd, unc, dddd, dxn, egrl, nyc, bmx, purr, vdex, narr, abcd, mox, angl, trvf, hnb, ggwp, plat, orma, ormb, ormc, ormd, orme, ormf, ormg, ormh, tngs, ormi, brnt, yex, ez, rbit, ysh, moo, guac, osrs, moom, idx, scpe, mag, frce, hodx, yoyo, cmdt, cmda, xoxo, idxx, cmdb, ycl, ohtn, zktx, soci, otni, nova, ani, soya, brs, tenx, jack, myx, pmas, dude, rsge, hov, dlx, dxx, dyel, blob, mooo, rolo, sejp, sjhu, dolo, sqxl, krzh, kwo, name, aha, tsst, neol, flxx, dd, vt, hfl, hkx, pew, magm, eepy, magk, ktob, nxlb, dur, shm, mmmm, acmt, cna, bb, dmhs, lah, lob, vkjf, ignp, kjex, arg, cfbx, lon, par, aix, parx, rrup, fcmt, nimb, sta, stt, pmew, tape, goy, eqde, one, pa, pas, lab); 42 goods/currency markets
+market                 dex        24h volume  open interest   funding/h         mark lev
+par:GOLD               par            37,396        239,943   +0.000006   4,161.5000 25
+PAXG                   core           14,129         44,892   +0.000012   4,149.0000 10
+xyz:GOLD               xyz             1,140         58,421   +0.000000   4,253.1000 25
+xyz:JPY                xyz             1,000         31,111   +0.000000     157.5100 50
+xyz:SILVER             xyz                72            778   +0.000000      53.4740 25
+scam:EUR               scam                0              0   +0.000000       1.1000 50
+scam:CHF               scam                0              0   +0.000000       1.2000 1
+hb:GOLD                hb                  0          3,742   -0.004677   4,341.6000 50
+hb:SILVER              hb                  0            181   -0.005000      54.2200 50
+hb:COFFEE              hb                  0              0   +0.000000     400.0000 10
+hb:COPPER              hb                  0              0   +0.000000       4.2461 10
+fx:EUR                 fx                  0              0   +0.000000       1.1000 10
+strat:GOLD             strat               0              0   +0.000000   4,141.0000 1
+xyz:EUR                xyz                 0              0   +0.000000       1.1202 50
+xyz:CL                 xyz                 0            396   +0.000000      94.2600 20
+xyz:COPPER             xyz                 0            530   +0.000000       6.8874 20
+xyz:NATGAS             xyz                 0              0   +0.000000       2.9050 10
+xyz:PLATINUM           xyz                 0              0   +0.000000   1,621.3000 20
+dydx:EUR               dydx                0             29   +0.000000       1.2000 3
+abdc:GBP               abdc                0              0   +0.000000       1.0000 1
+bart:SILVER            bart                0              0   +0.000000      59.9570 10
+owal:EUR               owal                0              0   +0.000000       1.1830 50
+owal:GBP               owal                0              0   +0.000000       1.3420 50
+owal:CAD               owal                0          6,420   +0.000000       0.7140 50
+sand:EUR               sand                0              0   +0.000000       1.2000 1
+sand:JPY               sand                0              0   +0.000000     156.4400 50
+str:GOLD               str                 0            818   +0.000000   4,130.0000 2
+str:SILVER             str                 0              0   +0.000000      51.0000 2
+fxx:EUR                fxx                 0              0   +0.000000       1.1750 10
+fxx:GBP                fxx                 0            144   +0.000000       1.3408 10
+perp:EUR               perp                0         33,462   +0.000000       1.1106 50
+ddex:GOLD              ddex                0              0   +0.000000   4,000.0000 20
+otcm:EUR               otcm                0              0   +0.000000       1.1717 50
+otcm:GBP               otcm                0              0   +0.000000       1.3437 50
+otcm:JPY               otcm                0              0   +0.000000     156.4410 50
+xmas:EUR               xmas                0            500   +0.000000       1.1794 50
+otc:EUR                otc                 0          1,238   +0.000000       1.1787 50
+otc:JPY                otc                 0              0   +0.000000     155.9420 50
+otc:GBP                otc                 0              0   +0.000000       1.3504 50
+scpe:SILVER            scpe                0             23   +0.000000     387.1900 25
+scpe:GOLD              scpe                0             24   +0.000000   4,991.5000 25
+pas:GOLD               pas                 0              0   +0.000000   4,160.5000 25

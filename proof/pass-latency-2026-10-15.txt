@@ -1,0 +1,31 @@
+# Pass latency, original code vs docs/68 D3 — 2026-10-15 ~01:15–01:40 +08
+# Tool: operator/examples/pass_rpc_cost.rs (read-only, execute=false), direct to public nodes.
+# 'before' = original sources rebuilt from the transcript; 'after' = crash-time code (concurrent log filters, unbounded reads); 'now' = D3 (log walk reverted, reads bounded 8).
+
+## Round 1: back-to-back, both chains (stopped early: it was rate-limiting Arc for everyone)
+before arbitrum-sepolia warm  history   2.49s  decide  3.35s  transfers 1 obl 0
+after  arbitrum-sepolia warm  history   2.50s  decide  3.09s  transfers 1 obl 0
+before arbitrum-sepolia warm  history  22.37s  decide  3.05s  transfers 1 obl 0
+after  arbitrum-sepolia warm  history   2.70s  decide  3.08s  transfers 1 obl 0
+before arbitrum-sepolia warm  history  25.60s  decide  3.24s  transfers 1 obl 0
+after  arbitrum-sepolia warm  history   2.34s  decide  3.13s  transfers 1 obl 0
+before arc-testnet      warm  history  49.99s  decide  8.24s  transfers 5 obl 0
+after  arc-testnet      warm  history  39.41s  decide  3.82s  transfers 5 obl 0
+before arc-testnet      warm  history   6.25s  decide 12.66s  transfers 5 obl 0
+after  arc-testnet      warm  history  94.48s  decide  5.98s  transfers 5 obl 0
+before arc-testnet      warm  history   9.02s  decide  3.81s  transfers 5 obl 0
+after  arc-testnet      warm  history  82.93s  decide  1.78s  transfers 5 obl 0
+before arc-testnet      cold  history  57.05s  decide 14.58s  transfers 10 obl 0
+after arc-testnet 0xf799a8 ERR 
+
+## Round 2: Arc 0xf799…635d, 10 new blocks, 20 s between runs
+before history  7.31s decide  4.11s
+now    history  5.00s decide  3.51s
+before history  9.62s decide  4.00s
+now    history  5.05s decide  3.55s
+before history  6.64s decide  4.09s
+now    history  5.81s decide  3.44s
+before history  4.38s decide  3.98s
+now    history  4.52s decide  5.49s
+before history  4.97s decide  4.11s
+now    history  7.09s decide  3.47s

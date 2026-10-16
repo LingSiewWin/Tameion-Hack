@@ -1,0 +1,88 @@
+# Secure Enclave as the account owner — live on Arbitrum Sepolia (chain 421614)
+# run 2026-10-15 23:09:17 +0800 on Apple M3, macOS 26.6.2
+# tools: apps/desk-se/main.swift (built to target/desk-se), scripts/se_owner.sh; contracts unchanged
+# nothing secret is printed: the Enclave key never leaves the chip; the relayer key is read from ~/.tameion and not echoed
+
+$ scripts/se_owner.sh arbsep key
+blob ~/.tameion/se-owner.blob (284 bytes, wrapped by this Mac's Secure Enclave)
+qx 0xb152f56fc2fe3c9ca4b823965435cb8b30274205461520f5362531102ace4516
+qy 0x7a896745b512ac68fcaa1fabdcd0ec0174670abc71a7724a24f9adac7c2d0793
+  (blob mode: -rw-------)
+
+$ target/desk-se selftest
+16 signatures verified against the public key; 8 had high s and were folded to n - s
+5 ms per signature
+
+$ scripts/se_owner.sh arbsep deploy
+  (exited before sending anything: bash 'read' hit end of input under set -e; nonce still 111. Fixed in se_owner.sh, rerun 23:09:34 +0800:)
+
+$ scripts/se_owner.sh arbsep deploy
+
+== deploy on chain 421614: the Secure Enclave key owns the policy ==
+  Enclave public key  qx 0xb152f56fc2fe3c9ca4b823965435cb8b30274205461520f5362531102ace4516
+                      qy 0x7a896745b512ac68fcaa1fabdcd0ec0174670abc71a7724a24f9adac7c2d0793
+  relayer 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25 holds 0.100747093214003854 ETH (gas only, no authority)
+  tx 0x91fd2a89bda395b4d666cb957d9e856b1c901fe0ebaef869e2a1afb1f5fe5dff  creates 0x08ea459047d0a4edde9af1865dff960f770c63e9  gas 0x231deb
+  tx 0x64cc9a4de43dc44a3063aeb51de1c4a33d8dc97cd15a00546d0e18ca38f479d9  creates 0x609f8b0827191c993729efd0d6344ba28e6d792c  gas 0x241472
+  PasskeyPrincipal  0x08Ea459047d0A4eDdE9af1865DfF960F770C63e9   https://sepolia.arbiscan.io/address/0x08Ea459047d0A4eDdE9af1865DfF960F770C63e9
+  BudgetPolicyToken 0x609F8b0827191C993729eFd0D6344bA28e6d792C   https://sepolia.arbiscan.io/address/0x609F8b0827191C993729eFd0D6344bA28e6d792C
+  read back: owner.qx()        0xb152f56fc2fe3c9ca4b823965435cb8b30274205461520f5362531102ace4516
+             owner.qy()        0x7a896745b512ac68fcaa1fabdcd0ec0174670abc71a7724a24f9adac7c2d0793
+             policy.principal() 0x08Ea459047d0A4eDdE9af1865DfF960F770C63e9
+             policy.agent()     0x80c195BE650FBfD55a9ffe059f397Db39f2fe881
+             policy.operator()  0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+
+# 23:10:08 +0800 — trust action: attest a payee (a supplier the agent may then pay, after the 60 s delay)
+$ scripts/se_owner.sh arbsep approve 0x1111111111111111111111111111111111111111
+
+== the Secure Enclave approves payee 0x1111111111111111111111111111111111111111 (approval #0) ==
+  challenge = owner.challengeFor(policy, 0, setPayee(0x1111111111111111111111111111111111111111,true), 0) = 0x5748eb6823f3ea0e841b08f82ffdd391f9c03d043abce6772337cd1b1d9b5d40
+  signed in the Enclave in 45 ms (process start included)
+  {"r":"0xa035b4810582fd2de120c713857b4f095f1ebc4b4f5e5a8aa2bbbdf24deda417","s":"0x1962f1e779b2ea776d3c2045f1ece59d8292a871177e9f658eee1c934cadf7d5","authenticatorData":"0x49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97630500000000"}
+  before: attestedPayee(0x1111111111111111111111111111111111111111) = false
+  status 0x1  gas 124959  block 319457696
+  after:  attestedPayee(0x1111111111111111111111111111111111111111) = true
+  owner.nonce() = 1
+  tx 0x536093b3cdae4fd79b7a1fa18c24f2f690657a6347cd4b7431b5ac6e265a2ff9   https://sepolia.arbiscan.io/tx/0x536093b3cdae4fd79b7a1fa18c24f2f690657a6347cd4b7431b5ac6e265a2ff9
+
+# 23:10:23 +0800 — refusals
+$ scripts/se_owner.sh arbsep refuse
+
+== every other key and every other call, against live state (eth_call, nothing mined) ==
+  next approval's challenge for setPayee(0x000000000000000000000000000000000000dEaD): 0x842fd48373438c02e88fb2218894c9ab5a51e783018818ed19f06230c7010cbf
+1. a software P-256 key signs the same challenge, same WebAuthn shape
+  refused: BadPasskeySignature (0x4d5cfe7b)
+2. control: the Enclave signs that challenge (simulated, not sent)
+  accepted (eth_call returns; not broadcast)
+3. the Enclave's signature for 0x000000000000000000000000000000000000dEaD, re-pointed at the relayer as payee
+  refused: BadPasskeySignature (0x4d5cfe7b)
+4. the approval already used on chain, submitted again
+  refused: BadPasskeySignature (0x4d5cfe7b)
+5. the relayer, which pays the gas, calls setPayee itself
+  refused: NotPrincipal (0x789a70b0)
+6. the agent calls setPayee itself
+  refused: NotPrincipal (0x789a70b0)
+  attestedPayee(0x000000000000000000000000000000000000dEaD) = false
+
+# 23:10:46 +0800 — independent read-back of the approval tx from the node
+  status 0x1  from 0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25  to 0x08ea459047d0a4edde9af1865dff960f770c63e9  gasUsed 124959
+  log 0x609f8b0827191c993729efd0d6344ba28e6d792c topic0 0x09707ebc4c11e09364f7c02a674b4d924b270d7bdf9579bb9368536151555912
+  log 0x08ea459047d0a4edde9af1865dff960f770c63e9 topic0 0x721f414e2bcd5645e9ea473cd5ab432d99f9e7e68b8eb291d2b0555954ebdfd4
+  topic0 of Executed(address,uint256,bytes4,uint256) = 0x721f414e2bcd5645e9ea473cd5ab432d99f9e7e68b8eb291d2b0555954ebdfd4
+  topic0 of PayeeSet(address,bool)                = 0x09707ebc4c11e09364f7c02a674b4d924b270d7bdf9579bb9368536151555912  (the policy's log above)
+  tx input selector 0x6f2ea2cf = execute(address,uint256,bytes,(bytes32,bytes32,uint256,uint256,bytes,string)) 0x6f2ea2cf
+  decoded:
+    0x609F8b0827191C993729eFd0D6344bA28e6d792C
+    0
+    0x34764f3d00000000000000000000000011111111111111111111111111111111111111110000000000000000000000000000000000000000000000000000000000000001
+    (0xa035b4810582fd2de120c713857b4f095f1ebc4b4f5e5a8aa2bbbdf24deda417, 0x1962f1e779b2ea776d3c2045f1ece59d8292a871177e9f658eee1c934cadf7d5, 23, 1, 0x49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97630500000000, "{\"type\":\"webauthn.get\",\"challenge\":\"V0jraCPz6g6EGwj4L_3TkfnAPQQ6vOZ3IzfNGx2bXUA\",\"origin\":\"http://localhost:7880\",\"crossOrigin\":false}")
+  gas note: 124,959 gas for WebAuthn verify + setPayee; the precompile at 0x100 answered the earlier eth_call, so OZ took that path (the Solidity fallback's cost was not measured here)
+
+# 23:13:04 +0800 — the same JSON through the existing forge path (simulation, no --broadcast, nothing sent)
+$ (cd contracts && forge script script/PasskeyPolicy.s.sol --sig "submit(address,address,bytes,string)" \
+    0x08Ea459047d0A4eDdE9af1865DfF960F770C63e9 0x609F8b0827191C993729eFd0D6344bA28e6d792C <setPayee(0x…dEaD,true)> ../runtime/se/arbsep-next-auth.json \
+    --rpc-url https://sepolia-rollup.arbitrum.io/rpc --sender 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25)
+  Estimated total gas used for script: 141248
+  SIMULATION COMPLETE.
+  (the Enclave's signature for approval #1, setPayee(0x…dEaD), read by PasskeyPolicy.s.sol's JSON parser and executed in simulation;
+   left unsent so 0x…dEaD stays unattested)

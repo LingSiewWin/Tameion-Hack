@@ -1,0 +1,102 @@
+# The signed weekly statement — proof, 2026-10-15 (docs/76 §1d, §7 row 8; §8b "after the submission" item 2)
+#
+# What: GET /api/level1/statement?policy=0x…&week=YYYY-Www[&format=csv] on the local service (:7880, restarted
+# 11:38 with the RESUME.md "Local runtime now" environment so the new route exists). The account is a live
+# Arbitrum Sepolia tenant (0x35a2…342f) with events this ISO week (2026-W42). The statement key is a dedicated
+# key made on first use at ~/.tameion/statement.key (mode 600; never the relayer's or the treasury's); its address
+# is advertised at GET /api/level1/config as `statementSigner`. No transaction was sent (relayer gas is at the
+# floor, docs/60 P-14): everything below is reads.
+#
+# The check: scripts/verify_statement.sh (python stdlib + cast). (a) linesHash recomputed from the lines,
+# (b) EIP-712 signature recovered with `cast wallet verify --data` against the advertised signer, (c) the root
+# found under the account's own agent key in the pinned record contract on two public nodes, (d) one flipped
+# byte fails. Unit tests: crates/operator/src/statement.rs (week bounds, lines-hash determinism, the EIP-712
+# digest against a `cast wallet sign --data` vector, decoding from canonical bytes, build + tamper).
+#
+# ---- 1. fetch the statement (JSON, then CSV) and verify it: PASS ----
+
+$ curl -fsS "http://127.0.0.1:7880/api/level1/statement?policy=0x35a2e2701d4d72be257bf7708c67d1433c60342f" > statement.json
+rc=0
+week {'from': 1791763200, 'label': '2026-W42', 'to': 1792368000}
+lines 19 totals {"needsYou": {"amount": "0.192000 USDC", "count": 18}, "paid": {"amount": "0.100000 USDC", "count": 1}, "refused": {"amount": "0.000000 USDC", "count": 0}}
+record {"agent": "0x18fac1d75013bd54f1aa1e005577f24ec4c12b77", "anchor": "0xe7c381aafa077cc99359e8b297d2125efd76b8f5", "anchorTx": "0x76eaf2ebac3e526a0751ff47b2b9ca94f6ad76ef2e5c8894c5ef83982a1f8d13", "eventsFrom": 1791989502, "eventsTo": 1792034621, "linesHash": "0x9992458c0d5a0318877e94b3f73a8094565517101a5d7f83fdcce27d34440851", "root": "0x4d3e54b425c73d399a3ac40f42e196e821e1ab95e0effb5ff70e699977f87146"}
+signature.signer 0x62f82e3494eb9c446c161a9f52f0a90b986e5062 hash 0xa655d441a0b344f3d825f8e979ee8e99caacf0cab9afd26e1ce60e6a43a57694
+sig 0xa4743203d1e9dd4b811d302cc82def4583b821c561007ef96bf2061d573d13b60e3aab4203b1aeb38132fb2b1c8cd135cad9dab48ddc06d8ea8b72e862d9857b1b
+   paid 1791989502 0x0000000000000000000000000000000000005eed 0.100000 USDC 0xe276d41cc1f2c9631c37f26fc6cc3da0fecb58fc042d379b939405e0af22e646 | Paid 0.100000 USDC to 0x0000000000000000000000000000000000005eed, settled in 0xe276d41cc1f
+   needs-you 1791999195 0x8d7e519310d56dfcfb6bb2f2f24babc55762ebe3 0.012000 USDC None | mode: policy is in Propose, not Autopilot; the contract refuses the agent's payment and th
+   needs-you 1791999195 0xff2c4c396e54551e484d08150cf23b0194eb6dfb 0.010000 USDC None | mode: policy is in Propose, not Autopilot; the contract refuses the agent's payment and th
+   needs-you 1791999195 0xe6379d56501826cddb242bbf9e9a1afb2f34665f 0.010000 USDC None | mode: policy is in Propose, not Autopilot; the contract refuses the agent's payment and th
+
+$ curl -fsS "http://127.0.0.1:7880/api/level1/statement?policy=0x35a2e2701d4d72be257bf7708c67d1433c60342f&format=csv" | head -5; tail -3
+date,payee,amount,kind,tx
+2026-10-14T14:51:42Z,0x0000000000000000000000000000000000005eed,0.100000 USDC,paid,0xe276d41cc1f2c9631c37f26fc6cc3da0fecb58fc042d379b939405e0af22e646
+2026-10-14T17:33:15Z,0x8d7e519310d56dfcfb6bb2f2f24babc55762ebe3,0.012000 USDC,needs-you,
+2026-10-14T17:33:15Z,0xff2c4c396e54551e484d08150cf23b0194eb6dfb,0.010000 USDC,needs-you,
+...
+# statement 2026-W42 for 0x35a2e2701d4d72be257bf7708c67d1433c60342f on arbitrum-sepolia (chainId 421614); week 1791763200..1792368000 unix; root 0x4d3e54b425c73d399a3ac40f42e196e821e1ab95e0effb5ff70e699977f87146; linesHash 0x9992458c0d5a0318877e94b3f73a8094565517101a5d7f83fdcce27d34440851
+# signature eip712 signer=0x62f82e3494eb9c446c161a9f52f0a90b986e5062 hash=0xa655d441a0b344f3d825f8e979ee8e99caacf0cab9afd26e1ce60e6a43a57694 sig=0xa4743203d1e9dd4b811d302cc82def4583b821c561007ef96bf2061d573d13b60e3aab4203b1aeb38132fb2b1c8cd135cad9dab48ddc06d8ea8b72e862d9857b1b
+# verify: fetch the same week without format=csv and run scripts/verify_statement.sh on it
+
+$ scripts/verify_statement.sh statement.json http://127.0.0.1:7880
+statement 2026-W42 for 0x35a2e2701d4d72be257bf7708c67d1433c60342f on arbitrum-sepolia (chainId 421614): 19 lines, root 0x4d3e54b425c73d399a3ac40f42e196e821e1ab95e0effb5ff70e699977f87146
+a. linesHash recomputed 0x9992458c0d5a0318877e94b3f73a8094565517101a5d7f83fdcce27d34440851
+   statement claims     0x9992458c0d5a0318877e94b3f73a8094565517101a5d7f83fdcce27d34440851   → MATCH
+b. EIP-712 signature by the advertised signer 0x62f82e3494eb9c446c161a9f52f0a90b986e5062 → VALID   (the file names 0x62f82e3494eb9c446c161a9f52f0a90b986e5062)
+-- against https://sepolia-rollup.arbitrum.io/rpc (block 319297068)
+   rootOf(0x18FAc1d75013BD54F1aA1E005577f24EC4C12b77) = 0x4d3e54b425c73d399a3ac40f42e196e821e1ab95e0effb5ff70e699977f87146: the latest record the account's agent put on chain   → MATCH
+-- against https://arbitrum-sepolia-rpc.publicnode.com (block 319297088)
+   rootOf(0x18FAc1d75013BD54F1aA1E005577f24EC4C12b77) = 0x4d3e54b425c73d399a3ac40f42e196e821e1ab95e0effb5ff70e699977f87146: the latest record the account's agent put on chain   → MATCH
+c. root on chain under the account's own key, two nodes: 2 of 2   → MATCH
+verify_statement: PASS (2026-W42, 19 lines, signer 0x62f82e3494eb9c446c161a9f52f0a90b986e5062, root on chain)
+exit=0
+
+# ---- 2. flip one byte, three places: each fails; an empty week; a bad week label ----
+
+$ # one byte of one line: the paid amount 0.100000 -> 0.100001
+$ scripts/verify_statement.sh tampered-line.json http://127.0.0.1:7880
+a. linesHash recomputed 0x31f364a8d1ad81a507031d19d63b32d395aa9032297b18a02dc5a5eb7245f23d
+   statement claims     0x9992458c0d5a0318877e94b3f73a8094565517101a5d7f83fdcce27d34440851   → MISMATCH
+b. EIP-712 signature by the advertised signer 0x62f82e3494eb9c446c161a9f52f0a90b986e5062 → VALID   (the file names 0x62f82e3494eb9c446c161a9f52f0a90b986e5062)
+c. root on chain under the account's own key, two nodes: 2 of 2   → MATCH
+verify_statement: FAIL (lines FAIL, signature ok, chain ok)
+exit=
+
+$ # one byte of the signature: last byte of r/s moved by one
+$ scripts/verify_statement.sh tampered-sig.json http://127.0.0.1:7880
+a. linesHash recomputed 0x9992458c0d5a0318877e94b3f73a8094565517101a5d7f83fdcce27d34440851
+   statement claims     0x9992458c0d5a0318877e94b3f73a8094565517101a5d7f83fdcce27d34440851   → MATCH
+b. EIP-712 signature by the advertised signer 0x62f82e3494eb9c446c161a9f52f0a90b986e5062 → INVALID   (the file names 0x62f82e3494eb9c446c161a9f52f0a90b986e5062)
+c. root on chain under the account's own key, two nodes: 2 of 2   → MATCH
+verify_statement: FAIL (lines ok, signature FAIL, chain ok)
+exit=
+
+$ # one byte of the root the statement stands on
+$ scripts/verify_statement.sh tampered-root.json http://127.0.0.1:7880
+a. linesHash recomputed 0x9992458c0d5a0318877e94b3f73a8094565517101a5d7f83fdcce27d34440851
+   statement claims     0x9992458c0d5a0318877e94b3f73a8094565517101a5d7f83fdcce27d34440851   → MATCH
+b. EIP-712 signature by the advertised signer 0x62f82e3494eb9c446c161a9f52f0a90b986e5062 → INVALID   (the file names 0x62f82e3494eb9c446c161a9f52f0a90b986e5062)
+   rootOf = 0x4d3e54b425c73d399a3ac40f42e196e821e1ab95e0effb5ff70e699977f87146 and 0x76eaf2ebac3e526a0751ff47b2b9ca94f6ad76ef2e5c8894c5ef83982a1f8d13 does not carry this root from the account's agent   → MISMATCH
+   rootOf = 0x4d3e54b425c73d399a3ac40f42e196e821e1ab95e0effb5ff70e699977f87146 and 0x76eaf2ebac3e526a0751ff47b2b9ca94f6ad76ef2e5c8894c5ef83982a1f8d13 does not carry this root from the account's agent   → MISMATCH
+c. root on chain under the account's own key, two nodes: 0 of 2   → MISMATCH
+verify_statement: FAIL (lines ok, signature FAIL, chain FAIL)
+exit=
+
+$ # a week with no events and no record: nothing for the chain to vouch for
+statement 2026-W41 for 0x35a2e2701d4d72be257bf7708c67d1433c60342f on arbitrum-sepolia (chainId 421614): 0 lines, root 0x0000000000000000000000000000000000000000000000000000000000000000
+a. linesHash recomputed 0x518674ab2b227e5f11e9084f615d57663cde47bce1ba168b4c19c7ee22a73d70
+b. EIP-712 signature by the advertised signer 0x62f82e3494eb9c446c161a9f52f0a90b986e5062 → VALID   (the file names 0x62f82e3494eb9c446c161a9f52f0a90b986e5062)
+c. the statement stands on no anchored record (root is zero): nothing on chain can vouch for it   → FAIL
+verify_statement: FAIL (lines ok, signature ok, chain FAIL)
+exit=
+
+$ curl -s "http://127.0.0.1:7880/api/level1/statement?policy=0x35a2e2701d4d72be257bf7708c67d1433c60342f&week=2026-W60"
+{"error":"week must be an ISO week like 2026-W42"}
+$ curl -s "http://127.0.0.1:7880/api/level1/config" | python3 -c ... statementSigner
+0x62f82e3494eb9c446c161a9f52f0a90b986e5062
+$ ls -la ~/.tameion/statement.key
+-rw-------@ 1 <user>  staff  67 Oct 15 11:38 ~/.tameion/statement.key
+
+# ---- 3. exit codes (the script exits 0 only on PASS) ----
+
+direct exit code, untampered: 0
+direct exit code, one byte flipped in a line: 1
