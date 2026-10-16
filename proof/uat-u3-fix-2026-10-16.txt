@@ -1,0 +1,166 @@
+# 2026-10-16 21:14:51 +0800 UAT U3 fix wave (docs/60 P-180…P-184): what an outside agent is told, through tameion-mcp, on the seat's own instance :7903 (TAMEION_APP_DIR=runtime/seat-S3, the U3 account's tenant file copied in; :7880 untouched)
+account 0xb32753851113869778fec66c51c3a13405edcfab (Arbitrum Sepolia, the U3 persona's), agent key = the U3 ops key (read, run, prepare), never printed
+
+## tools/list (1 ms): 17 tools; desk tools listed: []
+
+## treasury_inbox before (6706 ms, isError=False)
+{
+ "mode": "Autopilot",
+ "caps": {
+  "daily": "0.008000 USDC",
+  "floor": "0.000000 USDC",
+  "leftNow": "0.003000 USDC",
+  "perAction": "0.003000 USDC",
+  "spent24h": "0.002000 USDC"
+ },
+ "pending": null,
+ "waitingCount": 1,
+ "payees": [
+  {
+   "address": "0x6b5b461984505d9a9a6cba93f6ec8cd7adbe0ba8",
+   "approvedAt": 1792154400,
+   "payableFrom": 1792154460,
+   "payableNow": true
+  }
+ ],
+ "suggestedLimit": {
+  "basis": "twice your largest bill so far (0.002000 USDC), within what the account holds",
+  "daily": "0.004000 USDC",
+  "perAction": "0.004000 USDC"
+ },
+ "recommendAutopilot": false,
+ "agentAsks": {},
+ "waiting": [
+  {
+   "kind": "seller",
+   "what": "approve 127.0.0.1 so the agent may pay it",
+   "counterparty": "0x108fa47c5befc672e16852677182588b543bfece",
+   "amount": "0.001000 USDC",
+   "why": "SOL mid price for the morning risk note (uat-u3, unapproved seller)"
+  }
+ ],
+ "counts": {
+  "needsYou": 0,
+  "sellersToApprove": 1,
+  "invoices": 0
+ }
+}
+
+## prepare_limits per payment 0.002 (593 ms, isError=False)
+{
+ "summary": "set the agent's limits: 0.002000 USDC per payment, 0.008000 USDC per day, keep 0.000000 USDC untouched",
+ "signer": "only the owner's passkey can sign this, on the account page; an agent key cannot",
+ "applies": "at once when signed: it only lowers what the agent may spend",
+ "ownerSees": "one row on the account page with your reason; the owner's one tap there signs it. Tell your user to open the account page."
+}
+
+## prepare_limits per payment 0.004 (632 ms, isError=False)
+{
+ "summary": "set the agent's limits: 0.004000 USDC per payment, 0.008000 USDC per day, keep 0.000000 USDC untouched",
+ "signer": "only the owner's passkey can sign this, on the account page; an agent key cannot",
+ "applies": "1 minute(s) after it is signed, and the owner can cancel it until then: it raises what the agent may spend",
+ "ownerSees": "one row on the account page with your reason; the owner's one tap there signs it. Tell your user to open the account page."
+}
+
+## prepare_mode 1 (535 ms, isError=False)
+{
+ "summary": "Propose: the agent prepares each payment for your signature",
+ "signer": "only the owner's passkey can sign this, on the account page; an agent key cannot",
+ "applies": "at once when signed: it lowers what the agent may do by itself",
+ "ownerSees": "one row on the account page with your reason; the owner's one tap there signs it. Tell your user to open the account page."
+}
+
+## prepare_payees [0x85e1c3924eD413a7E24E3388eD2C8697Fd6b8904] (1206 ms, isError=False)
+{
+ "summary": "allow the agent to pay these 1 payees from now on",
+ "signer": "only the owner's passkey can sign this, on the account page; an agent key cannot",
+ "applies": "payable 1 minute(s) after it is signed (the contract's cooling-off, so the owner can still revoke)",
+ "ownerSees": "one row on the account page with your reason; the owner's one tap there signs it. Tell your user to open the account page."
+}
+
+## treasury_inbox after the requests (4109 ms, isError=False)
+{
+ "mode": "Autopilot",
+ "caps": {
+  "daily": "0.008000 USDC",
+  "floor": "0.000000 USDC",
+  "leftNow": "0.003000 USDC",
+  "perAction": "0.003000 USDC",
+  "spent24h": "0.002000 USDC"
+ },
+ "pending": null,
+ "waitingCount": 2,
+ "payees": [
+  {
+   "address": "0x6b5b461984505d9a9a6cba93f6ec8cd7adbe0ba8",
+   "approvedAt": 1792154400,
+   "payableFrom": 1792154460,
+   "payableNow": true
+  }
+ ],
+ "suggestedLimit": {
+  "askedAt": 1792156499,
+  "basis": "your agent (uat-u3-ops) asked: per payment 0.003000 USDC \u2192 0.004000 USDC (\"the weather API now costs 0.004 a call\"); it applies 1 minute(s) after it is signed, and the owner can cancel it until then: it raises what the agent may spend",
+  "byAgent": true,
+  "daily": "0.008000 USDC",
+  "floor": "0.000000 USDC",
+  "perAction": "0.004000 USDC"
+ },
+ "recommendAutopilot": false,
+ "agentAsks": {
+  "limits": {
+   "at": 1792156499,
+   "by": "uat-u3-ops",
+   "daily": "0.008000 USDC",
+   "floor": "0.000000 USDC",
+   "perAction": "0.004000 USDC",
+   "reason": "the weather API now costs 0.004 a call"
+  },
+  "mode": {
+   "at": 1792156499,
+   "by": "uat-u3-ops",
+   "mode": 1,
+   "reason": "UAT fix proof: lowering"
+  },
+  "payees": {
+   "allow": true,
+   "at": 1792156500,
+   "by": "uat-u3-ops",
+   "payees": [
+    "0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904"
+   ],
+   "reason": "the supplier that ships the parts"
+  }
+ },
+ "waiting": [
+  {
+   "kind": "seller",
+   "what": "approve 127.0.0.1 so the agent may pay it",
+   "counterparty": "0x108fa47c5befc672e16852677182588b543bfece",
+   "amount": "0.001000 USDC",
+   "why": "SOL mid price for the morning risk note (uat-u3, unapproved seller)"
+  },
+  {
+   "kind": "seller",
+   "what": "approve a payee it asked for so the agent may pay it",
+   "counterparty": "0x85e1c3924ed413a7e24e3388ed2c8697fd6b8904",
+   "amount": "0.003000 USDC",
+   "why": "the supplier that ships the parts"
+  }
+ ],
+ "counts": {
+  "needsYou": 0,
+  "sellersToApprove": 2,
+  "invoices": 0
+ }
+}
+
+## the service's own text (curl :7903)
+llms.txt carries the root algorithm: 1 line(s); openapi /api/level1/record summary: Recompute: leaf = keccak256(0x00 || canonical bytes); for n > 1 leaves split at k = the largest power of two below n
+
+## P-184: tameion-mcp against a socket that accepts and never answers (TAMEION_MCP_TIMEOUT_SECS=1), the words the agent gets:
+after 1027 ms, isError=True: no answer from http://127.0.0.1:55473/api/level1/prepare-payees in 1 s; the call may still complete. Read treasury_inbox before retrying, so nothing is asked twice.
+
+## P-183: the documented algorithm, run as written on the U3 record (proof/uat-u3-record-0x0e48221a-2026-10-16.events.jsonl), keccak by cast:
+7 events; recomputed root 0x0e48221a2f588c9ec193a9d1a80df4c3b98339faa9c293a158a557e15b533c0d
+U3's root from records / rootOf / the anchor calldata: 0x0e48221a…3c0d (proof/uat-u3-2026-10-16.txt step 5)
