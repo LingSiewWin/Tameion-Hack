@@ -611,20 +611,22 @@ pub fn transient_transport_error(msg: &str) -> bool {
     .any(|needle| m.contains(needle))
 }
 
+/// Public endpoints answer a burst with their own codes rather than HTTP
+/// 429: Arc's -32005 "rate limit exceeded", Base's -32011 "request limit
+/// reached". Treat any error that says "limit" as something to wait out,
+/// and a dropped connection or a timed-out request the same way.
+fn worth_retrying(e: &alloy::transports::TransportError) -> bool {
+    e.as_error_resp().is_some_and(|p| {
+        p.code == METHOD_NOT_SUPPORTED
+            || p.code == -32005
+            || p.code == -32011
+            || p.message.to_ascii_lowercase().contains("limit")
+    }) || transient_transport_error(&e.to_string())
+}
+
 fn retrying_client(url: alloy::transports::http::reqwest::Url) -> alloy::rpc::client::RpcClient {
     use alloy::transports::layers::{RateLimitRetryPolicy, RetryBackoffLayer};
-    // Public endpoints answer a burst with their own codes rather than HTTP
-    // 429: Arc's -32005 "rate limit exceeded", Base's -32011 "request limit
-    // reached". Treat any error that says "limit" as something to wait out,
-    // and a dropped connection the same way.
-    let policy = RateLimitRetryPolicy::default().or(|e: &alloy::transports::TransportError| {
-        e.as_error_resp().is_some_and(|p| {
-            p.code == METHOD_NOT_SUPPORTED
-                || p.code == -32005
-                || p.code == -32011
-                || p.message.to_ascii_lowercase().contains("limit")
-        }) || transient_transport_error(&e.to_string())
-    });
+    let policy = RateLimitRetryPolicy::default().or(worth_retrying);
     alloy::rpc::client::ClientBuilder::default()
         // The public Arc testnet RPC answers -32005 "rate limit exceeded" to a
         // history scan followed by writes (seen 2026-10-13). Twelve tries with
@@ -731,6 +733,43 @@ impl Confirmed for alloy::providers::PendingTransactionBuilder<alloy::network::E
 }
 
 impl ArcClient {
+    /// Read-only, for a person waiting on a page: a three-second cap per
+    /// request and three quick retries (a stalled request is sent again)
+    /// instead of the patient client's twelve two-second backoffs, so one
+    /// stalled or rate-limited read costs about three seconds, not a minute,
+    /// and is still answered (docs/110 item 8: the inbox took 38-62 s when a
+    /// public node stalled one read). Passes keep [`ArcClient::read_only`]'s patience.
+    pub fn read_only_quick(rpc_url: &str) -> Result<Self, ArcError> {
+        use alloy::transports::layers::{RateLimitRetryPolicy, RetryBackoffLayer};
+        let url: alloy::transports::http::reqwest::Url = rpc_url
+            .parse()
+            .map_err(|e| ArcError::Transport(format!("{e}")))?;
+        // A connection to the public node sometimes stalls in its TCP connect
+        // (7.6 s in 2 of 100 fresh curl requests to Arbitrum Sepolia's RPC,
+        // 2026-10-16); cut it at one second and connect again.
+        let http = alloy::transports::http::reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(1))
+            .timeout(std::time::Duration::from_secs(3))
+            .build()
+            .map_err(|e| ArcError::Transport(e.to_string()))?;
+        let client = alloy::rpc::client::ClientBuilder::default()
+            .layer(RetryBackoffLayer::new_with_policy(
+                3,
+                250,
+                1_000,
+                RateLimitRetryPolicy::default().or(worth_retrying),
+            ))
+            .transport(alloy::transports::http::Http::with_client(http, url), false);
+        Ok(ArcClient {
+            provider: ProviderBuilder::new().connect_client(client).erased(),
+            signer_address: None,
+            usdc: USDC_ADDRESS,
+            source: TransferSource::ArcNative,
+            log_chunk: LOG_CHUNK_BLOCKS,
+            turn: None,
+        })
+    }
+
     /// Read-only. Cannot send a transaction; the type says so and
     /// [`ArcError::NoSigner`] says so at runtime if a write is attempted.
     pub fn read_only(rpc_url: &str) -> Result<Self, ArcError> {
@@ -3295,6 +3334,57 @@ mod fail_closed_tests {
             }
         });
         url
+    }
+
+    /// A page's read that stalls is sent again and answered (docs/110 item 8):
+    /// the quick client gives up on the stalled request at its three-second cap
+    /// and retries, instead of failing the read or waiting a minute.
+    #[tokio::test]
+    async fn a_stalled_quick_read_is_sent_again_and_answered() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        tokio::spawn(async move {
+            let (stalled, _) = listener.accept().await.unwrap();
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let (mut buf, mut chunk) = (Vec::new(), [0u8; 4096]);
+            let body = loop {
+                let n = sock.read(&mut chunk).await.unwrap();
+                buf.extend_from_slice(&chunk[..n]);
+                let text = String::from_utf8_lossy(&buf).to_string();
+                let Some(end) = text.find("\r\n\r\n") else {
+                    continue;
+                };
+                let len: usize = text[..end]
+                    .lines()
+                    .find_map(|l| {
+                        l.to_ascii_lowercase()
+                            .strip_prefix("content-length:")?
+                            .trim()
+                            .parse()
+                            .ok()
+                    })
+                    .unwrap_or(0);
+                if buf.len() >= end + 4 + len {
+                    break text[end + 4..end + 4 + len].to_string();
+                }
+            };
+            let id = serde_json::from_str::<Value>(&body).unwrap()["id"].clone();
+            let out = json!({"jsonrpc": "2.0", "id": id, "result": "0x2a"}).to_string();
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{out}",
+                out.len()
+            );
+            sock.write_all(resp.as_bytes()).await.unwrap();
+            drop(stalled);
+        });
+        let started = std::time::Instant::now();
+        let head = ArcClient::read_only_quick(&url)
+            .unwrap()
+            .block_number()
+            .await;
+        assert_eq!(head.unwrap(), 42);
+        let took = started.elapsed();
+        assert!(took.as_secs() >= 3 && took.as_secs() < 6, "{took:?}");
     }
 
     fn selector(params: &Value) -> [u8; 4] {
