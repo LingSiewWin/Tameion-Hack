@@ -1,0 +1,50 @@
+# docs/103 §S2 fix round 1 and P-162 — live checks and test outputs, 2026-10-16 18:24 +0800 (seat S2)
+
+## Live, seat service :7902 (binary built from this tree)
+# fix round 1, live on http://127.0.0.1:7902 · 2026-10-16 18:22:34 +0800 · binary built 18:18 from this tree
+account 0x066330f5692a322af842ee4a0cf444679fc7ebc3 (s2-fix1-1822); device token in scratch, not printed
+## S2-4 (the agent key) is proven by cargo test app_http::invites_and_dismissals_take_the_owners_device_not_an_agent_key:
+##   a lazy account has no agent key to refuse (token-signed reads the owner's key on chain). Here: no token at all, then the device.
+{"error":"invites are the owner's: open the desk on the device that opened the account"}
+device: {'role': 'Supplier', 'expires': 1792750956}
+## the supplier answers as "Lim Brothers Gold"
+{"proposed":{"address":"0x79e417586b329c0fac364afdb8e896fae2bc87ad","name":"Lim Brothers Gold","role":"Supplier"}}
+## S2-2: a second supplier invite answered by a stranger with a look-alike name
+'Lim Brothers Gold\u200b' → {"error":"this name changes when it is cleaned (invisible characters, compatibility forms, extra spaces): sign the cleaned name"}
+'Lim Br\u043ethers Gold' → {"error":"Lim Brоthers Gold is already another key's name on this desk, or reads like it: choose another name"}
+'Lim Brothers G0ld' → {"error":"Lim Brothers G0ld is already another key's name on this desk, or reads like it: choose another name"}
+'\uff2cim Brothers Gold' → {"error":"this name changes when it is cleaned (invisible characters, compatibility forms, extra spaces): sign the cleaned name"}
+## S2-3: one row, naming its invite; turning the open look-alike invite down: no token refused, the device can
+{"proposals":[{"address":"0x79e417586b329c0fac364afdb8e896fae2bc87ad","at":1792146156,"id":"0x5a122a3e57f0497ce814bda1078b7c527ddc064540dbcedd2df7d2bcb45718b8","invited":1792146156,"name":"Lim Brothers Gold","received":1792146156,"role":"Supplier"}]}
+{"error":"invites are the owner's: open the desk on the device that opened the account"}
+{"dismissed":"0xe4c5312fff917052b46fe519e557ef006a6faaaf24c6231b78f5721b13662d04"}
+## S2-5: once approved, the supplier's key cannot answer a vault invite under another name
+{'parties': [('Lim Brothers Gold', '0x79e417586b329c0fac364afdb8e896fae2bc87ad')]}
+{"error":"this key already signs for this desk as Lim Brothers Gold: one key, one name; make a new key for this invite"}
+## Book::bind: the owner's passkey cannot approve a look-alike name for another key either
+{"error":"Lim Brоthers Gold reads like Lim Brothers Gold, already approved as another key; approve it under a name that reads differently"}
+
+## cargo test -p operator (round 1)
+     Running unittests src/lib.rs (target/debug/deps/operator-59f5d4f009e37283)
+test result: ok. 140 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.46s
+     Running unittests src/bin/tameion-app.rs (target/debug/deps/tameion_app-79cdf326596afa29)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/tameion-mcp.rs (target/debug/deps/tameion_mcp-dd1db1a98916efb1)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/app_http.rs (target/debug/deps/app_http-0238fb68a5ce848e)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.83s
+     Running tests/claude_transport.rs (target/debug/deps/claude_transport-fb8f0933f454c960)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+     Running tests/hedge_advice.rs (target/debug/deps/hedge_advice-5c2f7e7bf30a684a)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/mcp_stdio.rs (target/debug/deps/mcp_stdio-3b4fb2936e66dac3)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test desk::tests::a_look_alike_name_for_another_key_is_refused_and_an_old_book_still_replays ... ok
+test desk_invite::tests::a_look_alike_name_and_a_second_name_for_one_key_are_refused ... ok
+test parties::tests::a_name_that_reads_like_another_is_the_same_name ... ok
+test x402::tests::a_seller_whose_receipt_does_not_read_back_keeps_its_signature_pending_until_the_deadline ... ok
+test invites_and_dismissals_take_the_owners_device_not_an_agent_key ... ok
+
+## P-162 test before the fix (18:01)
+panicked at crates/operator/src/x402.rs:884:14: a second signature to a seller that may still redeem the first: ()  → test result: FAILED. 0 passed; 1 failed

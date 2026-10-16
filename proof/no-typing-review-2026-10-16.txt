@@ -1,0 +1,42 @@
+# S6 (reviewer) — the clean-profile no-typing flow, my own way, on :3000 (next dev) → :7880 — written 2026-10-16 18:03 +0800; run 10:01:52–10:02:19 UTC = 18:01:52–18:02:19 +08 (the log times are UTC)
+# Script: .playwright-mcp/s6-no-typing.js (deleted after the run); Chromium with a CDP virtual authenticator (PRF on) per context; five clean contexts (owner 1280 wide; supplier, three strangers at 390).
+# No device token, invite secret or key is printed (inv=… cut by the script).
+
+## Verdict
+- The owner typed nothing: 0 keydown events on the owner's page from `/` through Start → /desk → two invites → Approve (passkey) → Not them.
+- Start's h1 is the working line of CLAUDE.md; no banned word on Start, the join page or /desk; 0 visible bare addresses on each.
+- A stranger on a forwarded (already answered) link: refused. A made-up invite: refused. The exact same name on a second invite: refused.
+- A LOOKALIKE name ("Lim Brothers Gold" + U+200B zero-width space) on a second invite: ACCEPTED — the owner then saw two rows reading
+  "Approve Lim Brothers Gold ••45B1 as Supplier?" and "Approve Lim Brothers Gold ••46EB as Supplier?" (screenshot
+  proof/no-typing-review-rows-1280.png). The owner approved the first with one passkey tap and turned the second down ("Not them").
+- A #join= link carrying a forged answer, opened on the owner's desk: refused by the service (toast "signature: invalid parity: 34"); no row.
+- Not checked by this run: that the code on the owner's row equals the key code on the phone — my regex caught the join page's DESK code
+  (66AF 16E8, the same for every phone, as it should be); S2's proof §C compared the key codes (9FF2 E79A both sides) and the function is
+  deterministic with the spec's vectors (lib/names.ts, test/names.test.mts).
+
+## Log (UTC)
+[10:01:52Z] owner: http://localhost:3000/ clean (localStorage cleared). h1: "A gold dealer's stock is offset on Hyperliquid while they hold it, from their own laptop, and their lender gets a statement it can check without trusting them or us.". Name prefilled "desk-gold-3444". Banned words on Start: []. Bare addresses visible: 0
+[10:01:53Z] owner: one tap → desk 0x845ef977bcd8d9bf6112d39cb9a35acc96887020 (desk-gold-3444) on arbitrum-sepolia, deployed=false; landed on /desk. Keydowns on the owner's page: 0
+[10:01:53Z] owner taps "Invite a supplier": http://localhost:3000/sign#desk=0x845ef977bcd8d9bf6112d39cb9a35acc96887020&chain=421614&join=Supplier&inv=…&back=http%3A%2F%2Flocalhost%3A3000&from=desk-gold-3444
+[10:01:54Z] supplier: prefilled "Supplier" → "Lim Brothers Gold"; Sent; (desk code 66AF 16E8); banned words on the join page: []; bare addresses visible: 0
+[10:01:59Z] stranger on the forwarded, used link: refused — "this invite was already answered: ask the trader for a new link"
+[10:02:03Z] stranger with a made-up invite: refused — "this invite is not open on that desk (used, lapsed or never made): ask the trader for a new link"
+[10:02:03Z] owner taps "Invite a supplier": http://localhost:3000/sign#desk=0x845ef977bcd8d9bf6112d39cb9a35acc96887020&chain=421614&join=Supplier&inv=…&back=http%3A%2F%2Flocalhost%3A3000&from=desk-gold-3444
+[10:02:07Z] stranger on a second invite, the exact same name: refused — "Lim Brothers Gold is already another key's name on this desk: choose another name"
+[10:02:11Z] stranger, the lookalike "Lim Brothers Gold" + U+200B: ACCEPTED (Sent.)
+[10:02:13Z] owner's Needs you (2 supplier rows): Needs you | Each one is your decision. The reason is under it. | Approve Lim Brothers Gold ••45B1 as Supplier? | They will sign the purchase, and what they sign moves your offset. Their phone shows code 2AD3 4744; on a call they can read it to you. | Approve Lim Brothers Gold | Approve Lim Brothers Gold<U+200B> ••46EB as Supplier? | They will sign the purchase, and what they sign moves your offset. Their phone shows code 1C3C F2AC; on a call they can read it to you. | Approve Lim Brothers Gold<U+200B>
+[10:02:13Z] owner taps "Approve Lim Brothers Gold" (passkey): "Supplier approved: Lim Brothers Gold may now sign the purchase for your desk."
+[10:02:13Z] owner taps "Not them" on the remaining row: "Turned down: Lim Brothers Gold<U+200B> is not on your desk."
+[10:02:15Z] "Who may sign" after: Lim Brothers Gold@arbitrum-sepolia · the purchase
+[10:02:15Z] owner's /desk: bare addresses visible 0; banned words []
+[10:02:19Z] a #join= link with a forged answer opened on the owner's desk: toasts ["signature: invalid parity: 34"]; rows naming "Planted Supplier": 0
+
+## Everything typed in the run (the owner: nothing)
+supplier typed into #join-name: "Lim Brothers Gold"
+stranger-forwarded typed into #join-name: "Lim Brothers Gold"
+stranger-fake typed into #join-name: "Lim Brothers Gold"
+stranger-lookalike typed into #join-name: "Lim Brothers Gold"
+stranger-lookalike typed into #join-name: "Lim Brothers Gold<U+200B>"
+
+## Left behind
+A lazy test desk desk-gold-3444 (0x845ef977bcd8d9bf6112d39cb9a35acc96887020) in the PM's runtime/app (nothing on chain, nothing traded), like S2's three; delete if unwanted.

@@ -1,0 +1,158 @@
+# Nothing typed — docs/105 (seat S2 of docs/102), 2026-10-16
+# Written 2026-10-16 17:27 +0800. Arbitrum Sepolia; Hyperliquid testnet only; no key or device token is printed.
+# Browser runs: Chromium 155 (Playwright), each person in its own clean browser context (empty localStorage); the passkeys are
+# Chromium's virtual platform authenticator (CDP WebAuthn, with PRF) — a stand-in for Touch ID / a phone's fingerprint.
+
+## Verdict
+- Start cannot hang (docs/60 P-100): HELD — Cancel ends the prompt in words (68 ms); an unanswered prompt ends by itself at 60.3 s,
+  in words; no key is kept (section B).
+- A counterparty joins by an invite link and the owner taps one row "Approve <name> ••XXXX as <Role>?": HELD — by curl on the seat
+  service (A), in the browser on the PM's service :3000 → :7880 restarted 17:18 (C), and on the seat service (D).
+- name@chain, the address behind a tap: the owner's /desk had 0 visible text nodes with a bare address in every run (C, D).
+- Zero typed addresses: the owner typed nothing at all (the desk name is prefilled, every decision is a tap); the counterparties typed
+  their own name, grams, price and document numbers; the run script refuses to type anything that looks like an address.
+- The code each phone shows equals the code on the owner's row for that key (ERC-7828 checksum, 8 characters): same, both parties (C, D).
+- Statement as a link / lender PASS: PARKED by the PM at 17:13 (the PM's task 3 = task 2 of the plan in docs/105). One run before the ruling (D2): link copied (3,743 characters),
+  the lender's page asked for the desk code (it matched the trader's card), then "Do not lend" — check h refuses the statement's
+  "-0.000000" (docs/60 P-144, files not S2's). NOT DONE.
+
+## A. The invite route, by curl on the seat's own service (:7902, fresh runtime/seat-S2), verbatim
+# the invite route, by curl on the seat's own service (http://127.0.0.1:7902) · 2026-10-16 16:49:34 +0800
+## 1. an owner account (a software passkey made in scratch; lazy: reserved, nothing on chain)
+account 0xcc6c6d922c4cce34da34d4a8fe21fb5cdba35453 (s2-invite-1649), deployed=False; device token kept in scratch, not printed
+## 2. the owner mints an invite for a Supplier (device token); without it: refused
+{"error":"invites are the owner's: open the desk on the device that opened the account"}
+{'role': 'Supplier', 'expires': 1792745376, 'invite': '8ccb74…(64 hex, in the link only)'}
+## 3. the counterparty's phone key answers it (no token: the invite and the signature are the authority)
+counterparty key 0x6a865ed05E6B3878b8117dc41DA619434860c8EE (scratch)
+### signed for another role → refused
+{"error":"the signature is not by that key; it was signed for another desk, role or name (signed by 0x3ebe7c311c419ef8ec1ed130a45bb31fe977290d)"}
+### a made-up invite → refused
+{"error":"this invite is not open on that desk (used, lapsed or never made): ask the trader for a new link"}
+### the real answer → proposed
+{"proposed":{"address":"0x6a865ed05e6b3878b8117dc41da619434860c8ee","name":"Kim Seng Bullion","role":"Supplier"}}
+### another key on the same invite → refused (one answer per invite)
+{"error":"this invite was already answered: ask the trader for a new link"}
+## 4. the owner's page lists it (device token); without it: refused
+{"error":"invites are the owner's: open the desk on the device that opened the account"}
+{"proposals":[{"address":"0x6a865ed05e6b3878b8117dc41da619434860c8ee","at":1792140576,"id":"0x5af4da513de9835e144da661a7ab65bb42e8684d6cfca2a904fc666db30d8904","name":"Kim Seng Bullion","received":1792140576,"role":"Supplier"}]}
+## 5. one tap: the owner's passkey approves it through the existing POST /api/desk/party (kinds = the Supplier role)
+{'parties': [('Kim Seng Bullion', '0x6a865ed05e6b3878b8117dc41da619434860c8ee', ['bought'])]}
+### waiting no more
+{"proposals":[]}
+## 6. the approved phone key signs a purchase; the desk books it
+{"booked":"GOLD-S2-1792140580 · bought 10.000 g of gold for 1334.45 USDC · PO-S2-1 · signed by Kim Seng Bullion (0x6a865ed05e6b3878b8117dc41da619434860c8ee)","offset":null,"priceNote":null,"root":"0x43f28c04f29b46c07dd6e8534de576b6336e8fdf9df374439024bbaf68935607","signer":"0x6a865ed05e6b3878b8117dc41da619434860c8ee"}
+{'deals': [('GOLD-S2-1792140580', '10.000 g gold', 'bought, not delivered', [('bought', 'Kim Seng Bullion', True)])], 'parties': [('Kim Seng Bullion', '0x6a865ed05e6b3878b8117dc41da619434860c8ee')]}
+## 7. an invite for a role that does not exist → refused
+{"error":"an invite is for one of: Supplier, Carrier, Vault, Workshop, Retailer, Buyer"}
+
+## B. P-100 in the browser (seat service :7902, console built from this tree into scratch), times UTC (+08 is 8 h later)
+Clean context; the virtual authenticator never sees a touch (automaticPresenceSimulation: false).
+[09:14:37Z] tap "Open my desk with my passkey": the button reads "Waiting for your passkey…", the page says "Answer the Touch ID / passkey prompt your browser just opened. It closes by itself after a minute.", and a Cancel button is there
+[09:14:37Z] tap Cancel: after 68 ms the page says "Cancelled. Nothing was created; tap again when you are ready."; the button reads "Open my desk with my passkey" again
+[09:15:37Z] tap again and leave it: after 60.3 s the page says "No answer to the passkey prompt within a minute, so nothing was created. Tap again and answer it."
+[09:15:37Z] no key was kept: localStorage tameion.pub = null
+Screenshots: proof/no-typing-p100-prompt-{1280,390}.png, proof/no-typing-p100-cancelled-1280.png, proof/no-typing-p100-minute-1280.png
+
+## C. The clean-profile flow on the PM's service: http://localhost:3000 (next dev of this tree) → API :7880 (restarted 17:18 by the PM)
+Three people, three clean contexts: the owner (1280 wide), the supplier and the vault (390 wide, phone-like). Times UTC.
+[09:25:56Z] owner: http://localhost:3000/ in a clean profile (localStorage cleared). Start says: "A gold dealer's stock is offset on Hyperliquid while they hold it, from their own laptop, and their lender gets a statement it can check without trusting them or us.". Name prefilled: desk-gold-5761
+[09:25:57Z] screenshot proof/no-typing-1-start-{1280,390}.png
+[09:25:59Z] owner: one tap, the passkey prompt answered by the platform authenticator; account 0x24dd82f8eedc92be4d69b698820e08dae6200687 (desk-gold-5761) on arbitrum-sepolia, deployed=false; the page went to /desk by itself
+[09:25:59Z] owner taps "Invite a supplier": toast "Invite link copied"; the link: http://localhost:3000/sign#desk=0x24dd82f8eedc92be4d69b698820e08dae6200687&chain=421614&join=Supplier&inv=…&back=http%3A%2F%2Flocalhost%3A3000&from=desk-gold-5761
+[09:26:00Z] screenshot proof/no-typing-2-invite-{1280}.png
+[09:26:00Z] owner taps "Invite a vault": toast "Invite link copied"; the link: http://localhost:3000/sign#desk=0x24dd82f8eedc92be4d69b698820e08dae6200687&chain=421614&join=Vault&inv=…&back=http%3A%2F%2Flocalhost%3A3000&from=desk-gold-5761
+[09:26:02Z] screenshot proof/no-typing-3-join-{390,1280}.png
+[09:26:02Z] supplier: opened the invite on a phone-sized clean profile; name field prefilled "Supplier", changed to "Lim Brothers Gold"; one tap made the key (sealed behind the phone's passkey where PRF is offered) and sent it, signed; its key code: 9FF2 E79A
+[09:26:02Z] screenshot proof/no-typing-4-sent-{390}.png
+[09:26:04Z] vault: opened the invite on a phone-sized clean profile; name field prefilled "Vault", changed to "Harbour Vault KL"; one tap made the key (sealed behind the phone's passkey where PRF is offered) and sent it, signed; its key code: ACB5 75E6
+[09:26:09Z] owner's desk, Needs you: Needs you | Approve Lim Brothers Gold ••F305 as Supplier? | They will sign the purchase, and what they sign moves your offset. Their phone shows code 9FF2 E79A; on a call they can read it to you. | Approve Lim Brothers Gold | Not them | Approve Harbour Vault KL ••3D64 as Vault? | They will sign what comes into stock. Their phone shows code ACB5 75E6; on a call they can read it to you. | Approve Harbour Vault KL | Not them
+[09:26:09Z] code check, Lim Brothers Gold: phone 9FF2 E79A, owner's row 9FF2 E79A → same
+[09:26:09Z] code check, Harbour Vault KL: phone ACB5 75E6, owner's row ACB5 75E6 → same
+[09:26:10Z] screenshot proof/no-typing-5-needs-you-{1280,390}.png
+[09:26:10Z] owner taps "Approve Lim Brothers Gold" (passkey): toast "Supplier approved: Lim Brothers Gold may now sign the purchase for your desk."
+[09:26:11Z] owner taps "Approve Harbour Vault KL" (passkey): toast "Vault approved: Harbour Vault KL may now sign what comes into stock for your desk."
+[09:26:11Z] screenshot proof/no-typing-6-approved-{1280}.png
+[09:26:13Z] supplier: opened the signing link; "You confirm as" prefilled "Lim Brothers Gold" from its invite; signed the purchase of 10.000 g for 1334.45 USDC (GOLD-5761); booked
+[09:26:14Z] vault: opened the deal card's link, prefilled {"as":"Harbour Vault KL","kind":"arrived","qty":"10.000","deal":"GOLD-5761"}; typed only its receipt number; signed; booked
+[09:26:14Z] owner's /desk: 0 visible text nodes with a bare address
+Everything typed in the run (the owner: nothing):
+  supplier typed into #join-name: "Lim Brothers Gold"
+  vault typed into #join-name: "Harbour Vault KL"
+  supplier typed into #qty: "10.000"
+  supplier typed into #usdc: "1334.45"
+  supplier typed into #doc: "INV-2201"
+  supplier typed into #deal: "GOLD-5761"
+  vault typed into #doc: "VR-1042"
+The service's answers, in order (each cut at 700 characters; the device token and the invite secrets cut out by the script):
+owner POST /api/level1/deploy → 200 {"explorer":"https://sepolia.arbiscan.io","reserveToken":"<device token, not printed>","tenant":{"agent":"0x0f9f9603a7b23fa5f65aaecdd4aedff081745112","agentTokenCount":0,"agent_gas_tx":null,"billCount":0,"caps_provisional":true,"chain":"arbitrum-sepolia","created":1792142759,"created_block":319709774,"daily":"100.000000 USDC","delay_secs":60,"deployed":false,"floor":"0.000000 USDC","history_from_block":290421638,"keyless":false,"kind":"hold","mode":1,"name":"desk-gold-5761","notifySet":false,"operator":"0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25","owner":"0xfe7808d909d839f0e5126476f3efb2381fdef068","owner_tx":null,"partner":null,"per_action":"50.000000 USDC","policy":"0x24dd82f8eedc92be4d69b
+owner GET /api/desk/statements?… → 200 {"books":[],"statements":[]}
+owner GET /api/desk?… → 200 {"chainId":421614,"control":null,"deals":[],"exposure":[{"autoLimit":"1000.000 g gold","autoMoved":"0 g","goods":"gold","held":"0.000 g gold","market":"PAXG","offsetTarget":"0","unhedgedBase":"0.000 g gold"}],"parties":[],"root":"0x0000000000000000000000000000000000000000000000000000000000000000","venueAccount":null}
+owner GET /api/desk/party/proposals?… → 200 {"proposals":[]}
+owner POST /api/desk/party/invite → 200 {"expires":1792747559,"invite":"b64b52…","role":"Supplier"}
+owner GET /api/desk/venue?… → 200 {"account":"0x557e1e07652b75abaa667223b11704165fc94d09","agent":"0x22d3a1b3757e9ff4a83df9fc4447f16dfe4afca3","byEnvironment":false,"connected":null}
+owner POST /api/desk/party/invite → 200 {"expires":1792747560,"invite":"48ed64…","role":"Vault"}
+supplier POST /api/desk/party/propose → 200 {"proposed":{"address":"0x5338966f91126f5a6b1891417bb637a75c93f305","name":"Lim Brothers Gold","role":"Supplier"}}
+vault POST /api/desk/party/propose → 200 {"proposed":{"address":"0xa763c603c90ae1e3d554e501b4d82162fb943d64","name":"Harbour Vault KL","role":"Vault"}}
+owner GET /api/desk/party/proposals?… → 200 {"proposals":[{"address":"0x5338966f91126f5a6b1891417bb637a75c93f305","at":1792142762,"id":"0x7adae447f8ca59430749bb291f3d9a97f8d3a148e466ed8f9800573a70053aea","name":"Lim Brothers Gold","received":1792142762,"role":"Supplier"},{"address":"0xa763c603c90ae1e3d554e501b4d82162fb943d64","at":1792142764,"id":"0xc92d49c2a17c61c2bad13f95c2770759990c10358d4f657fb36282b0689d7699","name":"Harbour Vault KL","received":1792142764,"role":"Vault"}]}
+owner POST /api/desk/party → 200 {"parties":[{"address":"0x5338966f91126f5a6b1891417bb637a75c93f305","approval":{"auth":{"authenticatorData":"0x49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97630500000002","challengeIndex":23,"clientDataJSON":"{\"type\":\"webauthn.get\",\"challenge\":\"okxZ-6t7PVrbi29FSnAl92FLllEsVyMXlM0s3Z2scAY\",\"origin\":\"http://localhost:3000\",\"crossOrigin\":false}","r":"0xf11ddfeebe2c084f7c48360c2e1ea06f71800273613b4b24c9614ea880214963","s":"0x375a8a6c281ef13396e88fe40d921a9fe95be78c4161a69b1fd944dbb4a34b61","typeIndex":1},"challenge":"0xa24c59fbab7b3d5adb8b6f454a7025f7614b96512c57231794cd2cdd9dac7006","issued":1792142770},"kinds":["bought"],"name":"Lim Brothers Gold"}]}
+owner GET /api/desk/party/proposals?… → 200 {"proposals":[{"address":"0xa763c603c90ae1e3d554e501b4d82162fb943d64","at":1792142764,"id":"0xc92d49c2a17c61c2bad13f95c2770759990c10358d4f657fb36282b0689d7699","name":"Harbour Vault KL","received":1792142764,"role":"Vault"}]}
+owner POST /api/desk/party → 200 (the second approval: Harbour Vault KL, kinds ["arrived","returned"], with its own passkey assertion)
+owner GET /api/desk/party/proposals?… → 200 {"proposals":[]}
+owner GET /api/desk?… → 200 {… "parties":[{"address":"0x5338966f91126f5a6b1891417bb637a75c93f305","kinds":["bought"],"name":"Lim Brothers Gold","stopped":false},{"address":"0xa763c603c90ae1e3d554e501b4d82162fb943d64","kinds":["arrived","returned"],"name":"Harbour Vault KL","stopped":false}] …}
+supplier POST /api/desk/milestone → 200 {"booked":"GOLD-5761 · bought 10.000 g of gold for 1334.45 USDC · INV-2201 · signed by Lim Brothers Gold (0x5338966f91126f5a6b1891417bb637a75c93f305)","offset":null,"priceNote":null,"root":"0x5a4911c4c8286f3cc8634dbd685e2b04fd6531013e5ade743fcc28f346994427","signer":"0x5338966f91126f5a6b1891417bb637a75c93f305"}
+vault POST /api/desk/milestone → 200 {"booked":"GOLD-5761 · 10.000 g of gold into stock · VR-1042 · signed by Harbour Vault KL (0xa763c603c90ae1e3d554e501b4d82162fb943d64)","offset":null,"priceNote":null,"root":"0xc9023d1aacdefa50521de229b52e5fcf5520a2028784ac027fd76adca4f5abe5","signer":"0xa763c603c90ae1e3d554e501b4d82162fb943d64"}
+(offset null: this test desk is not connected to an exchange account on :7880 — the Mac's one account belongs to the demo desk; nothing traded.)
+
+## D. The same flow on the seat service (:7902, a production build of this tree served by the service, as on a trader's Mac)
+D1, 09:10:56Z–09:11:13Z (17:10:56–17:11:13 +08):
+[09:10:56Z] owner: http://localhost:7902/ in a clean profile (localStorage cleared). Start says the working line. Name prefilled: desk-gold-7593
+[09:11:00Z] owner: one tap; account 0xd20e9e4ffc892f74267ca26c9bbf902cee65294b (desk-gold-7593) on arbitrum-sepolia, deployed=false; the page went to /desk by itself
+[09:11:00Z] owner taps "Invite a supplier" … [09:11:01Z] "Invite a vault": both links copied
+[09:11:03Z] supplier joined as "Lim Brothers Gold", key code 7B2C 9D42 · [09:11:04Z] vault joined as "Harbour Vault KL", key code E3FB 8C79
+[09:11:10Z] owner's desk, Needs you: Approve Lim Brothers Gold ••01D4 as Supplier? (code 7B2C 9D42) | Approve Harbour Vault KL ••1E58 as Vault? (code E3FB 8C79)
+[09:11:10Z] code check: same, same
+[09:11:11Z] "Supplier approved: Lim Brothers Gold may now sign the purchase for your desk." · "Vault approved: Harbour Vault KL may now sign what comes into stock for your desk."
+[09:11:13Z] supplier signed the purchase (GOLD-7593, 10.000 g, 1334.45 USDC, INV-2201): booked; vault signed the arrival from the deal card's link (only "VR-1042" typed): booked
+[09:11:13Z] owner's /desk: 0 visible text nodes with a bare address
+Before D1, the same run found and fixed P-143 (a second link in the same tab kept the old form) and P-142 (a race in the script).
+
+D2 — the lender link (the PM's task 3), run once before the PM parked it at 17:13 (kept as evidence, NOT a pass):
+Operator step on the seat service only (the documented hand edit of runtime/seat-S2/desk-venue.json): desk-gold-7593 bound to
+Hyperliquid testnet account 0xd2ce2ab7d070a7117140231182d827935c24a66f — empty (accountValue 0.0, no positions, role "missing"), so
+nothing could trade and no other desk's short could be counted; the seat service runs without HEDGE_LIVE.
+[09:11:34Z] owner's /desk: Offset tile "0 g · flat, checked at the exchange 05:11 PM"
+[09:11:38Z] owner taps "Statement for your lender": "Your lender would count 914.77 USDC against this deal."
+  anchor tx 0x1af7735013e93c07c02440a78886b8517ed977a44cac6a2b6142ee5b93d77d88 (Arbitrum Sepolia, from the relayer 0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25,
+  contract 0xe7c381aafa077cc99359e8b297d2125efd76b8f5) — https://sepolia.arbiscan.io/tx/0x1af7735013e93c07c02440a78886b8517ed977a44cac6a2b6142ee5b93d77d88
+[09:11:38Z] owner taps "Send to lender": toast "Statement link copied: paste it to your lender. They open it and check it in their browser."; the link is 3,743 characters (http://localhost:7902/lender#s=H4sI…&from=desk-gold-7593); the card shows the desk code A89C A5D3
+[09:11:39Z] owner's /desk: 0 visible text nodes with a bare address
+[09:11:41Z] lender opens the link in a clean profile; checks ran at once; the page asks: "This is desk ••294B (desk-gold-7593). Confirm with them by phone, then Save."; code to read: A89C A5D3 (the trader's card: A89C A5D3)
+[09:11:43Z] lender taps "Save and check again": "Do not lend on this statement"
+[09:11:44Z] lender page: 0 visible text nodes with a bare address; the lender's browser now holds the set-up for desk 0xd20e9e4ffc892f74267ca26c9bbf902cee65294b
+Why "Do not lend" — the page's own checks run in node on the kit (runtime/seat-S2/…/statements/GOLD-7593-1792141894.lender.json, 17:12):
+  PASS a The numbers are the ones that were signed · PASS b Signed by the desk's statement key (0x62f82E3494eB9c446c161A9F52f0a90B986e5062)
+  PASS c Every step shown belongs to the book that was anchored (2 of 2) · PASS f Each counterparty signed its own step
+  FAIL h The grams are what the steps add up to | not a decimal: -0.000000 · FAIL m The money follows from the grams | No grams to compute from
+  PASS p The price is the market's (PAXG 4183.6–4184.2; the statement 4184.2) · PASS d The book's root is on chain (two public nodes, block 319706561)
+  PASS e The offset is real (0.000000) · PASS g The cost of the offset is the exchange's own figure (0.000000) · PASS t The statement is recent
+  → docs/60 P-144: the statement prints "shortContracts": "-0.000000" and the verifier refuses the sign. Not S2's files; fix proposed there.
+Screenshots (labelled as parked): proof/no-typing-parked-7-statement-sent-{1280,390}.png, proof/no-typing-parked-8-lender-first-{1280,390}.png,
+proof/lender-link-parked-do-not-lend-{1280,390}.png
+
+## E. The S2 → S4 patch for app/desk/page.tsx, tested on the seat's scratch copy only (S4 owns the file), 09:19Z
+[09:19:09Z] owner's inbox (S4's DeskInbox, top of /desk): "Needs you | Each one is your decision. The reason is under it. | Approve Lim Brothers Gold ••9BD8 as Supplier? | They will sign the purchase, and what they sign moves your offset. Their phone shows code 886B 6422; on a call they can read it to you. | Approve Lim Brothers Gold"
+[09:19:09Z] "Who may sign" keeps only: "Lim Brothers Gold asks to sign as Supplier: approve it under Needs you. | Not them"
+[09:19:10Z] one tap in the inbox (passkey): toast "Supplier approved: Lim Brothers Gold may now sign the purchase for your desk."
+[09:19:10Z] the inbox then says "Nothing needs you"
+Screenshots: proof/no-typing-inbox-{1280,390}.png
+
+## Not proven here
+- A real phone and a real Touch ID or fingerprint (the runs used Chromium's virtual platform authenticator, PRF on).
+- The cross-origin path (a public copy of /sign sends the answer back as a #join= link the owner opens): built, not run (no public copy).
+- A non-ASCII name end to end (P-145); the #step= reader on /desk is S4's patch.
+- The lender link verdict PASS: parked (D2 shows where it stopped).
+
+## Re-run
+Curl: scratch script invite_curl.sh (owner key and device token in scratch only). Browser: .playwright-mcp/s2-e2e-3000.js (C),
+s2-e2e-stage1.js + s2-e2e-stage2.js (D), s2-p100.js (B), s2-e2e-inbox.js (E), through the Playwright tool's run-code with that file.
