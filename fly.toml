@@ -1,0 +1,48 @@
+# Fly.io config for Tameion Watch. First deploy:
+#   fly launch --copy-config --no-deploy   (name the app, pick a region)
+#   fly volumes create tameion_data --size 1
+#   fly secrets set TAMEION_APP_ADMIN_TOKEN=<random> TAMEION_RPC_ARBITRUM=<keyed url> TAMEION_RPC_BASE=<keyed url>
+#   # Level 1 (/level1) needs the relayer key (pays gas, is the operator; a key
+#   # with a little Arc testnet USDC and nothing else) and an invite word:
+#   fly secrets set TAMEION_RELAYER_KEY=0x<hex> TAMEION_LEVEL1_INVITE=<word>
+#   fly deploy
+app = "tameion-watch"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  HOST = "0.0.0.0"
+  PORT = "8080"
+  TAMEION_APP_DIR = "/data/app"
+  TAMEION_CONTACT_URL = "https://discord.gg/rsVfYutFZg"
+  TAMEION_REPO_URL = "https://github.com/lingsiewwin/Tameion-Hack"
+  # one agent pass per tenant per hour; the page's button still works between
+  TAMEION_LEVEL1_EVERY_SECS = "3600"
+  # PLAN 5.6: a pass when a tenant's wallet or policy moves USDC (two eth_getLogs per chain per tick).
+  TAMEION_LEVEL1_WATCH_SECS = "60"
+  # PLAN 5.61: the Web Push key lives on the volume; one made in $HOME would be
+  # new after every deploy and every phone's subscription would stop working.
+  TAMEION_VAPID_KEY = "/data/vapid.key"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  method = "GET"
+  path = "/healthz"
+
+[mounts]
+  source = "tameion_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
