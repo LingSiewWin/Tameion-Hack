@@ -1,0 +1,299 @@
+{
+  "about": "Golden decisions for the payment pass (docs/113). Each case is decide::Case; golden is what a careful finance lead does, written before any decider ran. Amounts are USDC minor units (6 decimals). allowed is what S10's code computes (crates/operator/src/decide.rs): bills by allowed_for_bill (refused by the checks: refuse; escalated - unapproved payee, over a cap, weak inference: ask or refuse; verified: pay or anything more cautious, wait only before the due date; an early candidate: pay_early or wait), invoices by allowed_for_invoice (ask or refuse; a look-alike or frozen payee: refuse only), x402 calls by x402.rs's rules in the same shape (approved and inside the limits: pay, ask, refuse; otherwise ask or refuse). Rhythms in s09-s14: Base x402 payers 2026-09-16..10-16 (proof/exposure-census-2026-10-16.txt): the 300 busiest made a median 2,226 authorizations in 30 days; 208 of 300 randomly sampled others paid exactly once.",
+  "scenarios": [
+    {
+      "name": "recurring bill due today",
+      "case": {
+        "id": "bill:northwind-hosting:2026-10",
+        "payee": "Northwind Hosting",
+        "amount_minor": 49000000,
+        "usual_minor": 49000000,
+        "samples": 6,
+        "cadence_days": 30,
+        "due_in_days": 0,
+        "runway_days": 64,
+        "discount_bps": 0,
+        "early_days": 0,
+        "payee_age_days": 190,
+        "lookalike_of": null,
+        "confidence": 0.94,
+        "allowed": ["pay", "ask", "refuse"]
+      },
+      "golden": { "action": "pay", "basis": "due_now" },
+      "why": "An approved payee with six monthly payments of the same amount, due today, and cash for every bill for 64 days: paying on the due date is the job."
+    },
+    {
+      "name": "recurring bill due in 9 days, no early terms",
+      "case": {
+        "id": "bill:contoso-search:2026-10",
+        "payee": "Contoso Search API",
+        "amount_minor": 120000000,
+        "usual_minor": 120000000,
+        "samples": 5,
+        "cadence_days": 30,
+        "due_in_days": 9,
+        "runway_days": 64,
+        "discount_bps": 0,
+        "early_days": 0,
+        "payee_age_days": 160,
+        "lookalike_of": null,
+        "confidence": 0.91,
+        "allowed": ["pay", "ask", "wait", "refuse"]
+      },
+      "golden": { "action": "wait", "basis": "usual" },
+      "why": "No early-payment terms, so paying 9 days early gives away cash for nothing; USDC settles in seconds at any hour, so the pass pays it on the due day with no lead time."
+    },
+    {
+      "name": "invoice four times the payee's usual",
+      "case": {
+        "id": "invoice:fabrikam-data:INV-2291",
+        "payee": "Fabrikam Data",
+        "amount_minor": 1000000000,
+        "usual_minor": 250000000,
+        "samples": 7,
+        "cadence_days": 30,
+        "due_in_days": 3,
+        "runway_days": 64,
+        "discount_bps": 0,
+        "early_days": 0,
+        "payee_age_days": 230,
+        "lookalike_of": null,
+        "confidence": 0.93,
+        "allowed": ["ask", "refuse"]
+      },
+      "golden": { "action": "ask", "basis": "amount_deviates" },
+      "why": "Four times what this payee billed seven months running is a wrong invoice, a changed contract or a compromised payee until the owner says otherwise, and the due date leaves time to ask."
+    },
+    {
+      "name": "first invoice from a payee approved an hour ago",
+      "case": {
+        "id": "invoice:tailspin-labeling:TL-0001",
+        "payee": "Tailspin Labeling",
+        "amount_minor": 300000000,
+        "usual_minor": null,
+        "samples": 0,
+        "cadence_days": null,
+        "due_in_days": 2,
+        "runway_days": 64,
+        "discount_bps": 0,
+        "early_days": 0,
+        "payee_age_days": 0,
+        "lookalike_of": null,
+        "confidence": 1.0,
+        "allowed": ["ask", "refuse"]
+      },
+      "golden": { "action": "ask", "basis": "new_payee" },
+      "why": "With no history there is no usual amount to check this against, and a first invoice right after a payee is added is the classic invoice-fraud window; confirm the first payment with the owner, which costs nothing two days before it is due."
+    },
+    {
+      "name": "address that looks like a known payee's",
+      "case": {
+        "id": "invoice:0x1f9a-c3d7:2026-10",
+        "payee": "0x1f9a…c3d7",
+        "amount_minor": 49000000,
+        "usual_minor": null,
+        "samples": 0,
+        "cadence_days": null,
+        "due_in_days": 0,
+        "runway_days": 64,
+        "discount_bps": 0,
+        "early_days": 0,
+        "payee_age_days": null,
+        "lookalike_of": "Northwind Hosting",
+        "confidence": 1.0,
+        "allowed": ["refuse"]
+      },
+      "golden": { "action": "refuse", "basis": "look_alike" },
+      "why": "Same first and last four characters and the same amount as Northwind Hosting, but an address nobody approved: the address-poisoning pattern; refuse rather than ask, because an approve-this-payee row that looks like a known payee is how an owner gets tricked."
+    },
+    {
+      "name": "2% early-payment discount, last day to take it, long runway",
+      "case": {
+        "id": "bill:wingtip-compute:2026-10",
+        "payee": "Wingtip Compute",
+        "amount_minor": 2000000000,
+        "usual_minor": 2000000000,
+        "samples": 4,
+        "cadence_days": 30,
+        "due_in_days": 10,
+        "runway_days": 120,
+        "discount_bps": 200,
+        "early_days": 10,
+        "payee_age_days": 120,
+        "lookalike_of": null,
+        "confidence": 0.92,
+        "allowed": ["pay_early", "wait"]
+      },
+      "golden": { "action": "pay_early", "basis": "discount_worth_it" },
+      "why": "The terms take 2% off for paying at least 10 days before the due date and the bill is due in 10, so today is the last day to take it: about 74% a year for 10 days of cash, and after paying the balance still covers every bill for 120 days."
+    },
+    {
+      "name": "the same discount, runway 5 days, a larger bill due first",
+      "case": {
+        "id": "bill:wingtip-compute:2026-11",
+        "payee": "Wingtip Compute",
+        "amount_minor": 2000000000,
+        "usual_minor": 2000000000,
+        "samples": 4,
+        "cadence_days": 30,
+        "due_in_days": 10,
+        "runway_days": 5,
+        "discount_bps": 200,
+        "early_days": 10,
+        "payee_age_days": 120,
+        "lookalike_of": null,
+        "confidence": 0.92,
+        "allowed": ["pay", "ask", "wait", "refuse"]
+      },
+      "golden": { "action": "wait", "basis": "runway_short" },
+      "why": "A larger bill falls due in 5 days that the balance cannot cover, so paying a bill not due for 10 days now would turn a discount into a missed payment; wait."
+    },
+    {
+      "name": "bill inferred with low confidence",
+      "case": {
+        "id": "bill:adatum-monitoring:2026-10",
+        "payee": "Adatum Monitoring",
+        "amount_minor": 30000000,
+        "usual_minor": 30000000,
+        "samples": 3,
+        "cadence_days": 30,
+        "due_in_days": 0,
+        "runway_days": 64,
+        "discount_bps": 0,
+        "early_days": 0,
+        "payee_age_days": 75,
+        "lookalike_of": null,
+        "confidence": 0.55,
+        "allowed": ["ask", "refuse"]
+      },
+      "golden": { "action": "ask", "basis": "low_confidence" },
+      "why": "Three irregular payments are thin evidence that this is owed today (confidence under the 0.60 floor where the agent may not pay alone); ask the owner whether it is a real bill rather than pay it or skip it silently."
+    },
+    {
+      "name": "x402 call inside the cap, approved seller",
+      "case": {
+        "id": "x402:pay_5be17c0d",
+        "payee": "Litware Search",
+        "amount_minor": 10000,
+        "usual_minor": 10000,
+        "samples": 2226,
+        "cadence_days": null,
+        "due_in_days": 0,
+        "runway_days": 64,
+        "discount_bps": 0,
+        "early_days": 0,
+        "payee_age_days": 40,
+        "lookalike_of": null,
+        "confidence": 1.0,
+        "allowed": ["pay", "ask", "refuse"]
+      },
+      "golden": { "action": "pay", "basis": "usual" },
+      "why": "An approved seller at its usual price per call, bought at the median rhythm of the busiest x402 payers on Base, inside the cap: this purchase is exactly what the mandate is for."
+    },
+    {
+      "name": "x402 call above the cap",
+      "case": {
+        "id": "x402:pay_c09e44a1",
+        "payee": "Litware Search",
+        "amount_minor": 25000000,
+        "usual_minor": 10000,
+        "samples": 2226,
+        "cadence_days": null,
+        "due_in_days": 0,
+        "runway_days": 64,
+        "discount_bps": 0,
+        "early_days": 0,
+        "payee_age_days": 40,
+        "lookalike_of": null,
+        "confidence": 1.0,
+        "allowed": ["ask", "refuse"]
+      },
+      "golden": { "action": "refuse", "basis": "amount_deviates" },
+      "why": "Thousands of times the usual price and above the per-payment limit, so the contract would refuse it anyway; a purchase cannot wait out the delay a limit raise takes, so refuse it and say why instead of filing a request the owner cannot grant in time."
+    },
+    {
+      "name": "one-off x402 buy from a seller approved a month ago (most common rhythm)",
+      "case": {
+        "id": "x402:pay_7d2a90f3",
+        "payee": "Proseware Datasets",
+        "amount_minor": 250000,
+        "usual_minor": null,
+        "samples": 0,
+        "cadence_days": null,
+        "due_in_days": 0,
+        "runway_days": 64,
+        "discount_bps": 0,
+        "early_days": 0,
+        "payee_age_days": 30,
+        "lookalike_of": null,
+        "confidence": 1.0,
+        "allowed": ["pay", "ask", "refuse"]
+      },
+      "golden": { "action": "pay", "basis": "usual" },
+      "why": "Paying a seller once is the normal x402 rhythm (208 of 300 randomly sampled Base payers paid exactly once in 30 days); the owner approved this seller a month ago and set the cap, so asking about a small buy would be a tap that is not a trust decision."
+    },
+    {
+      "name": "busy x402 seller raises its price tenfold, still inside the cap",
+      "case": {
+        "id": "x402:pay_e41b07c6",
+        "payee": "Woodgrove Geocode",
+        "amount_minor": 20000,
+        "usual_minor": 2000,
+        "samples": 2226,
+        "cadence_days": null,
+        "due_in_days": 0,
+        "runway_days": 64,
+        "discount_bps": 0,
+        "early_days": 0,
+        "payee_age_days": 55,
+        "lookalike_of": null,
+        "confidence": 1.0,
+        "allowed": ["pay", "ask", "refuse"]
+      },
+      "golden": { "action": "ask", "basis": "amount_deviates" },
+      "why": "Ten times the usual price from a seller bought about 74 times a day makes this line ten times as expensive; each call is inside the cap, but accepting the new price is the owner's call, so ask before buying at it."
+    },
+    {
+      "name": "busy x402 seller halves its price",
+      "case": {
+        "id": "x402:pay_19c3f5d8",
+        "payee": "Woodgrove Geocode",
+        "amount_minor": 1000,
+        "usual_minor": 2000,
+        "samples": 2226,
+        "cadence_days": null,
+        "due_in_days": 0,
+        "runway_days": 64,
+        "discount_bps": 0,
+        "early_days": 0,
+        "payee_age_days": 55,
+        "lookalike_of": null,
+        "confidence": 1.0,
+        "allowed": ["pay", "ask", "refuse"]
+      },
+      "golden": { "action": "pay", "basis": "usual" },
+      "why": "A lower price from the same approved seller costs the account less, not more; a cheaper call is no risk to the mandate, so buy it and do not ask."
+    },
+    {
+      "name": "x402 seller nobody approved, not a look-alike",
+      "case": {
+        "id": "x402:pay_a3f0b2e9",
+        "payee": "Lucerne Weather",
+        "amount_minor": 50000,
+        "usual_minor": null,
+        "samples": 0,
+        "cadence_days": null,
+        "due_in_days": 0,
+        "runway_days": 64,
+        "discount_bps": 0,
+        "early_days": 0,
+        "payee_age_days": null,
+        "lookalike_of": null,
+        "confidence": 1.0,
+        "allowed": ["ask", "refuse"]
+      },
+      "golden": { "action": "ask", "basis": "new_payee" },
+      "why": "A seller nobody approved that resembles no known payee: approving a payee is the owner's trust decision, so put it to the owner as one tap with the price; paying is not allowed and refusing would hide a seller the agent needs."
+    }
+  ]
+}
