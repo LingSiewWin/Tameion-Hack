@@ -85,7 +85,7 @@ export default function DeskPage() {
 
   return (
     <>
-      <TopBar surface="human">
+      <TopBar surface="human" humanHref="/desk">
         <Link
           href="/"
           className="hidden px-2 text-sm text-muted-foreground hover:text-foreground sm:inline"

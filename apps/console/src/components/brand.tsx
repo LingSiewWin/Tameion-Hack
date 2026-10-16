@@ -37,10 +37,6 @@ export function ThemeToggle() {
 // Human = the desk's decision inbox; Agent = the live ops view. One toggle in the header, beside light/dark, on
 // the two owner pages only (a lender or a counterparty reading a link is neither).
 export type Surface = "human" | "agent";
-const SURFACES: { id: Surface; label: string; href: string }[] = [
-  { id: "human", label: "Human", href: "/desk" },
-  { id: "agent", label: "Agent", href: "/agent" },
-];
 const SURFACE_KEY = "tameion.surface";
 
 /** The surface the owner chose last. Storage can be blocked or absent (a private window): then it is Human. */
@@ -59,10 +55,15 @@ function chose(s: Surface) {
 
 /** Two links dressed as one segmented control: the page is the state, so each segment is a link (Tab reaches both,
  *  Enter follows, `aria-current` says where you are) and the choice is remembered when it is made, not when a page opens. */
-export function SurfaceToggle({ active }: { active: Surface }) {
+export function SurfaceToggle({ active, humanHref = "/" }: { active: Surface; humanHref?: string }) {
+  // Human is the account's own page, `/`, for every account; the desk's page only for an account that has a desk (an exchange connected).
+  const surfaces: { id: Surface; label: string; href: string }[] = [
+    { id: "human", label: "Human", href: humanHref },
+    { id: "agent", label: "Agent", href: "/agent" },
+  ];
   return (
     <nav aria-label="View" className="mr-1 flex items-center rounded-lg bg-muted p-[3px]">
-      {SURFACES.map((s) => (
+      {surfaces.map((s) => (
         <Link
           key={s.id}
           href={s.href}
@@ -89,7 +90,7 @@ export function useOpenOnLastSurface() {
   }, [router]);
 }
 
-export function TopBar({ children, surface }: { children?: React.ReactNode; surface?: Surface }) {
+export function TopBar({ children, surface, humanHref }: { children?: React.ReactNode; surface?: Surface; humanHref?: string }) {
   return (
     <header className="sticky top-0 z-30 border-b border-border/70 bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
@@ -99,7 +100,7 @@ export function TopBar({ children, surface }: { children?: React.ReactNode; surf
         </Link>
         <div className="ml-auto flex items-center gap-1">
           {children}
-          {surface && <SurfaceToggle active={surface} />}
+          {surface && <SurfaceToggle active={surface} humanHref={humanHref} />}
           <ThemeToggle />
         </div>
       </div>

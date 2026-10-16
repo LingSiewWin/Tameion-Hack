@@ -20,6 +20,20 @@ import { EventsPanel, feedState, FundingPanel, HaltBanner, HedgePanel, MarginPan
  *  dense panels, right-aligned figures, a time on every row, an events column. The account's own record leads (the mandate with what is
  *  spent and left, what was paid and refused and why, the last pass and its anchor); the exchange panels (positions, margin, funding,
  *  orders) appear only when an exchange account is connected. The agents themselves read `tameion-mcp` and the API, not this page. */
+/** The header and the page's frame. `humanHref` is where the toggle's Human segment goes: the account's own page, or the desk's when an exchange is connected. */
+function Frame({ humanHref, children }: { humanHref?: string; children: React.ReactNode }) {
+  return (
+    <>
+      <TopBar surface="agent" humanHref={humanHref}>
+        <Link href="/" className="hidden px-2 text-sm text-muted-foreground hover:text-foreground sm:inline">
+          Payments
+        </Link>
+      </TopBar>
+      <main className="mx-auto w-full max-w-6xl px-4 pb-16 pt-5 sm:px-6">{children}</main>
+    </>
+  );
+}
+
 export default function AgentPage() {
   // The account this browser has open; nothing during the static prerender.
   const saved = useSyncExternalStore(
@@ -28,33 +42,25 @@ export default function AgentPage() {
     () => null,
   );
   const tenant: Tenant | null | undefined = saved === null ? undefined : saved ? currentTenant() : null;
+  if (tenant) return <Agent key={tenant.policy} tenant={tenant} />;
   return (
-    <>
-      <TopBar surface="agent">
-        <Link href="/" className="hidden px-2 text-sm text-muted-foreground hover:text-foreground sm:inline">
-          Payments
-        </Link>
-      </TopBar>
-      <main className="mx-auto w-full max-w-6xl px-4 pb-16 pt-5 sm:px-6">
-        {tenant === undefined ? (
-          <Skeleton className="h-40 w-full rounded-xl" />
-        ) : !tenant ? (
-          <EmptyState
-            icon={Package}
-            title="Open your account first"
-            action={
-              <Button asChild>
-                <Link href="/">Open it</Link>
-              </Button>
-            }
-          >
-            The agent belongs to an account. Open yours on this device, then come back.
-          </EmptyState>
-        ) : (
-          <Agent key={tenant.policy} tenant={tenant} />
-        )}
-      </main>
-    </>
+    <Frame>
+      {tenant === undefined ? (
+        <Skeleton className="h-40 w-full rounded-xl" />
+      ) : (
+        <EmptyState
+          icon={Package}
+          title="Open your account first"
+          action={
+            <Button asChild>
+              <Link href="/">Open it</Link>
+            </Button>
+          }
+        >
+          The agent belongs to an account. Open yours on this device, then come back.
+        </EmptyState>
+      )}
+    </Frame>
   );
 }
 
@@ -111,7 +117,7 @@ function Agent({ tenant }: { tenant: Tenant }) {
   const refused = acct.inbox.error instanceof ApiError && (acct.inbox.error.status === 401 || acct.inbox.error.status === 403);
 
   return (
-    <>
+    <Frame humanHref={venue ? "/desk" : "/"}>
       <header className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h1 className="text-headline font-semibold">Agent</h1>
         <p className="text-caption text-muted-foreground">What the account&apos;s agents did, and what they may still spend.</p>
@@ -172,6 +178,6 @@ function Agent({ tenant }: { tenant: Tenant }) {
           </div>
         )}
       </div>
-    </>
+    </Frame>
   );
 }
