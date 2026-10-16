@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 71924102932bde4fc191843135e3e431348dfa79f3120e9199f4c77d0dff34ba # shrinks to equity = 40397.48, current = -0.9559, delta = 2.3695, px = 95259.11, k = 6, max_lev = 4
+cc 54938576188c8524910157aaa4a6a477d8ee0c50ae4c4870e311b43083790254 # shrinks to equity = 1120.64, other = 12154.80, current = -0.0860, delta = -0.1059, px = 52123, k = 5
+cc 6963a62c341443c781be503354cf59d1ae28f5b05710e46b3fc5993b9cb4c6f6 # shrinks to equity = 0.01, other = 0.00, current = 3.2459, delta = 0.0000, px = 50000, k = 2
