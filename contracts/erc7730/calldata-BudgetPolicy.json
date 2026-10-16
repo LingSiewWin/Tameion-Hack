@@ -1,0 +1,404 @@
+{
+  "$schema": "https://eips.ethereum.org/assets/eip-7730/erc7730-v2.schema.json",
+  "context": {
+    "$id": "Tameion BudgetPolicy",
+    "contract": {
+      "deployments": [
+        {
+          "chainId": 5042002,
+          "address": "0xad92baCbCd4e41E63C4b6E25DFfC09903c390dAB"
+        },
+        {
+          "chainId": 5042002,
+          "address": "0x1645951793f7ca2ae36d7a3eeae90ef93e1932ab"
+        },
+        {
+          "chainId": 5042002,
+          "address": "0x224fa9badcffb95fe41f3257cfb4f5e94436991a"
+        },
+        {
+          "chainId": 5042002,
+          "address": "0xf799a85496580af9a63c35223443688f8693635d"
+        },
+        {
+          "chainId": 421614,
+          "address": "0x35a2e2701d4d72be257bf7708c67d1433c60342f"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "owner": "Tameion",
+    "contractName": "BudgetPolicy",
+    "info": {
+      "url": "https://explorer.testnet.arc.io/address/0xad92baCbCd4e41E63C4b6E25DFfC09903c390dAB",
+      "deploymentDate": "2026-10-13T00:00:00Z"
+    },
+    "constants": {
+      "usdc": "0x3600000000000000000000000000000000000000"
+    },
+    "enums": {
+      "mode": {
+        "0": "Watch (paused: nothing is paid)",
+        "1": "Propose (every payment waits for your tap)",
+        "2": "Autopilot (approved payees paid inside the caps)"
+      }
+    }
+  },
+  "display": {
+    "definitions": {
+      "usdc": {
+        "label": "Amount",
+        "format": "tokenAmount",
+        "params": {
+          "token": "$.metadata.constants.usdc"
+        }
+      },
+      "payee": {
+        "label": "Payee",
+        "format": "addressName",
+        "params": {
+          "types": [
+            "wallet",
+            "contract"
+          ]
+        }
+      }
+    },
+    "formats": {
+      "settleAsPrincipal(address to,uint256 usdcUnits,bytes32 actionHash)": {
+        "intent": "Pay a bill the agent prepared",
+        "fields": [
+          {
+            "path": "to",
+            "$ref": "$.display.definitions.payee"
+          },
+          {
+            "path": "usdcUnits",
+            "$ref": "$.display.definitions.usdc"
+          },
+          {
+            "path": "actionHash",
+            "label": "The agent's action",
+            "format": "raw"
+          }
+        ]
+      },
+      "setPayees(address[] payees,bool attested)": {
+        "intent": "Approve payees (true) or revoke them (false); approving waits the cooling-off delay, revoking is instant",
+        "fields": [
+          {
+            "path": "payees.[]",
+            "$ref": "$.display.definitions.payee"
+          },
+          {
+            "path": "attested",
+            "label": "Approve",
+            "format": "raw"
+          }
+        ]
+      },
+      "setPayee(address payee,bool attested)": {
+        "intent": "Approve one payee (true) or revoke it (false)",
+        "fields": [
+          {
+            "path": "payee",
+            "$ref": "$.display.definitions.payee"
+          },
+          {
+            "path": "attested",
+            "label": "Approve",
+            "format": "raw"
+          }
+        ]
+      },
+      "setLimits(uint256 _perActionCap,uint256 _dailyCap,uint256 _reserveFloor)": {
+        "intent": "Set the agent's limits; tightening applies at once, loosening waits the delay",
+        "fields": [
+          {
+            "path": "_perActionCap",
+            "label": "Per payment, at most",
+            "format": "tokenAmount",
+            "params": {
+              "token": "$.metadata.constants.usdc"
+            }
+          },
+          {
+            "path": "_dailyCap",
+            "label": "Per day, at most",
+            "format": "tokenAmount",
+            "params": {
+              "token": "$.metadata.constants.usdc"
+            }
+          },
+          {
+            "path": "_reserveFloor",
+            "label": "Never spend below",
+            "format": "tokenAmount",
+            "params": {
+              "token": "$.metadata.constants.usdc"
+            }
+          }
+        ]
+      },
+      "setMode(uint8 next)": {
+        "intent": "Set the agent's autonomy level; lowering applies at once, raising waits the delay",
+        "fields": [
+          {
+            "path": "next",
+            "label": "Level",
+            "format": "enum",
+            "params": {
+              "$ref": "$.metadata.enums.mode"
+            }
+          }
+        ]
+      },
+      "applyPending()": {
+        "intent": "Apply the pending change now that its delay has passed",
+        "fields": []
+      },
+      "cancelPending()": {
+        "intent": "Cancel the pending change (a raise of the limits, the level, or the agent)",
+        "fields": []
+      },
+      "withdraw(address to,uint256 usdcUnits)": {
+        "intent": "Take USDC out of the policy",
+        "fields": [
+          {
+            "path": "to",
+            "label": "To",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "wallet",
+                "contract"
+              ]
+            }
+          },
+          {
+            "path": "usdcUnits",
+            "$ref": "$.display.definitions.usdc"
+          }
+        ]
+      },
+      "setOperator(address next)": {
+        "intent": "Change who runs the agent (the operator); waits the delay",
+        "fields": [
+          {
+            "path": "next",
+            "label": "New operator",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "wallet",
+                "contract"
+              ]
+            }
+          }
+        ]
+      },
+      "setAgent(address next)": {
+        "intent": "Change the agent's key (operator only); waits the delay",
+        "fields": [
+          {
+            "path": "next",
+            "label": "New agent key",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "wallet"
+              ]
+            }
+          }
+        ]
+      },
+      "pay(address to,uint256 usdcUnits,bytes32 actionHash)": {
+        "intent": "The agent pays an approved payee inside the caps (agent key only)",
+        "fields": [
+          {
+            "path": "to",
+            "$ref": "$.display.definitions.payee"
+          },
+          {
+            "path": "usdcUnits",
+            "$ref": "$.display.definitions.usdc"
+          },
+          {
+            "path": "actionHash",
+            "label": "The agent's action",
+            "format": "raw"
+          }
+        ]
+      },
+      "settleAsPrincipalIf(address to,uint256 usdcUnits,bytes32 actionHash,bytes32 terms,uint64 deadline)": {
+        "intent": "Pay a bill the agent prepared, only while the limits and keys you saw stay as they are",
+        "fields": [
+          {
+            "path": "to",
+            "$ref": "$.display.definitions.payee"
+          },
+          {
+            "path": "usdcUnits",
+            "$ref": "$.display.definitions.usdc"
+          },
+          {
+            "path": "actionHash",
+            "label": "The agent's action",
+            "format": "raw"
+          },
+          {
+            "path": "terms",
+            "label": "Only while the terms hash to",
+            "format": "raw"
+          },
+          {
+            "path": "deadline",
+            "label": "Valid until",
+            "format": "date",
+            "params": {
+              "encoding": "timestamp"
+            }
+          }
+        ]
+      },
+      "setPayeesIf(address[] payees,bool attested,bytes32 terms,uint64 deadline)": {
+        "intent": "Approve or revoke payees, only while the terms you saw stay as they are",
+        "fields": [
+          {
+            "path": "payees.[]",
+            "$ref": "$.display.definitions.payee"
+          },
+          {
+            "path": "attested",
+            "label": "Approve",
+            "format": "raw"
+          },
+          {
+            "path": "terms",
+            "label": "Only while the terms hash to",
+            "format": "raw"
+          },
+          {
+            "path": "deadline",
+            "label": "Valid until",
+            "format": "date",
+            "params": {
+              "encoding": "timestamp"
+            }
+          }
+        ]
+      },
+      "settleRunIf(address[] to,uint256[] usdcUnits,bytes32[] actionHashes,bytes32 terms,uint64 deadline)": {
+        "intent": "Pay every bill you reviewed with one approval; a bill already paid is skipped",
+        "fields": [
+          {
+            "path": "to.[]",
+            "$ref": "$.display.definitions.payee"
+          },
+          {
+            "path": "usdcUnits.[]",
+            "$ref": "$.display.definitions.usdc"
+          },
+          {
+            "path": "actionHashes.[]",
+            "label": "The agent's actions",
+            "format": "raw"
+          },
+          {
+            "path": "terms",
+            "label": "Only while the terms hash to",
+            "format": "raw"
+          },
+          {
+            "path": "deadline",
+            "label": "Valid until",
+            "format": "date",
+            "params": {
+              "encoding": "timestamp"
+            }
+          }
+        ]
+      },
+      "addSchedule(address payee,uint256 amount,uint64 every,uint64 firstDue)": {
+        "intent": "Set a standing order: anyone may trigger it on its day, inside the limits",
+        "fields": [
+          {
+            "path": "payee",
+            "$ref": "$.display.definitions.payee"
+          },
+          {
+            "path": "amount",
+            "$ref": "$.display.definitions.usdc"
+          },
+          {
+            "path": "every",
+            "label": "Every (seconds)",
+            "format": "raw"
+          },
+          {
+            "path": "firstDue",
+            "label": "First due",
+            "format": "date",
+            "params": {
+              "encoding": "timestamp"
+            }
+          }
+        ]
+      },
+      "removeSchedule(uint256 id)": {
+        "intent": "End a standing order, at once",
+        "fields": [
+          {
+            "path": "id",
+            "label": "Standing order",
+            "format": "raw"
+          }
+        ]
+      },
+      "payDue(uint256 id)": {
+        "intent": "Pay a standing order that is due (anyone may; the contract checks the day and the limits)",
+        "fields": [
+          {
+            "path": "id",
+            "label": "Standing order",
+            "format": "raw"
+          }
+        ]
+      },
+      "renewAgent(uint64 until)": {
+        "intent": "Renew the agent's authority until a date (at most a year)",
+        "fields": [
+          {
+            "path": "until",
+            "label": "Until",
+            "format": "date",
+            "params": {
+              "encoding": "timestamp"
+            }
+          }
+        ]
+      },
+      "redeemDelegations(bytes[] permissionContexts,bytes32[] modes,bytes[] executionCallData)": {
+        "intent": "Settle purchases the agent signed for paid APIs (x402), inside the account's limits",
+        "fields": [
+          {
+            "path": "permissionContexts.[]",
+            "label": "The agent's signed purchases",
+            "format": "raw"
+          },
+          {
+            "path": "modes.[]",
+            "label": "Execution mode (single call only)",
+            "format": "raw"
+          },
+          {
+            "path": "executionCallData.[]",
+            "label": "USDC transfer to the seller",
+            "format": "raw"
+          }
+        ]
+      }
+    }
+  }
+}

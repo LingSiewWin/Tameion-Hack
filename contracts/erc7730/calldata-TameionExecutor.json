@@ -1,0 +1,213 @@
+{
+  "$schema": "https://eips.ethereum.org/assets/eip-7730/erc7730-v2.schema.json",
+  "context": {
+    "$id": "Tameion TameionExecutor (ERC-7579 executor module)",
+    "contract": {
+      "deployments": [
+        {
+          "chainId": 5042002,
+          "address": "0x78a3d354eDe27EDDc13D3c28433117cbc07b2aCf"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "owner": "Tameion",
+    "contractName": "BudgetPolicy",
+    "info": {
+      "url": "https://explorer.testnet.arc.io/address/0xad92baCbCd4e41E63C4b6E25DFfC09903c390dAB",
+      "deploymentDate": "2026-10-13T00:00:00Z"
+    },
+    "constants": {
+      "usdc": "0x3600000000000000000000000000000000000000"
+    },
+    "enums": {
+      "mode": {
+        "0": "Watch (paused: nothing is paid)",
+        "1": "Propose (every payment waits for your tap)",
+        "2": "Autopilot (approved payees paid inside the caps)"
+      }
+    }
+  },
+  "display": {
+    "definitions": {
+      "usdc": {
+        "label": "Amount",
+        "format": "tokenAmount",
+        "params": {
+          "token": "$.metadata.constants.usdc"
+        }
+      },
+      "payee": {
+        "label": "Payee",
+        "format": "addressName",
+        "params": {
+          "types": [
+            "wallet",
+            "contract"
+          ]
+        }
+      }
+    },
+    "formats": {
+      "onInstall(bytes data)": {
+        "intent": "Install Tameion's limits on this account (the agent, the token, the caps, the floor, the delay)",
+        "fields": [
+          {
+            "path": "data",
+            "label": "Terms (encoded)",
+            "format": "raw"
+          }
+        ]
+      },
+      "onUninstall(bytes)": {
+        "intent": "Remove Tameion's limits from this account; the agent loses all power at once",
+        "fields": []
+      },
+      "setPayee(address payee,bool attested)": {
+        "intent": "Approve a payee (payable after the delay) or revoke one (at once)",
+        "fields": [
+          {
+            "path": "payee",
+            "$ref": "$.display.definitions.payee"
+          },
+          {
+            "path": "attested",
+            "label": "Approve",
+            "format": "raw"
+          }
+        ]
+      },
+      "setLimits(uint128 perActionCap,uint128 dailyCap,uint128 reserveFloor)": {
+        "intent": "Set the agent's limits; narrowing applies at once, widening waits the delay",
+        "fields": [
+          {
+            "path": "perActionCap",
+            "label": "Per payment, at most",
+            "format": "tokenAmount",
+            "params": {
+              "token": "$.metadata.constants.usdc"
+            }
+          },
+          {
+            "path": "dailyCap",
+            "label": "Per day, at most",
+            "format": "tokenAmount",
+            "params": {
+              "token": "$.metadata.constants.usdc"
+            }
+          },
+          {
+            "path": "reserveFloor",
+            "label": "Never spend below",
+            "format": "tokenAmount",
+            "params": {
+              "token": "$.metadata.constants.usdc"
+            }
+          }
+        ]
+      },
+      "applyLimits(address account)": {
+        "intent": "Apply a widening of the limits after its delay (anyone)",
+        "fields": [
+          {
+            "path": "account",
+            "label": "Account",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "contract",
+                "wallet"
+              ]
+            }
+          }
+        ]
+      },
+      "requestAutopilot()": {
+        "intent": "Ask for Autopilot: the agent may pay on its own after the delay",
+        "fields": []
+      },
+      "applyAutopilot(address account)": {
+        "intent": "Turn Autopilot on after its delay (anyone)",
+        "fields": [
+          {
+            "path": "account",
+            "label": "Account",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "contract",
+                "wallet"
+              ]
+            }
+          }
+        ]
+      },
+      "pause()": {
+        "intent": "Back to proposing, at once",
+        "fields": []
+      },
+      "setAgent(address agent)": {
+        "intent": "Replace the agent key (zero revokes it, at once)",
+        "fields": [
+          {
+            "path": "agent",
+            "label": "Agent key",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "wallet"
+              ]
+            }
+          }
+        ]
+      },
+      "renewAgent(uint64 until)": {
+        "intent": "Renew the agent's authority until a date (at most a year)",
+        "fields": [
+          {
+            "path": "until",
+            "label": "Until",
+            "format": "date",
+            "params": {
+              "encoding": "timestamp"
+            }
+          }
+        ]
+      },
+      "pay(address account,address to,uint256 amount,bytes32 actionHash)": {
+        "intent": "The agent pays an approved payee from the account, inside the limits",
+        "fields": [
+          {
+            "path": "account",
+            "label": "From account",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "contract",
+                "wallet"
+              ]
+            }
+          },
+          {
+            "path": "to",
+            "$ref": "$.display.definitions.payee"
+          },
+          {
+            "path": "amount",
+            "format": "tokenAmount",
+            "params": {
+              "token": "$.metadata.constants.usdc"
+            },
+            "label": "Amount"
+          },
+          {
+            "path": "actionHash",
+            "label": "The agent's action",
+            "format": "raw"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,207 @@
+{
+  "$schema": "https://eips.ethereum.org/assets/eip-7730/erc7730-v2.schema.json",
+  "context": {
+    "$id": "Tameion PasskeyPrincipal",
+    "contract": {
+      "deployments": [
+        {
+          "chainId": 5042002,
+          "address": "0x7d1a44b84a176ffa1599eb25fe953c9f73ff8af3"
+        },
+        {
+          "chainId": 5042002,
+          "address": "0xd439f2ea1f47740104ce52eb91c2fdc69fd0f654"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "owner": "Tameion",
+    "contractName": "PasskeyPrincipal",
+    "info": {
+      "url": "https://explorer.testnet.arc.io/address/0x7d1a44b84a176ffa1599eb25fe953c9f73ff8af3",
+      "deploymentDate": "2026-10-13T00:00:00Z"
+    }
+  },
+  "display": {
+    "formats": {
+      "execute(address target,uint256 value,bytes data,(bytes32 r,bytes32 s,uint256 challengeIndex,uint256 typeIndex,bytes authenticatorData,string clientDataJSON) auth)": {
+        "intent": "Relay a call the owner's passkey approved (the passkey signed a challenge over target, value, data and the nonce; a wrong assertion reverts)",
+        "fields": [
+          {
+            "path": "target",
+            "label": "Contract called",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "contract"
+              ]
+            }
+          },
+          {
+            "path": "value",
+            "label": "USDC sent along",
+            "format": "tokenAmount",
+            "params": {
+              "token": "0x3600000000000000000000000000000000000000"
+            }
+          },
+          {
+            "path": "data",
+            "label": "The call",
+            "format": "calldata",
+            "params": {
+              "calleePath": "target"
+            }
+          }
+        ]
+      },
+      "setRecovery(address next)": {
+        "intent": "Name (or clear, with the zero address) the recovery address that may propose a new passkey after the delay",
+        "fields": [
+          {
+            "path": "next",
+            "label": "Recovery address",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "wallet",
+                "contract"
+              ]
+            }
+          }
+        ]
+      },
+      "proposeRecovery(bytes32 _qx,bytes32 _qy)": {
+        "intent": "Propose a new passkey (its P-256 public key); applies after the recovery delay unless cancelled",
+        "fields": [
+          {
+            "path": "_qx",
+            "label": "New key, x",
+            "format": "raw"
+          },
+          {
+            "path": "_qy",
+            "label": "New key, y",
+            "format": "raw"
+          }
+        ]
+      },
+      "cancelRecovery()": {
+        "intent": "Cancel the proposed passkey change",
+        "fields": []
+      },
+      "applyRecovery()": {
+        "intent": "Apply the proposed passkey change after its delay",
+        "fields": []
+      },
+      "setGuardians(address[] list,uint8 threshold)": {
+        "intent": "Name guardians who may together propose a replacement for your passkey; they cannot spend",
+        "fields": [
+          {
+            "path": "list.[]",
+            "label": "Guardian",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "wallet",
+                "contract"
+              ]
+            }
+          },
+          {
+            "path": "threshold",
+            "label": "How many must agree",
+            "format": "raw"
+          }
+        ]
+      },
+      "approveRecovery(bytes32 _qx,bytes32 _qy)": {
+        "intent": "As a guardian, agree to a replacement passkey; it waits the recovery delay and the current passkey can cancel",
+        "fields": [
+          {
+            "path": "_qx",
+            "label": "New key x",
+            "format": "raw"
+          },
+          {
+            "path": "_qy",
+            "label": "New key y",
+            "format": "raw"
+          }
+        ]
+      },
+      "setCoOwners(bytes32[] xs,bytes32[] ys,uint8 threshold)": {
+        "intent": "Set who else owns this account (more passkeys, more devices) and how many must approve every change",
+        "fields": [
+          {
+            "path": "xs.[]",
+            "label": "Co-owner key x",
+            "format": "raw"
+          },
+          {
+            "path": "threshold",
+            "label": "How many must approve",
+            "format": "raw"
+          }
+        ]
+      },
+      "executeAs(uint256 keyIndex,address target,uint256 value,bytes data,(bytes32 r,bytes32 s,uint256 challengeIndex,uint256 typeIndex,bytes authenticatorData,string clientDataJSON) auth)": {
+        "intent": "Run a call one co-owner's passkey approved",
+        "fields": [
+          {
+            "path": "keyIndex",
+            "label": "Approved by key",
+            "format": "raw"
+          },
+          {
+            "path": "target",
+            "label": "Contract",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "contract"
+              ]
+            }
+          },
+          {
+            "path": "data",
+            "label": "Call",
+            "format": "calldata",
+            "params": {
+              "calleePath": "target"
+            }
+          }
+        ]
+      },
+      "executeWith(address target,uint256 value,bytes data,uint256[] keyIndexes,(bytes32 r,bytes32 s,uint256 challengeIndex,uint256 typeIndex,bytes authenticatorData,string clientDataJSON)[] auths)": {
+        "intent": "Run a call several owners' passkeys approved",
+        "fields": [
+          {
+            "path": "target",
+            "label": "Contract",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "contract"
+              ]
+            }
+          },
+          {
+            "path": "keyIndexes.[]",
+            "label": "Approved by keys",
+            "format": "raw"
+          },
+          {
+            "path": "data",
+            "label": "Call",
+            "format": "calldata",
+            "params": {
+              "calleePath": "target"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

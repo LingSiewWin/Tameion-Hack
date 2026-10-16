@@ -1,0 +1,51 @@
+{
+  "$schema": "https://eips.ethereum.org/assets/eip-7730/erc7730-v2.schema.json",
+  "context": {
+    "$id": "Tameion MemoryAnchor",
+    "contract": {
+      "deployments": [
+        {
+          "chainId": 5042002,
+          "address": "0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "owner": "Tameion",
+    "contractName": "MemoryAnchor",
+    "info": {
+      "url": "https://explorer.testnet.arc.io/address/0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB",
+      "deploymentDate": "2026-10-01T00:00:00Z"
+    }
+  },
+  "display": {
+    "formats": {
+      "anchorByAddress(bytes32 root)": {
+        "intent": "Commit the root of the agent's decision log for this pass (anyone can recompute it from the events)",
+        "fields": [
+          {
+            "path": "root",
+            "label": "Decision log root",
+            "format": "raw"
+          }
+        ]
+      },
+      "anchor(uint256 identityId,bytes32 root)": {
+        "intent": "Commit the root of the decision log under an ERC-8004 identity",
+        "fields": [
+          {
+            "path": "identityId",
+            "label": "Agent identity",
+            "format": "raw"
+          },
+          {
+            "path": "root",
+            "label": "Decision log root",
+            "format": "raw"
+          }
+        ]
+      }
+    }
+  }
+}
