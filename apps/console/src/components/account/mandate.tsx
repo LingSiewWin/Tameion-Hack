@@ -12,15 +12,18 @@ import { Receipt, useAccount, useAction } from "./ctx";
 
 /** The outcome the owner signs, in the owner's voice, filled from real values
  *  (docs/73 T1). `mode` undefined is the sentence signed at Start; on the
- *  account it follows the contract's mode, so it never says more than is true. */
-export function MandateSentence({ n, daily, mode }: { n: number; daily?: string | null; mode?: string }) {
+ *  account it follows the contract's mode, so it never says more than is true.
+ *  The words are not in the signed terms (`termsFingerprint` covers the caps,
+ *  floor, mode, keys, delay and pending change — numbers only); the price clause
+ *  shows only for an account with an exchange connected (docs/109 §10). */
+export function MandateSentence({ n, daily, mode, hedged }: { n: number; daily?: string | null; mode?: string; hedged?: boolean }) {
   if (mode === "Watch") return <>Pay nothing for now; keep reading and reporting; ask me for anything else.</>;
   const bills = n > 1 ? `these ${n} bills` : n === 1 ? "this bill" : "the bills you find";
   return (
     <>
       {mode === "Propose" ? "Prepare " : "Pay "}
       <strong>{bills}</strong> when due{mode === "Propose" ? " and wait for my tap" : ""}, up to <strong className="figures">{usd(daily) || "—"} USDC a day</strong>, only to
-      payees I approved; keep the money they need protected from a price fall; ask me for anything else.
+      payees I approved; {hedged ? "keep the money they need protected from a price fall; " : ""}ask me for anything else.
     </>
   );
 }
@@ -51,7 +54,7 @@ export function AccountMandate() {
             : "Signed with your passkey; the contract enforces the limits."
         }
       >
-        <MandateSentence n={n} daily={daily} mode={reserved ? undefined : inbox.mode} />
+        <MandateSentence n={n} daily={daily} mode={reserved ? undefined : inbox.mode} hedged={!!inbox.exposure?.hedge?.on} />
       </Mandate>
       {open && <LimitsDialog onClose={() => setOpen(false)} />}
     </>
