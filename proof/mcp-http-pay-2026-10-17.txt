@@ -1,0 +1,314 @@
+MCP over HTTP and the direct pay route — S16 seat, binary runtime/seats/S16/tameion-app (branch seat/S16, 2d58d81 docs(llms): add the MCP HTTP endpoint and the pay route), 2026-10-17 17:10:09 +0800
+Service :7916 (PID 93106), TAMEION_APP_DIR=runtime/seats/S16/app (a copy of uat2-u1-rc's tenant file and agent key), Arbitrum Sepolia public RPC.
+Account uat2-u1-rc: policy 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 · agent 0x5342886f08fb99f6a571dca291fc32ab92f0b210 · approved payee 0xee80b9f69D80A04D4b2e803C426715AA8c1BB1f3.
+Agent key: ~/.tameion/test-keys/uat2-u1-rc-buy.token (read, run, buy), sent from a file; never printed.
+
+== 1. On chain before (cast call, https://sepolia-rollup.arbitrum.io/rpc)
+mode()               = 2   (2 = Autopilot)
+attestedPayee(payee) = true; attestedSince = 1792219284; delay = 60 s; now = 1792228252
+perActionCap = 10000 · dailyCap = 48000 · spentInWindow = 1000   (USDC minor units)
+USDC balanceOf(policy) = 94000 · balanceOf(payee) = 1000
+
+== 2. POST /api/level1/pay refusals, live (nothing sent: input checks, then the contract's own checks run as the agent)
+$ a. no Idempotency-Key
+  body: {"policy":"0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1","payee":"0xee80b9f69D80A04D4b2e803C426715AA8c1BB1f3","amount":"0.001","why":"rent"}
+  HTTP/1.1 400 Bad Request
+{
+ "contractVersion": "2026-10-17.1",
+ "error": {
+  "audience": "agent",
+  "by": "input",
+  "code": "invalid_body",
+  "executed": "no",
+  "meaning": "The request is missing a field or carries one this route cannot use.",
+  "nextStep": "Fix the request as words says and send it again.",
+  "retryAfterSecs": 0,
+  "words": "Idempotency-Key is required: one operation id per payment, the same on a retry, so a payment is never made twice"
+ },
+ "ok": false
+}
+
+$ b. a wrong agent key
+  body: {"policy":"0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1","payee":"0xee80b9f69D80A04D4b2e803C426715AA8c1BB1f3","amount":"0.001","why":"rent"}   Idempotency-Key: op_s16-wrongkey-1
+  HTTP/1.1 403 Forbidden
+{
+ "contractVersion": "2026-10-17.1",
+ "error": {
+  "audience": "agent",
+  "by": "auth",
+  "code": "token_invalid",
+  "executed": "no",
+  "meaning": "The agent key is not one this account issued: mistyped, revoked, or for another account.",
+  "nextStep": "Check the key you send; if the owner revoked it, ask them for a new one.",
+  "retryAfterSecs": 0,
+  "words": "unknown agent key"
+ },
+ "ok": false,
+ "scope": "buy"
+}
+
+$ c. no why
+  body: {"policy":"0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1","payee":"0xee80b9f69D80A04D4b2e803C426715AA8c1BB1f3","amount":"0.001","why":""}   Idempotency-Key: op_s16-nowhy-0001
+  HTTP/1.1 400 Bad Request
+{
+ "contractVersion": "2026-10-17.1",
+ "error": {
+  "audience": "agent",
+  "by": "input",
+  "code": "invalid_body",
+  "executed": "no",
+  "meaning": "The request is missing a field or carries one this route cannot use.",
+  "nextStep": "Fix the request as words says and send it again.",
+  "retryAfterSecs": 0,
+  "words": "why is required, at most 500 characters: every payment is written to the book with what it was for"
+ },
+ "ok": false
+}
+
+$ d. above the per-payment cap (0.02 > 0.01)
+  body: {"policy":"0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1","payee":"0xee80b9f69D80A04D4b2e803C426715AA8c1BB1f3","amount":"0.02","why":"S16 proof: above the cap"}   Idempotency-Key: op_s16-overcap-0001
+  HTTP/1.1 409 Conflict
+{
+ "contractVersion": "2026-10-17.1",
+ "error": {
+  "audience": "user",
+  "by": "budget",
+  "code": "over_per_payment",
+  "executed": "no",
+  "meaning": "The amount is above the account's per-payment limit.",
+  "nextStep": "Pay less, or ask the owner to raise the limit (prepare_limits); a raise waits the account's delay.",
+  "retryAfterSecs": 0,
+  "words": "Over the limit for one payment, so nothing was paid. Raise the limit or pay it in parts."
+ },
+ "ok": false
+}
+
+$ e. a payee nobody approved
+  body: {"policy":"0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1","payee":"0x000000000000000000000000000000000000dEaD","amount":"0.001","why":"S16 proof: a stranger"}   Idempotency-Key: op_s16-stranger-0001
+  HTTP/1.1 409 Conflict
+{
+ "contractVersion": "2026-10-17.1",
+ "error": {
+  "audience": "user",
+  "by": "payee",
+  "code": "payee_not_approved",
+  "executed": "no",
+  "meaning": "The payee is not on the account's payee list.",
+  "nextStep": "Ask the owner to approve the payee; the ask is in Needs you.",
+  "retryAfterSecs": 0,
+  "words": "Not one of your approved payees yet, so nothing was paid."
+ },
+ "ok": false
+}
+
+
+== 3. MCP over HTTP: scripts/prove_mcp_http_pay.py (stdlib urllib) http://127.0.0.1:7916 <policy> <payee> 0.001 ~/.tameion/test-keys/uat2-u1-rc-buy.token op_s16-9d0579cd-f8a3-4c47-9ed2-fce56e8c2982
+
+$ POST http://127.0.0.1:7916/mcp initialize -> HTTP 200, Content-Type application/json, Mcp-Session-Id absent
+{
+ "capabilities": {
+  "tools": {}
+ },
+ "protocolVersion": "2025-06-18",
+ "serverInfo": {
+  "name": "tameion",
+  "version": "2026-10-17.1"
+ }
+}
+
+$ POST http://127.0.0.1:7916/mcp notifications/initialized -> HTTP 202, body ''
+
+$ tools/list -> HTTP 200, 18 tools
+{
+ "names": [
+  "treasury_inbox",
+  "run_pass",
+  "pass_status",
+  "prepare_payees",
+  "prepare_limits",
+  "prepare_mode",
+  "prepare_fund",
+  "prepare_schedule",
+  "prepare_renew",
+  "import_bills",
+  "buy_service",
+  "pay",
+  "purchases",
+  "invoices",
+  "send_invoice",
+  "records",
+  "record_events",
+  "watch_address"
+ ],
+ "pay.annotations": {
+  "destructiveHint": true,
+  "idempotentHint": true,
+  "openWorldHint": true,
+  "readOnlyHint": false,
+  "title": "Pay an approved payee (spends USDC)"
+ },
+ "pay.required": [
+  "policy",
+  "payee",
+  "amount",
+  "why",
+  "operationId"
+ ]
+}
+
+$ tools/call treasury_inbox -> HTTP 200, isError False
+{
+ "caps": {
+  "daily": "0.048000 USDC",
+  "floor": "0.000000 USDC",
+  "leftNow": "0.010000 USDC",
+  "perAction": "0.010000 USDC",
+  "spent24h": "0.001000 USDC"
+ },
+ "contractVersion": "2026-10-17.1",
+ "mode": "Autopilot",
+ "ok": true,
+ "payees": [
+  {
+   "address": "0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3",
+   "approvedAt": 1792219284,
+   "payableFrom": 1792219344,
+   "payableNow": true
+  },
+  {
+   "address": "0xf4d08abf297f57acd381f000a25442186d860e43",
+   "approvedAt": 1792220430,
+   "payableFrom": 1792220490,
+   "payableNow": true
+  }
+ ],
+ "waitingCount": 0
+}
+
+$ tools/call pay #1 (operationId op_s16-9d0579cd-f8a3-4c47-9ed2-fce56e8c2982) -> HTTP 200, isError False
+{
+ "contractVersion": "2026-10-17.1",
+ "ok": true,
+ "paid": true,
+ "payment": {
+  "actionHash": "0x74bed25fcc1f580a43b2113cbffe275391ad9a89ef5549573b06ca77b300f132",
+  "amount": "0.001000 USDC",
+  "at": 1792228309,
+  "explorer": "https://sepolia.arbiscan.io/tx/0xcf66a705eb7e972908d009ad87bf83de910a8ec5ed3f1cad5b3397f01395965d",
+  "minor": "1000",
+  "operationId": "op_s16-9d0579cd-f8a3-4c47-9ed2-fce56e8c2982",
+  "payee": "0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3",
+  "policy": "0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1",
+  "status": "paid",
+  "tx": "0xcf66a705eb7e972908d009ad87bf83de910a8ec5ed3f1cad5b3397f01395965d",
+  "why": "S16 proof: one direct payment to the approved payee"
+ }
+}
+
+$ tools/call pay #2 (operationId op_s16-9d0579cd-f8a3-4c47-9ed2-fce56e8c2982) -> HTTP 200, isError False
+{
+ "contractVersion": "2026-10-17.1",
+ "ok": true,
+ "paid": true,
+ "payment": {
+  "actionHash": "0x74bed25fcc1f580a43b2113cbffe275391ad9a89ef5549573b06ca77b300f132",
+  "amount": "0.001000 USDC",
+  "at": 1792228309,
+  "explorer": "https://sepolia.arbiscan.io/tx/0xcf66a705eb7e972908d009ad87bf83de910a8ec5ed3f1cad5b3397f01395965d",
+  "minor": "1000",
+  "operationId": "op_s16-9d0579cd-f8a3-4c47-9ed2-fce56e8c2982",
+  "payee": "0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3",
+  "policy": "0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1",
+  "status": "paid",
+  "tx": "0xcf66a705eb7e972908d009ad87bf83de910a8ec5ed3f1cad5b3397f01395965d",
+  "why": "S16 proof: one direct payment to the approved payee"
+ }
+}
+
+== 4. On chain after the pay and its replay
+keccak256(policy ‖ operationId) recomputed with cast = 0x74bed25fcc1f580a43b2113cbffe275391ad9a89ef5549573b06ca77b300f132
+
+
+cast receipt 0xcf66a705eb7e972908d009ad87bf83de910a8ec5ed3f1cad5b3397f01395965d: status 1 (success), block 320030067, from 0x5342886f08Fb99F6A571Dca291fc32ab92f0B210 (the agent), to 0xDAf055ffF0ad86F112A5F7F9055eEE4E5A9Ad4c1 (the policy)
+executed(actionHash) = true
+Paid(address,uint256,bytes32) logs on the policy with topic2 = actionHash, blocks 320025067..latest:
+  count = 1
+  tx 0xcf66a705eb7e972908d009ad87bf83de910a8ec5ed3f1cad5b3397f01395965d block 320030067
+USDC balanceOf(payee) = 2000 (was 1000: one transfer of 1000)
+USDC balanceOf(policy) = 93000 (was 94000) · spentInWindow = 2000 (was 1000)
+Explorer: https://sepolia.arbiscan.io/tx/0xcf66a705eb7e972908d009ad87bf83de910a8ec5ed3f1cad5b3397f01395965d
+
+The book: runtime/seats/S16/app/tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.payments.jsonl
+{"actionHash":"0x74bed25fcc1f580a43b2113cbffe275391ad9a89ef5549573b06ca77b300f132","amount":"0.001000 USDC","at":1792228309,"explorer":"https://sepolia.arbiscan.io/tx/0xcf66a705eb7e972908d009ad87bf83de910a8ec5ed3f1cad5b3397f01395965d","minor":"1000","operationId":"op_s16-9d0579cd-f8a3-4c47-9ed2-fce56e8c2982","payee":"0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3","policy":"0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1","status":"paid","tx":"0xcf66a705eb7e972908d009ad87bf83de910a8ec5ed3f1cad5b3397f01395965d","why":"S16 proof: one direct payment to the approved payee"}
+
+== 5. After a restart of :7916 (17:13:06, new PID 98712; the in-memory idempotency table is gone): the same operation id again, on the HTTP route
+$ a. the same payment, the same operationId
+  body: {"policy":"0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1","payee":"0xee80b9f69D80A04D4b2e803C426715AA8c1BB1f3","amount":"0.001","why":"S16 proof: one direct payment to the approved payee"}   Idempotency-Key: op_s16-9d0579cd-f8a3-4c47-9ed2-fce56e8c2982
+  HTTP/1.1 200 OK
+{
+ "contractVersion": "2026-10-17.1",
+ "ok": true,
+ "paid": true,
+ "payment": {
+  "actionHash": "0x74bed25fcc1f580a43b2113cbffe275391ad9a89ef5549573b06ca77b300f132",
+  "amount": "0.001000 USDC",
+  "at": 1792228309,
+  "explorer": "https://sepolia.arbiscan.io/tx/0xcf66a705eb7e972908d009ad87bf83de910a8ec5ed3f1cad5b3397f01395965d",
+  "minor": "1000",
+  "operationId": "op_s16-9d0579cd-f8a3-4c47-9ed2-fce56e8c2982",
+  "payee": "0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3",
+  "policy": "0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1",
+  "status": "paid",
+  "tx": "0xcf66a705eb7e972908d009ad87bf83de910a8ec5ed3f1cad5b3397f01395965d",
+  "why": "S16 proof: one direct payment to the approved payee"
+ },
+ "replayed": true
+}
+
+$ b. a different amount under the same operationId
+  body: {"policy":"0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1","payee":"0xee80b9f69D80A04D4b2e803C426715AA8c1BB1f3","amount":"0.002","why":"S16 proof: one direct payment to the approved payee"}   Idempotency-Key: op_s16-9d0579cd-f8a3-4c47-9ed2-fce56e8c2982
+  HTTP/1.1 422 Unprocessable Entity
+{
+ "contractVersion": "2026-10-17.1",
+ "error": {
+  "audience": "agent",
+  "by": "idempotency",
+  "code": "idempotency_conflict",
+  "executed": "no",
+  "meaning": "This Idempotency-Key was already used with a different body.",
+  "nextStep": "Use a new key for a new request; resend the first body to get the first answer.",
+  "retryAfterSecs": 0,
+  "words": "this Idempotency-Key was used with a different body"
+ },
+ "ok": false
+}
+
+   (b came from the in-memory table, which a stored the first answer in; restarted again at 17:13:22, PID 99024, so the book answers:)
+$ c. a different amount under the same operationId, first request after the restart
+  body: {"policy":"0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1","payee":"0xee80b9f69D80A04D4b2e803C426715AA8c1BB1f3","amount":"0.002","why":"S16 proof: one direct payment to the approved payee"}   Idempotency-Key: op_s16-9d0579cd-f8a3-4c47-9ed2-fce56e8c2982
+  HTTP/1.1 422 Unprocessable Entity
+{
+ "contractVersion": "2026-10-17.1",
+ "error": {
+  "audience": "agent",
+  "by": "idempotency",
+  "code": "idempotency_conflict",
+  "executed": "no",
+  "meaning": "This Idempotency-Key was already used with a different body.",
+  "nextStep": "Use a new key for a new request; resend the first body to get the first answer.",
+  "retryAfterSecs": 0,
+  "words": "this operation id was used for a different payment (payee, amount or why)"
+ },
+ "ok": false
+}
+
+
+== 6. On chain after every replay (17:13:42)
+Paid logs with topic2 = actionHash, blocks 320025067..latest:
+  count = 1 (one payment, however often the id was sent)
+USDC balanceOf(payee) = 2000 · spentInWindow = 2000
+Lines in the book for this operationId: 1
+
+Not shown live: mode_propose / mode_watch / payee_cooling_off / over_24h (this account is on Autopilot with its payee long cooled off and
+0.046 USDC of daily room; changing that needs the owner's passkey). They map from the contract's errors by selector, the same path as
+d and e above: operator::pay::tests::the_contracts_refusals_come_back_by_their_codes.
