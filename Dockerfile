@@ -28,7 +28,8 @@ COPY proof/hedge-testnet-live-open-2026-10-13.txt proof/hedge-testnet-nowithdraw
 # Everything the service writes goes to the volume: accounts, passes, bills, the book, keys it makes on first use.
 ENV HOST=0.0.0.0 PORT=8080 TAMEION_APP_DIR=/data/app TAMEION_LOG_DIR=/data/log TAMEION_VAPID_KEY=/data/vapid.key \
     TAMEION_STATEMENT_KEY_FILE=/data/statement.key HEDGE_HALT_DIR=/data/hedge TAMEION_DESKS_DIR=/data/desks
-VOLUME ["/data"]
+# No VOLUME line: Railway refuses a Dockerfile that has one ("use Railway Volumes"); the host mounts /data (fly.toml [mounts],
+# scripts/deploy_railway.sh `railway volume add`) and `docker run -v` works without it.
 EXPOSE 8080
 # A Fly volume is mounted owned by root: hand it to the service's user, then drop root for good.
 CMD ["sh", "-c", "chown -R tameion:tameion /data && exec setpriv --reuid=tameion --regid=tameion --init-groups tameion-app"]
