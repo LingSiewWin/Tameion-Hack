@@ -451,40 +451,81 @@ fn account_lock(policy: &str) -> std::sync::Arc<tokio::sync::Mutex<()>> {
         .clone()
 }
 
-/// The P-75 rule as one step under the account's lock (docs/60 P-214): read the
-/// seller's pending signature, ask whether the chain spent it (`spent`), judge
-/// (`guard`), sign and simulate (`sign`, which returns its result and the new
-/// pending entry), and record that entry before the lock is let go. Without
-/// the lock two concurrent buys from one seller both passed the check and both
-/// were signed; now the second finds the first pending and is refused in words.
-/// `Err` is the guard's refusal; `Ok(Err)` is `sign`'s.
-async fn one_signature_per_seller<T, S, SF, G, GF>(
+/// What the one-signature step decided ([`one_signature_per_seller`]).
+#[derive(Debug, PartialEq)]
+enum Step<T> {
+    /// Signed and simulated; the new signature is recorded as pending.
+    Signed(T),
+    /// The price needs the owner and no approval was left to use (P-217).
+    Held,
+    /// Refused, in words: the guard, the chain, or the time cap.
+    Refused(String),
+}
+
+/// How long one purchase may wait for, and then hold, its account's lock
+/// (docs/60 P-224): a stalled node answers in words in seconds instead of
+/// queueing every purchase of the account behind one read.
+const BUY_LOCK_SECS: u64 = 10;
+
+/// The P-75 rule as one step under the account's lock (docs/60 P-214): use the
+/// owner's price approval if the price needs one (`approved`, P-222: taken
+/// here, so one approval lets one purchase through), read the seller's pending
+/// signature, ask whether the chain spent it (`spent`), judge (`guard`), sign
+/// and simulate (`sign`, which returns its result and the new pending entry),
+/// and record that entry before the lock is let go. The wait for the lock and
+/// the work under it are each capped at `cap` ([`BUY_LOCK_SECS`] in `buy`); on
+/// the cap nothing is pending and nothing was handed to the seller.
+async fn one_signature_per_seller<T, A, S, SF, G, GF>(
     app_dir: &Path,
     policy: &str,
     seller: &str,
+    cap: std::time::Duration,
+    approved: A,
     spent: S,
     sign: G,
-) -> Result<Result<T, String>, String>
+) -> Step<T>
 where
+    A: FnOnce() -> bool,
     S: FnOnce(B256) -> SF,
     SF: std::future::Future<Output = bool>,
     G: FnOnce() -> GF,
     GF: std::future::Future<Output = Result<(T, Value), String>>,
 {
     let lock = account_lock(policy);
-    let _held = lock.lock().await;
-    let held = pending(app_dir, policy)
-        .get(&seller.to_lowercase())
-        .and_then(|p| p["digest"].as_str().and_then(|d| B256::from_str(d).ok()));
-    let spent = match held {
-        Some(d) => spent(d).await,
-        None => false,
+    let Ok(_held) = tokio::time::timeout(cap, lock.lock()).await else {
+        return Step::Refused(format!(
+            "another purchase for this account was still being signed after {} s; nothing was signed or paid, try again",
+            cap.as_secs()
+        ));
     };
-    guard(app_dir, policy, seller, spent, now_secs())?;
-    Ok(sign().await.map(|(out, entry)| {
-        set_pending(app_dir, policy, seller, Some(entry));
-        out
-    }))
+    let work = async {
+        if !approved() {
+            return Step::Held;
+        }
+        let held = pending(app_dir, policy)
+            .get(&seller.to_lowercase())
+            .and_then(|p| p["digest"].as_str().and_then(|d| B256::from_str(d).ok()));
+        let spent = match held {
+            Some(d) => spent(d).await,
+            None => false,
+        };
+        if let Err(w) = guard(app_dir, policy, seller, spent, now_secs()) {
+            return Step::Refused(w);
+        }
+        match sign().await {
+            Ok((out, entry)) => {
+                set_pending(app_dir, policy, seller, Some(entry));
+                Step::Signed(out)
+            }
+            Err(w) => Step::Refused(w),
+        }
+    };
+    tokio::time::timeout(cap, work).await.unwrap_or_else(|_| {
+        Step::Refused(format!(
+            "the chain did not answer within {} s; nothing was signed or paid, try again",
+            cap.as_secs()
+        ))
+    })
 }
 
 /// After the seller answered that it settled (P-75, docs/60 P-162): its pending
@@ -821,17 +862,11 @@ pub async fn buy(app_dir: &Path, t: &Tenant, r: BuyRequest<'_>) -> Result<Value,
         ));
     }
     // A price far above what this seller usually charges is the owner's call,
-    // as a bill's amount off its usual is (docs/60 P-217).
+    // as a bill's amount off its usual is (docs/60 P-217); the owner's approval
+    // is used under the account's lock below (P-222).
     let usual = usual_price(app_dir, &t.policy, &format!("{pay_to:#x}"));
-    if !purchase_allowed(amount, usual).contains(&crate::decide::Action::Pay)
-        && !take_price_approval(
-            app_dir,
-            &t.policy,
-            &format!("{pay_to:#x}"),
-            amount,
-            now_secs(),
-        )
-    {
+    let needs_owner = !purchase_allowed(amount, usual).contains(&crate::decide::Action::Pay);
+    let held_words = |line: &mut Value| -> Refusal {
         let u = usual.unwrap_or_default();
         line["status"] = json!("needs-you");
         line["band"] = json!(true);
@@ -842,12 +877,12 @@ pub async fn buy(app_dir: &Path, t: &Tenant, r: BuyRequest<'_>) -> Result<Value,
             usdc_text(u),
             r.reason
         ));
-        record(app_dir, &t.policy, &line);
-        return Err((
+        record(app_dir, &t.policy, line);
+        (
             "409 Conflict",
             json!({ "error": line["why"], "needsYou": line }),
-        ));
-    }
+        )
+    };
     if !level1::issuer_frozen(t, &[pay_to]).await.is_empty() {
         return Err(refuse(
             &mut line,
@@ -864,6 +899,8 @@ pub async fn buy(app_dir: &Path, t: &Tenant, r: BuyRequest<'_>) -> Result<Value,
         app_dir,
         &t.policy,
         &seller_key,
+        std::time::Duration::from_secs(BUY_LOCK_SECS),
+        || !needs_owner || take_price_approval(app_dir, &t.policy, &seller_key, amount, now_secs()),
         |d| {
             let client = &client;
             async move { client.executed(policy, d).await.unwrap_or(false) }
@@ -892,8 +929,9 @@ pub async fn buy(app_dir: &Path, t: &Tenant, r: BuyRequest<'_>) -> Result<Value,
     )
     .await;
     let (digest, context, deadline) = match signed {
-        Ok(Ok(v)) => v,
-        Ok(Err(w)) | Err(w) => return Err(refuse(&mut line, "409 Conflict", w)),
+        Step::Signed(v) => v,
+        Step::Held => return Err(held_words(&mut line)),
+        Step::Refused(w) => return Err(refuse(&mut line, "409 Conflict", w)),
     };
     line["actionHash"] = json!(format!("{digest:#x}"));
     let mut payload = payment_payload(&required, &offer, policy, &context);
@@ -1086,6 +1124,34 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// One purchase through the step, the chain's round trip taking `ms`.
+    async fn step(
+        dir: &Path,
+        policy: &str,
+        seller: &str,
+        byte: u8,
+        ms: u64,
+        approved: impl FnOnce() -> bool,
+        signed: &std::sync::atomic::AtomicUsize,
+    ) -> Step<u8> {
+        one_signature_per_seller(
+            dir,
+            policy,
+            seller,
+            std::time::Duration::from_millis(400),
+            approved,
+            |_| async { false },
+            || async move {
+                // The signature and the chain's simulation: a round trip.
+                tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+                signed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let entry = json!({ "digest": format!("{:#x}", B256::repeat_byte(byte)), "deadline": now_secs() + 60 });
+                Ok((byte, entry))
+            },
+        )
+        .await
+    }
+
     /// docs/60 P-214: two concurrent buys from one seller. The chain round trip
     /// between the check and the pending write is where both used to pass; under
     /// the account's lock exactly one is signed and the other is refused in
@@ -1096,39 +1162,102 @@ mod tests {
         std::fs::create_dir_all(level1::tenants_dir(&dir)).unwrap();
         let policy = "0x00000000000000000000000000000000000000c1";
         let signed = std::sync::atomic::AtomicUsize::new(0);
-        let buy = |seller: &'static str, byte: u8| {
-            let (dir, signed) = (&dir, &signed);
-            async move {
-                one_signature_per_seller(dir, policy, seller, |_| async { false }, || async move {
-                    // The signature and the chain's simulation: a round trip.
-                    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-                    signed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                    let entry = json!({ "digest": format!("{:#x}", B256::repeat_byte(byte)), "deadline": now_secs() + 60 });
-                    Ok((byte, entry))
-                })
-                .await
-            }
-        };
-        let s1 = "0x00000000000000000000000000000000000000a1";
+        let (s1, s2) = (
+            "0x00000000000000000000000000000000000000a1",
+            "0x00000000000000000000000000000000000000a2",
+        );
         let (a, b, other) = tokio::join!(
-            buy(s1, 1),
-            buy(s1, 2),
-            buy("0x00000000000000000000000000000000000000a2", 3)
+            step(&dir, policy, s1, 1, 150, || true, &signed),
+            step(&dir, policy, s1, 2, 150, || true, &signed),
+            step(&dir, policy, s2, 3, 150, || true, &signed)
         );
         let _ = std::fs::remove_dir_all(&dir);
-        let ok = [&a, &b].iter().filter(|r| matches!(r, Ok(Ok(_)))).count();
+        let ok = [&a, &b]
+            .iter()
+            .filter(|r| matches!(r, Step::Signed(_)))
+            .count();
         assert_eq!(ok, 1, "{a:?} {b:?}");
         let refused = [a, b]
             .into_iter()
-            .find_map(|r| r.err())
+            .find_map(|r| match r {
+                Step::Refused(w) => Some(w),
+                _ => None,
+            })
             .expect("one refused");
         assert!(refused.contains("can still be redeemed"), "{refused}");
-        assert!(matches!(other, Ok(Ok(3))), "{other:?}");
+        assert_eq!(other, Step::Signed(3));
         assert_eq!(
             signed.load(std::sync::atomic::Ordering::SeqCst),
             2,
             "one per seller"
         );
+    }
+
+    /// docs/60 P-222: one owner approval of a priced-out purchase lets one
+    /// purchase through, even when two from that seller arrive together: the
+    /// approval is used under the account's lock; the other is held for the owner.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn one_price_approval_lets_one_of_two_concurrent_buys_through() {
+        let dir =
+            std::env::temp_dir().join(format!("tameion-x402-approval-{}", std::process::id()));
+        std::fs::create_dir_all(level1::tenants_dir(&dir)).unwrap();
+        let (policy, seller) = (
+            "0x00000000000000000000000000000000000000c3",
+            "0x00000000000000000000000000000000000000a1",
+        );
+        approve_price(&dir, policy, seller, 2000, now_secs() + 600);
+        let signed = std::sync::atomic::AtomicUsize::new(0);
+        let take = || take_price_approval(&dir, policy, seller, 2000, now_secs());
+        let (a, b) = tokio::join!(
+            step(&dir, policy, seller, 1, 150, take, &signed),
+            step(&dir, policy, seller, 2, 150, take, &signed)
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        let outcomes = [&a, &b];
+        assert_eq!(
+            outcomes
+                .iter()
+                .filter(|r| matches!(r, Step::Signed(_)))
+                .count(),
+            1,
+            "{a:?} {b:?}"
+        );
+        assert_eq!(
+            outcomes.iter().filter(|r| matches!(r, Step::Held)).count(),
+            1,
+            "{a:?} {b:?}"
+        );
+        assert_eq!(signed.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    /// docs/60 P-224: a stalled chain read does not hold the account's lock: the
+    /// step answers in words at the cap, nothing is pending, and the next
+    /// purchase of the account is not queued behind it.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn a_stalled_purchase_answers_at_the_cap_and_frees_the_lock() {
+        let dir = std::env::temp_dir().join(format!("tameion-x402-cap-{}", std::process::id()));
+        std::fs::create_dir_all(level1::tenants_dir(&dir)).unwrap();
+        let policy = "0x00000000000000000000000000000000000000c4";
+        let seller = "0x00000000000000000000000000000000000000a1";
+        let signed = std::sync::atomic::AtomicUsize::new(0);
+        let started = std::time::Instant::now();
+        let stalled = step(&dir, policy, seller, 1, 5_000, || true, &signed).await;
+        assert!(
+            matches!(&stalled, Step::Refused(w) if w.contains("did not answer within")),
+            "{stalled:?}"
+        );
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "{:?}",
+            started.elapsed()
+        );
+        assert!(
+            pending(&dir, policy).is_empty(),
+            "nothing pending after the cap"
+        );
+        let next = step(&dir, policy, seller, 2, 10, || true, &signed).await;
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(next, Step::Signed(2));
     }
 
     #[test]
