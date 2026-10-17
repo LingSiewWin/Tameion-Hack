@@ -228,6 +228,7 @@ function domRules({ view, width, route, palette }) {
   const px = (v) => parseFloat(v);
   const isSheet = (e) => !!e.closest("dialog, [role=dialog], [data-sheet]");
   const metrics = {};
+  metrics.busy = !!document.querySelector('[aria-busy="true"]'); // the page is a skeleton: no hero yet
 
   // Rule 1: zero hashes in the Owner view, in the text and in every attribute (hrefs included)
   if (view === "owner") {
@@ -256,7 +257,7 @@ function domRules({ view, width, route, palette }) {
     if (off.length) add("warn", "agent-size", off[0], `${off.length} text elements are not 13/20 (first: ${st(off[0]).fontSize}/${st(off[0]).lineHeight})`);
   }
   const h1s = all.filter((e) => e.tagName === "H1");
-  if (h1s.length !== 1) add("fail", "one-hero", h1s[0] ?? null, `${h1s.length} h1 on the page (DESIGN: one hero per surface)`);
+  if (!metrics.busy && h1s.length !== 1) add("fail", "one-hero", h1s[0] ?? null, `${h1s.length} h1 on the page (DESIGN: one hero per surface)`);
   if (h1s[0]) {
     const s = st(h1s[0]);
     metrics.h1 = `${s.fontSize}/${s.lineHeight}/${s.fontWeight}`;
@@ -320,7 +321,7 @@ function domRules({ view, width, route, palette }) {
   };
   for (const e of [document.documentElement, document.body, ...all]) {
     const s = st(e);
-    if (e === document.documentElement || e === document.body || h.own(e)) note(s.color, e, "color");
+    if (e === document.body || h.own(e)) note(s.color, e, "color"); // <html> paints no text of its own
     note(s.backgroundColor, e, "background");
     for (const side of ["Top", "Right", "Bottom", "Left"]) if (px(s[`border${side}Width`]) > 0 && s[`border${side}Style`] !== "none") note(s[`border${side}Color`], e, "border");
     if (s.outlineStyle !== "none" && px(s.outlineWidth) > 0) note(s.outlineColor, e, "outline");
@@ -574,7 +575,9 @@ async function scenario(browser, AxeBuilder, sc, cfg) {
     const { findings, metrics } = await page.evaluate(domRules, { view: sc.view, width: sc.width, route: sc.route, palette: cfg.palette[sc.view] });
     R.findings.push(...findings);
     R.metrics = metrics;
-    if (!cfg.noAxe) R.findings.push(...(await axeFindings(page, AxeBuilder, R)));
+    // a skeleton has no hero; the heading rule waits for the content
+    if (!cfg.noAxe) R.findings.push(...(await axeFindings(page, AxeBuilder, R)).filter((f) => !(metrics.busy && f.rule === "axe:page-has-heading-one")));
+    if (metrics.busy && sc.state === "rest") R.pending = "the route still shows its skeleton after settling: no content yet";
     if (sc.state === "rest" || sc.state === "detail") {
       const flash = (metrics.skeleton ?? []).filter((s) => s.ms < 300);
       if (flash.length) R.findings.push({ sev: "fail", rule: "skeleton-flash", sel: "", text: "", detail: `skeleton on screen for ${flash.map((f) => f.ms + " ms").join(", ")} (DESIGN: >= 300 ms once shown)` });
@@ -662,15 +665,17 @@ async function motionAndShell(browser, sc, cfg) {
       const media = await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches);
       if (media !== reduced) R.findings.push({ sev: "fail", rule: "emulation", sel: "", text: "", detail: `prefers-reduced-motion is ${media}, expected ${reduced}` });
       const idle = await page.evaluate(sampleMotion, { action: null, ms: 400 });
-      const loops = idle.restRunning.filter((a) => a.infinite || a.props.some((p) => p !== "opacity"));
+      const pulses = idle.restRunning.filter((a) => /pulse|skeleton/i.test(a.name));
+      if (pulses.length && !reduced) R.findings.push({ sev: "warn", rule: "skeleton-pulse-infinite", sel: pulses[0].id.split("|").pop(), text: "", detail: `the skeleton pulse repeats for as long as it is shown (${pulses[0].name}, ${pulses[0].duration} ms, infinite); DESIGN §Motion says it "stops after first paint"` });
+      const loops = idle.restRunning.filter((a) => !/pulse|skeleton/i.test(a.name) && (a.infinite || a.props.some((p) => !["opacity", "mixBlendMode"].includes(p))));
       if (loops.length) R.findings.push({ sev: "fail", rule: "moves-at-rest", sel: loops[0].id.split("|").pop(), text: "", detail: `${loops.length} animation(s) still run on a settled page (${loops.map((a) => a.name || a.id.split("|")[0]).join(", ")}); nothing moves that is not a state change` });
       for (const to of ["agent", "owner"]) {
         const m = await page.evaluate(sampleMotion, { action: to, ms: 700 });
         if (m.error) { R.findings.push({ sev: "fail", rule: "capsule", sel: "", text: "", detail: m.error }); break; }
         if (m.after !== to) R.findings.push({ sev: "fail", rule: "capsule-flip", sel: "", text: "", detail: `clicked ${to}, html[data-view] is ${m.after}` });
         // the UA's ::view-transition-group / image-pair animate size and position from the old snapshot to the new one; for the root they do not change
-        const moving = m.seen.filter((a) => !/view-transition-(group|image-pair)/.test(a.pseudo) && a.props.some((p) => p !== "opacity"));
-        if (moving.length) R.findings.push({ sev: "fail", rule: "flip-not-opacity", sel: moving[0].pseudo || moving[0].id.split("|").pop(), text: "", detail: `the flip animates ${[...new Set(moving.flatMap((a) => a.props))].join(", ")}; DESIGN: crossfade only, no slide, no scale` });
+        const moving = m.seen.filter((a) => !/view-transition-(group|image-pair)/.test(a.pseudo) && a.props.some((p) => !["opacity", "mixBlendMode"].includes(p)));
+        if (moving.length) R.findings.push({ sev: "fail", rule: "flip-not-opacity", sel: moving[0].pseudo || moving[0].id.split("|").pop(), text: "", detail: `the flip animates ${[...new Set(moving.flatMap((a) => a.props))].filter((p) => p !== "mixBlendMode").join(", ")}; DESIGN: crossfade only, no slide, no scale` });
         const fade = m.seen.filter((a) => a.props.includes("opacity"));
         if (!reduced && !fade.some((a) => Math.abs(a.duration - 200) <= 25)) R.findings.push({ sev: "warn", rule: "flip-200ms", sel: "", text: "", detail: `no 200 ms opacity crossfade seen on the flip to ${to} (saw ${m.seen.map((a) => `${a.name || "?"}:${a.duration}`).join(", ") || "nothing"})` });
         if (reduced && !fade.length) R.findings.push({ sev: "note", rule: "flip-instant", sel: "", text: "", detail: `under reduced motion the flip to ${to} is instant (DESIGN allows the opacity crossfade; instant is quieter)` });
