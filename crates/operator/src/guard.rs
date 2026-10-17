@@ -96,10 +96,8 @@ where
             words,
             None,
         );
-        // A page (it says `Sec-Fetch-Mode`) reads `error` as the sentence, as `shaped` gives it.
-        let page = String::from_utf8_lossy(&buf[..head])
-            .to_ascii_lowercase()
-            .contains("\r\nsec-fetch-mode:");
+        // A page reads `error` as the sentence, as `shaped` gives it.
+        let page = crate::refusal::from_page(&String::from_utf8_lossy(&buf[..head]));
         let body = page
             .then(|| crate::refusal::for_page(&refusal))
             .flatten()

@@ -1906,10 +1906,20 @@ fn the_agent_envelope_names_every_refusal() {
         "GET",
         &inbox,
         "",
-        "Authorization: Bearer not-a-key\r\nSec-Fetch-Mode: cors\r\n",
+        "Authorization: Bearer not-a-key\r\nSec-Fetch-Site: same-origin\r\nSec-Fetch-Mode: cors\r\n",
     );
     assert_eq!(st, 403);
     assert_eq!(json(&b)["error"], "unknown agent key", "{b}");
+    assert_eq!(json(&b)["ok"], false, "{b}");
+    // Node's fetch says `Sec-Fetch-Mode` and is no page (docs/60 P-274): the SDK gets the code.
+    let (_, _, b) = http_with(
+        p,
+        "GET",
+        &inbox,
+        "",
+        "Authorization: Bearer not-a-key\r\nSec-Fetch-Mode: cors\r\n",
+    );
+    assert_eq!(json(&b)["error"]["code"], "token_invalid", "{b}");
     let (st, _, b) = http_with(p, "GET", &inbox, "", "");
     assert_eq!(
         (st, json(&b)["error"]["code"].clone()),
@@ -1974,6 +1984,20 @@ fn the_agent_envelope_names_every_refusal() {
     assert_eq!(v["halt"], false);
     assert!(v["recentUpdates"].as_array().is_some_and(|u| !u.is_empty()));
     assert!(v["policy"].is_string(), "the route's fields, unchanged");
+    // The inbox as the SDK (Node's fetch) and as a page read it: `ok` and the date too (docs/60 P-274).
+    for extra in [
+        "Authorization: Bearer k-read\r\nSec-Fetch-Mode: cors\r\n",
+        "Authorization: Bearer k-read\r\nSec-Fetch-Site: same-origin\r\nSec-Fetch-Mode: cors\r\n",
+    ] {
+        let (st, _, b) = http_with(p, "GET", &inbox, "", extra);
+        let v = json(&b);
+        assert_eq!(st, 200, "{b}");
+        assert_eq!(
+            (v["ok"].clone(), v["contractVersion"].clone()),
+            (true.into(), operator::refusal::CONTRACT_VERSION.into()),
+            "{extra}"
+        );
+    }
 
     // The catalogue, open to anyone.
     let (st, _, b) = http_with(p, "GET", "/api/level1/codes", "", "");

@@ -501,6 +501,15 @@ pub fn for_page(v: &Value) -> Option<Value> {
     Some(out)
 }
 
+/// Whether a request comes from a browser page, by its head: browsers send
+/// `Sec-Fetch-Site` on every request and scripts cannot set it. Not
+/// `Sec-Fetch-Mode`: Node's `fetch` sends that one too, so the SDK was read as a
+/// page (docs/60 P-274).
+pub fn from_page(request: &str) -> bool {
+    let head = request.split("\r\n\r\n").next().unwrap_or("");
+    head.to_ascii_lowercase().contains("\r\nsec-fetch-site:")
+}
+
 /// The code of an agent-key refusal (`level1::token_allows`'s words).
 pub fn token_code(words: &str) -> &'static str {
     if words.starts_with("buying a service needs") || words.contains("does not carry the scope") {
@@ -663,6 +672,16 @@ mod tests {
         );
         assert_eq!(envelope(409, &e, false), None, "already in the envelope");
         assert_eq!(envelope(200, &json!([1]), false), None);
+        assert!(from_page(
+            "GET /x HTTP/1.1\r\nSec-Fetch-Site: same-origin\r\nSec-Fetch-Mode: cors\r\n\r\n"
+        ));
+        assert!(
+            !from_page("GET /x HTTP/1.1\r\nsec-fetch-mode: cors\r\nuser-agent: node\r\n\r\n"),
+            "Node's fetch is no page (P-274)"
+        );
+        assert!(!from_page(
+            "POST /x HTTP/1.1\r\nHost: h\r\n\r\n{\"a\":\"\r\nsec-fetch-site: x\"}"
+        ));
         let page = for_page(&e).unwrap();
         assert_eq!(
             page["error"],

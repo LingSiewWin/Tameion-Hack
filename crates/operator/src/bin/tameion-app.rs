@@ -1351,10 +1351,12 @@ fn refused(code: &str, words: impl Into<String>) -> Value {
 /// docs/115 §2: an agent route's reply in the agent envelope
 /// (`operator::refusal::envelope`: `ok`, `contractVersion`, a refusal as one
 /// object with its code), headers and status kept. A page — a browser says
-/// `Sec-Fetch-Mode` on every request — keeps `error` as the sentence it shows,
-/// so the console and the classic pages read what they always read.
-/// ponytail: Safari before 16.4 sends no `Sec-Fetch-Mode` and gets the agent's
-/// shape; a header from the console if those browsers matter.
+/// `Sec-Fetch-Site` on every request — gets the same `ok` and
+/// `contractVersion` but keeps `error` as the sentence it shows, so the console
+/// and the classic pages read what they always read. Not `Sec-Fetch-Mode`:
+/// Node's `fetch` sends that one, and the SDK lost `ok` and the codes (docs/60
+/// P-274). ponytail: Safari before 16.4 sends no `Sec-Fetch-Site` and gets
+/// the agent's shape; a header from the console if those browsers matter.
 fn shaped(reply: Vec<u8>, method: &str, path: &str, raw: &str) -> Vec<u8> {
     if !operator::refusal::agent_route(method, path) {
         return reply;
@@ -1377,10 +1379,11 @@ fn shaped(reply: Vec<u8>, method: &str, path: &str, raw: &str) -> Vec<u8> {
         .nth(1)
         .and_then(|s| s.parse().ok())
         .unwrap_or(0);
-    let out = if header(raw, "sec-fetch-mode").is_some() {
-        operator::refusal::for_page(&v)
+    let enveloped = operator::refusal::envelope(status, &v, operator::refusal::moves_money(path));
+    let out = if operator::refusal::from_page(raw) {
+        operator::refusal::for_page(enveloped.as_ref().unwrap_or(&v)).or(enveloped)
     } else {
-        operator::refusal::envelope(status, &v, operator::refusal::moves_money(path))
+        enveloped
     };
     let Some(v) = out else {
         return reply;
