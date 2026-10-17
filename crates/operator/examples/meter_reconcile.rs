@@ -78,7 +78,10 @@ async fn main() {
             c.note
         );
     }
-    std::process::exit(i32::from(checks.len() > 1));
+    let differs = checks
+        .iter()
+        .any(|c| c.class != meter::MATCH && c.class != meter::SUMMARY);
+    std::process::exit(i32::from(differs));
 }
 
 /// A report page and a key list saved to files (the fixture run).
