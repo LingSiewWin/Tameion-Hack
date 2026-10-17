@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { calls, challengeFor, checkSettle, hex, invoiceDecideChallenge, keccak256 } from "../src/features/owner/owner-call.ts";
+import { calls, challengeFor, checkSettle, hex, invoiceDecideChallenge, keccak256, raiseCap } from "../src/features/owner/owner-call.ts";
 import { amount, authority, dateWords, facts, halvesByPayment, halvesWords, lines, minor, money, needs, payeesWords, pendingWords, plain } from "../src/features/owner/words.ts";
 import type { Inbox, Status } from "../src/lib/types.ts";
 
@@ -113,6 +113,13 @@ test("the calls built here are the ones the service prepared", () => {
     calls.setLimits(5000n, 50_000n, 0n),
     "0x189ae5f20000000000000000000000000000000000000000000000000000000000001388000000000000000000000000000000000000000000000000000000000000c3500000000000000000000000000000000000000000000000000000000000000000",
   );
+});
+
+test("raise the cap: one payment may be that amount, the day's cap at least as much, the floor kept", () => {
+  const r = raiseCap({ daily: "0.050000 USDC", floor: "0.000000 USDC" }, "0.006000 USDC");
+  assert.deepEqual(r.body, { perAction: "0.006000", daily: "0.050000", floor: "0.000000" });
+  assert.equal(r.data, calls.setLimits(6000n, 50_000n, 0n));
+  assert.deepEqual(raiseCap({ daily: "0.050000 USDC", floor: "0.010000 USDC" }, "0.080000 USDC").body, { perAction: "0.080000", daily: "0.080000", floor: "0.010000" });
 });
 
 test("the challenge is the one the service computed (PasskeyPrincipal.challengeFor)", () => {

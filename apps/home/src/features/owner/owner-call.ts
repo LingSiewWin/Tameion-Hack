@@ -97,6 +97,17 @@ export const calls = {
     "0x" + selector("setLimits(uint256,uint256,uint256)") + word(perAction) + word(daily) + word(floor),
 };
 
+/** "Raise the cap" for a payment over the per-payment cap: one payment may be that payment's amount, and the day's cap
+ *  at least as much; the floor stays. The prepare-limits body and the call the page will compare it with. */
+export function raiseCap(caps: { daily: string; floor: string }, amountText: string) {
+  const want = units(amountText);
+  const daily = units(caps.daily);
+  const floor = units(caps.floor);
+  const day = daily > want ? daily : want;
+  const text = (u: bigint) => `${u / 1_000_000n}.${(u % 1_000_000n).toString().padStart(6, "0")}`;
+  return { body: { perAction: text(want), daily: text(day), floor: text(floor) }, data: calls.setLimits(want, day, floor) };
+}
+
 const SETTLE = [selector("settleAsPrincipal(address,uint256,bytes32)"), selector("settleAsPrincipalIf(address,uint256,bytes32,bytes32,uint64)")];
 /** A payment the agent prepared for the owner's tap pays exactly `to` exactly `amount`, or this throws in words. */
 export function checkSettle(data: string, to: string, amount: bigint) {

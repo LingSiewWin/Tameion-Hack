@@ -9,9 +9,9 @@ import { OwnerSkeleton } from "../../components/skeletons.tsx";
 import { ApiError, fetchDemo, fetchInbox, fetchStatus, fetchSymbolon, fetchTenant, resolveAccount } from "../../lib/api.ts";
 import type { Inbox, Status } from "../../lib/types.ts";
 import { setView } from "../../lib/view.ts";
-import { calls, checkSettle, decideInvoice, keyIndexOf, ownerCall, prepare, savedPub, units, type Account } from "./owner-call.ts";
+import { calls, checkSettle, decideInvoice, keyIndexOf, ownerCall, prepare, raiseCap, savedPub, units, type Account } from "./owner-call.ts";
 import { OwnerView, type Outcome, type Phase } from "./owner-view.tsx";
-import { amount, COPY, halvesByPayment, minor, money, payeeName, type Halves, type Line, type Need } from "./words.ts";
+import { COPY, halvesByPayment, money, payeeName, type Halves, type Line, type Need } from "./words.ts";
 
 type Read = { inbox: Inbox; status: Status; halves: Map<string, Halves>; at: number };
 type DevState = "skeleton" | "empty" | "error" | "offline" | null;
@@ -170,13 +170,9 @@ export function OwnerHome({ name }: { name: string }) {
         if (n.kind === "seller") return COPY.approved(who);
       }
       if (n.kind === "bill" && n.action === "Raise the cap") {
-        const want = units(n.amount);
-        const daily = minor(inbox.caps.daily) ?? 0n;
-        const floor = minor(inbox.caps.floor) ?? 0n;
-        const newDaily = daily > want ? daily : want;
-        const plainAmount = (u: bigint) => amount(u).replace(/,/g, "");
-        const prepared = await prepare(acct, "prepare-limits", { perAction: plainAmount(want), daily: plainAmount(newDaily), floor: plainAmount(floor) });
-        await ownerCall(acct, calls.setLimits(want, newDaily, floor), { prepared, keyIndex, phase });
+        const raise = raiseCap(inbox.caps, n.amount);
+        const prepared = await prepare(acct, "prepare-limits", raise.body);
+        await ownerCall(acct, raise.data, { prepared, keyIndex, phase });
         return COPY.capAsked(money(n.amount));
       }
       if (n.kind === "bill" || (n.kind === "invoice" && !n.invoice?.everyDays)) {
