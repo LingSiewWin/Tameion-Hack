@@ -1,0 +1,236 @@
+Momentum accounting (docs/117 §1, seat S22) — proof written 2026-10-18 00:01 +0800
+Branch seat/S22 (worktree runtime/wt/S22). No key, token or invite printed. Testnets only.
+
+======================================================================================================================
+1. FLOWCHECK — the book (anchored record) against the chain, per UTC day, balance read from two RPCs
+   (read-only replay with the pass's own functions: operator::audit::book + ledger::momentum::flow_check;
+    cargo run -p operator --example flow_check -- runtime/app <policy> https://arbitrum-sepolia-rpc.publicnode.com)
+======================================================================================================================
+
+## 2026-10-18 00:01:18 +0800 flow_check 0xf0ae90c66d410dc0cc3bc9e6a667af8c39fb6b85
+account 0xf0ae90c66d410dc0cc3bc9e6a667af8c39fb6b85 on Arbitrum Sepolia · created block 320035137 (2026-10-17T09:34:25Z) · record: 10 money events
+RPC 1 https://sepolia-rollup.arbitrum.io/rpc head 320123710: balanceOf 0.040000 USDC
+RPC 2 https://arbitrum-sepolia-rpc.publicnode.com head 320123722: balanceOf 0.040000 USDC
+the transfer log sums to 0.040000 USDC now; balanceOf says 0.040000 USDC (RPC 1) and 0.040000 USDC (RPC 2)
+FLOWCHECK 2026-10-17T09:34:25Z → 2026-10-17T16:01:19Z | start 0.000000 USDC + in 0.050000 USDC − out(book) 0.010000 USDC = book 0.040000 USDC | chain 0.040000 USDC (out on chain 0.010000 USDC) | diff 0.000000 USDC
+momentum now: rate 0.001428 USDC a day over 7 days · runway by rate Some(28) days · floor 0.000000 USDC · forces 1
+
+## 2026-10-18 00:01:24 +0800 flow_check 0x42463b314d392fe34abe1854b925f0f6e55fa555
+account 0x42463b314d392fe34abe1854b925f0f6e55fa555 on Arbitrum Sepolia · created block 319756248 (2026-10-16T12:50:25Z) · record: 4 money events
+RPC 1 https://sepolia-rollup.arbitrum.io/rpc head 320123724: balanceOf 0.998000 USDC
+RPC 2 https://arbitrum-sepolia-rpc.publicnode.com head 320123740: balanceOf 0.998000 USDC
+the transfer log sums to 0.998000 USDC now; balanceOf says 0.998000 USDC (RPC 1) and 0.998000 USDC (RPC 2)
+FLOWCHECK 2026-10-16T12:50:25Z → 2026-10-17T00:00:00Z | start 0.000000 USDC + in 1.000000 USDC − out(book) 0.002000 USDC = book 0.998000 USDC | chain 0.998000 USDC (out on chain 0.002000 USDC) | diff 0.000000 USDC
+FLOWCHECK 2026-10-17T00:00:00Z → 2026-10-17T16:01:23Z | start 0.998000 USDC + in 0.000000 USDC − out(book) 0.000000 USDC = book 0.998000 USDC | chain 0.998000 USDC (out on chain 0.000000 USDC) | diff 0.000000 USDC
+momentum now: rate 0.000285 USDC a day over 7 days · runway by rate Some(3501) days · floor 0.000000 USDC · forces 1
+
+## 2026-10-18 00:01:28 +0800 flow_check 0x35a2e2701d4d72be257bf7708c67d1433c60342f
+account 0x35a2e2701d4d72be257bf7708c67d1433c60342f on Arbitrum Sepolia · created block 319119834 (2026-10-14T14:49:28Z) · record: 57 money events
+RPC 1 https://sepolia-rollup.arbitrum.io/rpc head 320123743: balanceOf 0.635000 USDC
+RPC 2 https://arbitrum-sepolia-rpc.publicnode.com head 320123756: balanceOf 0.635000 USDC
+the transfer log sums to 0.635000 USDC now; balanceOf says 0.635000 USDC (RPC 1) and 0.635000 USDC (RPC 2)
+FLOWCHECK 2026-10-14T14:49:28Z → 2026-10-15T00:00:00Z | start 0.000000 USDC + in 1.000000 USDC − out(book) 0.100000 USDC = book 0.900000 USDC | chain 0.635000 USDC (out on chain 0.365000 USDC) | diff -0.265000 USDC
+FLOWCHECK 2026-10-15T00:00:00Z → 2026-10-16T00:00:00Z | start 0.635000 USDC + in 0.000000 USDC − out(book) 0.000000 USDC = book 0.635000 USDC | chain 0.635000 USDC (out on chain 0.000000 USDC) | diff 0.000000 USDC
+FLOWCHECK 2026-10-16T00:00:00Z → 2026-10-17T00:00:00Z | start 0.635000 USDC + in 0.000000 USDC − out(book) 0.000000 USDC = book 0.635000 USDC | chain 0.635000 USDC (out on chain 0.000000 USDC) | diff 0.000000 USDC
+FLOWCHECK 2026-10-17T00:00:00Z → 2026-10-17T16:01:28Z | start 0.635000 USDC + in 0.000000 USDC − out(book) 0.000000 USDC = book 0.635000 USDC | chain 0.635000 USDC (out on chain 0.000000 USDC) | diff 0.000000 USDC
+  not in the book: 2026-10-14T17:22:46Z 0.008000 USDC to 0xe6379d56501826cddb242bbf9e9a1afb2f34665f in 0x78a1ca8b63cc3c5b630c9109cae5e379aa0655721bc7008d8cc0a88da6e48e0d — settled by the owner's passkey (SettledByPrincipal)
+  not in the book: 2026-10-14T17:34:45Z 0.012000 USDC to 0x8d7e519310d56dfcfb6bb2f2f24babc55762ebe3 in 0xf83d4c7a46a66de75a4ae0662efcf65283f3fa95fd3b0909316dc36f05b222c8 — settled by the owner's passkey (SettledByPrincipal)
+  not in the book: 2026-10-14T17:34:45Z 0.010000 USDC to 0xff2c4c396e54551e484d08150cf23b0194eb6dfb in 0xf83d4c7a46a66de75a4ae0662efcf65283f3fa95fd3b0909316dc36f05b222c8 — settled by the owner's passkey (SettledByPrincipal)
+  not in the book: 2026-10-14T17:34:45Z 0.010000 USDC to 0xe6379d56501826cddb242bbf9e9a1afb2f34665f in 0xf83d4c7a46a66de75a4ae0662efcf65283f3fa95fd3b0909316dc36f05b222c8 — settled by the owner's passkey (SettledByPrincipal)
+  not in the book: 2026-10-14T17:54:13Z 0.224000 USDC to 0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25 in 0xa56883f985b4543ba05349261a8cd143699224226d0a3f70638f465c3d8a7de0 — not an agent settlement (owner withdrawal, standing order or other call)
+  not in the book: 2026-10-14T18:52:52Z 0.001000 USDC to 0xae0c76958fcf8cd6c08eeb2a900ea4d8a7eec0bd in 0x823445d213a48906852e1753aaa7347067ed6b72e6cb3ce5fd6c56d77ee1945b — settled by the owner's passkey (SettledByPrincipal)
+momentum now: rate 0.014285 USDC a day over 7 days · runway by rate Some(44) days · floor 0.000000 USDC · forces 4
+
+## 2026-10-18 00:01:33 +0800 flow_check 0xa754b69c61f0a0bb7fde565ff99f40fd90787bcd
+account 0xa754b69c61f0a0bb7fde565ff99f40fd90787bcd on Arbitrum Sepolia · created block 319972705 (2026-10-17T04:58:43Z) · record: 7 money events
+RPC 1 https://sepolia-rollup.arbitrum.io/rpc head 320123760: balanceOf 0.992000 USDC
+RPC 2 https://arbitrum-sepolia-rpc.publicnode.com head 320123774: balanceOf 0.992000 USDC
+the transfer log sums to 0.992000 USDC now; balanceOf says 0.992000 USDC (RPC 1) and 0.992000 USDC (RPC 2)
+FLOWCHECK 2026-10-17T04:58:43Z → 2026-10-17T16:01:33Z | start 0.000000 USDC + in 1.000000 USDC − out(book) 0.001000 USDC = book 0.999000 USDC | chain 0.992000 USDC (out on chain 0.008000 USDC) | diff -0.007000 USDC
+  not in the book: 2026-10-17T05:44:17Z 0.002000 USDC to 0x30b49dec4082a10e0740804987daf09913fe1b2a in 0x4a748237d75d71b98c54c5d57587b709d01bbca097cddda6afcdd6b743c2f773 — settled by the owner's passkey (SettledByPrincipal)
+  not in the book: 2026-10-17T05:45:50Z 0.005000 USDC to 0xbad726898963814c5c3eee7f5cee5a4874c610fe in 0x80430a532c1f3b7f678290f9282a0bf4087a3cf8648a9acb744ffe8761ba8418 — settled by the owner's passkey (SettledByPrincipal)
+momentum now: rate 0.000142 USDC a day over 7 days · runway by rate Some(6985) days · floor 0.000000 USDC · forces 1
+
+Section 1 ran the example built from seat/S22 at 6fef4ca (before the rebase onto main 72a0ddf); the replay below of the new account ran the same binary.
+Reading: 0x35a2… and 0xa754… show non-zero differences, each explained to the minor unit by the 'not in the book' lines: payments the
+owner signed with the passkey (SettledByPrincipal) and one 0.224 USDC transfer back to the relayer address, none of which the agent's
+book records. That gap is the finding the check exists for (see the report, P-S22-3).
+
+## the new account of section 2, replayed the same way after its five passes
+account 0xbb3cf1b54d1eaad45f5a947e522ba02fc76c9ca1 on Arbitrum Sepolia · created block 320128317 (2026-10-17T16:21:44Z) · record: 17 money events
+RPC 1 https://sepolia-rollup.arbitrum.io/rpc head 320131200: balanceOf 0.040000 USDC
+RPC 2 https://arbitrum-sepolia-rpc.publicnode.com head 320131213: balanceOf 0.040000 USDC
+the transfer log sums to 0.040000 USDC now; balanceOf says 0.040000 USDC (RPC 1) and 0.040000 USDC (RPC 2)
+FLOWCHECK 2026-10-17T16:21:44Z → 2026-10-17T16:34:33Z | start 0.000000 USDC + in 0.050000 USDC − out(book) 0.010000 USDC = book 0.040000 USDC | chain 0.040000 USDC (out on chain 0.010000 USDC) | diff 0.000000 USDC
+momentum now: rate 0.001428 USDC a day over 7 days · runway by rate Some(28) days · floor 0.000000 USDC · forces 1
+
+======================================================================================================================
+2. REAL PASSES on a new demo account (local service :7891 built from seat/S22 at b4c9756, Arbitrum Sepolia 421614, relayer ~/.tameion/treasury.key)
+   The pass itself appends the FlowCheck (first pass of the UTC day) and the MoveReserve proposal (once a day, when at this burn the floor is
+   nearer than TAMEION_RUNWAY_FLOOR_DAYS; set to 60 on this local run so a 0.002-USDC demo bill crosses it within minutes; the default is 14).
+======================================================================================================================
+Account acme-agents-8293 · policy 0xbb3cf1b54d1eaad45f5a947e522ba02fc76c9ca1 · created block 320128317 · opened in the console with a CDP virtual passkey
+(Playwright, localhost:7891, demo mode with a throwaway local invite word, not written here) · demo funding tx 0x30cfb8473314c5604a17cc9e9afa1fcb3aa717cd95e1cb08c4623da31dbef366 (0.05 USDC)
+Steps: open (one passkey tap, funded in 19 s) · approve Demo Vendor + save the bill (one tap, 21 s) · Autopilot (one tap, applied after the 30 s delay, 83 s)
+pass 1 · job 6ad3a176-0000 · done · now 1792254326 · root 0x47097a849596b5bad2ca1b0c88d3839f5039a3edc0b57525f3266743284a2c72 · anchor tx 0x4588cca849e6b95efe775cc2ad4f09491f786a6ea8c72bceef3eebb45b94d032
+    paid 0.002000 USDC to 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854 in 0xf6c1d93dfee14d6836e1b445be8c67b628da0c0ea134e4ed244fd8438381f0d7
+    [0000] FLOWCHECK   Book: 0.000000 USDC at the start + 0.050000 USDC in - 0.000000 USDC out = 0.050000 USDC; the chain holds 0.050000 USDC; difference 0.000000 USDC.
+pass 2 · job 6ad3a1de-0001 · done · now 1792254430 · root 0xaee0c6114b375aca02ff76e0747c5291927efc2ed9496259e65d4a737f966701 · anchor tx 0xcddcc86600de1eb1dbf1e75312eb52d62d5ec0086a197d4dbdc093afcf6a7344
+    paid 0.002000 USDC to 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854 in 0x97fca17146ca6f9208951ae918ed5c2373f19f4fb88f28ff0bafb493f3ba1d3b
+pass 3 · job 6ad3a256-0002 · done · now 1792254587 · root 0xadbfbf08d4016a2ec117c17e5c7ff815384c03a20a0f21fb3195927ab551cf7d · anchor tx 0x1b225b3aedbe5b2a0b10ac8076d6ad7d9910961d35d83b4d0c766a57d2903b4e
+    paid 0.002000 USDC to 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854 in 0x8f0f23268e10d21101b2e26960c580cc1adc54c09c303e1be96fbc087f6e5e4e
+pass 4 · job 6ad3a2ce-0003 · done · now 1792254671 · root 0x993cd0b80dba5ee7e05747b8e4597e93c91a113a5a1816d00bf6dfb44fc103c8 · anchor tx 0xbb8a559b258155f1b6d80af5f9a52d1d83c33a0f27b7b6859f2db46cf8260098
+    paid 0.002000 USDC to 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854 in 0x557355220c69c7b8243e4473cb1a8bec6f0f7ea0440cd08d67163a1fd7835f03
+    [0000] DECISION    MoveReserve, proposed: at this burn (0.000857 USDC a day over the last 7 days) the floor is 51 days away, under the 60-day line; moving 0.007420 USDC in restores 60 days. Proposed, not done: the reserve is the owner's to move (the agent's key cannot withdraw or subscribe), and USYC on Arc testnet admits only entitled holders, which this account is not.
+pass 5 · job 6ad3a346-0004 · done · now 1792254791 · root 0x1602eca25892e7da8ad73fd222f0b29bff03508c6dc4c895f355221588d93de7 · anchor tx 0x73560c8eccd987e8b013b0489e177fe67c87b5e01ff1d5491b006f0fe5518fdc
+    paid 0.002000 USDC to 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854 in 0x1f1f6d6a2c1e7c507160d93312628fff314aea46c6a950c0c004d0a45bf19907
+Receipts on two RPCs (cast receipt … status):
+  0x4588cca849e6b95efe775cc2ad4f09491f786a6ea8c72bceef3eebb45b94d032 via sepolia-rollup.arbitrum.io/rpc: Error: error sending request for url (https://sepolia-rollup.arbitrum.io/rpc), block 320129196
+  0x4588cca849e6b95efe775cc2ad4f09491f786a6ea8c72bceef3eebb45b94d032 via arbitrum-sepolia-rpc.publicnode.com: 1 (success), block 320129196
+  0xbb8a559b258155f1b6d80af5f9a52d1d83c33a0f27b7b6859f2db46cf8260098 via sepolia-rollup.arbitrum.io/rpc: 1 (success), block 320130493
+  0xbb8a559b258155f1b6d80af5f9a52d1d83c33a0f27b7b6859f2db46cf8260098 via arbitrum-sepolia-rpc.publicnode.com: 1 (success), block 320130493
+  anchor 1 (holds the FLOWCHECK) and anchor 4 (holds the MoveReserve decision); explorer https://sepolia.arbiscan.io/tx/<hash>
+  re-read 01:11:30 +0800 (the first read of the line above timed out at the public endpoint): 0x4588cca8… via sepolia-rollup.arbitrum.io/rpc: 1 (success)
+
+======================================================================================================================
+3. GET /api/level1/status?policy= — rate, runway {byRateDays, firstShortfallDays}, forces (local service :7891, binary from b4c9756)
+======================================================================================================================
+## 2026-10-18 00:03:24 +0800 status for 0xf0ae… (a real account's files copied into the scratch app dir; no pass was run on the copy)
+{
+ "policy": "0xf0ae90c66d410dc0cc3bc9e6a667af8c39fb6b85",
+ "mode": "Autopilot",
+ "paused": false,
+ "halt": false,
+ "rate": "0.001428 USDC",
+ "windowDays": 7,
+ "runway": {
+  "byRateDays": 28,
+  "firstShortfallDays": null
+ },
+ "forces": [
+  {
+   "at": 1792229816,
+   "counterparty": "0xe5e2d8dcc2038fd0a010a6e7845378b646e33854",
+   "deltaPerDay": "0.001428 USDC",
+   "kind": "bill_added"
+  }
+ ]
+}
+## 2026-10-18 00:03:49 +0800 the inbox for the same account serves the same fold:
+inbox.momentum = {"forces": [{"at": 1792229816, "counterparty": "0xe5e2d8dcc2038fd0a010a6e7845378b646e33854", "deltaPerDay": "0.001428 USDC", "kind": "bill_added"}], "rate": "0.001428 USDC", "runway": {"byRateDays": 28, "firstShortfallDays": null}, "windowDays": 7}
+## 2026-10-18 00:34:01 +0800 status for the new account 0xbb3c… after its five passes
+{
+ "policy": "0xbb3cf1b54d1eaad45f5a947e522ba02fc76c9ca1",
+ "mode": "Autopilot",
+ "rate": "0.001428 USDC",
+ "windowDays": 7,
+ "runway": {
+  "byRateDays": 28,
+  "firstShortfallDays": 0
+ },
+ "forces": [
+  {
+   "at": 1792254326,
+   "counterparty": "0xe5e2d8dcc2038fd0a010a6e7845378b646e33854",
+   "deltaPerDay": "0.001428 USDC",
+   "kind": "bill_added"
+  }
+ ]
+}
+firstShortfallDays read 0 at 00:34:01 and null at 00:35:55: the last report's nextDue is the cycle that pass paid; once a full 120 s
+interval passes the walk counts the bill once ('may have ended'). Pre-existing inbox semantics on a 2-minute demo cadence (report, P-S22-4).
+
+======================================================================================================================
+4. tameion-mcp tool `top` (stdio, TAMEION_URL=http://127.0.0.1:7891) and the CLI `tameion top` (apps/sdk)
+======================================================================================================================
+## 2026-10-18 00:03:37 +0800 tools/list annotations of top, and tools/call top for 0xf0ae…
+tools/list top annotations: {"destructiveHint": false, "idempotentHint": true, "openWorldHint": true, "readOnlyHint": true, "title": "Burn rate and runway"}
+tools/call top structuredContent: {"contractVersion": "2026-10-17.1", "forces": [{"at": 1792229816, "counterparty": "0xe5e2d8dcc2038fd0a010a6e7845378b646e33854", "deltaPerDay": "0.001428 USDC", "kind": "bill_added"}], "ok": true, "policy": "0xf0ae90c66d410dc0cc3bc9e6a667af8c39fb6b85", "rate": "0.001428 USDC", "runway": {"byRateDays": 28, "firstShortfallDays": null}, "windowDays": 7}
+## CLI
+$ tameion top --policy 0xbb3cf1b54d1eaad45f5a947e522ba02fc76c9ca1 --url http://127.0.0.1:7891
+at this burn (0.001428 USDC a day over the last 7 days), the floor is 28 days away
+every bill in the next 90 days is covered
+  2026-10-17T16:25Z bill_added 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854 0.001428 USDC a day
+exit 0
+$ tameion top --policy 0xf0ae90c66d410dc0cc3bc9e6a667af8c39fb6b85 --url http://127.0.0.1:7891
+at this burn (0.001428 USDC a day over the last 7 days), the floor is 28 days away
+every bill in the next 90 days is covered
+  2026-10-17T09:36Z bill_added 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854 0.001428 USDC a day
+exit 0
+
+======================================================================================================================
+5. proptest (crates/ledger/tests/momentum.rs, PROPTEST_CASES=2000) and the unit tests of ledger::momentum
+======================================================================================================================
+2026-10-18 00:36:40 +0800
+48cf1fc
+     Running tests/momentum.rs (/Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/seats/S22/target/debug/deps/momentum-eae1b224bfff5700)
+test flow_is_conserved ... ok
+test runway_is_monotone_in_balance ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+test momentum::tests::runway_is_the_first_bill_the_balance_cannot_cover ... ok
+test momentum::tests::the_reserve_move_restores_the_line ... ok
+test momentum::tests::rate_runway_and_forces_from_the_record ... ok
+test momentum::tests::a_flow_check_reads_back_and_starts_where_the_last_one_ended ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+======================================================================================================================
+6. USYC on Arc testnet: can the policy subscribe? (docs/117 §1 'move reserve')
+======================================================================================================================
+## 2026-10-18 00:37:20 +0800 USYC probe, Arc testnet (chain 5042002, RPC https://rpc.testnet.arc.io, block 67698793); reads and eth_call simulations only, nothing sent
+USYC 0xe9185F0c5F296Ed1797AaE4238D26CCaBEadb86C: name "US Yield Coin", symbol "USYC", decimals 6, totalSupply 1378010700053
+proxy implementation (EIP-1967 slot): 0xc8ad161a7b8577fbbd5529b43d8a06cd8890b879 — verified on explorer.testnet.arc.io as YieldCoinSatellite (Circle, Apache-2.0); functions include mint, burn, setMinterAllowance; no deposit/subscribe/teller function
+authority(): 0xCC205224862C7641930c87679E98999d23C26113 (RolesAuthorityProxy; ROLE_INVESTOR=0, ROLE_TELLER=9, ROLE_TOKEN_MINTER=20 per src/config/constants.sol)
+Arc policy (runtime/arc_policy.addr) 0xad92baCbCd4e41E63C4b6E25DFfC09903c390dAB: USDC balanceOf 6200 minor; USYC balanceOf 0
+authority.canCall(policy, USYC, transfer(address,uint256)=0xa9059cbb): false  -> the policy may not even receive USYC (_assertCanReceive reverts NotPermissioned)
+authority.doesUserHaveRole(policy, ROLE_INVESTOR=0): false
+minterAllowance(policy): 0
+eth_call mint(policy, 1) from the policy:
+Error: server returned an error response: error code 3: execution reverted: panic: arithmetic underflow or overflow (0x11), data: "0x4e487b7100000000000000000000000000000000000000000000000000000000000
+verdict: GATED. Subscribing needs a minter allowance (mint: minterAllowance[msg.sender] - amount underflows, panic 0x11) and the receiver needs an entitlement role from Circle's RolesAuthority (canCall false). The BudgetPolicy also cannot call an arbitrary contract: it pays only approved payees. So MoveReserve is recorded as a proposal (Decision Review), never executed; no Arc spend (the Arc relayer is low on gas, per the PM).
+
+======================================================================================================================
+7. The account page line, phone width
+======================================================================================================================
+proof/momentum-page-2026-10-18.png — Playwright Chromium 390 x 844 (375 px content beside the scrollbar; scrollWidth 375 = clientWidth 375),
+http://127.0.0.1:7891/?policy=0xf0ae… opened read-only (the page's own confirm accepted). The line as rendered (innerText, 2026-10-18 00:05):
+  "At this burn, the floor is 28 days away · 0.001428 USDC a day over the last 7 days"
+beside the hero's bill walk "90 days of bills covered": two different questions, one fold (observed burn vs the bills known).
+
+======================================================================================================================
+8. After the rebase onto main 23be9f6 (S28's rails + this seat's momentum in one status reply), service rebuilt from seat/S22 6a009e4
+======================================================================================================================
+## 2026-10-18 04:54:00 +0800 GET /api/level1/status?policy=0xbb3cf1b54d1eaad45f5a947e522ba02fc76c9ca1
+{"ok": true, "rails": ["arc-native-usdc", "arbitrum-sepolia-usdc", "eurc-stablefx"], "mode": "Autopilot", "rate": "0.001428 USDC", "windowDays": 7, "runway": {"byRateDays": 28, "firstShortfallDays": null}, "forces": 1}
+## 2026-10-18 04:54:02 +0800 GET /api/level1/status?policy=0xf0ae90c66d410dc0cc3bc9e6a667af8c39fb6b85
+{"ok": true, "rails": ["arc-native-usdc", "arbitrum-sepolia-usdc", "eurc-stablefx"], "mode": "Autopilot", "rate": "0.001428 USDC", "windowDays": 7, "runway": {"byRateDays": 28, "firstShortfallDays": null}, "forces": 1}
+## 2026-10-18 04:54:16 +0800 tameion-mcp tools/call top (rebased build)
+{"contractVersion": "2026-10-17.1", "forces": [{"at": 1792254326, "counterparty": "0xe5e2d8dcc2038fd0a010a6e7845378b646e33854", "deltaPerDay": "0.001428 USDC", "kind": "bill_added"}], "ok": true, "policy": "0xbb3cf1b54d1eaad45f5a947e522ba02fc76c9ca1", "rate": "0.001428 USDC", "runway": {"byRateDays": 28, "firstShortfallDays": null}, "windowDays": 7}
+
+======================================================================================================================
+9. Gates on seat/S22 6a009e4 (rebased on main 23be9f6)
+======================================================================================================================
+== cargo fmt -p ledger -p operator -- --check
+fmt ok
+== cargo clippy -p ledger -p operator --all-targets -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.30s
+== cargo test -p ledger
+ledger passed 171 failed 0
+== cargo test -p operator --no-fail-fast
+operator passed 276 failed 0
+04:52:39
+04:51:15
+== tsc
+tsc ok
+== check-types
+  types.ts vs openapi.json: 16 types, 0 drifts
+== build
+○  (Static)  prerendered as static content
+
+== node --test
+ℹ tests 64
+ℹ pass 64
+ℹ fail 0
+== sdk npm test
+ℹ tests 22
+ℹ pass 22
+ℹ fail 0
