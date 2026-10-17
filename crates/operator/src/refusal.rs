@@ -276,6 +276,13 @@ pub const CODES: &[Code] = &[
         "Try again in a few seconds.",
     ),
     c(
+        "service_paused",
+        "service",
+        "agent",
+        "The operator paused this part of the service (the demo's relayer is under its floor); nothing was done.",
+        "Try again later, or tell the operator.",
+    ),
+    c(
         "service_error",
         "service",
         "agent",
@@ -562,8 +569,9 @@ mod tests {
                 c.name
             );
         }
-        // docs/115 §2's starting list, minus `service_paused` (no site refuses with it).
+        // docs/115 §2's starting list (`service_paused`: the demo's relayer floor, `demo::may_open`).
         for name in [
+            "service_paused",
             "token_missing",
             "token_invalid",
             "token_scope",

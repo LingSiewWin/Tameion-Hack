@@ -95,7 +95,8 @@ The codes:
 - Input: `invalid_body`, `not_found`, `body_too_large`, `state_conflict` (the
   request does not fit the account as it is now: read it first).
 - Service, chain, upstream: `rate_limited`, `account_busy`,
-  `service_unavailable`, `service_error`, `chain_unavailable`,
+  `service_unavailable`, `service_paused` (the operator paused it, e.g. the
+  demo's relayer is under its floor), `service_error`, `chain_unavailable`,
   `chain_refused` (the contract refused; words say why), `purchase_expired`,
   `upstream_unavailable` (a seller, Circle or a node did not answer as
   expected), `x402_unsupported` (the seller takes no payment this account can

@@ -78,23 +78,54 @@ pub async fn may_open(c: &ChainPreset, invite: Option<&str>) -> Result<(), (&'st
     if !enabled() || invite.is_none_or(str::is_empty) {
         return Err((
             "403 Forbidden",
-            json!({ "error": "demo mode is off on this service" }),
+            refusal("not_found", "demo mode is off on this service", None),
         ));
     }
     if c.usdc.is_none() {
         return Err((
             "400 Bad Request",
-            json!({ "error": "demo accounts open on Arbitrum Sepolia, where USDC is a token the relayer can send" }),
+            refusal(
+                "invalid_body",
+                "demo accounts open on Arbitrum Sepolia, where USDC is a token the relayer can send",
+                None,
+            ),
         ));
     }
     match relayer_short(c).await {
         Ok(None) => Ok(()),
-        // refusal: service_paused
-        Ok(Some(why)) | Err(why) => Err((
+        Ok(Some(why)) => Err((
             "503 Service Unavailable",
-            json!({ "error": format!("the demo is paused: {why}; nothing was opened") }),
+            refusal(
+                "service_paused",
+                format!("the demo is paused: {why}; nothing was opened"),
+                Some(3600),
+            ),
+        )),
+        Err(why) => Err((
+            "503 Service Unavailable",
+            refusal(
+                "chain_unavailable",
+                format!("the demo could not read the relayer: {why}; nothing was opened"),
+                Some(30),
+            ),
         )),
     }
+}
+
+/// A refusal from the catalogue (docs/115 §2) on a page route: `error` stays the
+/// sentence the page shows, as `refusal::for_page` serves pages, and `code` rides beside it.
+fn refusal(code: &str, words: impl Into<String>, retry_after: Option<u64>) -> Value {
+    let r = crate::refusal::refuse(
+        code,
+        crate::refusal::Executed::No,
+        "",
+        "",
+        words,
+        retry_after,
+    );
+    let mut page = crate::refusal::for_page(&r).unwrap_or_else(|| r.clone());
+    page["code"] = r["error"]["code"].clone();
+    page
 }
 
 /// What the relayer lacks to fund one more demo account, in words; `None` when
@@ -256,6 +287,14 @@ mod tests {
             !ended(&bill(30, 0), u64::MAX / 2),
             "a bill in days never ends here"
         );
+    }
+
+    #[test]
+    fn a_demo_refusal_keeps_the_page_sentence_and_names_its_code() {
+        let r = refusal("service_paused", "the demo is paused", Some(3600));
+        assert_eq!(r["error"], "the demo is paused");
+        assert_eq!(r["code"], "service_paused");
+        assert_eq!(r["ok"], false);
     }
 
     #[test]
