@@ -1,0 +1,175 @@
+{
+  "version": 1,
+  "project": {
+    "name": "@tameion/home",
+    "productType": "the account an agent operator gives its agents: a landing that becomes the book, an Owner view and an Agent view behind one toggle",
+    "stack": [
+      "next",
+      "react",
+      "tailwind-v4",
+      "shadcn"
+    ]
+  },
+  "sources": {
+    "tokens": [
+      "./src/tokens.ts"
+    ],
+    "components": [
+      "src/components/ui"
+    ],
+    "assets": [
+      "public/hero"
+    ],
+    "instructions": [
+      "./DESIGN.md"
+    ]
+  },
+  "design": {
+    "concept": "The strait becomes the book. A Sentinel-2 photograph of the Strait of Hormuz is quantised to a grid, drained of colour, its vessels tracked from a recorded AIS window, and the labels become the rows of a real account. The pixel grid is the ledger grid.",
+    "colorMode": "light-default (Owner, paper); dark is the Agent view (sea), not an inversion",
+    "colors": {
+      "paper": "#EEF2EA",
+      "plate": "#FFFFFF",
+      "plate-2": "#E4EAE1",
+      "ink": "#000000",
+      "ink-2": "#5B625B",
+      "rule": "#D5DCD2",
+      "attention": "#B3261E",
+      "transit (marks only)": "#3FB8B0",
+      "sea (Agent paper)": "#0E1B22",
+      "sea plate": "#15242C",
+      "sea ink": "#EEF2EA",
+      "sea ink-2": "#A9B4AD",
+      "sea attention": "#FF6B5E"
+    },
+    "typography": {
+      "interface": "IBM Plex Sans 400/500/600, tabular lining figures",
+      "machine": "IBM Plex Mono 400/500 (hero tracking labels, the whole Agent view)",
+      "scale": [
+        13,
+        16,
+        20,
+        25,
+        31,
+        39,
+        49,
+        61
+      ],
+      "roles": {
+        "heroStatement": "49/56, 31/38 under 640px, tracking -0.01em",
+        "authority": "31/38",
+        "balance": "39/44 tabular",
+        "sheetTitle": "25/32",
+        "rowTitle": "16/24 600",
+        "row": "16/24",
+        "meta": "13/18",
+        "monoDense": "13/20",
+        "monoRead": "15/22"
+      },
+      "measure": "<= 68ch",
+      "case": "sentence case only"
+    },
+    "spacing": {
+      "grid": 4,
+      "steps": [
+        4,
+        8,
+        12,
+        16,
+        24,
+        32,
+        48,
+        64
+      ],
+      "gutter": {
+        "mobile": 20,
+        "desktop": 32
+      },
+      "contentMax": 1120
+    },
+    "radius": {
+      "mark": 4,
+      "inner": 8,
+      "button": 12,
+      "plate": 16,
+      "sheetTop": 24
+    },
+    "shadows": {
+      "sheet": "0 -4px 16px #0000001F",
+      "everythingElse": "none"
+    },
+    "motion": {
+      "hero": "one scroll-bound sequence: photograph -> grid -> drain -> tracking -> hand-over -> the book",
+      "press": "100ms in / 160ms out to 0.98",
+      "capsule": "200ms crossfade",
+      "figures": "160ms roll",
+      "sheet": "320ms in / 200ms out, cubic-bezier(0.32, 0.72, 0, 1)",
+      "reducedMotion": "three stills for the hero; instant swaps elsewhere"
+    },
+    "density": "low in the Owner view, high in the Agent view"
+  },
+  "components": {
+    "installed": [],
+    "preferredPrimitives": [
+      "radix-ui"
+    ],
+    "shortlist": [
+      "segmented control -> the Owner | Agent capsule",
+      "hold-to-confirm -> Stop the agent",
+      "order / receipt card -> the authority receipt (Tameion can / can never / Worst case)",
+      "activity feed -> the statement lines",
+      "qr tile -> Receive"
+    ],
+    "patterns": [
+      "a pick keeps its structure and loses its colours, radii and shadows to tokens",
+      "one file per pick with its source line: component, author, URL, why"
+    ]
+  },
+  "constraints": {
+    "must": [
+      "resolve every colour to a token; no hex outside the tokens file",
+      "no hash anywhere in the Owner view (test: /0x[0-9a-fA-F]{8,}/ fails the build)",
+      "one primary action per screen; the attention red never carries anything but Needs you, Stop, refused, failures",
+      "tabular lining figures wherever money or time appears",
+      "monospace only for the machine's eye: hero tracking labels and the Agent view",
+      "every state designed: loading skeleton >= 300ms, empty with a next action, error with what still works, offline marked stale with its time",
+      "a disabled primary button names the first fixable reason and does it",
+      "the hero uses only recorded material: a dated Sentinel-2 scene, a stated aisstream window with real MMSIs, the demo account's real records",
+      "reduced motion: stills and instant swaps; axe-core clean in both views",
+      "the judges' live path (the account page) loads with no hero and is unchanged"
+    ],
+    "avoid": [
+      "AI-generated components; prefer human-made registry parts restyled to tokens",
+      "HUD chrome: brackets, crosshairs, scanlines, radar sweeps, glow",
+      "gradients, borders on content, shadows on groups",
+      "Inter, Roboto, Space Grotesk or the system font as the brand font",
+      "tracked uppercase labels, eyebrow labels, middle-dot meta strings, arrows appended to buttons",
+      "cream paper with a serif and a clay accent; neon green on black",
+      "a spinner page, a fake $0, 'Soon', 'Quote only'",
+      "stock photographs of containers or handshakes; ShipXplorer or MarineTraffic tiles; frames from videos",
+      "any vessel, route, scene or number that was not recorded"
+    ]
+  },
+  "decisions": [
+    {
+      "date": "2026-10-18",
+      "decision": "D-HOME-1: 'The strait becomes the book.' Hormuz photograph -> grid -> drain -> tracking -> the account's rows; Owner on paper, Agent at sea, one toggle. IBM Plex Sans / Mono.",
+      "evidence": "docs/design/DESIGN.md"
+    },
+    {
+      "date": "2026-10-18",
+      "decision": "Three treatments previewed before token values freeze: A photograph -> book (default), B chart -> book, C numbers -> book. Founder picks from screenshots; only token values change.",
+      "evidence": "docs/design/DESIGN.md, section 'Three treatments'"
+    }
+  ],
+  "evidence": [
+    {
+      "fact": "design.colors.sea and transit",
+      "source": "sampled from the Sentinel-2 scene's deep water and shallows"
+    },
+    {
+      "fact": "acceptance",
+      "source": "five-second test with five outsiders; Lighthouse mobile >= 85; axe; zero-hash test; contrast script; 21st review"
+    }
+  ]
+}
