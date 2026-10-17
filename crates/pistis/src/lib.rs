@@ -24,13 +24,14 @@
 //! loop never raises the score, however well it is signed, and a wash
 //! trader's counterparty signs its slot for free.
 //!
+//! Records are counted by their hash-first id (`Symbolon::id`): the same
+//! record persisted in two files is one record, with its best slots.
+//!
 //! Pure: no I/O and no clock; `now` is an argument.
 
-pub mod input;
+pub use ledger::symbolon::{SlotSig, Symbolon, SymbolonKind};
 
-pub use input::{SlotSig, Symbolon, SymbolonKind};
-
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 const DAY: i64 = 86_400;
 
@@ -65,12 +66,9 @@ pub struct Record {
 }
 
 impl Record {
-    /// How many of the three slots hold a verified signature.
+    /// How many of the three slots hold a verified signature, 0 to 3.
     pub fn slots(&self) -> usize {
-        [&self.sym.agent, &self.sym.counterparty, &self.sym.witness]
-            .iter()
-            .filter(|s| s.is_some())
-            .count()
+        self.sym.signedness() as usize
     }
 }
 
@@ -99,7 +97,7 @@ pub struct Score {
     pub survival: f64,
     pub independence: f64,
     pub recency: f64,
-    /// Records with three, two and one slot filled.
+    /// Records, each counted once, with three, two and one slot filled.
     pub n_triple: usize,
     pub n_double: usize,
     pub n_single: usize,
@@ -115,6 +113,14 @@ fn volume<'a>(rs: impl Iterator<Item = &'a Record>) -> u128 {
 }
 
 pub fn score(records: &[Record], now: i64, p: &Params) -> Score {
+    let mut best: BTreeMap<[u8; 32], &Record> = BTreeMap::new();
+    for r in records {
+        let kept = best.entry(r.sym.id()).or_insert(r);
+        if r.slots() > kept.slots() {
+            *kept = r;
+        }
+    }
+    let records: Vec<&Record> = best.into_values().collect();
     let window = i64::from(p.loop_window_days) * DAY;
     // ponytail: quadratic scans; index by counterparty when one account holds
     // tens of thousands of records.
@@ -143,6 +149,7 @@ pub fn score(records: &[Record], now: i64, p: &Params) -> Score {
 
     let countersigned: Vec<&Record> = records
         .iter()
+        .copied()
         .filter(|r| matches!(r.flow, Flow::Paid | Flow::Claimed) && r.slots() >= 2)
         .collect();
     let n_clean = countersigned.iter().filter(|r| clean(r)).count() as u128;
@@ -151,6 +158,7 @@ pub fn score(records: &[Record], now: i64, p: &Params) -> Score {
 
     let settled: Vec<&Record> = records
         .iter()
+        .copied()
         .filter(|r| r.flow == Flow::Paid && r.slots() >= 1)
         .collect();
     let independence = ratio(
@@ -160,6 +168,7 @@ pub fn score(records: &[Record], now: i64, p: &Params) -> Score {
 
     let triple: Vec<&Record> = records
         .iter()
+        .copied()
         .filter(|r| r.slots() == 3 && matches!(r.flow, Flow::Paid | Flow::Received | Flow::Claimed))
         .collect();
     let half_life = f64::from(p.half_life_days.max(1));
@@ -193,8 +202,10 @@ pub fn score(records: &[Record], now: i64, p: &Params) -> Score {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     const NOW: i64 = 1_800_000_000;
+    static NEXT: AtomicU64 = AtomicU64::new(1);
 
     fn sig() -> Option<SlotSig> {
         Some(SlotSig {
@@ -205,10 +216,13 @@ mod tests {
         })
     }
 
+    /// A record with its own hash, so no two calls are the same record.
     fn rec(flow: Flow, cp: &str, amount: u128, days_ago: i64, slots: usize) -> Record {
+        let mut record_hash = [0; 32];
+        record_hash[..8].copy_from_slice(&NEXT.fetch_add(1, Ordering::Relaxed).to_be_bytes());
         Record {
             sym: Symbolon {
-                record_hash: [0; 32],
+                record_hash,
                 kind: SymbolonKind::Settlement,
                 agent: (slots >= 3).then(sig).flatten(),
                 counterparty: (slots >= 2).then(sig).flatten(),
@@ -304,6 +318,18 @@ mod tests {
         let mut after = base.clone();
         after.push(rec(Flow::Paid, "c", 70, 11, 3)); // c's money returns a day later
         assert_eq!(score(&after, NOW, &Params::default()).survival, 0.0);
+    }
+
+    #[test]
+    fn the_same_record_twice_counts_once_with_its_best_slots() {
+        let single = rec(Flow::Paid, "a", 100, 0, 1);
+        let mut triple = single.clone();
+        triple.sym.agent = sig();
+        triple.sym.counterparty = sig();
+        let p = Params::default();
+        let both = score(&[single.clone(), triple.clone(), single], NOW, &p);
+        assert_eq!(both, score(&[triple], NOW, &p));
+        assert_eq!((both.n_single, both.n_triple, both.bps), (0, 1, 10_000));
     }
 
     #[test]

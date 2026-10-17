@@ -6,8 +6,10 @@ rust-version.workspace = true
 license.workspace = true
 description = "What an account's own record is worth as evidence: dispute survival x independence x recency over its signed records."
 
-# Pure, like `ledger`: no I/O, no clock (`now` is an argument), no dependencies.
+# Pure, like `ledger`: no I/O, no clock (`now` is an argument).
 [dependencies]
+# The symbolon: one record, three signature slots (docs/117 §13).
+ledger.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

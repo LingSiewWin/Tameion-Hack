@@ -1,6 +1,7 @@
 //! The four properties of the brief (docs/117 §13): the score stays in
 //! [0, 10000]; a closed loop never raises it; a triple-signed record never
-//! lowers survival; recency falls with age.
+//! lowers survival; recency falls with age. And a fifth: a record counted
+//! twice counts once.
 
 use pistis::{Flow, Params, Record, SlotSig, Symbolon, SymbolonKind, score};
 use proptest::prelude::*;
@@ -20,10 +21,13 @@ fn slot(on: bool) -> Option<SlotSig> {
     })
 }
 
-fn record(flow: Flow, cp: &str, amount: u128, at: i64, [a, c, w]: [bool; 3]) -> Record {
+/// Record `id` is its own record: the hash-first id dedups equal hashes.
+fn record(id: u64, flow: Flow, cp: &str, amount: u128, at: i64, [a, c, w]: [bool; 3]) -> Record {
+    let mut record_hash = [0; 32];
+    record_hash[..8].copy_from_slice(&id.to_be_bytes());
     Record {
         sym: Symbolon {
-            record_hash: [0; 32],
+            record_hash,
             kind: SymbolonKind::Settlement,
             agent: slot(a),
             counterparty: slot(c),
@@ -47,12 +51,17 @@ prop_compose! {
         days_ago in 0i64..200,
         slots in any::<[bool; 3]>(),
     ) -> Record {
-        record(flow, PARTIES[cp], AMOUNTS[amount], NOW - days_ago * DAY, slots)
+        record(0, flow, PARTIES[cp], AMOUNTS[amount], NOW - days_ago * DAY, slots)
     }
 }
 
 fn records() -> impl Strategy<Value = Vec<Record>> {
-    prop::collection::vec(any_record(), 0..30)
+    prop::collection::vec(any_record(), 0..30).prop_map(|mut rs| {
+        for (i, r) in rs.iter_mut().enumerate() {
+            r.sym.record_hash[..8].copy_from_slice(&(i as u64 + 1).to_be_bytes());
+        }
+        rs
+    })
 }
 
 proptest! {
@@ -80,8 +89,8 @@ proptest! {
         let before = score(&rs, NOW, &p);
         let at = NOW - days_ago * DAY;
         let mut looped = rs.clone();
-        looped.push(record(Flow::Paid, PARTIES[cp], AMOUNTS[out], at, out_slots));
-        looped.push(record(Flow::Received, PARTIES[cp], AMOUNTS[back], at + back_after * DAY, back_slots));
+        looped.push(record(1_000, Flow::Paid, PARTIES[cp], AMOUNTS[out], at, out_slots));
+        looped.push(record(1_001, Flow::Received, PARTIES[cp], AMOUNTS[back], at + back_after * DAY, back_slots));
         let after = score(&looped, NOW, &p);
         prop_assert!(after.bps <= before.bps, "{before:?} -> {after:?}");
         prop_assert!(after.survival <= before.survival);
@@ -117,8 +126,15 @@ proptest! {
         prop_assume!(!refused_later && !closes_loop);
         let before = score(&rs, NOW, &p).survival;
         let mut more = rs.clone();
-        more.push(record(flow, cp, amount, at, [true; 3]));
+        more.push(record(2_000, flow, cp, amount, at, [true; 3]));
         prop_assert!(score(&more, NOW, &p).survival >= before);
+    }
+
+    #[test]
+    fn a_record_counted_twice_counts_once(rs in records(), ahead in 0i64..400) {
+        let p = Params::default();
+        let twice: Vec<Record> = rs.iter().chain(&rs).cloned().collect();
+        prop_assert_eq!(score(&twice, NOW + ahead * DAY, &p), score(&rs, NOW + ahead * DAY, &p));
     }
 
     #[test]
