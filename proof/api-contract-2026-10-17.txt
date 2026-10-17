@@ -1,0 +1,138 @@
+S14 API contract proof — written 2026-10-17 16:48:01 +0800 by the S14 seat (main tree).
+What is checked: every reply an agent gets against apps/classic/openapi.json (scripts/acceptance.sh rule 17, anvil),
+and apps/console/src/lib/types.ts against openapi.json (apps/console/scripts/check-types.mjs, scripts/test_all.sh).
+
+== 1. Final scripts/acceptance.sh run (finished 16:46:41; main tree, S13's envelope merged: 7b00daf, 565c1f7) ==
+17. every agent reply above matches apps/classic/openapi.json (docs/115 §2; the envelope lines fail until the envelope lands)
+  PASS  a wrong agent key is refused (403)
+  PASS  a key without the import scope is refused (403)
+  PASS  an agent key with prepare gets calldata (200)
+  PASS  buy (200): its fields match openapi.json
+  PASS  buy (200): the agent envelope
+  PASS  run (202): its fields match openapi.json
+  PASS  run (202): the agent envelope
+  PASS  pass (200): its fields match openapi.json
+  PASS  pass (200): the agent envelope
+  PASS  inbox (200): its fields match openapi.json
+  PASS  inbox (200): the agent envelope
+  PASS  purchases.jsonl (200): its fields match openapi.json
+  PASS  prepare-payees (200): its fields match openapi.json
+  PASS  prepare-payees (200): the agent envelope
+  PASS  no key (401): the agent envelope
+  PASS  wrong key (403): the agent envelope
+  PASS  no scope (403): the agent envelope
+  PASS  codes (200): its fields match openapi.json
+  PASS  codes (200): the agent envelope
+  PASS  the served code catalogue equals openapi.json's RefusalCode
+  PASS  status (200): its fields match openapi.json
+  PASS  status (200): the agent envelope
+
+  FAIL  a model made the ordering (got 'rule', want 'model')
+  115 passed, 1 failed
+  (the one FAIL is rule 1, a transport error to the model API on that call; docs/60 P-247. Rules 0-16 otherwise as before.)
+
+== 2. The same rule 17 against main BEFORE the envelope merged (run finished 16:41:42): fails where it should ==
+17. every agent reply above matches apps/classic/openapi.json (docs/115 §2; the envelope lines fail until the envelope lands)
+  PASS  a wrong agent key is refused (403)
+  PASS  a key without the import scope is refused (403)
+  PASS  an agent key with prepare gets calldata (200)
+  PASS  buy (200): its fields match openapi.json
+  FAIL  buy (200): the agent envelope -- (top): 'ok' is a required property; (top): 'contractVersion' is a required property [expected until the envelope lands]
+  PASS  run (202): its fields match openapi.json
+  FAIL  run (202): the agent envelope -- (top): 'ok' is a required property; (top): 'contractVersion' is a required property [expected until the envelope lands]
+  PASS  pass (200): its fields match openapi.json
+  FAIL  pass (200): the agent envelope -- (top): 'ok' is a required property; (top): 'contractVersion' is a required property [expected until the envelope lands]
+  PASS  inbox (200): its fields match openapi.json
+  FAIL  inbox (200): the agent envelope -- (top): 'ok' is a required property; (top): 'contractVersion' is a required property [expected until the envelope lands]
+  PASS  purchases.jsonl (200): its fields match openapi.json
+  PASS  prepare-payees (200): its fields match openapi.json
+  FAIL  prepare-payees (200): the agent envelope -- (top): 'ok' is a required property; (top): 'contractVersion' is a required property [expected until the envelope lands]
+  FAIL  no key (401): the agent envelope -- error: "this account's owner requires an agent key: send Authorization: Bearer <token> (the owner mints one on the account page)" is not of type 'o; (top): 'ok' is a required property [expected until the envelope lands]
+  FAIL  wrong key (403): the agent envelope -- error: 'unknown agent key' is not of type 'object'; (top): 'ok' is a required property [expected until the envelope lands]
+  FAIL  no scope (403): the agent envelope -- error: 'this agent key does not carry the scope this call needs' is not of type 'object'; (top): 'ok' is a required property [expected until the envelope lands]
+  FAIL  codes (404): the reply is not JSON -- 'not found'
+  FAIL  status (404): the reply is not JSON -- 'not found'
+
+  103 passed, 10 failed
+
+== 3. It fails against an empty server, and on a renamed field (the checker of rule 17, on the replies run 1 recorded) ==
+$ an inbox reply of {} :
+FAIL	empty inbox (200): its fields match openapi.json -- (top): 'policy' is a required property; (top): 'mode' is a required property; (top): 'caps' is a required property
+FAIL	empty inbox (200): the agent envelope -- (top): 'ok' is a required property; (top): 'contractVersion' is a required property [expected until the envelope lands]
+$ the recorded inbox with caps.leftNow renamed to caps.left and paidTotal to paidTotl:
+FAIL	renamed inbox (200): its fields match openapi.json -- caps: Additional properties are not allowed ('left' was unexpected); (top): 'paidTotal' is a required property; (top): Unevaluated properties are not allowed ('agentAsks', 'agentAuthority', 'agentTokens', 'approvals', 'approvedByYou', 'balance', 'caps', 'chos
+PASS	renamed inbox (200): the agent envelope
+$ (every schema in run 1 also refused {}: the line 'an empty reply {} passes its schema' never printed)
+
+== 4. The same checker against S13's live build before it merged (:7913, read-only GETs, nothing signed; 16:4x) ==
+PASS	S13 inbox (200): its fields match openapi.json
+PASS	S13 inbox (200): the agent envelope
+PASS	S13 wrong key (403): the agent envelope
+PASS	S13 no key (401): the agent envelope
+PASS	S13 codes (200): its fields match openapi.json
+PASS	S13 codes (200): the agent envelope
+PASS	the served code catalogue equals openapi.json's RefusalCode
+PASS	S13 status (200): its fields match openapi.json
+PASS	S13 status (200): the agent envelope
+  (first pass, before InboxStatus was added: 'S13 inbox (200): its fields match openapi.json -- (top): Unevaluated properties are not
+   allowed ('halt', 'paused', 'recentUpdates' were unexpected)' — the strict inbox caught three undocumented keys; now InboxStatus.)
+
+== 5. Console side: node apps/console/scripts/check-types.mjs ==
+  drift: Inbox.pull.allowance: types.ts counts on it; openapi.json does not promise it
+  drift: Inbox.pull.wallet: types.ts counts on it; openapi.json does not promise it
+  drift: Inbox.pull.walletBalance: types.ts counts on it; openapi.json does not promise it
+  drift: Inbox.pull.suggestedAllowance: types.ts counts on it; openapi.json does not promise it
+  drift: Inbox.pull.usdc: types.ts counts on it; openapi.json does not promise it
+  drift: Inbox.pull.approveData: types.ts counts on it; openapi.json does not promise it
+  drift: Inbox.pull.revokeData: types.ts counts on it; openapi.json does not promise it
+  types.ts vs openapi.json: 15 types, 7 drifts
+  exit 1
+$ the same with docs/60 P-243's types.ts patch applied to a copy:
+  types.ts vs openapi.json: 15 types, 0 drifts
+  exit 0
+$ tsc --noEmit on a copy of the console with that patch (what S17b then guards):
+src/components/account/money.tsx(59,30): error TS18048: 'pl.wallet' is possibly 'undefined'.
+src/components/account/money.tsx(193,132): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+
+== 6. After run 1, text only: rule 17's title and the '[expected until the envelope lands]' suffix were removed (the envelope is on main). ==
+$ rule 17's block, extracted from scripts/acceptance.sh and run under /bin/bash 3.2.57 on run 1's recorded replies (16:48):
+  19 passed, 0 failed
+
+== 7. PATH=/opt/homebrew/bin:$PATH scripts/test_all.sh (finished 16:50:19, after S13 merged, final openapi.json) ==
+== contracts: forge test ==
+Ran 19 test suites in 42.09s (218.28s CPU time): 187 tests passed, 0 failed, 0 skipped (187 total tests)
+  ok
+== contracts: forge fmt --check ==
+  ok
+== contracts: forge lint (no findings) ==
+  ok
+== rust: cargo test --locked ==
+  72 passed, 1 failed
+  FAILED
+== rust: clippy, warnings are errors ==
+  ok
+== rust: formatting ==
+  ok
+== evidence desk: python unittest ==
+  ok
+== lender verifier: python unittest (offline) ==
+  ok
+== passkey page: node --test ==
+ℹ pass 15
+ℹ fail 0
+  ok
+== chip bridge: python unittest ==
+  ok
+== clear-signing descriptors: ERC-7730 ==
+  ok
+== console: tsc, eslint, node --test ==
+ℹ pass 59
+ℹ fail 0
+  ok
+== console: types.ts against openapi.json ==
+  types.ts vs openapi.json: 15 types, 7 drifts
+  FAILED
+failed: rust: cargo test --locked
+failed: console: types.ts against openapi.json
+exit 1
+$ cargo test --locked --workspace --no-fail-fast (16:53): 488 passed, 4 failed — the 4 are crates/hedge engine.rs:612, safety.rs:93, :166, :270 (docs/60 P-187, waiting on the founder); operator (app_http reads /api/openapi.json) passes.
