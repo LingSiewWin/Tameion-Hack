@@ -287,6 +287,46 @@ impl App {
         Ok(())
     }
 
+    /// The latest finished pass of an account, with when it started and its
+    /// report: this run's memory first, then the files of passes from before a
+    /// restart. ponytail: a directory scan when memory has none; an index when
+    /// accounts have hundreds of passes.
+    async fn last_done_pass(&self, policy: &str) -> Option<(u64, Value)> {
+        let in_memory = {
+            let jobs = self.jobs.lock().await;
+            jobs.values()
+                .filter(|j| j.request["level1"] == "run" && j.request["policy"] == policy)
+                .filter(|j| j.status == "done")
+                .max_by_key(|j| j.created)
+                .and_then(|j| j.report.clone().map(|r| (j.created, r)))
+        };
+        if in_memory.is_some() {
+            return in_memory;
+        }
+        let mut best: Option<(u64, Value)> = None;
+        let mut rd = tokio::fs::read_dir(self.dir.join("jobs")).await.ok()?;
+        while let Ok(Some(e)) = rd.next_entry().await {
+            let Some(v) = tokio::fs::read_to_string(e.path())
+                .await
+                .ok()
+                .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+            else {
+                continue;
+            };
+            if v["request"]["level1"] != "run"
+                || v["request"]["policy"] != policy
+                || v["status"] != "done"
+            {
+                continue;
+            }
+            let created = v["created"].as_u64().unwrap_or(0);
+            if best.as_ref().is_none_or(|(c, _)| created > *c) {
+                best = Some((created, v["report"].clone()));
+            }
+        }
+        best
+    }
+
     /// Tell the account's open event streams that something happened.
     fn emit(&self, policy: &str, event: &str, data: Value) {
         let _ = self.events.send((
@@ -579,6 +619,82 @@ async fn block_times(client: &arc::ArcClient, chain: &str, blocks: Vec<u64>) -> 
 /// settlement key from the pass, stable across passes, never the proposal's
 /// `actionHash`, which changes every pass (docs/60 P-175: one tap paid the same
 /// 30-day bill twice under two hashes). `None` for a row without one.
+/// The earliest due time of a bill the pass in `report` knew that falls after
+/// `since` (when that pass ran) and at or before `now`: a bill that fell due
+/// after the pass, so the pass is no answer for it (docs/60 P-229). A bill an
+/// x402 receipt suggests is never paid by a pass and does not count.
+fn due_after(report: &Value, since: u64, now: u64) -> Option<u64> {
+    report["obligationsList"]
+        .as_array()?
+        .iter()
+        .filter(|o| o["provenance"] != "x402 receipt")
+        .filter_map(|o| o["nextDue"].as_u64())
+        .filter(|d| *d > since && *d <= now)
+        .min()
+}
+
+/// When the watcher should run this account's pass for a bill falling due
+/// (docs/60 P-229): a few seconds after the earliest due time the last pass
+/// knew that is still ahead of it, and never within a minute of that pass.
+/// `None` when no bill falls due after it.
+fn due_pass_at(report: &Value, last_pass: u64) -> Option<u64> {
+    report["obligationsList"]
+        .as_array()?
+        .iter()
+        .filter(|o| o["provenance"] != "x402 receipt")
+        .filter_map(|o| o["nextDue"].as_u64())
+        .filter(|d| *d > last_pass)
+        .min()
+        .map(|d| (d + 5).max(last_pass + 60))
+}
+
+/// The bills a pass found in the history (not typed, not an x402 receipt),
+/// confident enough to propose, with their payees: what the owner may approve
+/// before they fall due (docs/60 P-228).
+fn found_bills(report: &Value) -> Vec<(Address, Value)> {
+    let floor = f64::from(ledger::action::CONFIDENCE_FLOOR_PROPOSE_BP) / 10_000.0;
+    report["obligationsList"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|o| o["samples"].as_u64().unwrap_or(0) > 0 && o["provenance"] != "x402 receipt")
+        .filter(|o| o["confidence"].as_f64().unwrap_or(0.0) >= floor)
+        .filter_map(|o| {
+            Some((
+                Address::from_str(o["counterparty"].as_str()?).ok()?,
+                o.clone(),
+            ))
+        })
+        .collect()
+}
+
+/// Why the agent asks to pay a bill it found (docs/60 P-228), in the owner's words.
+fn found_bill_reason(o: &Value, delay: u64, now: u64) -> String {
+    let every = o["intervalSecs"].as_u64().unwrap_or(0);
+    let every = if every >= 86_400 {
+        format!("{} days", every / 86_400)
+    } else if every >= 3_600 {
+        format!("{} hours", every / 3_600)
+    } else {
+        format!("{} minutes", (every / 60).max(1))
+    };
+    let next = o["nextDue"].as_u64().unwrap_or(0);
+    let when = if next > now {
+        format!(
+            "next due at unix {next}. Approve it before then and the agent pays that cycle itself"
+        )
+    } else {
+        format!(
+            "it fell due at unix {next}. Approve it and the agent pays the coming cycles itself"
+        )
+    };
+    format!(
+        "it found this bill in your history: {} every {every}, paid {} times; {when}, once the payee's {delay}-second waiting time has passed",
+        o["amount"].as_str().unwrap_or("?"),
+        o["samples"].as_u64().unwrap_or(0),
+    )
+}
+
 /// The waiting "Let the agent buy from … at … (usually …)" rows (docs/60 P-217):
 /// the newest priced-out purchase per seller in the last day that no later paid
 /// purchase from that seller answered. `bought` is newest first.
@@ -4092,6 +4208,49 @@ impl App {
                     }
                 }
             }
+            // docs/60 P-228: a bill the pass found in the history whose payee the
+            // agent may not pay yet, offered BEFORE it falls due: one tap approves
+            // the payee, its waiting time runs out before the due date, and the
+            // agent pays that cycle itself (until now the first offer came at the
+            // due date, as "Approve & pay", and the owner paid that cycle).
+            if let (Some(t), Some(client), Some(found)) = (
+                terms.as_ref().filter(|t| t.recompute() == t.fingerprint),
+                rc.as_ref(),
+                last.and_then(|j| j.report.as_ref()).map(found_bills),
+            ) && !found.is_empty()
+            {
+                let listed: Vec<String> = reply["sellersToApprove"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|s| s["seller"].as_str().map(str::to_lowercase))
+                    .collect();
+                let addrs: Vec<Address> = found.iter().map(|(a, _)| *a).collect();
+                if let Ok(Some(approved)) = client.attested_among(policy, &addrs).await {
+                    let deadline = now + 600;
+                    let delay = status["delaySecs"].as_u64().unwrap_or(0);
+                    for (a, o) in found.iter().filter(|(a, _)| {
+                        let a = format!("{a:#x}");
+                        !approved.contains(&a) && !listed.contains(&a)
+                    }) {
+                        let call = arc::prepare_payee_batch_bound(
+                            policy,
+                            &[*a],
+                            true,
+                            t.fingerprint,
+                            deadline,
+                        );
+                        if let Some(rows) = reply["sellersToApprove"].as_array_mut() {
+                            rows.push(json!({
+                                "seller": format!("{a:#x}"), "host": "a bill it found", "amount": o["amount"],
+                                "askedBy": "Your agent", "reason": found_bill_reason(o, delay, now),
+                                "bill": { "everySecs": o["intervalSecs"], "nextDue": o["nextDue"], "samples": o["samples"] },
+                                "to": format!("{:#x}", call.to), "data": call.data, "summary": call.summary, "boundUntil": deadline,
+                            }));
+                        }
+                    }
+                }
+            }
             // P-181: spent and left in the trailing 24 hours, and whom the agent may
             // pay and from when, read from the contract (not learned from refusals).
             if let (Some(client), true) = (rc.as_ref(), tenant.deployed) {
@@ -6336,6 +6495,14 @@ impl App {
     }
 
     async fn level1_bills(&self, body: &str, raw: &str) -> Vec<u8> {
+        // `TAMEION_INBOX_TIMING=1`: where a bill save's time goes, on stderr (docs/60 P-231).
+        let t0 = std::time::Instant::now();
+        let timing = std::env::var_os("TAMEION_INBOX_TIMING").is_some();
+        let tm = |what: &str| {
+            if timing {
+                eprintln!("bills: {what} at {} ms", t0.elapsed().as_millis());
+            }
+        };
         let v: Value = match serde_json::from_str(body) {
             Ok(v) => v,
             Err(e) => return json_reply("400 Bad Request", json!({ "error": e.to_string() })),
@@ -6424,41 +6591,46 @@ impl App {
                 return refused;
             }
         }
+        tm("signature checked");
         // docs/60 P-227: no import, whoever sends it, moves a bill whose current
         // cycle is paid to a start that re-opens a paid cycle (its cycle keys
         // would change, and a paid period would be asked or paid again).
-        let retyped: Vec<(String, u64, u64)> = bills
+        let retyped: Vec<(String, u64, u64, u64)> = bills
             .iter()
             .filter_map(|b| {
                 let old = tenant
                     .bills
                     .iter()
                     .find(|o| o.payee.eq_ignore_ascii_case(&b.payee))?;
-                Some((b.payee.to_lowercase(), old.next_due, b.next_due))
+                Some((
+                    b.payee.to_lowercase(),
+                    old.next_due,
+                    u64::from(old.every_days) * 86_400,
+                    b.next_due,
+                ))
             })
             .collect();
-        if tenant.deployed && !retyped.is_empty() {
-            let plan = match level1::plan(&self.dir, &tenant).await {
-                Ok(p) => p,
-                Err(e) => {
-                    return json_reply(
-                        "503 Service Unavailable",
-                        json!({ "error": format!("could not read which cycles of these bills are paid ({e}); nothing was saved, try again") }),
-                    );
-                }
-            };
-            for (payee, typed, wanted) in &retyped {
-                let next_unpaid = plan["obligations"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .find(|o| {
-                        o["cycleKey"]
-                            .as_str()
-                            .is_some_and(|k| k.starts_with(&format!("{payee}@")))
-                    })
-                    .and_then(|o| o["nextDue"].as_u64());
-                if let Some(w) = reopens_paid_cycle(payee, *typed, next_unpaid, *wanted) {
+        if tenant.deployed {
+            for (payee, typed, every, wanted) in &retyped {
+                let next_unpaid = match level1::next_unpaid_typed(
+                    &self.dir,
+                    &tenant,
+                    payee,
+                    *typed,
+                    *every,
+                    now_secs(),
+                )
+                .await
+                {
+                    Ok(n) => n,
+                    Err(e) => {
+                        return json_reply(
+                            "503 Service Unavailable",
+                            json!({ "error": format!("could not read which cycles of this bill are paid ({e}); nothing was saved, try again") }),
+                        );
+                    }
+                };
+                if let Some(w) = reopens_paid_cycle(payee, *typed, Some(next_unpaid), *wanted) {
                     return json_reply(
                         "409 Conflict",
                         json!({ "error": w, "nextUnpaid": next_unpaid }),
@@ -6466,12 +6638,14 @@ impl App {
                 }
             }
         }
+        tm("paid cycles read");
         // F10 (PLAN 5.47): a frozen payee never becomes a bill.
         let addrs: Vec<Address> = bills
             .iter()
             .filter_map(|b| Address::from_str(&b.payee).ok())
             .collect();
         let frozen = level1::issuer_frozen(&tenant, &addrs).await;
+        tm("issuer freeze read");
         if !frozen.is_empty() {
             return json_reply(
                 "422 Unprocessable Entity",
@@ -6525,7 +6699,9 @@ impl App {
                 Err(e) => json_reply("500 Internal Server Error", json!({ "error": e })),
             };
         }
-        match level1::set_bills(&self.dir, &tenant, bills).await {
+        let saved = level1::set_bills(&self.dir, &tenant, bills).await;
+        tm("approvals read and saved");
+        match saved {
             Ok(r) => json_reply("200 OK", r),
             Err(e) => json_reply("502 Bad Gateway", json!({ "error": e })),
         }
@@ -7123,10 +7299,31 @@ impl App {
                 })
                 .max_by_key(|j| j.created);
             if let Some(j) = recent {
-                return json_reply(
-                    "200 OK",
-                    json!({ "id": j.id, "status": j.status, "cached": true, "note": "a run for this policy started less than ten minutes ago" }),
-                );
+                // docs/60 P-229: a pass from before a bill fell due is no answer
+                // after it. Fresh once a minute has passed since it; before that
+                // the watcher runs it at the minute (`due_pass_at`).
+                match j
+                    .report
+                    .as_ref()
+                    .filter(|_| j.status == "done")
+                    .and_then(|r| due_after(r, j.created, now_secs()))
+                {
+                    Some(_) if now_secs() >= j.created + 60 => {}
+                    Some(d) => {
+                        let at = (j.created + 60).max(d + 5);
+                        return json_reply(
+                            "200 OK",
+                            json!({ "id": j.id, "status": j.status, "cached": true, "next": at,
+                                "note": format!("this check ran before a bill fell due; a fresh one runs at unix {at}") }),
+                        );
+                    }
+                    None => {
+                        return json_reply(
+                            "200 OK",
+                            json!({ "id": j.id, "status": j.status, "cached": true, "note": "a run for this policy started less than ten minutes ago" }),
+                        );
+                    }
+                }
             }
         }
         let Ok(permit) = Arc::clone(&self.slots).try_acquire_owned() else {
@@ -7604,8 +7801,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let app = Arc::clone(&app);
         tokio::spawn(async move {
             let mut last: HashMap<String, u64> = HashMap::new();
+            // docs/60 P-229: the pass each account gets when a known bill falls
+            // due, by policy (the time it was set for, so it is set once).
+            let mut due_set: HashMap<String, u64> = HashMap::new();
             loop {
                 tokio::time::sleep(std::time::Duration::from_secs(watch_every)).await;
+                // docs/60 P-229: a pass a few seconds after a known bill falls due,
+                // not only when USDC moves — through the same job path a button
+                // uses (it keeps the minute between passes).
+                for t in level1::list(&app.dir).into_iter().filter(|t| t.deployed) {
+                    let Some((ran, report)) = app.last_done_pass(&t.policy).await else {
+                        continue;
+                    };
+                    let Some(at) = due_pass_at(&report, ran) else {
+                        continue;
+                    };
+                    if at > now_secs() + watch_every || due_set.get(&t.policy) == Some(&at) {
+                        continue;
+                    }
+                    due_set.insert(t.policy.clone(), at);
+                    let (app, policy) = (Arc::clone(&app), t.policy.clone());
+                    tokio::spawn(async move {
+                        let wait = at.saturating_sub(now_secs());
+                        tokio::time::sleep(std::time::Duration::from_secs(wait)).await;
+                        let reply = app
+                            .level1_run(&json!({ "policy": policy }).to_string())
+                            .await;
+                        let line = String::from_utf8_lossy(&reply);
+                        println!(
+                            "watcher: a bill of {policy} fell due → pass {}",
+                            line.split_whitespace().nth(1).unwrap_or("?")
+                        );
+                    });
+                }
                 // A signed raise whose delay has passed is applied here
                 // (docs/66 route 2, P-49). Anyone may apply; a second
                 // application reverts `NothingPending`, harmlessly. Forgotten
@@ -8648,6 +8876,72 @@ mod settle_key_tests {
             reopens_paid_cycle(payee, d0, None, 1),
             None,
             "no bill found by the plan"
+        );
+    }
+
+    /// docs/60 P-229, U1's re-check: a watcher pass at 15:02:40 knew the bill due
+    /// 15:03:14 (34 s later). "Check now" after the due time is not answered from
+    /// that pass, and the watcher's own pass is set for the due time + 5 s — a
+    /// minute after the last pass at the earliest — instead of a cycle late.
+    #[test]
+    fn a_pass_runs_when_a_known_bill_falls_due() {
+        let (ran, due) = (1_792_220_560u64, 1_792_220_594u64);
+        let report = json!({ "obligationsList": [
+            { "nextDue": due, "provenance": "history" },
+            { "nextDue": due - 100, "provenance": "x402 receipt" },
+        ]});
+        assert_eq!(
+            due_after(&report, ran, due - 1),
+            None,
+            "not due yet: the pass answers"
+        );
+        assert_eq!(
+            due_after(&report, ran, due + 2),
+            Some(due),
+            "fell due after the pass: run again"
+        );
+        assert_eq!(
+            due_pass_at(&report, ran),
+            Some(ran + 60),
+            "a minute after the last pass"
+        );
+        assert_eq!(due_pass_at(&report, ran - 300), Some(due + 5), "due + 5 s");
+        assert_eq!(due_pass_at(&json!({ "obligationsList": [] }), ran), None);
+    }
+
+    /// docs/60 P-228, U1's re-check: the bill found in the history (5 payments,
+    /// confident) is offered for approval before it falls due; a typed bill (its
+    /// payee is approved when it is saved), an x402 receipt and a weak guess are not.
+    #[test]
+    fn a_found_bill_is_offered_for_approval_before_it_falls_due() {
+        let report = json!({ "obligationsList": [
+            { "counterparty": "0xf4d08abf297f57acd381f000a25442186d860e43", "amount": "0.002000 USDC", "intervalSecs": 243,
+              "nextDue": 1792220350, "confidence": 0.8125, "samples": 5, "provenance": "history" },
+            { "counterparty": "0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3", "amount": "0.001000 USDC", "intervalSecs": 2592000,
+              "nextDue": 1792220000, "confidence": 1.0, "samples": 0, "provenance": "imported" },
+            { "counterparty": "0x00000000000000000000000000000000000000a1", "amount": "0.001000 USDC", "intervalSecs": 60,
+              "nextDue": 1792220000, "confidence": 0.9, "samples": 4, "provenance": "x402 receipt" },
+            { "counterparty": "0x00000000000000000000000000000000000000a2", "amount": "0.5 USDC", "intervalSecs": 86400,
+              "nextDue": 1792220000, "confidence": 0.4, "samples": 3, "provenance": "history" },
+        ]});
+        let found = found_bills(&report);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(
+            format!("{:#x}", found[0].0),
+            "0xf4d08abf297f57acd381f000a25442186d860e43"
+        );
+        let why = found_bill_reason(&found[0].1, 60, 1_792_220_000);
+        assert!(
+            why.contains("every 4 minutes")
+                && why.contains("paid 5 times")
+                && why.contains("1792220350"),
+            "{why}"
+        );
+        assert!(why.contains("pays that cycle itself"), "{why}");
+        let late = found_bill_reason(&found[0].1, 60, 1_792_220_400);
+        assert!(
+            late.contains("fell due") && late.contains("coming cycles"),
+            "{late}"
         );
     }
 
