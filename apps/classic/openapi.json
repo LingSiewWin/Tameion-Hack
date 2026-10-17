@@ -3177,6 +3177,206 @@
           }
         }
       }
+    },
+    "/api/level1/pay": {
+      "post": {
+        "summary": "Pay a payee the owner approved, from the account, now (docs/115 §7). Needs an agent key with the `buy` scope and `Idempotency-Key`, the agent's operation id (8 to 128 of A-Z a-z 0-9 _ . : -; one per payment, the same on a retry). Only on Autopilot, only a payee past its cooling-off, inside the per-payment cap, the 24-hour limit and the floor: the contract's own checks, run as the agent before sending and enforced again by the transaction. The action hash is keccak256(policy ‖ operationId), so the chain refuses a second payment under the same id; the same id and body answer with the first payment (replayed), a different body is idempotency_conflict. `why` is written to the account's book and anchored with the next check.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "the operation id",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_.:-]+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "payee",
+                  "amount",
+                  "why"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "payee": {
+                    "type": "string",
+                    "description": "0x… address of an approved payee"
+                  },
+                  "amount": {
+                    "type": "string",
+                    "description": "USDC, e.g. \"0.25\""
+                  },
+                  "why": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "description": "what the payment is for; written to the book"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "the payment, read back from the chain; replayed when this operationId was paid before",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PayReply"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_body: no Idempotency-Key, no why, a bad payee or amount",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no agent key with the buy scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found: no such account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "refused before sending, by the contract's own check: mode_propose, mode_watch, agent_lapsed, payee_not_approved, payee_cooling_off, over_per_payment, over_24h, below_floor, insufficient_funds; or account_keyless, account_not_deployed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "idempotency_conflict: this operationId was used for a different payment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "chain_unavailable with executed unknown: the payment may have been sent; send the same operationId again later, never a new one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "chain_unavailable: the chain did not answer before anything was sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mcp": {
+      "post": {
+        "summary": "The MCP tools of tameion-mcp over Streamable HTTP (MCP 2025-06-18): one JSON-RPC message per POST (initialize, ping, tools/list, tools/call), answered with one JSON object; a notification or response gets 202 with no body. No SSE stream and no session. Send Authorization: Bearer <agent key>; each tool call is the matching route of this service with that key. MCP-Protocol-Version other than 2025-06-18 or 2025-03-26 answers 400; a browser Origin other than this machine or TAMEION_PUBLIC_URL answers 403.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "a JSON-RPC 2.0 message"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "the JSON-RPC response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "jsonrpc"
+                  ]
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "a notification or response was accepted"
+          },
+          "400": {
+            "description": "not JSON, a batch, or an unsupported MCP-Protocol-Version"
+          },
+          "403": {
+            "description": "a browser Origin this endpoint does not serve"
+          }
+        }
+      },
+      "get": {
+        "summary": "No server stream: 405 (the spec lets a server decline).",
+        "responses": {
+          "405": {
+            "description": "POST one JSON-RPC message instead"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5840,6 +6040,13 @@
               "$ref": "#/components/schemas/Party"
             },
             "description": "every party in this reply, by lowercase address"
+          },
+          "payments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Payment"
+            },
+            "description": "the agent's direct payments, newest first, at most 20"
           }
         },
         "required": [
@@ -5870,6 +6077,7 @@
           "sellersToApprove",
           "pricesToApprove",
           "purchases",
+          "payments",
           "exposure",
           "keyless",
           "owners",
@@ -6380,6 +6588,86 @@
           "parties"
         ],
         "description": "a lender kit (docs/83 W7)"
+      },
+      "Payment": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "integer"
+          },
+          "operationId": {
+            "type": "string",
+            "description": "the request's Idempotency-Key"
+          },
+          "actionHash": {
+            "type": "string",
+            "description": "keccak256(policy ‖ operationId), the chain's replay guard"
+          },
+          "policy": {
+            "type": "string"
+          },
+          "payee": {
+            "type": "string"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "minor": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "paid",
+              "unconfirmed",
+              "sent"
+            ],
+            "description": "sent = the transaction may have gone out and was not confirmed; the same operationId answers once the chain shows it"
+          },
+          "tx": {
+            "type": "string"
+          },
+          "explorer": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "operationId",
+          "actionHash",
+          "payee",
+          "amount",
+          "minor",
+          "why",
+          "status"
+        ],
+        "description": "one direct payment the agent made to an approved payee (POST /api/level1/pay); one line of the account's payments book"
+      },
+      "PayReply": {
+        "type": "object",
+        "properties": {
+          "paid": {
+            "type": "boolean",
+            "description": "true once the payment was read back from the chain"
+          },
+          "replayed": {
+            "type": "boolean",
+            "description": "true when this operationId was paid before and the first payment is answered"
+          },
+          "payment": {
+            "$ref": "#/components/schemas/Payment"
+          }
+        },
+        "required": [
+          "paid",
+          "payment"
+        ]
       }
     }
   }

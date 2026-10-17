@@ -4196,6 +4196,8 @@ impl App {
             // was more than a quarter above that seller's usual; one tap lets one through.
             "pricesToApprove": prices_to_approve(&bought, now_secs()),
             "purchases": bought.iter().take(20).collect::<Vec<_>>(),
+            // docs/60 P-284: the agent's direct payments (POST /api/level1/pay), with why.
+            "payments": operator::pay::recent(&self.dir, &tenant.policy),
             "exposure": exposure,
             "keyless": tenant.keyless,
             "owners": owners,

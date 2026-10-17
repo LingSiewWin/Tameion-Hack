@@ -71,6 +71,19 @@ fn lines(app_dir: &Path, policy: &str) -> Vec<Value> {
         .collect()
 }
 
+/// The account's direct payments for the inbox, newest first: the latest
+/// line of each operation id (a `sent` line is followed by its `paid` one),
+/// at most twenty.
+pub fn recent(app_dir: &Path, policy: &str) -> Vec<Value> {
+    let mut seen = std::collections::HashSet::new();
+    lines(app_dir, policy)
+        .into_iter()
+        .rev()
+        .filter(|l| seen.insert(l["operationId"].as_str().unwrap_or("").to_string()))
+        .take(20)
+        .collect()
+}
+
 /// What an earlier line for this operation id answers: the same payment
 /// again (`replayed`), or a conflict when the id named a different payment.
 /// `None` when nothing was paid under it yet.
@@ -502,9 +515,18 @@ mod tests {
         assert_eq!(s, "422 Unprocessable Entity");
         assert_eq!(v["error"]["code"], "idempotency_conflict");
         assert_eq!(v["error"]["executed"], "no");
-        // The book: the paid line becomes one settlement under the next root.
+        // The inbox lists the latest line of each operation id, newest first.
+        let mut sent = stored.clone();
+        sent["operationId"] = json!("op_replay-0002");
+        sent["status"] = json!("sent");
+        record(&d, POLICY, &sent);
+        let mut paid = sent.clone();
+        paid["status"] = json!("paid");
+        record(&d, POLICY, &paid);
+        assert_eq!(recent(&d, POLICY), vec![paid, stored.clone()]);
+        // The book: each paid line becomes one settlement under the next root.
         let (events, upto) = unanchored_events(&d, POLICY);
-        assert_eq!((events.len(), upto), (1, 1));
+        assert_eq!((events.len(), upto), (2, 3), "two paid lines of three");
         mark_anchored(&d, POLICY, upto);
         assert!(unanchored_events(&d, POLICY).0.is_empty());
     }
