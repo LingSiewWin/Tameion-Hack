@@ -114,7 +114,7 @@ export function Top({ status, inbox }: { status: Status | null; inbox: Inbox | n
   const missing = cols.filter((c) => c.value === null).map((c) => c.source.split(" ")[0]);
   return (
     <section aria-label="The account now" className="flex flex-col gap-(--space-1)">
-      <div role="region" aria-label="The account now, by unit" tabIndex={0} className="overflow-x-auto">
+      <div role="region" aria-label="The account now, by unit" tabIndex={0} className="relative overflow-x-auto">
         <table className="mono border-collapse whitespace-nowrap text-left">
           <thead>
             <tr>

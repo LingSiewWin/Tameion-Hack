@@ -66,7 +66,7 @@ export function Stream({ data, now }: { data: Symbolon; now?: number }) {
       {records.length === 0 ? (
         <p className="mono m-0">No records yet. The agent writes one on each pass.</p>
       ) : (
-        <div role="region" aria-label="Records, newest first" tabIndex={0} className="overflow-x-auto">
+        <div role="region" aria-label="Records, newest first" tabIndex={0} className="relative overflow-x-auto">
           <table className="mono w-full border-collapse whitespace-nowrap text-left">
             <thead className="meta">
               <tr className="border-b border-(--rule)">
@@ -183,7 +183,7 @@ function Detail({ r, explorer, unread }: { r: SymbolonRecord; explorer?: string 
         <span className="meta">Leaf</span>
         <span>{r.leaf}</span>
       </div>
-      <table className="my-(--space-1) border-collapse whitespace-nowrap text-left">
+      <table className="my-(--space-1) self-start border-collapse whitespace-nowrap text-left">
         <thead className="meta">
           <tr>
             {["Slot", "Alg", "Key id", "Verified"].map((h) => (
