@@ -1,0 +1,124 @@
+The judge's five minutes on the PUBLIC host, on the submission tag (seat E6, docs/115 §3) — written 2026-10-18 06:39 +0800
+
+Where: https://tameion-agents-production-064a.up.railway.app (Railway; tameion-app in demo mode, Arbitrum Sepolia), redeployed from the
+submission tag. Before the run: /healthz 200 at 06:24:44; GET /api/level1/codes contractVersion "2026-10-18.1"; GET /api/level1/demo
+{vendor 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854, bill 0.002 USDC every 120 s, 15 cycles, delay 30 s}.
+Browser: the Playwright MCP's Chromium at 390 x 844 (375 px content beside the scrollbar). Set-up as run 3 of
+proof/judge-path-public-2026-10-17.txt: browser_close first, then a new page (06:26:09); 06:27:48 asserted 0 routes on the page and 0 on the
+context (1 page open), cleared the origin's storage (Storage.clearDataForOrigin), and added a new CDP virtual passkey (ctap2, internal,
+resident key, user verification on) before the first tap.
+The invite came from the link: a one-shot local redirect (127.0.0.1 → host/?invite=…) served once and exited, so the word was never typed or
+printed; it is not written here. One harness step more than run 3: once the page had read the invite (no #invite field, before and after),
+the address bar was cleaned with history.replaceState so no tool output carried the word. Afterwards a search of .playwright-mcp/ and the
+screenshots for the word found 0 files. No key, token or passkey material was printed.
+Chain: Arbitrum Sepolia. Spend: 0.05 test USDC + gas from the relayer (the demo's funding of one account).
+
+RESULT: PASS, all five steps, one account, no 5xx, no refusal, no dialog, nothing typed. "Done in 5 min 32 s."
+
+Account: acme-agents-4045 · policy 0xe13ed2cbf28d99410f9968f57b3b316d31c730b6 · owner 0xc20a2bd476256d8341a18e40c5810be6d14593e1 ·
+agent 0x6783489ac9daf9e19e663970392183754e9a3e1c · relayer 0x5f3f40daa525230289af8d40746dd12d10a151d6 · delay 30 s · per payment 50.00,
+a day 100.00 USDC · mode 1 at creation · created block 320210457.
+
+Home        06:28:09 the card "Try it in 5 minutes": "To type 0 seed phrases or addresses · A raise waits 30 s anyone can see it; a cut is
+            instant · A bill 0.002 USDC every 2 minutes, test money", "Run your agents the way a finance team runs its payables.", the
+            suggested name acme-agents-4045 "is free.", no invite field (#invite count 0). scrollWidth 375 = clientWidth 375.
+            One console error: GET /api/level1/name/acme-agents-4045 404 at 06:28:05 (the name check; 404 = free).
+1 Open — PASS (one tap; nothing typed)
+            06:28:22 tap "Try it in 5 minutes" → passkey created 115 ms after the tap (WebAuthn.credentialAdded) → POST /api/level1/deploy
+            {demo: true, lazy: true, invite from the link} sent 06:28:22, 200 at 06:28:32 → 06:28:34 "Funded: 0.05 USDC, by the demo, no
+            wallet needed. Receipt", strip "Step 2 of 5 · Bill" by 06:28:36. 13 s from tap to Funded.
+            Owner deploy tx   0xcd966a769528f2e201e46812bf763d58e222062277a27fd9b98a55ab11db20a8  block 320210468 (06:28:25)
+            Policy deploy tx  0x5f58f282de4c1693a88e04d1c0a59bbcee4ee6864a0011cc079900dcacb6b426  block 320210476 (06:28:27)
+            Agent's gas tx    0xe14d369564bdb4c1688eab6910c6186a7301800aa3528e7aaa8a3c784792c43a  block 320210484 (06:28:29)
+            Funding tx        0x5e6797a7feee6b696e82c9a4a375535228f400fb1de2a460a9a18984e4eb4950  block 320210491 (06:28:31), relayer → USDC transfer, 0.05
+            First check record, anchored by the agent: 0x8323ec99d793ad45a5cfbeaa849262341fb133ff1eae1d685b15249978fda115 block 320210551 (06:28:47)
+2 Bill — PASS (one passkey tap)
+            06:28:54 tap "Let the agent pay Demo Vendor 0.002 USDC every 2 minutes": POST /api/level1/bills {check: true} 200 06:28:54 ("you may
+            tell the agent about bills on this account; nothing was saved") → prepare-payees {payees: [0xe5e2…3854]} 200 06:28:55 ("payable 30
+            seconds after it is signed …") → challenge 200 06:28:56 → passkey 06:28:56 → execute 200 06:28:58, PayeeSet tx
+            0x264258fabb067aab587e876835f040fa37d7b359d494d030db77278fc8298700 (block 320210586, 06:28:58) → POST /api/level1/bills 200 06:28:59,
+            saved {payee 0xe5e2…3854, amount 0.002, every_secs 120, next_due 1792276258 = 06:30:58} → contacts "Demo Vendor" 200 06:28:59.
+            06:29:05 strip "Step 3 of 5 · Autopilot": "Demo Vendor approved; the bill saved: 0.002 USDC every 2 minutes. Receipt", "Turn
+            Autopilot on", and the keys line "1 of 3 keys set: on a real account, add two guardians …". 11 s from tap to step 3.
+3 Autopilot — PASS (one passkey tap, no confirm dialog)
+            06:29:24 tap "Turn Autopilot on" (no alertdialog at any point) → prepare-mode {mode: 2} 200 06:29:24 → challenge 200 06:29:25 →
+            passkey 06:29:25 → execute 200 06:29:28, setMode (ChangeProposed) tx 0xaf8e5ce7f60a3c45dea1079dbba4803b418f0dcfb15bc413a6612bbbed2d3932
+            (block 320210693, 06:29:27) → 06:29:31 "Autopilot applies in 0:26 unless you cancel." with Cancel, and "Asked. Autopilot turns on in
+            30 s unless you cancel. Receipt". Applied by the page's POST /api/level1/mode {action: apply} sent 06:30:00, 200 at 06:30:02 (mode
+            Autopilot, pending null), tx 0x0184c6c4b9a85d377e8811d8fe913eac440806da65df993b720e5600143f4edd (block 320210810, 06:30:00, 33 s after
+            the proposal). 06:30:09 strip "Step 4 of 5 · Watch it pay".
+4 Watch it pay — PASS, PAID BY ITSELF: YES (one cycle needed; two seen before step 5, a third after the cut)
+            06:30:09 "The bill is due in 0:47 … Then the agent pays Demo Vendor 0.002 USDC by itself, inside your limits, and says why."
+            Live: "Account changed: mode".
+            Cycle 1: due 06:30:58, paid by the agent's key (from 0x6783…3e1c) tx 0x08d8c8f03217c019c3fe73703f5ca55ab975bb62beea90e63575246395634e31
+                     (block 320211064, 06:31:10; 12 s after due); record anchored tx 0x86dda4d58df379768ab3bba0fd62821c0e1fae59e76ad79e6d046323997a126f
+                     (block 320211071, 06:31:12; root 0x276d…74ec). The page fetched records and statement at 06:31:17 (the book line for this
+                     payment came back then). The strip moved to step 5 with "The agent paid the bill by itself on its due time."
+            Cycle 2: due 06:32:58, paid by the agent tx 0x63d1e07c6a54d11a965a6390aa26feb128a3d05fd866e44c75f13ff65a80742c (block 320211510, 06:33:09);
+                     record tx 0x3e6fa84c78fd5567311dc59c76441e284d4e6e44b64b84a6d1dc54404bc3e0ea (block 320211518, 06:33:11; root 0x6fb3…6d4e).
+            Cycle 3: paid by the agent after the cut (the bill equals the new 0.002 cap) tx 0x6b45c70c5eeb9b42c36e2c696f31683ee1b1122b834fc4c86b89f7bbc76a110d
+                     (block 320211955, 06:35:09; found with eth_getLogs on the policy, the browser was already closed).
+            Row, verbatim (cycle 2, 06:33:20):
+              "0.002 USDC to Demo Vendor · by the agent · 17 s ago · Receipt"
+              "Why, as recorded: paid by the agent: a bill the owner typed: 0.002000 USDC"
+              "In the book: paid 0.002 USDC — Paid 0.002000 USDC to 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854, settled in
+               0x63d1e07c6a54d11a965a6390aa26feb128a3d05fd866e44c75f13ff65a80742c. Read back from the receipt: the policy's Paid event matches.;
+               line 2 of record 0x6fb3…6d4e · on chain"   (cycle 1: the same words, settled in 0x08d8…4e31, line 2 of record 0x276d…74ec · on chain)
+            Harness note: the step-4 locator looked for "to Demo Vendor · by the agent" in one element; this build splits the row across
+            elements, so the exact second the row first showed is not recorded (bounded by the 06:31:17 records/statement fetch and the
+            06:32:57 look that found it). Not a product fault.
+5 Raise and cut — PASS; CANCEL THE RAISE: SUCCEEDED
+            06:33:21 tap "Raise one payment to 100.00 USDC" (from 50.00), no confirm dialog → prepare-limits {perAction 100, daily 100} 200 06:33:21
+            ("30 seconds after it is signed, and the owner can cancel it until then: it raises what the agent may spend") → challenge 200 06:33:22
+            → passkey 06:33:22 → execute 200 06:33:25, raise (ChangeProposed) tx 0x95d33868aec02570222a7c68286822419ff17ffbdbc29c26fa1ab906ab743a6a
+            (block 320211567, 06:33:24) → 06:33:29 "The higher cap, 100.00 USDC a payment, applies in 0:25." with "Cancel the raise".
+            06:33:30 Cancel → prepare-cancel 200 06:33:30 → challenge 200 06:33:30 → passkey 06:33:30 → execute 200 06:33:34, cancelPending tx
+            0xd994acf4038485da4f1237a8e89267f16f1e953476a689e2a7b72e0b3cdff74e (block 320211599, 06:33:32) → 06:33:34 "Cancelled at once: the
+            cap stays where it was. Receipt". "You cancelled the raise: it never applied. Now cut: a cut never waits." with the Cut button, seen
+            at 06:33:59 (the seat's next look; it may have shown earlier). No POST /api/level1/mode after the cancel, no 5xx: P-286 did not show.
+            06:33:59 tap "Cut one payment to 0.002 USDC" → prepare-limits {perAction 0.002, daily 100} 200 06:34:00 ("at once when signed: it only
+            lowers what the agent may spend") → challenge 200 06:34:00 → passkey 06:34:00 → execute 200 06:34:04, setLimits tx
+            0xadf3f7f25eb420b86d59d3436e7ce14b811d22f5bc041555c965464394313c5a (block 320211714, 06:34:03; raiseCancelled null). 5 s tap to finish.
+Finish      06:34:04 "All five steps done" · "Done in 5 min 32 s. Your agent paid its bills by itself; you made the trust decisions."
+            Agents can spend now 0.002 (USDC in one payment; 99.996 of 100.00 left today; read 06:34:30 — at 06:34:05 the tile still said 0.046,
+            the pre-cut inbox, see finding 1) · Paid by the agent 0.004 (USDC to Demo Vendor, 2 payments) · Paid with no human 2 (of 2 bills
+            paid, 0.002 USDC each; 0 by your tap) · "The raise waited 30 s where anyone could see it, and you cancelled it Receipt; the cut
+            applied at once Receipt."
+            Mandate: "Pay this bill when due, up to 100.00 USDC a day, only to payees I approved; ask me for anything else."
+            "Keys: your passkey, on this device. The agent holds a bounded key: it pays only payees you approved, up to the mandate you signed.
+             Two guardians, added in Settings, bring the account back if this device is lost."
+            Below it, both paid rows with their why and book lines (cycle 2 "62 s ago", cycle 1 "3 min ago").
+Widths: 390 = 375 content beside the scrollbar; scrollWidth = clientWidth = 375 at home and at the finish; at the finish no element's right
+edge passed 375 (scanned every element).
+
+Passkey prompt time (virtual authenticator, CDP WebAuthn events): created 115 ms after the "Try it" tap; asserted 1.4 s, 1.0 s, ~1 s (second resolution),
+1.1 s after the tap for bill, Autopilot, raise and cut, and in the same second as the cancel tap — each in the second the challenge reply
+landed (06:28:56, 06:29:25, 06:33:22, 06:33:30, 06:34:00). A real Touch ID adds the human's tap.
+Signed-call waits (prepare → challenge): 0.6 s, 0.6 s, 0.6 s, 0.6 s, 0.6 s. P-287's 26–29 s did not happen.
+
+Checked against the chain: all 16 txs above (owner, policy, agent gas, funding, first record, PayeeSet, setMode, mode applied, pay 1–3,
+record 1–2, raise, cancel, cut) — eth_getTransactionReceipt on https://sepolia-rollup.arbitrum.io/rpc status 1 each (06:35–06:36). The pays
+are from the agent 0x6783…3e1c to the policy; the records from the agent to the anchor 0xe7c381aafa077cc99359e8b297d2125efd76b8f5; the
+owner-signed calls from the relayer to the owner contract 0xc20a…93e1. Balances read 06:36:15: the account 44000 = 0.044 USDC
+(0.05 − 3 × 0.002); the relayer 19.85 USDC (19.90 after run 3 of 10-17, minus this account's 0.05).
+
+Requests (the page's own log, 06:28:05–06:34:08, 74 API replies): every POST 200 (deploy 1, bills 2, prepare-payees 1, prepare-mode 1,
+prepare-limits 2, prepare-cancel 1, challenge 5, execute 5, contacts 1, mode 1); GET inbox 45 × 200, records 2, statement 2, events 1,
+tenant 1, config 1, demo 1. The only non-2xx: GET /api/level1/name/acme-agents-4045 404 at 06:28:05 (the name check: 404 = free). Every
+reply carried Railway's x-railway-request-id (0 without). 0 native dialogs; 0 routes on the page and the context at the end too.
+
+Findings for the judge's eyes
+  1. P-293 held on the host: after the cut the finish tile reads "99.996 of 100.00 left today" (run 3 said "0.002 of 100.00"). The pre-cut
+     0.046 still shows for the first seconds (06:34:05; 0.002 by 06:34:30), which P-293's fix note leaves alone.
+  2. The header still reads "Last checked 14 s ago · 1 recurring bill found · checks every 60 min" while the bill pays every 2 minutes
+     (run 3 finding 2, unchanged).
+  3. The amber "1 of 3 keys set — add two guardians before raising a limit. Today one lost device loses this account's key for good." box
+     shows under the strip (screenshot 1) beside the strip's own keys line (run 3 finding 3, unchanged).
+  4. P-267 (the agent asks instead of paying), P-286 (502 after the cancel) and P-287 (26–29 s passkey wait) did not show.
+
+Screenshots (390 wide): proof/judge-path-public-2026-10-18-1-open.png (Funded, step 2), -4-paid.png (cycle 2 and cycle 1 rows with why and
+book line), -5-wait.png (the raise waiting, "Cancel the raise"), -6-finish.png (Done in 5 min 32 s, the three numbers).
+Spend: 0.05 test USDC + gas from the relayer; 0.006 USDC paid by the account to Demo Vendor by 06:35:09.
+Left: acme-agents-4045 holds 0.044 test USDC on Autopilot, per payment 0.002, a day 100.00; the bill keeps paying until its 15 cycles end
+(about 06:59). The Playwright page was closed at 06:35 (browser open 06:26–06:35), which deleted the virtual passkey: this account cannot
+sign again. Nothing was patched, restarted or committed.
