@@ -1,0 +1,109 @@
+# Deploy prep (seat S19, docs/115 §3 last paragraph, §6) — written 2026-10-17 16:35 +0800
+# What ran here: the image built and ran on this Mac (Docker Desktop, linux/arm64); the deploy and tunnel scripts up to
+# the point where they need software only the founder installs. NOT run: fly deploy (flyctl not installed, not logged in);
+# a real quick tunnel (cloudflared not installed). No key is printed anywhere below; only addresses.
+
+## 1. docker build -t tameion-app:s19 .   (BuildKit, anonymous DOCKER_CONFIG per docs/60 P-65)
+started 2026-10-17 16:10:18 +0800
+#7 transferring context: 5.82MB 0.2s done
+#16 DONE 327.5s
+#18 7.520 ✓ Compiled successfully in 7.1s
+#18 13.57 ✓ Generating static pages using 7 workers (10/10) in 322ms
+#18 13.57   Finalizing page optimization ...
+#18 DONE 14.9s
+#12 1277.1    Compiling operator v0.1.0 (/src/crates/operator)
+#12 1417.3     Finished `release` profile [optimized] target(s) in 23m 37s
+#12 DONE 1419.9s
+#25 naming to docker.io/library/tameion-app:s19 done
+ - SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ENV "TAMEION_STATEMENT_KEY_FILE") (line 29)
+ - SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ENV "TAMEION_VAPID_KEY") (line 29)
+exit=0
+ended 2026-10-17 16:34:14 +0800
+(the two SecretsUsedInArgOrEnv warnings name file PATHS on the volume, not secrets; 275 crates compiled)
+
+## 2. The image on a fresh root-owned volume (as Fly mounts one), no key passed, then a restart
+2026-10-17 16:34:46 +0800
+image tameion-app:s19 184MB
+$ docker run --rm -v s19data:/data debian:bookworm-slim ls -ld /data   # a fresh volume, as Fly mounts one
+Unable to find image 'debian:bookworm-slim' locally
+bookworm-slim: Pulling from library/debian
+Digest: sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587
+Status: Downloaded newer image for debian:bookworm-slim
+drwxr-xr-x 2 root root 4096 Oct 17 08:34 /data
+$ docker run -d --name s19 -p 127.0.0.1:7919:8080 -v s19data:/data -e TAMEION_LEVEL1_INVITE=<test word> tameion-app:s19   (no key passed)
+GET /healthz -> ok 200
+GET / -> 200 text/html; charset=utf-8 <title>Tameion</title>
+GET /classic -> 200
+GET /proof/hedge-testnet-live-open-2026-10-13.txt -> 200
+GET /proof/uat-u1-2026-10-16.txt (not shipped) -> 404
+GET /api/level1/config ->
+  inviteNeeded: True | operator: None | statementSigner set: True
+  anchor arc-testnet 0xdab65a5380bcc2eebc3a3a91d0ad11eec95994db
+  anchor arbitrum-sepolia 0xe7c381aafa077cc99359e8b297d2125efd76b8f5
+$ docker exec s19 sh -c "grep -E ^Uid /proc/1/status; ls -la /data /data/app"
+Name:	tameion-app
+Uid:	10001	10001	10001	10001
+total 16
+drwxr-xr-x 3 tameion tameion 4096 Oct 17 08:34 .
+drwxr-xr-x 1 root    root    4096 Oct 17 08:34 ..
+drwxr-xr-x 3 tameion tameion 4096 Oct 17 08:34 app
+-rw------- 1 tameion tameion   67 Oct 17 08:34 statement.key
+total 12
+drwxr-xr-x 3 tameion tameion 4096 Oct 17 08:34 .
+drwxr-xr-x 3 tameion tameion 4096 Oct 17 08:34 ..
+drwxr-xr-x 2 tameion tameion 4096 Oct 17 08:34 jobs
+$ docker exec s19 printenv (names of TAMEION_/HEDGE_ paths only)
+PORT=8080
+TAMEION_DESKS_DIR=/data/desks
+TAMEION_APP_DIR=/data/app
+TAMEION_LOG_DIR=/data/log
+TAMEION_VAPID_KEY=/data/vapid.key
+TAMEION_STATEMENT_KEY_FILE=/data/statement.key
+HOST=0.0.0.0
+HEDGE_HALT_DIR=/data/hedge
+$ docker logs s19 (tail)
+Tameion Watch → http://0.0.0.0:8080  (runs in /data/app)
+  arc-testnet  Arc testnet  rpc https://rpc.testnet.arc.network (public; set TAMEION_RPC_ARC for a keyed one)
+  arbitrum     Arbitrum One  rpc https://arb1.arbitrum.io/rpc (public; set TAMEION_RPC_ARBITRUM for a keyed one)
+  ethereum     Ethereum  rpc https://ethereum-rpc.publicnode.com (public; set TAMEION_RPC_ETHEREUM for a keyed one)
+  base         Base  rpc https://mainnet.base.org (public; set TAMEION_RPC_BASE for a keyed one)
+  arbitrum-sepolia Arbitrum Sepolia  rpc https://sepolia-rollup.arbitrum.io/rpc (public; set TAMEION_RPC_ARBITRUM_SEPOLIA for a keyed one)
+statement signer before restart: 0x946807f100343c53622e5cc3c4ceb3a60385dbe3
+statement signer after restart:  0x946807f100343c53622e5cc3c4ceb3a60385dbe3
+same key across a restart (kept on the volume)
+container s19 and volume s19data removed
+2026-10-17 16:35:17 +0800
+
+## 3. scripts/deploy_fly.sh
+2026-10-17 16:12:10 +0800
+$ scripts/deploy_fly.sh relayer
+made a fresh demo relayer key: /Users/lingsiewwin/.tameion/demo-relayer.key (mode 600, not printed)
+relayer 0x5f3f40daa525230289Af8d40746DD12d10A151d6 on Arbitrum Sepolia: 0.000000 ETH, 0.000000 USDC; needs 0.02 ETH + 5 USDC
+fund it: send 0.020000 ETH and 5.000000 USDC to 0x5f3f40daa525230289Af8d40746DD12d10A151d6 (Arbitrum Sepolia)
+exit=0
+600 67 bytes /Users/lingsiewwin/.tameion/demo-relayer.key
+600 43 bytes /Users/lingsiewwin/.tameion/demo-relayer.address
+$ scripts/deploy_fly.sh relayer   (second run: key exists, not remade)
+relayer 0x5f3f40daa525230289Af8d40746DD12d10A151d6 on Arbitrum Sepolia: 0.000000 ETH, 0.000000 USDC; needs 0.02 ETH + 5 USDC
+fund it: send 0.020000 ETH and 5.000000 USDC to 0x5f3f40daa525230289Af8d40746DD12d10A151d6 (Arbitrum Sepolia)
+exit=0
+$ scripts/deploy_fly.sh
+flyctl is not installed. The founder runs:  brew install flyctl  then  fly auth login
+exit=2
+$ RELAYER_KEY_FILE=~/.tameion/treasury.key scripts/deploy_fly.sh relayer
+relayer 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25 on Arbitrum Sepolia: 0.088907 ETH, 24.620000 USDC; needs 0.02 ETH + 5 USDC
+exit=0
+
+## 4. scripts/public_tunnel.sh against :7880 (PID 16364, not restarted)
+2026-10-17 16:19:01 +0800
+$ scripts/public_tunnel.sh            # :7880 as it runs now
+the service on :7880 opens accounts without an invite word: restart it with TAMEION_LEVEL1_INVITE=<word> first (TUNNEL_OPEN_OK=1 for a short check)
+exit=3
+$ TUNNEL_OPEN_OK=1 scripts/public_tunnel.sh
+cloudflared is not installed. The founder runs:  brew install cloudflared
+exit=2
+$ scripts/public_tunnel.sh 7999      # nothing listens
+curl: (7) Failed to connect to 127.0.0.1 port 7999 after 0 ms: Couldn't connect to server
+nothing answers on :7999
+exit=2
+(the 60 s tunnel with a /healthz curl through the public URL did not run: cloudflared is not installed and this seat installs nothing)
