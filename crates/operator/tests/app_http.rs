@@ -1007,15 +1007,16 @@ fn a_named_account_resolves_holds_its_name_and_connects_wallets() {
     let (st, b) = http(p, "POST", "/api/level1/wallets", &add(w1, &tok));
     assert_eq!(st, 200, "{b}");
     // docs/60 P-225: the owner's device token, as the page sends it with a
-    // bills import, now opens the import on its own account (the gate passes;
-    // here the chain read behind it then fails).
+    // bills import, opens the import on its own account; P-226: the import
+    // itself then needs the owner's passkey over the bills.
     let (st, b) = http(
         p,
         "POST",
         "/api/level1/bills",
         &format!(r#"{{"policy":"{policy}","reserveToken":"{tok}","bills":{bill}}}"#),
     );
-    assert!(st != 401 && st != 403, "{st} {b}");
+    assert_eq!(st, 401, "{b}");
+    assert!(b.contains("owner's passkey"), "{b}");
 }
 
 /// docs/81: the owner names a party from the device that opened the account
@@ -1621,4 +1622,105 @@ fn the_owners_device_runs_checks_saves_bills_and_decides_invoices() {
     );
     let (st, _, _) = http_with(p, "POST", "/api/level1/buy", &buy, dev_a);
     assert_eq!(st, 401, "the device does not buy");
+}
+
+/// docs/60 P-226: on an account with agent keys, a bill import that only the
+/// owner's device opened needs the owner's passkey over exactly those bills:
+/// without it 401 naming the passkey, with another key's signature 403, with
+/// the owner's the bills are saved.
+#[test]
+fn a_device_bill_import_needs_the_owners_passkey_over_the_bills() {
+    use p256::ecdsa::signature::hazmat::PrehashSigner;
+    use sha2::{Digest, Sha256};
+    // The chain is the service itself: every read fails at once (not a refused
+    // connection, which the client waits out), so the test does not wait.
+    let own = 17_000 + (std::process::id() % 9_000) as u16 + 18;
+    let srv = start_with(
+        18,
+        &[("TAMEION_RPC_ARC", &format!("http://127.0.0.1:{own}"))],
+    );
+    let p = srv.port;
+    let dir = std::env::temp_dir().join(format!("tameion-app-test-{}-18", std::process::id()));
+    std::fs::create_dir_all(dir.join("tenants")).unwrap();
+    let a = "0x00000000000000000000000000000000000000e1";
+    let sk = p256::ecdsa::SigningKey::from_slice(&[7u8; 32]).unwrap();
+    let pt = sk.verifying_key().to_encoded_point(false);
+    let (kx, ky) = (
+        format!("0x{}", alloy::hex::encode(pt.x().unwrap())),
+        format!("0x{}", alloy::hex::encode(pt.y().unwrap())),
+    );
+    let (read, dev) = (
+        operator::level1::token_hash("k-read"),
+        operator::level1::token_hash("dev-a"),
+    );
+    std::fs::write(
+        dir.join("tenants").join(format!("{a}.json")),
+        format!(
+            r#"{{"chain":"arc-testnet","owner":"0x0000000000000000000000000000000000000001","policy":"{a}","agent":"0x0000000000000000000000000000000000000003","operator":"0x0000000000000000000000000000000000000004","watched":"0x0000000000000000000000000000000000000005","recovery":"0x0000000000000000000000000000000000000000","per_action":"1","daily":"1","floor":"0","delay_secs":60,"mode":1,"created_block":0,"history_from_block":0,"created":0,"deployed":false,"qx":"{kx}","qy":"{ky}","reserve_token_hash":"{dev}","agent_tokens":[{{"id":"r1","label":"reader","scopes":["read"],"expires":4102444800,"issued":0,"hash":"{read}"}}]}}"#
+        ),
+    )
+    .unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let bill = operator::level1::SeededBill {
+        payee: "0x179dca89f69faef5765d2e7445aa5452b8159520".into(),
+        amount: "0.05".into(),
+        every_days: 30,
+        next_due: now,
+        discount_bps: 0,
+        early_days: 0,
+    };
+    let chain_id = operator::watch::chain("arc-testnet").unwrap().chain_id;
+    let body = |key: Option<&p256::ecdsa::SigningKey>| {
+        let mut v = serde_json::json!({ "policy": a, "bills": [{ "payee": bill.payee, "amount": bill.amount, "everyDays": 30, "nextDue": now }] });
+        if let Some(key) = key {
+            let ch = operator::level1::bills_challenge(
+                chain_id,
+                a.parse().unwrap(),
+                std::slice::from_ref(&bill),
+                now,
+            )
+            .unwrap();
+            let cd = format!(
+                r#"{{"type":"webauthn.get","challenge":"{}","origin":"http://localhost"}}"#,
+                operator::level1::b64url(ch.as_slice())
+            );
+            let ad = vec![0xaa; 37];
+            let mut h = Sha256::new();
+            h.update(&ad);
+            h.update(Sha256::digest(cd.as_bytes()));
+            let sig: p256::ecdsa::Signature = key.sign_prehash(&h.finalize()).unwrap();
+            let (r, s) = sig.split_bytes();
+            v["issued"] = serde_json::json!(now);
+            v["auth"] = serde_json::json!({ "r": format!("0x{}", alloy::hex::encode(r)), "s": format!("0x{}", alloy::hex::encode(s)),
+                "challengeIndex": cd.find("\"challenge\"").unwrap(), "typeIndex": cd.find("\"type\"").unwrap(),
+                "authenticatorData": format!("0x{}", alloy::hex::encode(&ad)), "clientDataJSON": cd });
+        }
+        v.to_string()
+    };
+    let dev_a = "x-tameion-device: dev-a\r\n";
+    let (st, _, b) = http_with(p, "POST", "/api/level1/bills", &body(None), dev_a);
+    assert_eq!(st, 401, "{b}");
+    assert!(b.contains("owner's passkey"), "{b}");
+    let stranger = p256::ecdsa::SigningKey::from_slice(&[9u8; 32]).unwrap();
+    let (st, _, b) = http_with(
+        p,
+        "POST",
+        "/api/level1/bills",
+        &body(Some(&stranger)),
+        dev_a,
+    );
+    assert_eq!(st, 403, "{b}");
+    let (st, _, b) = http_with(p, "POST", "/api/level1/bills", &body(Some(&sk)), dev_a);
+    assert_eq!(st, 200, "{b}");
+    let saved = std::fs::read_to_string(dir.join("tenants").join(format!("{a}.json"))).unwrap();
+    assert!(
+        saved.contains("0x179dca89f69faef5765d2e7445aa5452b8159520"),
+        "{saved}"
+    );
+    // The same signature again is refused (one use).
+    let (st, _, b) = http_with(p, "POST", "/api/level1/bills", &body(Some(&sk)), dev_a);
+    assert_eq!(st, 400, "{b}");
 }
