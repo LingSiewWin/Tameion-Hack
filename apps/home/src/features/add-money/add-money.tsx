@@ -4,7 +4,7 @@
 // A card top-up is not built, so it has no plate. The Owner view shows no hash and no explorer link (DESIGN Rules 1, 6);
 // the Agent view adds them. Figures come from the service (`inbox`) or the chain, never computed here (Rule 3).
 import { useCallback, useEffect, useState } from "react";
-import type { Address, Hex } from "viem";
+import { isAddress, type Address, type Hex } from "viem";
 import { AddMoneySkeleton } from "../../components/skeletons.tsx";
 import { useSkeleton } from "../../components/skeleton.tsx";
 import { fetchDemo, fetchInbox, fetchTenant } from "../../lib/api.ts";
@@ -16,7 +16,9 @@ import { MovePlate } from "./move-plate.tsx";
 import { explorer, FAUCET, link, plate, quiet } from "./ui.ts";
 import { demoFunding } from "./wallet.ts";
 
-/** The account as the server resolved it from its name: the address is for this page's Copy, calldata and chain reads. */
+/** The account as the server resolved it from its name; `addressText` is its address grouped by four (format.ts `grouped`). */
+export type AddProps = { name: string; addressText: string; chain: string };
+/** The same with the address joined back, for Copy, calldata and chain reads in the browser. */
 export type AddAccount = { name: string; address: Address; chain: string };
 
 /** What the page read from the service. `null` while reading; an `Error` when that read failed. */
@@ -28,8 +30,10 @@ async function readAll(name: string): Promise<Reads> {
   return { inbox: asValue(inbox), tenant: asValue(tenant), demo: asValue(demo) };
 }
 
-export function AddMoney({ account }: { account: AddAccount }) {
-  const dest = byKey(account.chain);
+export function AddMoney({ account: props }: { account: AddProps }) {
+  const joined = props.addressText.replaceAll(" ", "");
+  const account: AddAccount = { name: props.name, address: (isAddress(joined) ? joined : "0x") as Address, chain: props.chain };
+  const dest = isAddress(joined) ? byKey(account.chain) : undefined;
   const [reads, setReads] = useState<Reads>({ inbox: null, tenant: null, demo: null });
   useEffect(() => {
     let live = true;

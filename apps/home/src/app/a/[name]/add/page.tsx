@@ -1,8 +1,10 @@
 import { AddMoney } from "../../../../features/add-money/add-money.tsx";
+import { grouped } from "../../../../features/add-money/format.ts";
 import { resolveAccount } from "../../../../lib/api.ts";
 
 // `/a/<name>/add` add money (H5). The name becomes the account here, on the server; the page gets the address only to
-// show it on the address plate with Copy and to address the move to it (PM ruling 2026-10-18).
+// show it on the address plate with Copy and to address the move to it (PM ruling 2026-10-18). It travels grouped by four
+// ("0xb806 4c03 …"), the form a person reads, so the Owner view's markup and payload carry no machine hex (DESIGN, zero-hash).
 export default async function AddMoneyPage({ params }: { params: Promise<{ name: string }> }) {
   const { name } = await params;
   let account: Awaited<ReturnType<typeof resolveAccount>>;
@@ -13,7 +15,7 @@ export default async function AddMoneyPage({ params }: { params: Promise<{ name:
   }
   if (!account) return <Said title="No account has that name" body="Check the name in the link; an account lives on the service that opened it." />;
   const chain = account.chains[0]?.key ?? "";
-  return <AddMoney account={{ name: account.name, address: account.policy as `0x${string}`, chain }} />;
+  return <AddMoney account={{ name: account.name, addressText: grouped(account.policy), chain }} />;
 }
 
 function Said({ title, body }: { title: string; body: string }) {

@@ -92,9 +92,35 @@ function useTrack(move: Move | null, dest: CctpChain, who: Address | undefined, 
 }
 
 const phaseWord = (p: Phase, i: number, of: number) => `${p === "signing" ? "Signing" : p === "sent" ? "Sent" : "Confirmed"}${of > 1 ? ` ${i} of ${of}` : ""}`;
-/** The wallet's or the chain's refusal in a sentence; "You said no" for EIP-1193 4001. */
-const refusalWords = (e: unknown) =>
-  codeOf(e) === 4001 ? "You said no in the wallet." : ((e as { shortMessage?: string; message?: string })?.shortMessage ?? (e as Error)?.message ?? "The wallet did not answer.");
+
+type Failure = { words: string; moved: string; detail: string };
+/** A wallet's or chain's refusal as a plain sentence, with its own text kept for the disclosure. */
+function failureOf(e: unknown, moved: string): Failure {
+  const detail = String((e as { shortMessage?: string; message?: string })?.shortMessage ?? (e as Error)?.message ?? e);
+  const code = codeOf(e);
+  const words =
+    code === 4001
+      ? "You said no in the wallet."
+      : /insufficient funds/i.test(detail)
+        ? "The wallet could not pay the gas."
+        : /failed on|revert/i.test(detail)
+          ? "The chain refused the transaction."
+          : "The wallet did not send it.";
+  return { words, moved, detail };
+}
+
+/** Seconds since `since` (ms), ticking each second while `on`; DESIGN §States, Waits. */
+function useElapsed(since: number | null): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (since === null) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [since]);
+  return since === null ? 0 : Math.max(0, Math.floor((now - since) / 1000));
+}
+/** A wait in words: the verb, its seconds after 3 s, and after 15 s the promise that nothing is sent twice. */
+const waitWords = (verb: string, secs: number) => (secs >= 15 ? "Still checking. It will not be sent twice." : secs >= 3 ? `${verb}, ${secs} s` : verb);
 
 export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain; account: AddAccount; inbox: Inbox | null; onLanded: () => void }) {
   const view = useView();
@@ -111,7 +137,11 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
   const [held, setHeld] = useState<{ for: string; usdc: bigint; gas: bigint } | null>(null);
   const [move, setMove] = useState<Move | null>(() => loadMove(account.address));
   const [busy, setBusy] = useState<string | null>(null);
-  const [failure, setFailure] = useState<{ words: string; moved: string } | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  // when the wallet's current phase began, so a long "Sent" says how long and that nothing is re-sent
+  const [phaseAt, setPhaseAt] = useState<number | null>(null);
+  const elapsed = useElapsed(busy ? phaseAt : null);
+  const label = busy && busy.startsWith("Sent") ? waitWords(busy, elapsed) : busy;
 
   useEffect(() => {
     const p = injected();
@@ -139,7 +169,8 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
     return () => {
       live = false;
     };
-  }, [who, fromDomain, from]);
+    // read again once a move is kept: the wallet holds less after a burn
+  }, [who, fromDomain, from, move]);
   const heldNow = held && held.for === `${who}:${fromDomain}` ? held : null;
 
   const track = useTrack(move, dest, who, onLanded);
@@ -154,7 +185,7 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
       try {
         setWallet({ has: true, address: await connect() });
       } catch (e) {
-        setFailure({ words: refusalWords(e), moved: "Nothing was sent." });
+        setFailure(failureOf(e, "Nothing was sent."));
       }
       return;
     }
@@ -165,9 +196,14 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
     const sent: { move: Move | null } = { move: null };
     try {
       const of = (await allowed(from, who)) < amount ? 2 : 1;
-      if (of === 2) await send(from, from.usdc, approveData(amount), (p) => setBusy(phaseWord(p, 1, 2)));
+      if (of === 2)
+        await send(from, from.usdc, approveData(amount), (p) => {
+          setBusy(phaseWord(p, 1, 2));
+          setPhaseAt(Date.now());
+        });
       await send(from, TOKEN_MESSENGER, burnData(from, dest, account.address, amount), (p, hash) => {
         setBusy(phaseWord(p, of, of));
+        setPhaseAt(Date.now());
         if (p === "sent" && hash) {
           sent.move = { from: from.domain, amount: amount.toString(), burnTx: hash, at: Math.floor(Date.now() / 1000) };
           saveMove(account.address, sent.move);
@@ -176,7 +212,7 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
       setAmountText("");
     } catch (e) {
       // after the burn has a hash the chain answers for it (reverted, or still checking); before, nothing moved
-      if (!sent.move) setFailure({ words: refusalWords(e), moved: "Nothing was sent." });
+      if (!sent.move) setFailure(failureOf(e, "Nothing was sent."));
     } finally {
       setBusy(null);
       if (sent.move) setMove(sent.move);
@@ -189,7 +225,7 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
       try {
         setWallet({ has: true, address: await connect() });
       } catch (e) {
-        setFailure({ words: refusalWords(e), moved: "Nothing arrived yet. The USDC is burned and waits at Circle for the mint." });
+        setFailure(failureOf(e, "Nothing arrived yet. The USDC is burned and waits at Circle for the mint."));
       }
       return;
     }
@@ -199,11 +235,12 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
     try {
       await send(dest, MESSAGE_TRANSMITTER, mintData(message, attestation), (p, hash) => {
         setBusy(phaseWord(p, 1, 1));
+        setPhaseAt(Date.now());
         if (p === "sent" && hash) saveMove(account.address, (sent.move = { ...move, mintTx: hash }));
       });
     } catch (e) {
       // the tracker reads the destination again: a mint someone else sent, or one whose answer was lost, shows as arrived
-      setFailure({ words: refusalWords(e), moved: "Nothing arrived yet. The USDC is burned and waits at Circle for the mint." });
+      setFailure(failureOf(e, "Nothing arrived yet. The USDC is burned and waits at Circle for the mint."));
     } finally {
       setBusy(null);
       setMove(sent.move ?? { ...move });
@@ -240,7 +277,9 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
         <ol className="flex flex-col" aria-label="The move">
           <Line
             title={`Burned ${moved} on ${moveFrom.name}`}
-            state={track?.burn === "success" ? `Done ${whenText(move.at)}` : track?.burn === "reverted" ? "Failed: nothing moved" : "Sent, still checking"}
+            state={
+              track?.burn === "success" ? `Done ${whenText(move.at)}` : track?.burn === "reverted" ? "Failed: nothing moved" : "Still checking. It will not be sent twice."
+            }
             agent={
               view === "agent" && (
                 <a className={link} href={explorer(moveFrom, "tx", move.burnTx)} target="_blank" rel="noreferrer">
@@ -259,7 +298,7 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
                       ? "Done"
                       : "Signed for another address: this page will not bring it here"
                     : track?.att?.state === "waiting"
-                      ? `Waiting for ${moveFrom.name} to finalize, ${moveFrom.wait}${track.att.delay ? ` (Circle: ${track.att.delay})` : ""}`
+                      ? `Waiting for ${moveFrom.name} to finalize, ${moveFrom.wait}${minutesSince(move.at)}${track.att.delay ? ` (Circle: ${track.att.delay})` : ""}`
                       : track?.att?.state === "unreadable"
                         ? `Not read: ${track.att.words}`
                         : track?.burn === "success"
@@ -280,7 +319,7 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
               />
               <Line
                 title={`Arrived on ${dest.name}`}
-                state={track?.att?.state === "signed" && forThisAccount ? (busy ? busy : "Waits for the mint") : "Next"}
+                state={track?.att?.state === "signed" && forThisAccount ? (label ?? "Waits for the mint") : "Next"}
                 agent={
                   view === "agent" &&
                   mintTx && (
@@ -302,7 +341,7 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
       )}
 
       {inFlight && track?.att?.state === "signed" && forThisAccount && (
-        <MintStep dest={dest} wallet={wallet} gas={track.gas} busy={busy} onMint={mint} />
+        <MintStep dest={dest} wallet={wallet} gas={track.gas} busy={label} onMint={mint} />
       )}
 
       {!inFlight && (
@@ -317,19 +356,29 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
           wallet={wallet}
           held={heldNow}
           amount={amount}
-          busy={busy}
+          busy={label}
           onStart={start}
         />
       )}
 
       {failure && (
-        <div role="alert" className="flex flex-col gap-(--space-1) border-t border-(--rule) pt-(--space-3)">
+        <div role="alert" className="flex flex-col gap-(--space-1)">
           <p className="row text-(--red)">{failure.words}</p>
           <p className="meta">{failure.moved}</p>
+          <details className="meta">
+            <summary className="cursor-pointer">What the wallet said</summary>
+            <p className="break-all">{failure.detail}</p>
+          </details>
         </div>
       )}
     </section>
   );
+}
+
+/** ", 6 min so far" once a minute has passed since `at` (unix seconds); read at render, refreshed by the tracker's polls. */
+function minutesSince(at: number) {
+  const m = Math.floor((Date.now() / 1000 - at) / 60);
+  return m >= 1 ? `; ${m} min so far` : "";
 }
 
 function Line({ title, state, agent }: { title: string; state: string; agent?: React.ReactNode }) {
