@@ -1,0 +1,13 @@
+[package]
+name = "pistis"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "What an account's own record is worth as evidence: dispute survival x independence x recency over its signed records."
+
+# Pure, like `ledger`: no I/O, no clock (`now` is an argument), no dependencies.
+[dependencies]
+
+[dev-dependencies]
+proptest.workspace = true

@@ -12,7 +12,7 @@
 # decides whether money should move.
 [workspace]
 resolver = "3"
-members = ["crates/ledger", "crates/arc", "crates/operator", "crates/hedge", "crates/desk"]
+members = ["crates/ledger", "crates/arc", "crates/operator", "crates/hedge", "crates/desk", "crates/pistis"]
 
 [workspace.package]
 edition = "2024"
