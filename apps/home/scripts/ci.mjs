@@ -8,6 +8,7 @@
 //   npm run ci -- --route account --state loading,error --view owner --width 390
 //   npm run ci -- --no-browser                  the static steps only
 //   npm run ci -- --dry                         list the matrix, run nothing
+//   npm run ci -- --fast                        use the Owner home's ?state= flag for loading, empty, error, offline (the real offline path waits ~20 s)
 //   npm run ci -- --strict                      a feature that is not built yet (no sheet, no account) counts as FAIL
 //
 // env: POLICY            an account with paid rows, by NAME (routes are /a/<name>); default northwind-agents, the lane service's
@@ -486,12 +487,16 @@ async function patchJson(page, re, mutate, R) {
 }
 const fail503 = (route) => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ ok: false, error: "the service did not answer", executed: false, audience: "user" }) });
 const API = /\/api\//;
+const FLAGS = { loading: "skeleton", empty: "empty", error: "error", offline: "offline" }; // H2's ?state= values
 
 // Arrange one scenario's state. Real data where an account for it was given; otherwise the reply is patched in the page and R.mocked says so.
 async function arrange(page, ctx, sc, cfg, R) {
   const { state } = sc;
+  if (R.flag) return; // the page itself shows the state (H2's ?state=, development only)
   if (state === "loading") {
     await page.route(API, async (route) => { await R.hold; await route.continue().catch(() => {}); });
+  } else if (state === "error") {
+    await page.route(API, fail503); // the service never answers: nothing was read, nothing is cached
   } else if (state === "empty" && !cfg.policyEmpty) {
     await patchJson(page, /\/api\/level1\/inbox/, (b) => ({ ...b, paid: [], waiting: [], waitingCount: 0, needsYou: [], paidTotal: "0", purchases: [], refused: [], invoices: [] }), R);
   } else if (state === "needs-you" && !cfg.policyNeeds) {
@@ -501,16 +506,16 @@ async function arrange(page, ctx, sc, cfg, R) {
 }
 
 async function afterLoad(page, ctx, sc, R) {
-  if (sc.state === "error") {
-    // the first load filled whatever the page caches; now the service stops answering and the page is read again
-    await page.unroute(API).catch(() => {});
-    await page.route(API, fail503);
-    await page.reload({ waitUntil: "domcontentloaded" });
-    await settle(page);
-  } else if (sc.state === "offline") {
+  if (R.flag) return;
+  if (sc.state === "offline") {
+    // the connection drops after a good read: the next read fails and the page keeps what it had, each figure marked stale with its time
     await ctx.setOffline(true);
     await page.evaluate(() => { window.dispatchEvent(new Event("offline")); window.dispatchEvent(new Event("focus")); document.dispatchEvent(new Event("visibilitychange")); }).catch(() => {});
-    await page.waitForTimeout(1500);
+    const t0 = Date.now();
+    const seen = await page.waitForFunction(() => /\bas of \d{1,2}:\d{2}\b/i.test(document.body.innerText), null, { timeout: 30000 }).then(() => true, () => false);
+    R.waited = Math.round((Date.now() - t0) / 1000);
+    if (!seen) R.findings.push({ sev: "warn", rule: "offline-no-stale-marker", sel: "", text: "", detail: `no "as of HH:MM" on the page ${R.waited} s after the connection dropped (DESIGN: cached values at full ink, each marked stale with its time)` });
+    await page.waitForTimeout(300);
   } else if (sc.state === "detail") {
     const ok = await openDetail(page);
     if (!ok) R.pending = "no row disclosure to open yet";
@@ -543,6 +548,8 @@ async function axeFindings(page, AxeBuilder, R) {
 
 async function scenario(browser, AxeBuilder, sc, cfg) {
   const R = { name: `${sc.route}/${sc.state}/${sc.view}/${sc.width}`, findings: [], mocked: false, pending: null };
+  // --fast: the Owner home's own development flag shows loading, empty, error and offline at once; otherwise the state is made for real
+  R.flag = cfg.fast && sc.route === "account" && sc.view === "owner" ? FLAGS[sc.state] : undefined;
   const policy = sc.state === "empty" ? (cfg.policyEmpty ?? cfg.policy) : sc.state === "needs-you" ? (cfg.policyNeeds ?? cfg.policy) : cfg.policy;
   const { ctx, page, errors } = await newPage(browser, sc);
   let release;
@@ -550,7 +557,7 @@ async function scenario(browser, AxeBuilder, sc, cfg) {
   const quiet = ["loading", "error", "offline"].includes(sc.state);
   try {
     await arrange(page, ctx, sc, cfg, R);
-    await page.goto(cfg.url + ROUTES[sc.route].path(policy), { waitUntil: sc.state === "loading" ? "commit" : "domcontentloaded", timeout: 60000 });
+    await page.goto(cfg.url + ROUTES[sc.route].path(policy) + (R.flag ? `?state=${R.flag}` : ""), { waitUntil: sc.state === "loading" && !R.flag ? "commit" : "domcontentloaded", timeout: 60000 });
     if (sc.state === "loading") {
       await page.waitForSelector('[aria-busy="true"], .skeleton, [data-skeleton]', { timeout: 5000 }).catch(() => R.findings.push({ sev: "warn", rule: "no-skeleton", sel: "", text: "", detail: "no skeleton on screen while the service reply is held" }));
       await page.waitForTimeout(450);
@@ -827,7 +834,7 @@ async function main() {
   const cfg = {
     url: (process.env.APP_URL ?? "http://localhost:3010").replace(/\/$/, ""),
     policy, policyEmpty: process.env.POLICY_EMPTY || undefined, policyNeeds: process.env.POLICY_NEEDS || undefined,
-    proof: proofDir(), shots: !!args.shots, strict: !!args.strict, noAxe: !!args["no-axe"],
+    proof: proofDir(), shots: !!args.shots, strict: !!args.strict, noAxe: !!args["no-axe"], fast: !!args.fast,
   };
   const plan = matrix(args, { policy: !!policy });
   if (args.dry) {
