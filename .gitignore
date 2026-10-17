@@ -31,6 +31,9 @@ target/
 # Browser automation logs (local console output)
 .playwright-mcp/
 
+# Audit packs (scripts/audit_pack.py): an account's ledger and evidence, account data, never committed.
+/audit-pack/
+
 # Markdown (founder, 2026-10-15): the root README.md is the only Markdown file
 # that goes to GitHub for now. Docs, plans, notes, CLAUDE.md, RESUME.md and every
 # other *.md stay local until the founder says otherwise.
