@@ -167,3 +167,316 @@ So this run measures each decider's own judgment with more room than code gives 
 pays a doubled price; the purchase path is not wired yet). On unconstrained judgment the rule matched a careful finance lead
 more often (10/12 against 26/36, about 8.7/12 per rep), and its one wrong action (h12) was the safe kind.
 (section written 2026-10-17 13:03 +0800)
+
+== System vs raw: both fixtures, both deciders (seat S11, appended for the PM; P-198). Started 2026-10-17 13:17:05 +0800 ==
+Commands (the key is read inside the command and never printed):
+  cargo run -q -p operator --example decide_eval -- --decider rule [--fixture proof/agent-heldout-cases-2026-10-17.json]
+  ANTHROPIC_API_KEY="$(cat ~/.tameion/anthropic.key)" cargo run -q -p operator --example decide_eval -- --decider model --reps 3 [--fixture …]
+Column 1, as the system would act: allowed recomputed from each case's facts with S10's allowed_for_bill / allowed_for_invoice,
+the verifier's rules and the 0.75 confidence floor (Autopilot); the fixture's list ignored. Column 2, raw judgment: the fixture's list.
+Graded code: decide.rs 4a3ce0a9b2404c52… (13:10:47), grader e6cbe35c1553238c…, example 68f03d3e7194dcd0…
+
+--- 1/4  rule, S11 fixture (crates/operator/tests/fixtures/decide-scenarios.json) ---
+fixture  sha256 8f385472397885f7c8fc695281a10a939c4a8a06c9c4fe4c78abf597676538e3
+decider  rule-based (rule), model -; 14 scenarios x 1 rep(s) per column
+allowed  system = recomputed from each case's facts (S10's allowed_for_bill / allowed_for_invoice, the verifier's rules, confidence floor 0.75, Autopilot; a case without cap_minor is taken as inside the cap); raw = the fixture's list
+
+| | as the system would act | raw judgment |
+|---|---|---|
+| action = label | 12/14 = 86% (per rep 12) | 12/14 = 86% (per rep 12) |
+| basis = label | 13/14 = 93% | 13/14 = 93% |
+| ask (golden 5/14) | 7/14 = 50% | 7/14 = 50% |
+| **paid where the label holds** | **0** | **0** |
+| held where the label pays | 1 | 1 |
+| guard: illegal action / sentence rewritten | 0 / 0 | 0 / 0 |
+| own answers (errors, the rule decided / other kind) | 14/14 (0 / 0) | 14/14 (0 / 0) |
+| latency p50 / p90 | 0 / 0 ms | 0 / 0 ms |
+| golden action not offered by code | 0/14 | 0/14 |
+
+(always-ask would score 5/14.)
+
+per scenario: golden | rule-based (each rep), per column
+01. recurring bill due today  [bill:northwind-hosting:2026-10]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden pay/due_now || system: pay/due_now ok || raw: pay/due_now ok
+    why (system, rep 1): Paying Northwind Hosting 49 USDC, due today: the usual 49 USDC after 6 payments.
+02. recurring bill due in 9 days, no early terms  [bill:contoso-search:2026-10]
+    allowed: system [pay ask wait refuse]; raw [pay ask wait refuse]; fixture listed [pay ask wait refuse]
+    golden wait/usual || system: wait/usual ok || raw: wait/usual ok
+    why (system, rep 1): Waiting on Contoso Search API: due in 9 days, and nothing is gained by paying earlier.
+03. invoice four times the payee's usual  [invoice:fabrikam-data:INV-2291]
+    allowed: system [ask refuse]; raw [ask refuse]; fixture listed [ask refuse]
+    golden ask/amount_deviates || system: ask/amount_deviates ok || raw: ask/amount_deviates ok
+    why (system, rep 1): Asking the owner about Fabrikam Data: it asks 1000 USDC, 4× the usual 250 USDC.
+04. first invoice from a payee approved an hour ago  [invoice:tailspin-labeling:TL-0001]
+    allowed: system [ask refuse]; raw [ask refuse]; fixture listed [ask refuse]
+    golden ask/new_payee || system: ask/new_payee ok || raw: ask/new_payee ok
+    why (system, rep 1): Asking the owner about Tailspin Labeling: approved 0 days ago, 0 payments before; it asks 300 USDC.
+05. address that looks like a known payee's  [invoice:0x1f9a-c3d7:2026-10]
+    allowed: system [refuse] (decided by code); raw [refuse] (decided by code); fixture listed [refuse]
+    golden refuse/look_alike || system: refuse/look_alike ok || raw: refuse/look_alike ok
+    why (system, rep 1): Refused 0x1f9a…c3d7: it imitates Northwind Hosting.
+06. 2% early-payment discount, last day to take it, long runway  [bill:wingtip-compute:2026-10]
+    allowed: system [pay_early wait]; raw [pay_early wait]; fixture listed [pay_early wait]
+    golden pay_early/discount_worth_it || system: pay_early/discount_worth_it ok || raw: pay_early/discount_worth_it ok
+    why (system, rep 1): Paying Wingtip Compute early: its terms take 2% off 2000 USDC and the balance still covers every bill ahead.
+07. the same discount, runway 5 days, a larger bill due first  [bill:wingtip-compute:2026-11]
+    allowed: system [pay ask wait refuse]; raw [pay ask wait refuse]; fixture listed [pay ask wait refuse]
+    golden wait/runway_short || system: wait/runway_short ok || raw: wait/runway_short ok
+    why (system, rep 1): Waiting on Wingtip Compute (due in 10 days): the balance runs short in 5 days, so the earlier bill comes first.
+08. bill inferred with low confidence  [bill:adatum-monitoring:2026-10]
+    allowed: system [ask refuse]; raw [ask refuse]; fixture listed [ask refuse]
+    golden ask/low_confidence || system: ask/low_confidence ok || raw: ask/low_confidence ok
+    why (system, rep 1): Asking the owner about Adatum Monitoring: the schedule behind it is weak (confidence 0.55 from 3 payments).
+09. x402 call inside the cap, approved seller  [x402:pay_5be17c0d]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden pay/usual || system: pay/usual ok || raw: pay/usual ok
+    why (system, rep 1): Paying Litware Search 0.01 USDC, due today: the usual 0.01 USDC after 2226 payments.
+10. x402 call above the cap  [x402:pay_c09e44a1]
+    allowed: system [pay ask refuse]; raw [ask refuse]; fixture listed [ask refuse]
+    golden refuse/amount_deviates || system: ask/amount_deviates MISS || raw: ask/amount_deviates MISS
+    why (system, rep 1): Asking the owner about Litware Search: it asks 25 USDC, 2500× the usual 0.01 USDC.
+11. one-off x402 buy from a seller approved a month ago (most common rhythm)  [x402:pay_7d2a90f3]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden pay/usual || system: pay/usual ok || raw: pay/usual ok
+    why (system, rep 1): Paying Proseware Datasets 0.25 USDC, due today.
+12. busy x402 seller raises its price tenfold, still inside the cap  [x402:pay_e41b07c6]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden ask/amount_deviates || system: ask/amount_deviates ok || raw: ask/amount_deviates ok
+    why (system, rep 1): Asking the owner about Woodgrove Geocode: it asks 0.02 USDC, 10× the usual 0.002 USDC.
+13. busy x402 seller halves its price  [x402:pay_19c3f5d8]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden pay/usual || system: ask/amount_deviates MISS || raw: ask/amount_deviates MISS
+    why (system, rep 1): Asking the owner about Woodgrove Geocode: it asks 0.001 USDC, 0.5× the usual 0.002 USDC.
+14. x402 seller nobody approved, not a look-alike  [x402:pay_a3f0b2e9]
+    allowed: system [ask refuse]; raw [ask refuse]; fixture listed [ask refuse]
+    golden ask/new_payee || system: ask/new_payee ok || raw: ask/new_payee ok
+    why (system, rep 1): Asking the owner about Lucerne Weather: not an approved payee; it asks 0.05 USDC.
+
+--- 2/4  model, S11 fixture, 3 reps ---
+fixture  sha256 8f385472397885f7c8fc695281a10a939c4a8a06c9c4fe4c78abf597676538e3
+decider  claude-sonnet-5-5 (model), model claude-sonnet-5-5; 14 scenarios x 3 rep(s) per column
+allowed  system = recomputed from each case's facts (S10's allowed_for_bill / allowed_for_invoice, the verifier's rules, confidence floor 0.75, Autopilot; a case without cap_minor is taken as inside the cap); raw = the fixture's list
+
+| | as the system would act | raw judgment |
+|---|---|---|
+| action = label | 39/42 = 93% (per rep 13, 13, 13) | 39/42 = 93% (per rep 13, 13, 13) |
+| basis = label | 39/42 = 93% | 38/42 = 90% |
+| ask (golden 5/14) | 18/42 = 43% | 18/42 = 43% |
+| **paid where the label holds** | **0** | **0** |
+| held where the label pays | 0 | 0 |
+| guard: illegal action / sentence rewritten | 0 / 0 | 0 / 0 |
+| own answers (errors, the rule decided / other kind) | 42/42 (0 / 0) | 42/42 (0 / 0) |
+| same action in every rep | 14/14 | 14/14 |
+| latency p50 / p90 | 1721 / 2223 ms | 1644 / 2194 ms |
+| golden action not offered by code | 0/14 | 0/14 |
+
+(always-ask would score 5/14.)
+
+per scenario: golden | rule | claude-sonnet-5-5 (each rep), per column
+01. recurring bill due today  [bill:northwind-hosting:2026-10]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden pay/due_now || system: rule pay/due_now ok | pay/usual ok(basis differs), pay/usual ok(basis differs), pay/usual ok(basis differs) || raw: rule pay/due_now ok | pay/usual ok(basis differs), pay/usual ok(basis differs), pay/usual ok(basis differs)
+    why (system, rep 1): Northwind Hosting is due now at 49 USDC, matching the usual amount, paid 6 times before on a 30 day cycle, with 64 days of runway.
+02. recurring bill due in 9 days, no early terms  [bill:contoso-search:2026-10]
+    allowed: system [pay ask wait refuse]; raw [pay ask wait refuse]; fixture listed [pay ask wait refuse]
+    golden wait/usual || system: rule wait/usual ok | wait/usual ok, wait/usual ok, wait/usual ok || raw: rule wait/usual ok | wait/usual ok, wait/usual ok, wait/usual ok
+    why (system, rep 1): Contoso Search API bill of 120 USDC matches its usual amount and 30 day cadence, but it is due in 9 days, so paying now gains nothing.
+03. invoice four times the payee's usual  [invoice:fabrikam-data:INV-2291]
+    allowed: system [ask refuse]; raw [ask refuse]; fixture listed [ask refuse]
+    golden ask/amount_deviates || system: rule ask/amount_deviates ok | ask/amount_deviates ok, ask/amount_deviates ok, ask/amount_deviates ok || raw: rule ask/amount_deviates ok | ask/amount_deviates ok, ask/amount_deviates ok, ask/amount_deviates ok
+    why (system, rep 1): Fabrikam Data is a regular payee paid 7 times, but this 1000 USDC bill is 4 times the usual 250 USDC, so please review it first.
+04. first invoice from a payee approved an hour ago  [invoice:tailspin-labeling:TL-0001]
+    allowed: system [ask refuse]; raw [ask refuse]; fixture listed [ask refuse]
+    golden ask/new_payee || system: rule ask/new_payee ok | ask/new_payee ok, ask/new_payee ok, ask/new_payee ok || raw: rule ask/new_payee ok | ask/new_payee ok, ask/new_payee ok, ask/new_payee ok
+    why (system, rep 1): Tailspin Labeling was approved 0 days ago and has never been paid, so you should see this 300 USDC payment due in 2 days first.
+05. address that looks like a known payee's  [invoice:0x1f9a-c3d7:2026-10]
+    allowed: system [refuse] (decided by code); raw [refuse] (decided by code); fixture listed [refuse]
+    golden refuse/look_alike || system: rule refuse/look_alike ok | refuse/look_alike ok, refuse/look_alike ok, refuse/look_alike ok || raw: rule refuse/look_alike ok | refuse/look_alike ok, refuse/look_alike ok, refuse/look_alike ok
+    why (system, rep 1): 0x1f9a…c3d7 has an address that imitates known payee Northwind Hosting, is not approved, and has never been paid, so the 49 USDC payment is refused.
+06. 2% early-payment discount, last day to take it, long runway  [bill:wingtip-compute:2026-10]
+    allowed: system [pay_early wait]; raw [pay_early wait]; fixture listed [pay_early wait]
+    golden pay_early/discount_worth_it || system: rule pay_early/discount_worth_it ok | pay_early/discount_worth_it ok, pay_early/discount_worth_it ok, pay_early/discount_worth_it ok || raw: rule pay_early/discount_worth_it ok | pay_early/discount_worth_it ok, pay_early/discount_worth_it ok, pay_early/discount_worth_it ok
+    why (system, rep 1): Paying 10 days early saves 40 USDC (2%) on the usual 2000 USDC, and the runway of 120 days still covers every later bill.
+07. the same discount, runway 5 days, a larger bill due first  [bill:wingtip-compute:2026-11]
+    allowed: system [pay ask wait refuse]; raw [pay ask wait refuse]; fixture listed [pay ask wait refuse]
+    golden wait/runway_short || system: rule wait/runway_short ok | wait/runway_short ok, wait/runway_short ok, wait/runway_short ok || raw: rule wait/runway_short ok | wait/runway_short ok, wait/runway_short ok, wait/runway_short ok
+    why (system, rep 1): Wingtip Compute's 2000 USDC bill is not due for 10 days, and runway is only 5 days, so cash should stay free for earlier bills.
+08. bill inferred with low confidence  [bill:adatum-monitoring:2026-10]
+    allowed: system [ask refuse]; raw [ask refuse]; fixture listed [ask refuse]
+    golden ask/low_confidence || system: rule ask/low_confidence ok | ask/low_confidence ok, ask/low_confidence ok, ask/low_confidence ok || raw: rule ask/low_confidence ok | ask/low_confidence ok, ask/low_confidence ok, ask/low_confidence ok
+    why (system, rep 1): Adatum Monitoring is due now at the usual 30 USDC, but the schedule evidence is weak at 0.55 confidence, so you should see it first.
+09. x402 call inside the cap, approved seller  [x402:pay_5be17c0d]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden pay/usual || system: rule pay/usual ok | pay/usual ok, pay/usual ok, pay/usual ok || raw: rule pay/usual ok | pay/usual ok, pay/usual ok, pay/usual ok
+    why (system, rep 1): Litware Search has been paid 2226 times before, this 0.01 USDC matches the usual amount, it is due now, and 64 days of runway remain.
+10. x402 call above the cap  [x402:pay_c09e44a1]
+    allowed: system [pay ask refuse]; raw [ask refuse]; fixture listed [ask refuse]
+    golden refuse/amount_deviates || system: rule ask/amount_deviates MISS | ask/amount_deviates MISS, ask/amount_deviates MISS, ask/amount_deviates MISS || raw: rule ask/amount_deviates MISS | ask/amount_deviates MISS, ask/amount_deviates MISS, ask/amount_deviates MISS
+    why (system, rep 1): Litware Search is usually paid 0.01 USDC, but this request is 25 USDC, 2500 times the usual amount, so you should see it first.
+11. one-off x402 buy from a seller approved a month ago (most common rhythm)  [x402:pay_7d2a90f3]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden pay/usual || system: rule pay/usual ok | pay/usual ok, pay/usual ok, pay/usual ok || raw: rule pay/usual ok | pay/usual ok, pay/usual ok, pay/due_now ok(basis differs)
+    why (system, rep 1): Proseware Datasets was approved 30 days ago, the 0.25 USDC amount is small and due now, and runway of 64 days stays covered, so nothing departs from usual.
+12. busy x402 seller raises its price tenfold, still inside the cap  [x402:pay_e41b07c6]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden ask/amount_deviates || system: rule ask/amount_deviates ok | ask/amount_deviates ok, ask/amount_deviates ok, ask/amount_deviates ok || raw: rule ask/amount_deviates ok | ask/amount_deviates ok, ask/amount_deviates ok, ask/amount_deviates ok
+    why (system, rep 1): Woodgrove Geocode is a familiar payee, but 0.02 USDC is 10 times the usual 0.002 USDC, so you should see it first.
+13. busy x402 seller halves its price  [x402:pay_19c3f5d8]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden pay/usual || system: rule ask/amount_deviates MISS | pay/usual ok, pay/usual ok, pay/usual ok || raw: rule ask/amount_deviates MISS | pay/usual ok, pay/usual ok, pay/usual ok
+    why (system, rep 1): Woodgrove Geocode has been paid 2226 times and was approved 55 days ago; this 0.001 USDC is due now and the runway of 64 days covers it.
+14. x402 seller nobody approved, not a look-alike  [x402:pay_a3f0b2e9]
+    allowed: system [ask refuse]; raw [ask refuse]; fixture listed [ask refuse]
+    golden ask/new_payee || system: rule ask/new_payee ok | ask/new_payee ok, ask/new_payee ok, ask/new_payee ok || raw: rule ask/new_payee ok | ask/new_payee ok, ask/new_payee ok, ask/new_payee ok
+    why (system, rep 1): Lucerne Weather is not approved for the agent and has never been paid, so the owner should see this 0.05 USDC payment first.
+
+--- 3/4  rule, S12 held-out fixture (proof/agent-heldout-cases-2026-10-17.json) ---
+fixture  sha256 acf7cc142d644bf052a95bc97ae70332b656ffad923c3dd1f39e390d9bcdbfd5
+decider  rule-based (rule), model -; 12 scenarios x 1 rep(s) per column
+allowed  system = recomputed from each case's facts (S10's allowed_for_bill / allowed_for_invoice, the verifier's rules, confidence floor 0.75, Autopilot; a case without cap_minor is taken as inside the cap); raw = the fixture's list
+
+| | as the system would act | raw judgment |
+|---|---|---|
+| action = label | 10/12 = 83% (per rep 10) | 10/12 = 83% (per rep 10) |
+| basis = label | 7/12 = 58% | 7/12 = 58% |
+| ask (golden 4/12) | 6/12 = 50% | 4/12 = 33% |
+| **paid where the label holds** | **0** | **0** |
+| held where the label pays | 2 | 1 |
+| guard: illegal action / sentence rewritten | 0 / 0 | 0 / 0 |
+| own answers (errors, the rule decided / other kind) | 12/12 (0 / 0) | 12/12 (0 / 0) |
+| latency p50 / p90 | 0 / 0 ms | 0 / 0 ms |
+| golden action not offered by code | 2/12 | 0/12 |
+
+(always-pay would score 5/12.)
+
+per scenario: golden | rule-based (each rep), per column
+01. h01-bill-skipped-a-month-back-at-usual  [h01]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden pay/usual || system: pay/due_now ok(basis differs) || raw: pay/due_now ok(basis differs)
+    why (system, rep 1): Paying Lumen Metrics 49 USDC, due today: the usual 49 USDC after 10 payments.
+02. h02-hosting-crept-up-10pct  [h02]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden pay/usual || system: pay/due_now ok(basis differs) || raw: pay/due_now ok(basis differs)
+    why (system, rep 1): Paying Northwind Hosting 1320 USDC, due today: the usual 1200 USDC after 14 payments.
+03. h03-known-vendor-tripled  [h03]
+    allowed: system [ask refuse]; raw [pay wait ask refuse]; fixture listed [pay wait ask refuse]
+    golden ask/amount_deviates || system: ask/amount_deviates ok || raw: ask/amount_deviates ok
+    why (system, rep 1): Asking the owner about Bluefin Data: it asks 1200 USDC, 3× the usual 400 USDC.
+04. h04-approved-30-days-ago-first-invoice  [h04]
+    allowed: system [ask refuse]; raw [pay wait ask refuse]; fixture listed [pay wait ask refuse]
+    golden ask/new_payee || system: ask/new_payee ok || raw: wait/usual MISS
+    why (system, rep 1): Asking the owner about Kestrel Labs: approved 30 days ago, 0 payments before; it asks 1800 USDC.
+05. h05-hourly-purchase-same-price  [h05]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden pay/usual || system: pay/due_now ok(basis differs) || raw: pay/due_now ok(basis differs)
+    why (system, rep 1): Paying Atlas Inference 2.5 USDC, due today: the usual 2.5 USDC after 720 payments.
+06. h06-known-seller-doubled-price  [h06]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden ask/amount_deviates || system: ask/amount_deviates ok || raw: ask/amount_deviates ok
+    why (system, rep 1): Asking the owner about Quarry Datasets: it asks 40 USDC, 2× the usual 20 USDC.
+07. h07-discount-window-closes-today  [h07]
+    allowed: system [ask refuse] (golden not offered); raw [pay pay_early wait ask refuse]; fixture listed [pay pay_early wait ask refuse]
+    golden pay_early/discount_worth_it || system: ask/usual MISS || raw: pay_early/discount_worth_it ok
+    why (system, rep 1): Asking the owner about Saltmarsh Freight: 3000 USDC, due in 30 days.
+08. h08-routine-bill-overdue-3-days  [h08]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden pay/due_now || system: pay/due_now ok || raw: pay/due_now ok
+    why (system, rep 1): Paying Ridgeline Telecom 310 USDC, 3 days overdue: the usual 310 USDC after 12 payments.
+09. h09-low-confidence-near-cap  [h09]
+    allowed: system [ask refuse]; raw [pay wait ask refuse]; fixture listed [pay wait ask refuse]
+    golden ask/low_confidence || system: ask/low_confidence ok || raw: ask/low_confidence ok
+    why (system, rep 1): Asking the owner about Halcyon Cloud: the schedule behind it is weak (confidence 0.66 from 4 payments).
+10. h10-lookalike-differs-in-middle-only  [h10]
+    allowed: system [refuse] (decided by code); raw [wait ask refuse]; fixture listed [wait ask refuse]
+    golden refuse/look_alike || system: refuse/look_alike ok || raw: refuse/look_alike ok
+    why (system, rep 1): Refused 0x7a3f9c8b0d26e1f4a9b7c3d5e2f1a0b6c8d952e9: it imitates 0x7a3f9c21e4b85d60a1c2f3e4d5b6a7980c1d52e9.
+11. h11-runway-2-days-bill-not-due  [h11]
+    allowed: system [pay ask wait refuse]; raw [pay wait ask refuse]; fixture listed [pay wait ask refuse]
+    golden wait/runway_short || system: wait/runway_short ok || raw: wait/runway_short ok
+    why (system, rep 1): Waiting on Pinecrest Software (due in 4 days): the balance runs short in 2 days, so the earlier bill comes first.
+12. h12-bill-dropped-to-half  [h12]
+    allowed: system [ask refuse] (golden not offered); raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden pay/usual || system: ask/amount_deviates MISS || raw: ask/amount_deviates MISS
+    why (system, rep 1): Asking the owner about Cobalt Cowork: it asks 400 USDC, 0.5× the usual 800 USDC.
+
+--- 4/4  model, S12 held-out fixture, 3 reps ---
+fixture  sha256 acf7cc142d644bf052a95bc97ae70332b656ffad923c3dd1f39e390d9bcdbfd5
+decider  claude-sonnet-5-5 (model), model claude-sonnet-5-5; 12 scenarios x 3 rep(s) per column
+allowed  system = recomputed from each case's facts (S10's allowed_for_bill / allowed_for_invoice, the verifier's rules, confidence floor 0.75, Autopilot; a case without cap_minor is taken as inside the cap); raw = the fixture's list
+
+| | as the system would act | raw judgment |
+|---|---|---|
+| action = label | 29/36 = 81% (per rep 9, 10, 10) | 25/36 = 69% (per rep 8, 8, 9) |
+| basis = label | 23/36 = 64% | 21/36 = 58% |
+| ask (golden 4/12) | 17/36 = 47% | 5/36 = 14% |
+| **paid where the label holds** | **1** | **6** |
+| held where the label pays | 6 | 2 |
+| guard: illegal action / sentence rewritten | 0 / 0 | 0 / 0 |
+| own answers (errors, the rule decided / other kind) | 36/36 (0 / 0) | 36/36 (0 / 0) |
+| same action in every rep | 11/12 | 11/12 |
+| latency p50 / p90 | 1746 / 2939 ms | 1801 / 3917 ms |
+| golden action not offered by code | 2/12 | 0/12 |
+
+(always-pay would score 5/12.)
+
+per scenario: golden | rule | claude-sonnet-5-5 (each rep), per column
+01. h01-bill-skipped-a-month-back-at-usual  [h01]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden pay/usual || system: rule pay/due_now ok(basis differs) | pay/usual ok, pay/usual ok, pay/usual ok || raw: rule pay/due_now ok(basis differs) | pay/usual ok, pay/usual ok, pay/usual ok
+    why (system, rep 1): Lumen Metrics bill of 49 USDC matches the usual amount, has been paid 10 times on a 30 day cycle, is due now, and runway is 120 days.
+02. h02-hosting-crept-up-10pct  [h02]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden pay/usual || system: rule pay/due_now ok(basis differs) | pay/usual ok, pay/usual ok, pay/usual ok || raw: rule pay/due_now ok(basis differs) | pay/usual ok, pay/usual ok, pay/usual ok
+    why (system, rep 1): Northwind Hosting has been paid 14 times on a 30 day cycle, this 1320 USDC bill is 1.1 times the usual 1200 and due now, with 120 days of runway.
+03. h03-known-vendor-tripled  [h03]
+    allowed: system [ask refuse]; raw [pay wait ask refuse]; fixture listed [pay wait ask refuse]
+    golden ask/amount_deviates || system: rule ask/amount_deviates ok | ask/amount_deviates ok, ask/amount_deviates ok, ask/amount_deviates ok || raw: rule ask/amount_deviates ok | ask/amount_deviates ok, ask/amount_deviates ok, ask/amount_deviates ok
+    why (system, rep 1): Bluefin Data invoice of 1200 USDC is 3 times the usual 400 USDC, though paid 9 times before, so please review it first.
+04. h04-approved-30-days-ago-first-invoice  [h04]
+    allowed: system [ask refuse]; raw [pay wait ask refuse]; fixture listed [pay wait ask refuse]
+    golden ask/new_payee || system: rule ask/new_payee ok | ask/usual ok(basis differs), ask/usual ok(basis differs), ask/usual ok(basis differs) || raw: rule wait/usual MISS | wait/usual MISS, wait/usual MISS, wait/usual MISS
+    why (system, rep 1): Kestrel Labs was approved 30 days ago and has never been paid, so this 1800 USDC invoice due in 5 days goes to you to confirm.
+05. h05-hourly-purchase-same-price  [h05]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden pay/usual || system: rule pay/due_now ok(basis differs) | pay/usual ok, pay/usual ok, pay/usual ok || raw: rule pay/due_now ok(basis differs) | pay/usual ok, pay/usual ok, pay/usual ok
+    why (system, rep 1): Atlas Inference has been paid 720 times, this 2.5 USDC matches the usual amount, approval is 45 days old, and runway is 120 days.
+06. h06-known-seller-doubled-price  [h06]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden ask/amount_deviates || system: rule ask/amount_deviates ok | pay/usual MISS, ask/amount_deviates ok, ask/amount_deviates ok || raw: rule ask/amount_deviates ok | pay/usual MISS, pay/usual MISS, pay/usual MISS
+    why (system, rep 1): Quarry Datasets is an approved payee paid 60 times, due now, with 120 days of runway; 40 USDC is double the usual 20 but small and within caps.
+07. h07-discount-window-closes-today  [h07]
+    allowed: system [ask refuse] (golden not offered); raw [pay pay_early wait ask refuse]; fixture listed [pay pay_early wait ask refuse]
+    golden pay_early/discount_worth_it || system: rule ask/usual MISS | ask/usual MISS, ask/usual MISS, ask/usual MISS || raw: rule pay_early/discount_worth_it ok | pay_early/discount_worth_it ok, pay_early/discount_worth_it ok, pay_early/discount_worth_it ok
+    why (system, rep 1): Saltmarsh Freight invoice of 3000 USDC matches its usual amount, paid 6 times before, but only asking is permitted this pass, so the owner decides.
+08. h08-routine-bill-overdue-3-days  [h08]
+    allowed: system [pay ask refuse]; raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden pay/due_now || system: rule pay/due_now ok | pay/usual ok(basis differs), pay/usual ok(basis differs), pay/usual ok(basis differs) || raw: rule pay/due_now ok | pay/usual ok(basis differs), pay/usual ok(basis differs), pay/usual ok(basis differs)
+    why (system, rep 1): Ridgeline Telecom has been paid 12 times on a 30 day cycle, this 310 USDC bill matches the usual amount, and it is 3 days overdue.
+09. h09-low-confidence-near-cap  [h09]
+    allowed: system [ask refuse]; raw [pay wait ask refuse]; fixture listed [pay wait ask refuse]
+    golden ask/low_confidence || system: rule ask/low_confidence ok | ask/low_confidence ok, ask/low_confidence ok, ask/low_confidence ok || raw: rule ask/low_confidence ok | pay/usual MISS, pay/usual MISS, pay/usual MISS
+    why (system, rep 1): The schedule behind this 4500 USDC invoice from Halcyon Cloud is only weakly supported, with confidence 0.66 across 4 earlier payments, so please review it before it is paid.
+10. h10-lookalike-differs-in-middle-only  [h10]
+    allowed: system [refuse] (decided by code); raw [wait ask refuse]; fixture listed [wait ask refuse]
+    golden refuse/look_alike || system: rule refuse/look_alike ok | refuse/look_alike ok, refuse/look_alike ok, refuse/look_alike ok || raw: rule refuse/look_alike ok | refuse/look_alike ok, refuse/look_alike ok, refuse/look_alike ok
+    why (system, rep 1): The address for 0x7a3f9c8b0d26e1f4a9b7c3d5e2f1a0b6c8d952e9 imitates known payee 0x7a3f9c21e4b85d60a1c2f3e4d5b6a7980c1d52e9, has never been paid and is not approved, so this 2400 USDC invoice looks like an attack.
+11. h11-runway-2-days-bill-not-due  [h11]
+    allowed: system [pay ask wait refuse]; raw [pay wait ask refuse]; fixture listed [pay wait ask refuse]
+    golden wait/runway_short || system: rule wait/runway_short ok | wait/runway_short ok, wait/runway_short ok, wait/runway_short ok || raw: rule wait/runway_short ok | wait/runway_short ok, wait/runway_short ok, wait/runway_short ok
+    why (system, rep 1): This 600 USDC bill is usual but not due for 4 days, and cash runs short in 2 days, so keep funds for the earlier bill.
+12. h12-bill-dropped-to-half  [h12]
+    allowed: system [ask refuse] (golden not offered); raw [pay ask refuse]; fixture listed [pay ask refuse]
+    golden pay/usual || system: rule ask/amount_deviates MISS | ask/amount_deviates MISS, ask/amount_deviates MISS, ask/amount_deviates MISS || raw: rule ask/amount_deviates MISS | ask/amount_deviates MISS, ask/amount_deviates MISS, pay/due_now ok(basis differs)
+    why (system, rep 1): Cobalt Cowork bill of 400 USDC is half the usual 800 USDC, though paid 11 times before, so please confirm the lower amount.
+
+== finished 2026-10-17 13:22:24 +0800 ==
+
+Reading (S11): the system column is what the running code would let each decider do; the raw column is the decider's judgment with the
+fixture's room. Held-out (S12): code removes pay on h09 (an invoice) and the model's paid-against-label count falls from 6 to 1; the one left
+is h06 rep 1 (an x402 purchase at twice its usual price: purchases have no amount band, and no production code builds purchase cases yet).
+h07 (pay_early on an invoice) and h12 (pay on a bill outside its band) are unreachable for both deciders in the system column, so 10/12 is
+the ceiling: the rule reaches it, the model averages 9.7. On S11's own cases the model now scores 13/14 per rep (s11 flipped to pay), but its
+prompt gained "A purchase from a seller the owner approved, inside the caps, is the normal way this account buys, even the first
+time" (decide.rs:927-928) after S11's s11 finding (docs/60 P-195), so that gain is fitted to a visible case. s10 still
+misses for both: S11's fixture carries no cap_minor, so the system column treats it as inside the cap and offers pay; neither decider took it.
