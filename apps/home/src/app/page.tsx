@@ -1,6 +1,6 @@
-import { GuestSkeleton } from "../components/skeletons.tsx";
+import { Guest } from "../features/onboarding/guest.tsx";
 
-// `/` the guest: the invite word opens the seeded demo account, read-only (H4 builds it here).
+// `/` the guest: the invite word opens the seeded demo account, read-only, or starts the stepper (H4).
 export default function GuestPage() {
-  return <GuestSkeleton />;
+  return <Guest />;
 }
