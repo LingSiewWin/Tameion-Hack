@@ -2,7 +2,7 @@
 // (src/app/api/[...path]/route.ts), so no CORS and no service URL in the page; on the server they ask the service directly.
 import type { Demo, Inbox, Recall, RecordEvent, Records, Refusal, RefusalError, Status, Tenant } from "./types.ts";
 
-const base = () => (typeof window === "undefined" ? (process.env.TAMEION_URL ?? "http://127.0.0.1:7890") : "");
+const base = () => (typeof window === "undefined" ? (process.env.TAMEION_URL ?? "http://127.0.0.1:7890").replace(/\/+$/, "") : "");
 
 /** A refusal from the service (or from the proxy when the service did not answer), with whether money may have moved. */
 export class ApiError extends Error {
@@ -39,8 +39,8 @@ export const fetchRecords = (policy: string, headers?: HeadersInit) => json<Reco
 export const fetchRecall = (policy: string, ids: string[], root?: string, headers?: HeadersInit) =>
   json<Recall>(`/api/level1/recall?${q({ policy, ids: ids.join(","), root })}`, headers);
 export const fetchDemo = () => json<Demo>("/api/level1/demo");
-/** The tenant as the service keeps it, without keys (the header reads `name`). */
-export const fetchTenant = (policy: string) => json<Tenant>(`/api/level1/tenant/${encodeURIComponent(policy)}`);
+/** The tenant as the service keeps it, without keys (the header reads `name`); the route wraps it as `{ tenant }`. */
+export const fetchTenant = async (policy: string) => (await json<{ tenant: Tenant }>(`/api/level1/tenant/${encodeURIComponent(policy)}`)).tenant;
 
 /** The events behind one anchored root, in order (the route answers NDJSON). */
 export async function fetchRecord(policy: string, root: string, headers?: HeadersInit): Promise<RecordEvent[]> {
