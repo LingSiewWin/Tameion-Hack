@@ -376,13 +376,20 @@ fn the_only_writer_of_events_files_is_audit_persist() {
         .map(|(f, n, _)| format!("{f}:{n}"))
         .collect();
     println!("audit::persist call sites outside tests: {callers:?}");
+    // Two writers, each listed on purpose: the pass (`lib.rs`), and the token
+    // meter's reconciliation record (`meter.rs`, docs/117 §6): our meter against
+    // the provider's own usage report, numbers from code, never a model's text.
+    // A third writer is a decision, not a drift: add it here with its reason.
+    let mut writers: Vec<&str> = callers
+        .iter()
+        .map(|c| c.split(':').next().unwrap())
+        .collect();
+    writers.sort_unstable();
+    writers.dedup();
     assert_eq!(
-        callers
-            .iter()
-            .map(|c| c.split(':').next().unwrap())
-            .collect::<Vec<_>>(),
-        vec!["operator/src/lib.rs"],
-        "persist is called by the pass alone: {callers:?}"
+        writers,
+        vec!["operator/src/lib.rs", "operator/src/meter.rs"],
+        "persist is called by the pass and the meter alone: {callers:?}"
     );
     let writes = [
         "fs::write(",
