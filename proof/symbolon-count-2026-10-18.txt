@@ -1,0 +1,43 @@
+# symbolon_count over runtime/app (seat S20s, branch seat/S20s at 3f94071)
+# started: 2026-10-18 00:09:12 +0800
+# command: TAMEION_RPC_ARC=https://rpc.testnet.arc.io target/debug/examples/symbolon_count /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/app
+# why the override: rpc.testnet.arc.network answers NXDOMAIN from this Mac; rpc.testnet.arc.io answers eth_chainId 0x4cef52 (5042002)
+# witness = the root's anchoring tx read back on its chain (status, sender = agent, to = anchor, root in calldata); counterparty = payee-signed invoice for the paid bill cycle; agent = none exists yet
+# records = settlements, decisions, flow/meter/price checks (deduplicated by leaf); other kinds are not projected
+account                                    records unsigned single double triple  chain
+0x075feefbcce89cc6b4ebae366d00b7ade3e27916      10        0     10      0      0  arc-testnet
+0x08db42e5d8af1cec6640d4e1f52b4b5acf6eee32       2        0      2      0      0  arbitrum-sepolia
+0x1645951793f7ca2ae36d7a3eeae90ef93e1932ab      53        0     53      0      0  arc-testnet
+0x1a5121dbabecd0abb8bc8cdb7916748a9a507b88       4        0      4      0      0  arbitrum-sepolia
+0x1ea18505a2b7be40def78d4b2ad53f2e004ce488       2        0      2      0      0  arc-testnet
+0x224fa9badcffb95fe41f3257cfb4f5e94436991a       2        0      2      0      0  arc-testnet
+0x26e6901e08b9928bbbc7d3523c9102da5e361e53      12        0     12      0      0  arbitrum-sepolia
+0x2ecdabed2b8c48a8ce37fcb56bfee94c4991e8a3       6        0      6      0      0  arc-testnet
+0x35a2e2701d4d72be257bf7708c67d1433c60342f      30        0     30      0      0  arbitrum-sepolia
+0x42463b314d392fe34abe1854b925f0f6e55fa555       2        0      2      0      0  arbitrum-sepolia
+0x48274c7904edb23f75ea607c932d5c441c1a80e3       4        0      4      0      0  arbitrum-sepolia
+0x489dbd3dfc2985a65c9b5d555e2b42986c151661       3        0      3      0      0  arc-testnet
+0x5d74363c6d599b334dfe3e601f576079436a4c37       6        0      6      0      0  arc-testnet
+0x727e659593e183a1a7ba663e2f44075fba8be5f3       5        0      5      0      0  arbitrum-sepolia
+0x74cf5962e9a316a0693afd04c244e6586b1b6be6       4        0      4      0      0  arbitrum-sepolia
+0x7839d74d424dd14ad7147d11bc26745a82ed0df9       8        0      8      0      0  arc-testnet
+0x7bae6c3e651355c0b8bd8810d8dabd9b8e4be6d2       2        0      2      0      0  arbitrum-sepolia
+0x7ebc3894ec793fa6c9225841992001e580da9273      16        0     16      0      0  arbitrum-sepolia
+0x800d8171813bcfff6fccd40bcd90656af6f4665c       0        0      0      0      0  arc-testnet
+0x818e56c043e052f1c7d8dc8c0f239ad6a1b9e58c       2        0      2      0      0  arbitrum-sepolia
+0xa754b69c61f0a0bb7fde565ff99f40fd90787bcd       3        0      3      0      0  arbitrum-sepolia
+0xaafa130bd044ec682df1a8846e0bb4d64f777679       0        0      0      0      0  arbitrum-sepolia
+0xb011f7e71ec90fcc7632e7e1f243853d0221b5b9       2        0      2      0      0  arc-testnet
+0xb19f130d30ab1cf00188bbc749bce1d7005474de       7        0      7      0      0  arc-testnet
+0xb32753851113869778fec66c51c3a13405edcfab       1        0      1      0      0  arbitrum-sepolia
+0xc0111f35f9a8faf4a19ded77c6f457a7afbbbe7c       2        0      2      0      0  arc-testnet
+0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1      14        0     14      0      0  arbitrum-sepolia
+0xf0ae90c66d410dc0cc3bc9e6a667af8c39fb6b85      10        0     10      0      0  arbitrum-sepolia
+0xf1c78d0b940ee10a683e3ba899c5a829890004a8      11        0     11      0      0  arbitrum-sepolia
+0xf69d65413cb255f2c409acd93579c6a58c8d26ae       0        0      0      0      0  arbitrum-sepolia
+0xf799a85496580af9a63c35223443688f8693635d       5        0      5      0      0  arc-testnet
+total                                          228        0    228      0      0
+events files 160: not witnessed 2, chain read failed 0; lines not decodable 0
+payee-signed invoices that verify 13; settlement lines of their bill cycles 0
+# exit: 0
+# finished: 2026-10-18 00:11:00 +0800
