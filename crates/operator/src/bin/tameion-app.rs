@@ -8111,17 +8111,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 // A signed raise whose delay has passed is applied here
                 // (docs/66 route 2, P-49). Anyone may apply; a second
-                // application reverts `NothingPending`, harmlessly. Forgotten
-                // either way: an inbox read relearns one still pending.
-                let due: Vec<String> = {
+                // application reverts `NothingPending`, harmlessly, and is
+                // forgotten. Any other failure is tried again next tick: the
+                // chain's clock runs a few seconds behind ours, so an apply at
+                // the eta can revert `TooEarly`, and with no page open nothing
+                // relearned it (docs/60 P-285: Autopilot never applied).
+                let due: Vec<(String, u64)> = {
                     let now = now_secs();
                     let m = app.due_changes.lock().await;
                     m.iter()
                         .filter(|(_, eta)| **eta <= now)
-                        .map(|(p, _)| p.clone())
+                        .map(|(p, eta)| (p.clone(), *eta))
                         .collect()
                 };
-                for p in due {
+                for (p, eta) in due {
                     app.due_changes.lock().await.remove(&p);
                     let Some(t) = level1::load(&app.dir, &p) else {
                         continue;
@@ -8138,7 +8141,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             println!("watcher: applied the waiting change of {p} in {}", r["tx"]);
                             app.emit(&p, "inbox", json!({ "cause": "change applied" }));
                         }
-                        Err(e) => println!("watcher: applying the waiting change of {p}: {e}"),
+                        Err(e) => {
+                            println!("watcher: applying the waiting change of {p}: {e}");
+                            if !(e.contains("NothingPending") || e.contains("175c1aea")) {
+                                app.due_changes.lock().await.entry(p).or_insert(eta);
+                            }
+                        }
                     }
                 }
                 // Reserved accounts too (PLAN 5.32): money sent to the reserved
