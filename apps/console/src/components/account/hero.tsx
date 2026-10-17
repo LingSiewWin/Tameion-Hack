@@ -162,10 +162,11 @@ function ProtectionLine() {
   );
 }
 
-/** What an agent operator reads instead of a hedge tile (docs/109 §10): the most the agents can still spend now — the
- *  smaller of the cap on one payment, what the contract says is left of the 24-hour cap (`caps.leftNow`, read from
- *  `remainingAllowance`), and what the account holds above the amount kept. An older service does not send `leftNow`:
- *  then "left" subtracts every payment this page lists from the last 24 hours (never higher than the contract's figure).
+/** What an agent operator reads instead of a hedge tile (docs/109 §10): the most the agents can still spend now.
+ *  `caps.leftNow` is the contract's `remainingAllowance`: already the smallest of the cap on one payment, the room left in
+ *  the 24-hour cap and what the account holds above the amount kept — so it is the number, never the day's remainder
+ *  (P-293: after a cut it read "0.002 of 100.00 left today"). The day's remainder is `daily − spent24h`. An older service
+ *  does not send `leftNow`: then the smallest of the three is computed here from the payments this page lists.
  *  On "Asks before paying" the agents pay nothing by themselves (docs/60 P-172 item 8, P-174): the tile says 0 and what
  *  one tap of the owner's can pay. */
 function AgentsCanSpend() {
@@ -177,11 +178,11 @@ function AgentsCanSpend() {
   const since = inbox.readAt ? inbox.readAt / 1000 - 86_400 : 0;
   const spent = inbox.caps.spent24h != null ? num(inbox.caps.spent24h) : inbox.paid.reduce((a, p) => ((p.at ?? 0) >= since ? a + num(p.amount) : a), 0);
   const per = num(inbox.caps.perAction);
-  const left = inbox.caps.leftNow != null ? num(inbox.caps.leftNow) : Math.max(0, num(inbox.caps.daily) - spent);
+  const dayLeft = Math.max(0, num(inbox.caps.daily) - spent);
   const above = Math.max(0, num(inbox.balance) - num(inbox.caps.floor));
-  const can = Math.min(per, left, above);
-  const day = `${usd(left.toFixed(6))} of the ${usd(inbox.caps.daily)} a day is left, ${usd(spent.toFixed(6))} spent in the last 24 hours`;
-  const why = above < Math.min(per, left) ? `all the account holds above the ${usd(inbox.caps.floor)} USDC you keep` : left < per ? day : `the cap on one payment; ${day}`;
+  const can = inbox.caps.leftNow != null ? Math.min(num(inbox.caps.leftNow), per, dayLeft, above) : Math.min(per, dayLeft, above);
+  const day = `${usd(dayLeft.toFixed(6))} of the ${usd(inbox.caps.daily)} a day is left, ${usd(spent.toFixed(6))} spent in the last 24 hours`;
+  const why = above < Math.min(per, dayLeft) ? `all the account holds above the ${usd(inbox.caps.floor)} USDC you keep` : dayLeft < per ? day : `the cap on one payment; ${day}`;
   if (inbox.mode !== "Autopilot")
     return <Stat label={label} value="0.00" sub={`USDC by themselves: on Asks before paying each payment waits for your tap; one tap pays up to ${usd(can.toFixed(6))} — ${why}.`} />;
   return <Stat label={label} value={usd(can.toFixed(6))} sub={`USDC: ${why}`} />;

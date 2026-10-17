@@ -531,9 +531,11 @@ function Finish({ d, paid, all, saved }: { d: Demo; paid: Paid[]; all: number; s
   const https = (h?: string) => (h?.startsWith("https://") ? h : undefined);
   const caps = inbox!.caps;
   const per = num(caps.perAction);
-  const left = caps.leftNow != null ? num(caps.leftNow) : num(caps.daily);
+  // The day's remainder is daily − spent24h; `leftNow` (the contract's remainingAllowance) is already the smallest of the
+  // cap on one payment, that remainder and the balance above the floor, so it only ever lowers "can" (P-293).
+  const dayLeft = Math.max(0, num(caps.daily) - (caps.spent24h != null ? num(caps.spent24h) : 0));
   const above = Math.max(0, num(inbox!.balance) - num(caps.floor));
-  const can = inbox!.mode === "Autopilot" ? Math.min(per, left, above) : 0;
+  const can = inbox!.mode === "Autopilot" ? Math.min(per, dayLeft, above, caps.leftNow != null ? num(caps.leftNow) : Infinity) : 0;
   const total = paid.reduce((s, p) => s + num(p.amount), 0);
   return (
     <div className="space-y-4">
@@ -544,7 +546,7 @@ function Finish({ d, paid, all, saved }: { d: Demo; paid: Paid[]; all: number; s
           : "The agent asked you before paying, and your one tap paid; the limits held the whole time."}
       </p>
       <Stats>
-        <Stat label="Agents can spend now" value={usd(can.toFixed(6))} sub={`USDC in one payment; ${usd(left.toFixed(6))} of ${usd(caps.daily)} left today`} />
+        <Stat label="Agents can spend now" value={usd(can.toFixed(6))} sub={`USDC in one payment; ${usd(dayLeft.toFixed(6))} of ${usd(caps.daily)} left today`} />
         <Stat label="Paid by the agent" value={usd(total.toFixed(6))} sub={`USDC to Demo Vendor, ${paid.length} payment${paid.length === 1 ? "" : "s"}`} />
         <Stat label="Paid with no human" value={String(paid.length)} sub={`of ${all} bill${all === 1 ? "" : "s"} paid, ${usd(d.bill.usdc)} USDC each; ${all - paid.length} by your tap`} />
       </Stats>
