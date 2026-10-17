@@ -1,0 +1,28 @@
+H5 add money: proof of a real CCTP V2 move made by the page, read back 2026-10-17T23:13:24.331Z
+Page: http://localhost:3014/a/h5-arc-0641/add (lane service 127.0.0.1:7890). Wallet: a local EIP-1193 test signer (fresh testnet key, never printed) in place of MetaMask; the page made every call.
+
+approve on Arbitrum Sepolia: 0x9475f8fe71419779d5a1fa3c85a45d99b6151ee52b82bf875e24d98ab72f9a9a
+  https://sepolia.arbiscan.io/tx/0x9475f8fe71419779d5a1fa3c85a45d99b6151ee52b82bf875e24d98ab72f9a9a
+  status success, block 320215887, 2026-10-17T22:52:39.000Z, from 0xd7cb3922f3a6aab6f8977895e23970aeeea2052a to 0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d
+  approve(0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA, 250000)
+
+depositForBurn on Arbitrum Sepolia: 0x23c65d4eceb0a8a4d126f91e216595d220a810a819a716dd1e864f7159a13e90
+  https://sepolia.arbiscan.io/tx/0x23c65d4eceb0a8a4d126f91e216595d220a810a819a716dd1e864f7159a13e90
+  status success, block 320215900, 2026-10-17T22:52:42.000Z, from 0xd7cb3922f3a6aab6f8977895e23970aeeea2052a to 0x8fe6b999dc680ccfdd5bf7eb0974218be2542daa
+  depositForBurn(250000, 26, 0x000000000000000000000000b8064c0325b0679f219665f55e24f1de1fd369fa, 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d, 0x0000000000000000000000000000000000000000000000000000000000000000, 0, 2000)
+
+Circle (sandbox) GET https://iris-api-sandbox.circle.com/v2/messages/3?transactionHash=0x23c65d4eceb0a8a4d126f91e216595d220a810a819a716dd1e864f7159a13e90
+  status complete, cctpVersion 2, minFinalityThreshold 2000, finalityThresholdExecuted 2000, delayReason null
+  (at 2026-10-18 06:57 and 07:02 +08 the same call answered status pending_confirmations, attestation PENDING; complete by 07:10)
+  the page reads: state signed, source 3 -> destination 26, mintRecipient 0xB8064C0325b0679f219665f55e24F1De1FD369fA, amount 250000 (0.25 USDC), fee 0, nonce 0x65233b819b9d792bc1cd6c3ab2784631aabf5c9c397b2fefb369bc09a27d9a2d
+  message 376 bytes, attestation 130 bytes
+
+Arc testnet MessageTransmitterV2 0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275 usedNonces(nonce) = 0 (0: not minted yet)
+Simulated, NOT sent: eth_call receiveMessage(message, attestation) on Arc from the mover returns 0x0000000000000000000000000000000000000000000000000000000000000001
+  estimateGas 188969 at gas price 25000000000 wei = 0.004724225 USDC; the mover holds 0 USDC on Arc. The mint is framed until Arc gas arrives.
+
+Demo funding as the faucet plate reads it (USDC Transfer relayer -> h5-add-money-0618 after created_block 320208324): tx 0x319738499656f62644fbd31ae648a01c687e0241fe01b663bfc4c76e9ebcdbf1, 0.05 USDC, 2026-10-17T22:19:01.000Z (the deploy reply named the same tx).
+signer log (no key):
+2026-10-17T22:50:18.500Z listening for 0xD7cb3922f3A6Aab6F8977895E23970aEEEa2052a
+2026-10-17T22:52:39.826Z sent 0x9475f8fe71419779d5a1fa3c85a45d99b6151ee52b82bf875e24d98ab72f9a9a on Arbitrum Sepolia to 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d selector 0x095ea7b3
+2026-10-17T22:52:43.197Z sent 0x23c65d4eceb0a8a4d126f91e216595d220a810a819a716dd1e864f7159a13e90 on Arbitrum Sepolia to 0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA selector 0x8e0250ee
