@@ -255,6 +255,27 @@ pub fn unanchored(dir: &Path) -> io::Result<Vec<(Hash32, usize)>> {
     Ok(out.into_iter().map(|(_, r, n)| (r, n)).collect())
 }
 
+/// The account's book across every pass: the money events of every events
+/// file in `dir`, read back from their canonical bytes, each once, oldest
+/// first (`ledger::momentum::book`). Empty when nothing was recorded yet; a
+/// file that does not read is left out and said on stderr.
+pub fn book(dir: &Path) -> Vec<ledger::Event> {
+    let Ok(rd) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut records = Vec::new();
+    for p in rd.filter_map(|e| e.ok().map(|e| e.path())) {
+        if root_from_filename(&p).is_none() {
+            continue;
+        }
+        match load(&p) {
+            Ok(lines) => records.extend(lines.into_iter().map(|l| l.canonical)),
+            Err(e) => eprintln!("audit: {} left out of the book: {e}", p.display()),
+        }
+    }
+    ledger::momentum::book(records)
+}
+
 /// Every anchor line whose `root` is `root`.
 pub fn anchors_for(dir: &Path, root: Hash32) -> io::Result<Vec<Value>> {
     let want = root.to_hex();
