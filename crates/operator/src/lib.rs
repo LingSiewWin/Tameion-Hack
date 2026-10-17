@@ -60,6 +60,7 @@ pub mod push;
 pub mod reasoner;
 pub mod recall;
 pub mod refusal;
+pub mod sig;
 pub mod statement;
 pub mod watch;
 pub mod x402;

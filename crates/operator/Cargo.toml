@@ -36,6 +36,11 @@ icu_normalizer = "2.3"
 icu_properties = "2.3"
 serde.workspace = true
 serde_json.workspace = true
+# FIPS 204 ML-DSA-65 verification for invoices a payee signs with a post-quantum
+# key (docs/117 §2). RustCrypto, pure Rust, not independently audited; checked
+# against NIST's ACVP vectors in tests/ml_dsa_acvp.rs. `alloc` boxes the large
+# key matrices instead of putting them on the stack.
+ml-dsa = { version = "0.1.1", default-features = false, features = ["alloc"] }
 
 [features]
 # For examples that build history on a test chain.
