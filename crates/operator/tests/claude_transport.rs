@@ -78,8 +78,10 @@ async fn stub(status: u16, body: String) -> (String, Arc<Mutex<Option<String>>>)
         *sink.lock().unwrap() = Some(String::from_utf8_lossy(&req).to_string());
 
         let reason = if status == 200 { "OK" } else { "Error" };
+        // `request-id` as the API sends it on every reply (api/errors, "Request ID").
         let resp = format!(
             "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\n\
+             request-id: req_stub_01\r\n\
              Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
             body.len()
         );
@@ -223,4 +225,62 @@ async fn an_invented_payee_over_the_wire_is_still_refused() {
         .await
         .unwrap_err();
     assert!(matches!(err, ReasonerError::WrongPopulation));
+}
+
+#[tokio::test]
+async fn each_reply_is_metered_with_its_usage_and_request_id() {
+    // docs/117 §6: the reply's `usage` and `request-id` reach the meter, the
+    // key does not (only its first 16 characters, Anthropic's own hint).
+    use std::os::unix::fs::PermissionsExt;
+    let obs = vec![
+        obligation("0xaaa", -2, 1_000_000),
+        obligation("0xbbb", 4, 2_000_000),
+    ];
+    let keys: Vec<String> = obs.iter().map(|o| o.cycle_key()).collect();
+    let mut reply: serde_json::Value =
+        serde_json::from_str(&ok_body(&[keys[0].as_str(), keys[1].as_str()])).unwrap();
+    reply["model"] = "claude-opus-5".into();
+    reply["usage"] = serde_json::json!({
+        "input_tokens": 812, "output_tokens": 97,
+        "cache_creation_input_tokens": 0, "cache_read_input_tokens": 64,
+        "cache_creation": { "ephemeral_5m_input_tokens": 0, "ephemeral_1h_input_tokens": 0 }
+    });
+    let (url, _seen) = stub(200, reply.to_string()).await;
+    let dir = std::env::temp_dir().join(format!("tameion-meter-wire-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let meter = dir.join("meter.jsonl");
+
+    let key = "sk-ant-api03-R2D.not-a-real-key";
+    ClaudeReasoner::new(Auth::ApiKey(key.into()))
+        .with_url(url)
+        .with_meter(meter.clone(), "order")
+        .prioritise(&obs, Money::minor(3_000_000, Currency::Usdc), NOW)
+        .await
+        .unwrap();
+
+    let lines = operator::meter::read(&meter).unwrap();
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    let l = &lines[0];
+    assert_eq!(
+        (
+            l.model.as_str(),
+            l.uncached_in,
+            l.cache_read,
+            l.cache_create,
+            l.out
+        ),
+        ("claude-opus-5", 812, 64, 0, 97)
+    );
+    assert_eq!(l.request_id.as_deref(), Some("req_stub_01"));
+    assert_eq!(
+        (l.key_hint.as_str(), l.purpose.as_str()),
+        ("sk-ant-api03-R2D", "order")
+    );
+    let text = std::fs::read_to_string(&meter).unwrap();
+    assert!(!text.contains(key), "the key never reaches the meter");
+    assert_eq!(
+        std::fs::metadata(&meter).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }

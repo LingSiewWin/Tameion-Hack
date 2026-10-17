@@ -49,7 +49,7 @@ const DAY: i64 = 86_400;
 
 // ---- ISO weeks, proleptic Gregorian, UTC (Howard Hinnant's day algorithms) ----
 
-fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
+pub(crate) fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
     let y = if m <= 2 { y - 1 } else { y };
     let era = if y >= 0 { y } else { y - 399 } / 400;
     let yoe = y - era * 400;

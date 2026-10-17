@@ -40,8 +40,18 @@ pub const MODEL: &str = "claude-opus-5";
 /// what the prompt asks for; this is the enforcement.
 pub const MAX_RATIONALE_CHARS: usize = 280;
 
-const API_URL: &str = "https://api.anthropic.com/v1/messages";
-const API_VERSION: &str = "2023-06-01";
+const API_BASE: &str = "https://api.anthropic.com";
+pub(crate) const API_VERSION: &str = "2023-06-01";
+
+/// `ANTHROPIC_BASE_URL` (the SDKs' own variable) for a proxy, a gateway, or a
+/// deliberately dead port to rehearse an outage; the API itself otherwise.
+pub fn base_url() -> String {
+    std::env::var("ANTHROPIC_BASE_URL")
+        .ok()
+        .map(|b| b.trim().trim_end_matches('/').to_string())
+        .filter(|b| !b.is_empty())
+        .unwrap_or_else(|| API_BASE.to_string())
+}
 
 /// How the request authenticates.
 #[derive(Clone)]
@@ -69,6 +79,16 @@ impl Auth {
             return Some(Auth::Bearer(t));
         }
         None
+    }
+
+    /// What the meter keeps of the credential: an API key's first
+    /// [`crate::meter::HINT_LEN`] characters (the start of Anthropic's own key
+    /// hint), and nothing of an OAuth token.
+    pub fn hint(&self) -> String {
+        match self {
+            Auth::ApiKey(k) => k.chars().take(crate::meter::HINT_LEN).collect(),
+            Auth::Bearer(_) => "oauth".to_string(),
+        }
     }
 }
 
@@ -117,6 +137,9 @@ pub struct ClaudeReasoner {
     /// [`MODEL`] unless a caller pins another in code ([`ClaudeReasoner::with_model`]);
     /// never from the environment, for the reason [`MODEL`] gives.
     model: &'static str,
+    /// Where each reply's token usage goes (`crate::meter`); none unless a
+    /// caller names a file.
+    meter: Option<crate::meter::Meter>,
 }
 
 impl ClaudeReasoner {
@@ -125,18 +148,12 @@ impl ClaudeReasoner {
             http: reqwest::Client::new(),
             auth,
             effort: Effort::Medium,
-            // `ANTHROPIC_BASE_URL` (the SDKs' own variable) for a proxy, a
-            // gateway, or a deliberately dead port to rehearse an outage.
-            url: std::env::var("ANTHROPIC_BASE_URL")
-                .ok()
-                .map(|b| b.trim().trim_end_matches('/').to_string())
-                .filter(|b| !b.is_empty())
-                .map(|b| format!("{b}/v1/messages"))
-                .unwrap_or_else(|| API_URL.to_string()),
+            url: format!("{}/v1/messages", base_url()),
             workspace: std::env::var("ANTHROPIC_WORKSPACE_ID")
                 .ok()
                 .filter(|w| !w.trim().is_empty()),
             model: MODEL,
+            meter: None,
         }
     }
 
@@ -160,6 +177,13 @@ impl ClaudeReasoner {
 
     pub fn with_effort(mut self, effort: Effort) -> Self {
         self.effort = effort;
+        self
+    }
+
+    /// Append each successful reply's `usage` to `path` as `purpose`
+    /// (`crate::meter`), so our count can be held against Anthropic's report.
+    pub fn with_meter(mut self, path: std::path::PathBuf, purpose: &'static str) -> Self {
+        self.meter = Some(crate::meter::Meter { path, purpose });
         self
     }
 
@@ -236,6 +260,11 @@ impl ClaudeReasoner {
             .map_err(|e| ReasonerError::Transient(format!("request failed: {e}")))?;
 
         let status = resp.status();
+        let request_id = resp
+            .headers()
+            .get("request-id")
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string);
         let raw = resp
             .text()
             .await
@@ -249,6 +278,11 @@ impl ClaudeReasoner {
             return Err(classify_status(status.as_u16(), detail));
         }
 
+        // Metered before the reply is read: a refusal or a truncated reply is
+        // billed all the same.
+        if let Some(m) = &self.meter {
+            m.record(&raw, self.model, self.auth.hint(), request_id);
+        }
         extract_text(&raw)
     }
 }

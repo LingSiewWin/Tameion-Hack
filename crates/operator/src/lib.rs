@@ -52,6 +52,7 @@ pub mod invoice;
 pub mod level1;
 pub mod local;
 pub mod mcp;
+pub mod meter;
 pub mod parties;
 pub mod pay;
 pub mod price;
