@@ -1,0 +1,47 @@
+# Fix wave 3 (money path), S3 seat — written 2026-10-17 13:27:15 +0800
+Reviewer findings: docs/103 'Wave 2 money path (S6c)', proof/review-wave2-money-path-2026-10-17.txt. Ids only; no key printed.
+
+## P-210 / P-213: uat-u2-fin's next pass, read only (cargo run -p operator --example plan_tenant -- runtime/app 0x48274c7904edb23f75ea607c932d5c441c1a80e3, 13:26:40)
+The account: Propose, typed bill 0.05 USDC / 30 d to 0x179dca89f69faef5765d2e7445aa5452b8159520, typed next_due 1792156029; its one cycle paid twice by the owner under two passes' hashes (0x85dc…1969, 0xd160…44f7).
+The plan reads the same configuration and the same obligations_due a pass acts on (the pass pays or asks only for 'due'); it sends nothing:
+{
+  "aside": [],
+  "due": [],
+  "head": 319979051,
+  "now": 1792214806,
+  "obligations": [
+    { "amount": "0.050000 USDC", "cycleKey": "0x179dca89f69faef5765d2e7445aa5452b8159520@1794748029", "intervalSecs": 2592000, "nextDue": 1794748029 }
+  ],
+  "offeredReferences": 5,
+  "policy": "0x48274c7904edb23f75ea607c932d5c441c1a80e3"
+}
+=> nothing due now; the bill steps to the cycle due 1794748029 (a month after 1792156029), no bill set aside, and the plan does not fail.
+   (Before: every pass failed — job 6ad3014c-0004 at 1792213324 and 6ad30268-0005 at 1792213608, 'the chain records …@1797340029 as settled, which is further ahead than any pass could have paid it'.)
+
+## P-210: the waiting ask on the page, my instance :7903 (this build) against :7880 (the PM's, 00:57 build), read only, 2026-10-17 13:46:31 +0800
+Both read the same last finished pass of uat-u2-fin (6ad2328f-0011, 22:20, pre-fix); its row is cycle …@1792156029 under 0x8e14…/0xf39a…, which no payment used.
+:7880 old build: needsYou 1 ['0x179dca89f69faef5765d2e7445aa5452b8159520@1792156029']; standingOrderCandidates nextDue [1792156029]
+:7903 this build: needsYou 0 []; standingOrderCandidates nextDue [1794748029]
+=> on this build the paid cycle's ask is withdrawn at once (the cycle was paid under two other passes' references, 0x85dc…1969 and 0xd160…44f7), and 'Make it standing' offers the next unpaid cycle.
+
+## P-211: 'Make it standing' on uat-u2-fin, my instance :7903 (prepare only: calldata, nothing signed or sent)
+firstDue 1792156029 (the typed date, the cycle paid twice) -> 409 {"error": "the bill-cycle due 1792156029 (unix) is already paid; this bill's next unpaid cycle is due 1794748029. Start the order then, or it pays a cycle twice", "nextUnpaid": 1794748029}
+firstDue 1794748029 -> 200 addSchedule calldata (0x8d938516…), 'first on unix 1794748029'
+The pass: payDue only on Autopilot and never for a bill-cycle already paid (unit test lib.rs a_standing_order_pays_only_on_autopilot_and_only_an_unpaid_cycle); POST /api/level1/pay-due refuses the same (409). Not run on chain: uat-u2-fin has no standing order.
+
+## P-212: a locked account's record (uat-u1-acme 0x42463b314d392fe34abe1854b925f0f6e55fa555, agent keys), my instance :7903, 13:45:59
+GET records (no key) 200; newest root 0x79c9396d808f57d31ab1d644d4702e1ac7699223a8e624823a86606fc7030d73
+GET record (no key) 200, 2 lines, first: {"leaf":"0xfe5c4f0f36fd8ca8e6f9878f746eb9075511861936fce357b1564e80b75fb7b5","seq":0}; lines naming canonical / x402 / Holding: 0
+GET record (its read key) 200, 2 lines with the events (canonical: 2)
+The page's own check (apps/console/src/lib/verify.ts rootOfEvents) on both answers:
+  rebuilt from leaves: 0x79c9396d808f57d31ab1d644d4702e1ac7699223a8e624823a86606fc7030d73 2 | from events: 0x79c9396d808f57d31ab1d644d4702e1ac7699223a8e624823a86606fc7030d73 2 | anchored name: 0x79c9396d808f57d31ab1d644d4702e1ac7699223a8e624823a86606fc7030d73 | MATCH: true
+
+## P-214 and P-217: x402 (tests only; a live purchase needs an Autopilot account's money — not run), 2026-10-17 13:50:51 +0800
+x402::tests::two_concurrent_buys_from_one_seller_sign_once: three concurrent calls through one_signature_per_seller (the step x402::buy now runs), each with a 150 ms chain round trip: one seller twice -> one signed, the other refused 'an earlier purchase from this seller can still be redeemed …'; another seller -> signed. ok
+x402::tests::a_purchase_far_above_its_usual_price_asks_the_owner: no history -> no band (pay allowed); usual = median of the last five paid = 1000; 1250 -> pay allowed; 2000 -> allowed [ask, refuse] (decide::allowed_for_bill on Review); the owner's approval passes 2000 once, not 2001. ok
+tameion-app settle_key_tests::a_priced_out_purchase_waits_until_a_later_purchase_answers_it: one row per seller, until a later paid purchase, for a day. ok
+
+## Gate
+cargo fmt -p operator --check: clean. cargo clippy -p operator --lib --tests --bins --examples -D warnings: clean.
+cargo test -p operator: lib 176, tameion-app 14, tameion-mcp 1, app_http 13, claude_transport 4, decide_eval 3, hedge_advice 4, mcp_stdio 2 — all passed, 0 failed.
+apps/console: tsc --noEmit clean; eslint (verify.ts, test/verify.test.mts) clean; node --test test/*.mts: 58 pass, 0 fail.
