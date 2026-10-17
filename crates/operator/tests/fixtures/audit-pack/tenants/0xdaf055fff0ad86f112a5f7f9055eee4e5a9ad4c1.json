@@ -1,0 +1,12 @@
+{
+ "chain": "arbitrum-sepolia",
+ "policy": "0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1",
+ "name": "uat2-u1-rc",
+ "created_block": 319995525,
+ "policy_tx": "0xe85ca2b0375de5ae21a991ee63963bfc423b4c45cd441b4d74b60b1f4d41bc65",
+ "watched": "0x0000000000000000000000000000000000000000",
+ "wallets": [
+  "0x3c559e1152b109323eb70ad0fcf6d4e7aa9210f5"
+ ],
+ "contacts": []
+}
