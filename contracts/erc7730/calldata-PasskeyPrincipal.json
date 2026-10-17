@@ -201,6 +201,75 @@
             }
           }
         ]
+      },
+      "proposeVerifier(bytes32 algId,address verifier,bytes key)": {
+        "intent": "Propose moving this account to another signature algorithm: the verifier contract and the new key apply after the recovery delay unless cancelled; a retired algorithm can never be proposed again",
+        "fields": [
+          {
+            "path": "algId",
+            "label": "Algorithm id",
+            "format": "raw"
+          },
+          {
+            "path": "verifier",
+            "label": "Verifier contract",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "contract"
+              ]
+            }
+          },
+          {
+            "path": "key",
+            "label": "New key (algorithm-specific encoding)",
+            "format": "raw"
+          }
+        ]
+      },
+      "cancelVerifier()": {
+        "intent": "Cancel the proposed algorithm change before its delay ends",
+        "fields": []
+      },
+      "applyVerifier()": {
+        "intent": "Apply the proposed algorithm change after its delay: the previous algorithm is retired for good",
+        "fields": []
+      },
+      "executeSigned(address target,uint256 value,bytes data,bytes sig)": {
+        "intent": "Relay a call the owner's current (non-passkey) key signed over target, value, data and the nonce; refused unless that algorithm is active",
+        "fields": [
+          {
+            "path": "target",
+            "label": "Contract called",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "contract"
+              ]
+            }
+          },
+          {
+            "path": "value",
+            "label": "USDC sent along",
+            "format": "tokenAmount",
+            "params": {
+              "token": "0x3600000000000000000000000000000000000000"
+            }
+          },
+          {
+            "path": "data",
+            "label": "The call",
+            "format": "calldata",
+            "params": {
+              "calleePath": "target"
+            }
+          },
+          {
+            "path": "sig",
+            "label": "Signature (algorithm-specific)",
+            "format": "raw"
+          }
+        ]
       }
     }
   }
