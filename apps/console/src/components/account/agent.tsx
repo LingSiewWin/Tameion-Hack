@@ -6,9 +6,10 @@ import { Section, Why } from "@/components/layout/section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { build, minor } from "@/lib/guard";
-import { ApiError, dateText, everyText, fetchInbox, inText, raw, sentence, usd } from "@/lib/tameion";
+import { ApiError, dateText, everyText, fetchInbox, inText, num, raw, sentence, usd } from "@/lib/tameion";
 import type { Inbox } from "@/lib/types";
 import { Receipt, useAccount, useAction } from "./ctx";
+import { useKeysGate } from "./keys-nag";
 import { Payee } from "./payee";
 
 export const modeWords = (m?: string) => (m === "Watch" ? "Paused" : m === "Autopilot" ? "Autopilot" : "Asks before paying");
@@ -17,6 +18,8 @@ export function AgentControls() {
   const { inbox, tenant, cfg, sign, post, refresh, owns } = useAccount();
   const auto = useAction();
   const pause = useAction();
+  // P-202: a trust-widening tap first says what one key means, and lets the owner go on.
+  const keys = useKeysGate(tenant);
   if (!inbox) return null;
   // One raise waits at a time (autopilot, resume, a higher limit): while it
   // does, the owner's one tap is to cancel it. The account page applies it
@@ -81,6 +84,7 @@ export function AgentControls() {
               disabled={state.kind === "working"}
               onClick={() =>
                 auto.run("Asking…", async () => {
+                  if (!(await keys.gate("turn Autopilot on, so the agent pays approved payees by itself inside your limits"))) throw new Error("cancelled");
                   const prep = await post<{ to: string; data: string }>("/api/level1/prepare-mode", { policy: tenant.policy, mode: 2 });
                   const ex = await sign(prep.to, prep.data, { fn: ["setMode"], data: build("setMode", [2]) });
                   refresh();
@@ -125,6 +129,7 @@ export function AgentControls() {
         <Why>Raising autonomy waits the delay, and you can cancel it until then. Lowering or pausing never waits.</Why>
       </p>
       <Identity />
+      {keys.dialog}
     </Section>
   );
 }
@@ -170,6 +175,7 @@ export function Suggestions() {
   const renew = useAction();
   const autoRec = useAction();
   const so = useAction();
+  const keys = useKeysGate(tenant);
   if (!inbox) return null;
   const sg = inbox.suggestedLimit;
   const aa = inbox.agentAuthority;
@@ -229,6 +235,9 @@ export function Suggestions() {
                   disabled={limit.state.kind === "working"}
                   onClick={() =>
                     limit.run("Setting…", async () => {
+                      const raising =
+                        num(sg.daily) > num(inbox.caps.daily) || num(sg.perAction) > num(inbox.caps.perAction) || num(sg.floor ?? inbox.caps.floor) < num(inbox.caps.floor);
+                      if (raising && !(await keys.gate(`raise the daily limit to ${usd(sg.daily)} USDC`))) throw new Error("cancelled");
                       const prep = await post<{ to: string; data: string }>("/api/level1/prepare-limits", {
                         policy: tenant.policy,
                         perAction: raw(sg.perAction),
@@ -264,6 +273,7 @@ export function Suggestions() {
                   disabled={autoRec.state.kind === "working"}
                   onClick={() =>
                     autoRec.run("Asking…", async () => {
+                      if (!(await keys.gate("turn Autopilot on, so the agent pays approved payees by itself inside your limits"))) throw new Error("cancelled");
                       const prep = await post<{ to: string; data: string }>("/api/level1/prepare-mode", { policy: tenant.policy, mode: 2 });
                       const ex = await sign(prep.to, prep.data, { fn: ["setMode"], data: build("setMode", [2]) });
                       refresh();
@@ -336,6 +346,7 @@ export function Suggestions() {
         ))}
         {so.state.kind !== "idle" && <li className="px-4 pb-4 sm:px-5">{out(so.state)}</li>}
       </ul>
+      {keys.dialog}
     </Section>
   );
 }

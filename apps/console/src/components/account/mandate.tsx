@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { build, minor } from "@/lib/guard";
 import { num, raw, usd } from "@/lib/tameion";
 import { Receipt, useAccount, useAction } from "./ctx";
+import { useKeysGate } from "./keys-nag";
 
 /** The outcome the owner signs, in the owner's voice, filled from real values
  *  (docs/73 T1). `mode` undefined is the sentence signed at Start; on the
@@ -68,6 +69,7 @@ function LimitsDialog({ onClose }: { onClose: () => void }) {
   const [daily, setDaily] = useState(raw(caps.daily));
   const [per, setPer] = useState(raw(caps.perAction));
   const raising = num(daily) > num(caps.daily) || num(per) > num(caps.perAction);
+  const keys = useKeysGate(tenant);
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
@@ -98,6 +100,7 @@ function LimitsDialog({ onClose }: { onClose: () => void }) {
             disabled={state.kind === "working" || !(num(daily) > 0) || !(num(per) > 0) || num(per) > num(daily)}
             onClick={() =>
               run("Signing…", async () => {
+                if (raising && !(await keys.gate(`raise the limits to ${usd(per)} USDC a payment and ${usd(daily)} USDC a day`))) throw new Error("cancelled");
                 let data: ReturnType<typeof build>;
                 try {
                   data = build("setLimits", [minor(per), minor(daily), minor(caps.floor)]);
@@ -122,6 +125,7 @@ function LimitsDialog({ onClose }: { onClose: () => void }) {
             {state.kind === "working" ? state.label : "Sign with my passkey"}
           </Button>
         </DialogFooter>
+        {keys.dialog}
       </DialogContent>
     </Dialog>
   );

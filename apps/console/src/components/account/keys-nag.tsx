@@ -68,9 +68,9 @@ export function useKeysGate(tenant: Pick<Tenant, "chain" | "owner">) {
             <p>You are about to {what}.</p>
             <p className="mt-2">
               {k
-                ? "One key signs for this account today. If it is lost, nobody can replace it, and what you approve now stays approved."
-                : "This page could not check whether two guardians can replace your key."}{" "}
-              Add two guardians first — your email wallet and a hardware wallet — or go on.
+                ? "Add two guardians first: if you lose this device you cannot get the account back, and what you approve now stays approved. Your email wallet and a hardware wallet can be the two."
+                : "This page could not check whether two guardians can replace your key. Add two guardians first — your email wallet and a hardware wallet."}{" "}
+              Or go on.
             </p>
           </>
         ),

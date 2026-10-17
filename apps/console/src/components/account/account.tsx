@@ -26,6 +26,7 @@ import { Activity } from "./activity";
 import { AgentControls, Suggestions } from "./agent";
 import { AccountProvider, makeCtx, useBusy, useInvalidate, useRecord } from "./ctx";
 import { Hero, Status } from "./hero";
+import { KeysNag } from "./keys-nag";
 import { AccountMandate } from "./mandate";
 import { Money } from "./money";
 import { NeedsYou } from "./needs";
@@ -195,6 +196,16 @@ export function Account({ tenant, cfg, onSwitch, onNew }: { tenant: Tenant; cfg:
                 Read-only. This browser holds no owner key of this account, so nothing here can be paid, funded or approved from it. If it is yours, open it on the
                 device where you made it, or ask to join from Settings and approve this device there.
               </p>
+            )}
+            {/* P-202: "1 of 3 keys set" on the page, not only inside Settings → Owners. */}
+            {owns && (
+              <KeysNag
+                tenant={tenant}
+                onAdd={() => {
+                  setSettingsTab("owners");
+                  setSettingsOpen(true);
+                }}
+              />
             )}
             <AccountMandate />
             <Hero />
