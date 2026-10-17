@@ -10,6 +10,7 @@ import { billsChallenge, build, minor, PAYEES } from "@/lib/guard";
 import { clock, cutOf, nextDue, raiseOf, STEPS, stepOf, type Caps } from "@/lib/judge";
 import { ago, everyText, fetchDemo, getJson, noAddr, num, passkeyAssert, raw, reserveToken, saveName, short, store, usd } from "@/lib/tameion";
 import type { Demo, Paid, Tenant } from "@/lib/types";
+import type { AnchoredRecord } from "@/lib/verify";
 import { cn } from "@/lib/utils";
 import { Receipt, useAccount, useAction, type AccountCtx } from "./ctx";
 import { keysReady, keysSet, useKeys } from "@/lib/keys";
@@ -575,6 +576,12 @@ function Payments({ paid, next }: { paid: Paid[]; next: number | null }) {
     },
     staleTime: 30_000,
   });
+  // Each pass anchors its own record: a line's root is on chain when the account's anchored records list it.
+  const records = useQuery({
+    queryKey: ["records", tenant.policy, paid.length],
+    queryFn: () => getJson<{ records: AnchoredRecord[] }>(`/api/level1/records?policy=${tenant.policy}`, tenant.policy),
+    staleTime: 30_000,
+  });
   return (
     <div className="mt-5 border-t pt-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -584,9 +591,12 @@ function Payments({ paid, next }: { paid: Paid[]; next: number | null }) {
       <ol className="mt-2 divide-y">
         {paid.slice(0, 6).map((p, i) => {
           const line = book.data?.lines.find((l) => l.kind === "paid" && !!p.tx && l.tx?.toLowerCase() === p.tx.toLowerCase());
-          const anchored = line && book.data?.record.root === line.root ? book.data.record.anchorTx : null;
+          const anchored = line?.root
+            ? (records.data?.records.find((r) => r.root.toLowerCase() === line.root.toLowerCase())?.anchorTx ??
+              (book.data?.record.root === line.root ? book.data.record.anchorTx : null))
+            : null;
           return (
-            <li key={(p.tx ?? "") + i} className="space-y-1 py-3 text-sm">
+            <li key={(p.tx ?? "") + i} className="space-y-1 py-3 text-sm [overflow-wrap:anywhere]">
               <p className="flex flex-wrap items-baseline gap-x-2">
                 <span className="figures font-semibold">{usd(p.amount)} USDC</span>
                 <span>

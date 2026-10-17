@@ -308,7 +308,7 @@ function AccountMenu({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="max-w-[46vw] gap-1.5 sm:max-w-xs">
+          <Button variant="ghost" className="max-w-[40vw] gap-1.5 sm:max-w-xs">
             <span className="truncate">{name || `Account ••${tail(tenant.policy)}`}</span>
             <ChevronsUpDown className="size-3.5 opacity-60" />
           </Button>
