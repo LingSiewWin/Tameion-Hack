@@ -59,7 +59,7 @@ sys.exit(0 if ok else 1)' "$ADDR" "$wei" "$usdc" "$NEED_WEI" "$NEED_USDC"
 }
 
 if [ "${1:-}" = relayer ]; then
-  relayer || true
+  relayer   # exit 1 when unfunded (set -e); scripts/deploy_railway.sh reuses this check
   exit 0
 fi
 

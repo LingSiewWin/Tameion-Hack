@@ -1,0 +1,14 @@
+# Dropped from the `railway up` upload (scripts/deploy_railway.sh). .gitignore, .git and node_modules are dropped
+# by default; the image build then applies .dockerignore. This list only keeps the upload small and key-free.
+contracts/lib/
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+proof/*.png
+apps/desk-se/
+.playwright-mcp/
+*.key
+*.pem
+*.token
+*.blob
+.env*
