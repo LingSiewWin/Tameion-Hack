@@ -276,7 +276,7 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
       {move && moveFrom && !arrived && (
         <ol className="flex flex-col" aria-label="The move">
           <Line
-            title={`Burned ${moved} on ${moveFrom.name}`}
+            title={track?.burn === "success" ? `Burned ${moved} on ${moveFrom.name}` : `Burn ${moved} on ${moveFrom.name}`}
             state={
               track?.burn === "success" ? `Done ${whenText(move.at)}` : track?.burn === "reverted" ? "Failed: nothing moved" : "Still checking. It will not be sent twice."
             }
@@ -291,7 +291,7 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
           {track?.burn !== "reverted" && (
             <>
               <Line
-                title="Signed by Circle"
+                title={track?.att?.state === "signed" ? "Signed by Circle" : "Circle signs it"}
                 state={
                   track?.att?.state === "signed"
                     ? forThisAccount
@@ -318,7 +318,7 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
                 }
               />
               <Line
-                title={`Arrived on ${dest.name}`}
+                title={`Arrives on ${dest.name}`}
                 state={track?.att?.state === "signed" && forThisAccount ? (label ?? "Waits for the mint") : "Next"}
                 agent={
                   view === "agent" &&
