@@ -122,3 +122,43 @@ Screenshots: proof/judge-path-page-rerun-{1-open,2-bill,3-autopilot,4-countdown,
 Gates after the re-run: tsc 0 errors; eslint src test 0 problems; node --test test/*.mts 64 pass 0 fail; check-types 15 types, 0 drifts.
 Left: acme-agents-4695 holds 0.042 test USDC on Autopilot (the demo bill ends after 15 cycles, demo.rs CYCLES); its passkey lives only in the
 Playwright context. Dev server :3003 (PID 69016) stopped.
+
+======================================================================================================================================
+On :7880, 17:45 (written 2026-10-17 17:45 +0800) — the merged build (service + the console export built 17:27:56, PID 38006, restarted 17:32:52), demo mode,
+invite word from the link. Served by :7880 itself (origin http://localhost:7880), no dev server. One fresh demo account, the only one opened.
+Fresh Playwright context with a CDP virtual passkey. The export carries this seat's latest page (checked: the keys line, the wrap, the menu width).
+
+Account: acme-agents-8433 · policy 0xf0ae90c66d410dc0cc3bc9e6a667af8c39fb6b85 · owner 0x98537aee61a90d614667779cb49eed4118a6bb38 · delay 30 s
+
+Home        17:34:05 the card, no invite field; 390: scrollWidth 375 = clientWidth 375.
+1 Open      17:34:25 tap → deploy 200 17:34:39 (funding tx 0x11129717180c3db834ce5b7d984b49acfb9294746af970d3262411f237fa1d91) → strip on step 2 17:34:43 (18 s).
+2 Bill      17:34:45 one passkey tap → PayeeSet tx 0x492ef6895775a701eeac6f4ee60fc30114f3e4012b22646e3541488ce7e9eaa1 → bills 200 17:34:52 → step 3 17:35:03 (18 s).
+3 Autopilot 17:35:05 tap, no confirm dialog → setMode tx 0xa1e486edcbac49c2270962746718c1536e0d26be87599c0e9777034180512365 17:35:10 →
+            "Autopilot applies in 0:22 unless you cancel." + the keys line → step 4 at 17:36:03.
+4 Watch it pay — PAID BY ITSELF: YES
+            17:36:05 "The bill is due in 0:47" … 17:36:55 "Now" · Live "Check running, 100 % read" → 17:37:15 "Check done: paid 1, needs you 0, recorded on chain 0x81ee1b…0133".
+            Cycle 1: due 1792229811, paid 1792229816 by the agent, tx 0x44a7ea734dc6e9a012f5bbedafb655198b41a98633b0ca2ea7d9c7d9e3bd44c3 (row 17:37:35).
+            Cycle 2: due 1792229931, paid 1792229936 by the agent, tx 0x28b5257784a14bb69ba4d92ca7cd90042e9d910eca1dca1676f98e0c91673c7c (row 17:39:40).
+            (Cycle 3 by the agent too: 0x0319dd3161ff696591c437ee8b4291895c7f1f88ddc56e0b218cd2b2d941d9af.)
+            Row, verbatim (cycle 2): "0.002 USDC to Demo Vendor · by the agent · 48 s ago · Receipt" / "Why, as recorded: paid by the agent: a bill
+            the owner typed: 0.002000 USDC" / "In the book: paid 0.002 USDC — Paid 0.002000 USDC to 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854,
+            settled in 0x28b5257784a14bb69ba4d92ca7cd90042e9d910eca1dca1676f98e0c91673c7c. Read back from the receipt: the policy's Paid event
+            matches.; line 2 of record 0x5631…4482 · on chain ↗"   (cycle 1: record 0x3a1c…f17b · on chain ↗)
+5 Raise and cut — CANCEL THE RAISE: SUCCEEDED
+            17:40:21 "Raise one payment to 100.00 USDC", no confirm dialog → challenge only at 17:40:47 (P-287, same on :7917) → ChangeProposed
+            tx 0xabb3ba9bccd640179d79f5e7aa6c0f5182a35efadda801dd0561ce52929b3421 (17:40:52) → 17:41:05 "The higher cap, 100.00 USDC a payment, applies in 0:16."
+            17:41:07 Cancel → cancelPending tx 0x5b278991a1aa87651b0487b3055c88cc57196c5d720ebfe648330c901a780e95 (execute 200 17:41:13) →
+            "Cancelled at once: the cap stays where it was. Receipt". The inbox kept listing the raise until ~17:42:20 (P-286): POST /api/level1/mode
+            502 at 17:41:25, :41, :57, 17:42:13 (the page's auto-apply); "You cancelled the raise: it never applied. Now cut" at 17:42:20.
+            17:42:22 "Cut one payment to 0.002 USDC" → setLimits tx 0xfb036666b8994ca50f21bf5568928a381224898d0e139a668104652e9821ec66 (17:42:30, 8 s;
+            raiseCancelled null: nothing waiting). Inbox after: perAction 0.002, daily 100, pending null, balance 0.044.
+Finish      17:42:30 "Done in 7 min 50 s. Your agent paid its bills by itself; you made the trust decisions." · Agents can spend now 0.044 ·
+            Paid by the agent 0.006 (3 payments) · Paid with no human 3 (of 3 bills paid; 0 by your tap) · "The raise waited 30 s where anyone could
+            see it, and you cancelled it ↗; the cut applied at once ↗." · the mandate sentence · the keys line.
+Widths: 390 = 375 content beside the desktop scrollbar; scrollWidth = clientWidth = 375 at every step.
+Differences from :7917: (1) after the cancel the inbox listed the raise for ~67 s more (11 s on :7917), with four 502s from the auto-apply
+(P-286; the page no longer says "applying" after a cancel it signed — needs the PM's next build to reach :7880); (2) the raise's 26 s before the
+passkey prompt is the same on both (P-287). Everything else matched.
+Screenshots: proof/judge-path-page-7880-{home,1-open,2-bill,3-autopilot,4-countdown,4-paid-1,4-paid-2,5-raise,5-wait,5-cancelled,6-finish}-{1280,390}.png
+Spend: 0.05 test USDC (the demo's funding, approved by the PM). Left: acme-agents-8433 holds 0.044 test USDC; its passkey lives only in the
+Playwright context. Nothing was restarted.
