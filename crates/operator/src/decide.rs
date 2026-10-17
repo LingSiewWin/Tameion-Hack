@@ -1141,7 +1141,11 @@ impl Decider for ModelDecider {
             by: ActorKind::Model,
             model: Some(MODEL.to_string()),
         };
-        self.remember(&key, &d);
+        // docs/117 §8: an answer citing an event it was not given is refused
+        // by `decide_or_rule`; kept, it would be replayed on every pass.
+        if unknown_citation(case, &d.why).is_none() {
+            self.remember(&key, &d);
+        }
         Ok(d)
     }
 
@@ -1727,10 +1731,29 @@ mod tests {
         changed.due_in_days = -1;
         assert!(
             decider(&url)
-                .with_memory(path)
+                .with_memory(path.clone())
                 .decide(&changed)
                 .await
                 .is_err()
+        );
+        // docs/117 §8: an answer citing an event it was not given is not kept,
+        // so it is not replayed on the next pass: the next ask goes out again.
+        let forged =
+            json!({ "basis": "due_now", "action": "pay", "why": "Paid like last time [evt:9]." });
+        let (url, _h) = stub(Some(json!({ "stop_reason": "end_turn", "content": [{ "type": "text", "text": forged.to_string() }] }))).await;
+        let d = decider(&url)
+            .with_memory(path.clone())
+            .decide(&changed)
+            .await
+            .unwrap();
+        assert!(d.why.contains("[evt:9]"));
+        assert!(
+            decider(&url)
+                .with_memory(path)
+                .decide(&changed)
+                .await
+                .is_err(),
+            "not answered from memory"
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
