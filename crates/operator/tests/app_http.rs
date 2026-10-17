@@ -1006,13 +1006,16 @@ fn a_named_account_resolves_holds_its_name_and_connects_wallets() {
     assert_eq!(http(p, "POST", "/api/level1/wallets", &bare).0, 403);
     let (st, b) = http(p, "POST", "/api/level1/wallets", &add(w1, &tok));
     assert_eq!(st, 200, "{b}");
+    // docs/60 P-225: the owner's device token, as the page sends it with a
+    // bills import, now opens the import on its own account (the gate passes;
+    // here the chain read behind it then fails).
     let (st, b) = http(
         p,
         "POST",
         "/api/level1/bills",
         &format!(r#"{{"policy":"{policy}","reserveToken":"{tok}","bills":{bill}}}"#),
     );
-    assert_eq!(st, 401, "{b}");
+    assert!(st != 401 && st != 403, "{st} {b}");
 }
 
 /// docs/81: the owner names a party from the device that opened the account
@@ -1251,11 +1254,8 @@ fn the_owners_device_reads_a_keyed_account_without_its_agent_key() {
         &format!(r#"{{"policy":"{mine}"}}"#),
         &device(&dev_mine),
     );
-    assert_eq!(
-        st, 401,
-        "a run needs its key, even from the owner's device: {b}"
-    );
-    assert!(b.contains(r#""scope":"run""#), "{b}");
+    // docs/60 P-225: the owner's own "Check now" — the device opens `run`.
+    assert_eq!(st, 202, "the owner's device runs a check: {b}");
 }
 
 /// UAT U3 (docs/60 P-182): a prepared change says who signs it and when it
@@ -1379,7 +1379,7 @@ fn the_owners_device_prepares_and_anyone_reads_the_records() {
         &format!(r#"{{"policy":"{a}"}}"#),
         dev_a,
     );
-    assert_eq!(st, 401, "a run still needs a key with run");
+    assert_eq!(st, 202, "docs/60 P-225: the owner's device runs a check");
     // Agent key scopes unchanged: a read key cannot prepare.
     let (st, _, _) = http_with(
         p,
@@ -1489,4 +1489,136 @@ fn a_locked_accounts_record_shows_outsiders_leaves_not_events() {
             "{who}: {body}"
         );
     }
+}
+
+/// docs/60 P-221: a tenant file that cannot be read is treated as locked. The
+/// record serves leaf hashes, not events, and a gated route refuses (503)
+/// instead of opening.
+#[test]
+fn an_unreadable_tenant_shows_no_events_and_opens_no_gate() {
+    let srv = start_with(16, &[("TAMEION_RPC_ARC", "http://127.0.0.1:9")]);
+    let p = srv.port;
+    let dir = std::env::temp_dir().join(format!("tameion-app-test-{}-16", std::process::id()));
+    let a = "0x00000000000000000000000000000000000000e1";
+    let log = dir.join("tenants").join(a).join("log");
+    std::fs::create_dir_all(&log).unwrap();
+    // Half a tenant, as a read in the middle of a non-atomic write found it.
+    std::fs::write(
+        dir.join("tenants").join(format!("{a}.json")),
+        r#"{"chain":"arc-testnet","owner":"0x0000"#,
+    )
+    .unwrap();
+    let root = ledger::log::root_from_leaves(&[ledger::log::leaf_from_canonical(
+        b"Holding 0.998000 USDC",
+    )])
+    .to_hex();
+    std::fs::write(
+        log.join(format!("{root}.events.jsonl")),
+        format!("{}\n", serde_json::json!({ "seq": 0, "at": 1, "kind": "observation", "note": "a secret note", "canonical": "0x486f6c64696e6720302e39393830303020555344" })),
+    )
+    .unwrap();
+    let (st, _, body) = http_with(
+        p,
+        "GET",
+        &format!("/api/level1/record?policy={a}&root={root}"),
+        "",
+        "",
+    );
+    assert_eq!(st, 200, "{body}");
+    assert!(
+        body.contains("\"leaf\"") && !body.contains("canonical") && !body.contains("secret"),
+        "{body}"
+    );
+    let (st, _, body) = http_with(p, "GET", &format!("/api/level1/inbox?policy={a}"), "", "");
+    assert_eq!(st, 503, "{body}");
+}
+
+/// docs/60 P-225: with an agent key on the account, the owner's own device still
+/// runs a check, saves bills and decides invoices for its own account — never
+/// another account's, and never `buy`; agent-key scopes are unchanged. A bills
+/// `check` answers before the page spends a passkey tap.
+#[test]
+fn the_owners_device_runs_checks_saves_bills_and_decides_invoices() {
+    let srv = start_with(17, &[("TAMEION_RPC_ARC", "http://127.0.0.1:9")]);
+    let p = srv.port;
+    let dir = std::env::temp_dir().join(format!("tameion-app-test-{}-17", std::process::id()));
+    std::fs::create_dir_all(dir.join("tenants")).unwrap();
+    let tenant = |policy: &str, device: &str| {
+        let read = operator::level1::token_hash("k-read");
+        let dev = operator::level1::token_hash(device);
+        std::fs::write(
+            dir.join("tenants").join(format!("{policy}.json")),
+            format!(
+                r#"{{"chain":"arc-testnet","owner":"0x0000000000000000000000000000000000000001","policy":"{policy}","agent":"0x0000000000000000000000000000000000000003","operator":"0x0000000000000000000000000000000000000004","watched":"0x0000000000000000000000000000000000000005","recovery":"0x0000000000000000000000000000000000000000","per_action":"1","daily":"1","floor":"0","delay_secs":60,"mode":1,"created_block":0,"history_from_block":0,"created":0,"deployed":false,"reserve_token_hash":"{dev}","agent_tokens":[{{"id":"r1","label":"reader","scopes":["read"],"expires":4102444800,"issued":0,"hash":"{read}"}}]}}"#
+            ),
+        )
+        .unwrap();
+    };
+    let (a, b) = (
+        "0x00000000000000000000000000000000000000e1",
+        "0x00000000000000000000000000000000000000e2",
+    );
+    tenant(a, "dev-a");
+    tenant(b, "dev-b");
+    let dev_a = "x-tameion-device: dev-a\r\n";
+    // `check: true`: the gate's answer without the import (which reads the chain).
+    let bills = |policy: &str| format!(r#"{{"policy":"{policy}","check":true}}"#);
+    let routes = [
+        (
+            "/api/level1/run",
+            format!(r#"{{"policy":"{a}"}}"#),
+            format!(r#"{{"policy":"{b}"}}"#),
+        ),
+        ("/api/level1/bills", bills(a), bills(b)),
+        (
+            "/api/level1/invoice-decide",
+            format!(
+                r#"{{"policy":"{a}","id":"0x{}","accept":true}}"#,
+                "11".repeat(32)
+            ),
+            format!(
+                r#"{{"policy":"{b}","id":"0x{}","accept":true}}"#,
+                "11".repeat(32)
+            ),
+        ),
+    ];
+    for (route, mine, theirs) in &routes {
+        let (st, _, body) = http_with(p, "POST", route, mine, dev_a);
+        // Past the gate: an invoice decision then asks for the owner's passkey
+        // signature (the device opens the route; the passkey decides).
+        if route.ends_with("invoice-decide") {
+            assert!(
+                st == 401 && body.contains("owner's passkey"),
+                "{route}: {st} {body}"
+            );
+        } else {
+            assert!(
+                st != 401 && st != 403,
+                "{route}: the owner's device on its own account: {st} {body}"
+            );
+        }
+        let (st, _, _) = http_with(p, "POST", route, theirs, dev_a);
+        assert_eq!(st, 401, "{route}: another account's device opens nothing");
+        let (st, _, _) = http_with(p, "POST", route, mine, "");
+        assert_eq!(st, 401, "{route}: no credential");
+        let (st, _, _) = http_with(p, "POST", route, mine, "Authorization: Bearer k-read\r\n");
+        assert_eq!(st, 403, "{route}: a read key still cannot");
+    }
+    // The bills import carries the device token in its body too, as the page sends it.
+    let in_body = format!(r#"{{"policy":"{a}","check":true,"reserveToken":"dev-a"}}"#);
+    let (st, _, body) = http_with(p, "POST", "/api/level1/bills", &in_body, "");
+    assert_eq!(st, 200, "{body}");
+    // Asked first, before any passkey tap: allowed with the device, refused without.
+    let check = format!(r#"{{"policy":"{a}","check":true}}"#);
+    let (st, _, body) = http_with(p, "POST", "/api/level1/bills", &check, dev_a);
+    assert_eq!(st, 200, "{body}");
+    assert!(body.contains("nothing was saved"), "{body}");
+    let (st, _, _) = http_with(p, "POST", "/api/level1/bills", &check, "");
+    assert_eq!(st, 401);
+    // Never buy: buying is the agent's.
+    let buy = format!(
+        r#"{{"policy":"{a}","url":"https://example.com/x","maxUsdc":"0.01","reason":"a test"}}"#
+    );
+    let (st, _, _) = http_with(p, "POST", "/api/level1/buy", &buy, dev_a);
+    assert_eq!(st, 401, "the device does not buy");
 }
