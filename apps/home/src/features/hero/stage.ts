@@ -24,6 +24,9 @@ export function drawPlaceholder(scene: Scene, coast: Coast): HTMLCanvasElement {
   const img = g.getImageData(0, 0, c.width, c.height);
   const d = img.data, W = c.width, H = c.height;
   const sea = new Uint8Array(W * H);
+  const open = (i: number) => !sea[i] && d[i * 4] >= 200; // a coast pixel stops the fill
+  // scanline fill: one run per row segment, one seed per run above and below (a pixel-by-pixel fill blocked the main
+  // thread for a second on a throttled phone)
   const stack: number[] = [];
   for (const [lon, lat] of [[57.6, 25.0], [55.0, 26.6]]) {
     const [x, y] = toPixel(scene, lon, lat).map(Math.floor);
@@ -31,18 +34,24 @@ export function drawPlaceholder(scene: Scene, coast: Coast): HTMLCanvasElement {
   }
   while (stack.length) {
     const i = stack.pop()!;
-    if (sea[i] || d[i * 4] < 200) continue; // a coast pixel stops the fill
-    sea[i] = 1;
-    const x = i % W;
-    if (x > 0) stack.push(i - 1);
-    if (x < W - 1) stack.push(i + 1);
-    if (i >= W) stack.push(i - W);
-    if (i < W * (H - 1)) stack.push(i + W);
+    if (!open(i)) continue;
+    const row = i - (i % W);
+    let x0 = i - row, x1 = x0;
+    while (x0 > 0 && open(row + x0 - 1)) x0--;
+    while (x1 < W - 1 && open(row + x1 + 1)) x1++;
+    for (let x = x0; x <= x1; x++) sea[row + x] = 1;
+    for (const next of [row - W, row + W]) {
+      if (next < 0 || next >= W * H) continue;
+      for (let x = x0; x <= x1; x++) if (open(next + x) && (x === x0 || !open(next + x - 1))) stack.push(next + x);
+    }
   }
   const [land, water] = [channels(palette.owner.rule), channels(palette.agent.paper)];
-  for (let i = 0; i < W * H; i++) {
+  for (let i = 0, j = 0; i < W * H; i++, j += 4) {
     const t = sea[i] ? water : land;
-    [d[i * 4], d[i * 4 + 1], d[i * 4 + 2], d[i * 4 + 3]] = [t[0], t[1], t[2], 255];
+    d[j] = t[0];
+    d[j + 1] = t[1];
+    d[j + 2] = t[2];
+    d[j + 3] = 255;
   }
   g.putImageData(img, 0, 0);
   return c;
