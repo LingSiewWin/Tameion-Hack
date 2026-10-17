@@ -962,6 +962,88 @@
         }
       }
     },
+    "/api/level1/recall": {
+      "get": {
+        "summary": "Check cited events against the anchored record and the chain (docs/117 §8): each id (evt:N, N the event's seq in /api/level1/record) is re-hashed from its canonical bytes and its Merkle path folded to the root the chain holds — rootOf(agent) for the latest anchored record, the anchoring transaction for an earlier one (root). Per id: verified, unverified (the record changed after it was anchored, or its root is not on chain) or unknown (no such event: code recall_unknown; no chain to ask: by rpc, code chain_unavailable — never verified without the chain). Open like /api/level1/record: on an account with agent keys, the event's fields need a read key or the owner's device; the proof (leaf, path, status) is for anyone.",
+        "parameters": [
+          {
+            "name": "policy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ids",
+            "in": "query",
+            "required": true,
+            "description": "1 to 32 event ids, comma-separated: evt:0,evt:3",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "root",
+            "in": "query",
+            "required": false,
+            "description": "an earlier record's root (from /api/level1/records); default: the latest anchored record",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{ record, chainRead, results: [...], verified, unverified, unknown }",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Recall"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "no policy, no ids, more than 32, or a root that is not 32 bytes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "no such account, or no anchored record (or not that root)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/level1/inbox": {
       "get": {
         "summary": "One screen for a treasurer: deployed (false while only reserved; status then reads what the reserved address can reach); agentTokens [{id, label, scopes, expires, issued}] and gated (true once a key exists — then this route needs Authorization: Bearer with the read scope); guardians {list, threshold, pendingEta}; terms {perActionCap, dailyCap, reserveFloor, mode, agent, operator, delay, agentExpiry, pendingEta, pendingKinds, fingerprint, recomputed, consistent} — the fields the owner's approvals are bound to, and needsYou rows whose to/data/attest are settleAsPrincipalIf / setPayeesIf bound to that fingerprint for ten minutes (boundUntil); standingOrders [{id, payee, amount, everySecs, nextDue, active, due}] and standingOrderCandidates (confirmed bills the agent suggests making standing orders); kind (hold | pull) and, for pull tenants, pull {wallet, usdc, allowance, walletBalance, suggestedAllowance, approveData, revokeData} — the money stays in the bill wallet and balance = the smaller of its balance and the allowance; mode, caps, balance, pending change, protectedPerDay = min(daily cap, balance - floor), lastPass, running (with progress), needsYou (prepared payments with why the agent asked), paid (settled by the agent across passes) and paidTotal, nextPassSecs when a scheduler runs. Also runway: {days, horizonDays, firstAtRisk {counterparty, amount, onUnix}, billsInHorizon, basis} projected from the last pass's obligationsList against the balance above the floor. halted {reason, clear} when a post-pay read-back mismatch left HALT beside the tenant's log (nothing is paid until a human removes it). And holdingsElsewhere: the bill wallet's USDC in Circle Gateway on every chain Gateway serves — {source, total, chains [{domain, chain, balance}], arriving [{domain, chain, amount, tx, since}] (deposits Gateway has seen but not credited yet)} or {source, error}; read with no key, shown beside the balance, never counted as the policy's. run (PLAN 5.39: every waiting bill as one call the owner approves with one tap; null on policies without settleRunIf), refused (what the checks refused on the last pass, and why), keyless (PLAN 5.38), runway.idleCover (PLAN 5.36). delegation (PLAN 5.28, wallet accounts): {implementation, wallet, initializeData, active}. invoices (PLAN 5.60): invoices vendors sent and the owner has not answered — the vendor's signed body plus status, at, amountText, approvedPayee (read live), frozen, notes (the agent's checks in words) and, for a one-off invoice on a deployed account, pay {to, data, summary}: the owner's payment bound to the terms for ten minutes, keyed by the invoice's ref so it pays once. preview (PLAN 5.59, before the first pass): {status reading|done|failed, at, readMs, days, transfers, bills [{counterparty, amount, every, intervalSecs, nextDue, confidence}], next30, fundMinor (USDC minor units that cover the next 30 days), suggestedLimit, usdc (the token to send)} — the read-only report of the bill wallet, kept an hour; chosenDaily: the daily limit the owner chose, before the contract holds it.",
@@ -6305,6 +6387,122 @@
         "required": [
           "policy",
           "records"
+        ]
+      },
+      "Recall": {
+        "type": "object",
+        "properties": {
+          "policy": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string"
+          },
+          "record": {
+            "type": "object",
+            "properties": {
+              "root": {
+                "type": "string"
+              },
+              "latest": {
+                "type": "boolean"
+              },
+              "events": {
+                "type": "integer"
+              },
+              "anchorTx": {},
+              "at": {}
+            },
+            "required": [
+              "root",
+              "latest",
+              "events"
+            ]
+          },
+          "chainRead": {
+            "description": "how the root was read: how (rootOf | anchorTx), chain, anchor, agent, rootOf, tx, error; null when no node could be asked"
+          },
+          "verified": {
+            "type": "integer"
+          },
+          "unverified": {
+            "type": "integer"
+          },
+          "unknown": {
+            "type": "integer"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "verified",
+                    "unverified",
+                    "unknown"
+                  ]
+                },
+                "by": {
+                  "type": "string",
+                  "description": "unverified: leaf | root; unknown: record | input | rpc"
+                },
+                "code": {
+                  "type": "string",
+                  "description": "recall_unknown (no such event, or not an id) or chain_unavailable"
+                },
+                "words": {
+                  "type": "string"
+                },
+                "leaf": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "sibling": {
+                        "type": "string"
+                      },
+                      "left": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "sibling",
+                      "left"
+                    ]
+                  }
+                },
+                "root": {
+                  "type": "string",
+                  "description": "the root the chain holds, when verified"
+                },
+                "event": {
+                  "description": "verified, with read access: kind, seq, at, payee, amount, minor, decision, tx, reason, balance, note — read from the hashed bytes"
+                }
+              },
+              "required": [
+                "id",
+                "status",
+                "words"
+              ]
+            }
+          }
+        },
+        "required": [
+          "policy",
+          "chain",
+          "record",
+          "results",
+          "verified",
+          "unverified",
+          "unknown"
         ]
       },
       "BuyReply": {

@@ -1343,6 +1343,73 @@ async fn serve_events(app: Arc<App>, sock: &mut tokio::net::TcpStream, query: &s
     }
 }
 
+/// What the chain says of a recalled record's root (docs/117 §8), and the read
+/// in words for the reply: for the latest record `rootOf(agent)` on the anchor
+/// contract the record names; when the chain holds another root (or for an
+/// earlier record) the transaction that anchored this one, read back (sent by
+/// the agent to the anchor, succeeded, the root in its calldata). A node that
+/// does not answer is `Err`: nothing is verified without it.
+async fn recall_chain(
+    t: &level1::Tenant,
+    rec: &operator::recall::Record,
+) -> (operator::recall::Attested, Value) {
+    let addr = |k: &str| {
+        rec.anchor[k]
+            .as_str()
+            .and_then(|a| Address::from_str(a).ok())
+    };
+    let (Some(anchor), Some(agent)) = (addr("anchor"), addr("agent")) else {
+        return (
+            Err("the anchors index does not name the anchor contract and the agent".into()),
+            Value::Null,
+        );
+    };
+    let client = match operator::watch::chain(&t.chain)
+        .ok_or_else(|| format!("chain {} unknown", t.chain))
+        .and_then(level1::quick_client)
+    {
+        Ok(c) => c,
+        Err(e) => return (Err(e), Value::Null),
+    };
+    let root = alloy::primitives::B256::from(*rec.root.as_bytes());
+    let mut read = json!({ "chain": t.chain, "anchor": format!("{anchor:#x}"), "agent": format!("{agent:#x}") });
+    if rec.latest {
+        read["how"] = json!("rootOf");
+        match client.anchored_root(anchor, agent).await {
+            Ok(r) if r == root => {
+                read["rootOf"] = json!(format!("{r:#x}"));
+                return (Ok(Some(rec.root)), read);
+            }
+            Ok(r) => read["rootOf"] = json!(format!("{r:#x}")),
+            Err(e) => {
+                read["error"] = json!(e.to_string());
+                return (Err(e.to_string()), read);
+            }
+        }
+    }
+    read["how"] = json!("anchorTx");
+    let Some(tx) = rec.anchor["anchorTx"]
+        .as_str()
+        .and_then(|x| alloy::primitives::B256::from_str(x).ok())
+    else {
+        return (Ok(None), read);
+    };
+    read["tx"] = json!(format!("{tx:#x}"));
+    match client.anchored_in(tx, anchor, agent, root).await {
+        Ok(true) => (Ok(Some(rec.root)), read),
+        Ok(false) => (Ok(None), read),
+        // The node answered and has no such transaction: not on chain.
+        Err(arc::ArcError::Contract(e)) => {
+            read["error"] = json!(e);
+            (Ok(None), read)
+        }
+        Err(e) => {
+            read["error"] = json!(e.to_string());
+            (Err(e.to_string()), read)
+        }
+    }
+}
+
 fn json_reply(status: &str, v: Value) -> Vec<u8> {
     // No loaded secret leaves in a reply (docs/60 P-250).
     let body = operator::guard::scrub(&v.to_string());
@@ -5743,6 +5810,127 @@ impl App {
         }
     }
 
+    /// `GET /api/level1/recall?policy=&ids=evt:N,…[&root=0x…]` (docs/117 §8):
+    /// each cited event re-hashed from its canonical bytes and proved against
+    /// the root on chain — `rootOf(agent)` for the latest anchored record, the
+    /// anchoring transaction for an earlier one (`root`). Per id `verified`,
+    /// `unverified` or `unknown`; without a chain read nothing is verified.
+    /// Open like the record: on a locked account an outsider gets the proof
+    /// (leaf, path, status), the event's fields only with a read key or the
+    /// owner's device.
+    async fn level1_recall(&self, query: &str, raw: &str) -> Vec<u8> {
+        let get = |k: &str| {
+            query
+                .split('&')
+                .find_map(|kv| kv.strip_prefix(k).and_then(|v| v.strip_prefix('=')))
+                .map(str::trim)
+        };
+        let Some(policy) = get("policy").and_then(|x| Address::from_str(x).ok()) else {
+            return json_reply(
+                "400 Bad Request",
+                refused(
+                    "invalid_body",
+                    "policy (the account's 0x… address) is required",
+                ),
+            );
+        };
+        // Ids are `evt:<digits>`, so the only escapes a client sends are `:` and `,`.
+        let ids: Vec<String> = get("ids")
+            .unwrap_or("")
+            .replace("%3A", ":")
+            .replace("%3a", ":")
+            .replace("%2C", ",")
+            .replace("%2c", ",")
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if ids.is_empty() || ids.len() > operator::recall::MAX_IDS {
+            return json_reply(
+                "400 Bad Request",
+                refused(
+                    "invalid_body",
+                    format!(
+                        "ids is 1 to {} event ids, comma-separated, e.g. ids=evt:0,evt:3",
+                        operator::recall::MAX_IDS
+                    ),
+                ),
+            );
+        }
+        let root = match get("root") {
+            None | Some("") => None,
+            Some(r) => match ledger::log::Hash32::from_hex(r) {
+                Some(h) => Some(h),
+                None => {
+                    return json_reply(
+                        "400 Bad Request",
+                        refused("invalid_body", "root is a 0x… 32-byte root from records"),
+                    );
+                }
+            },
+        };
+        let Some(t) = level1::load(&self.dir, &format!("{policy:#x}")) else {
+            return json_reply(
+                "404 Not Found",
+                refused("not_found", "no such account on this service"),
+            );
+        };
+        let log_dir = level1::tenants_dir(&self.dir)
+            .join(format!("{policy:#x}"))
+            .join("log");
+        let rec = match operator::recall::record(&log_dir, root) {
+            Ok(Some(r)) => r,
+            Ok(None) => {
+                return json_reply(
+                    "404 Not Found",
+                    refused(
+                        "not_found",
+                        if root.is_some() {
+                            "no anchored record with that root for this account (records lists them)"
+                        } else {
+                            "this account has no anchored record yet; a pass writes one"
+                        },
+                    ),
+                );
+            }
+            Err(e) => {
+                return json_reply(
+                    "500 Internal Server Error",
+                    refused(
+                        "service_error",
+                        format!("the record could not be read: {e}"),
+                    ),
+                );
+            }
+        };
+        let (attested, chain_read) = recall_chain(&t, &rec).await;
+        let open = t.agent_tokens.is_empty() || self.reads_account(&t, raw, query);
+        let results: Vec<Value> = ids
+            .iter()
+            .map(|id| operator::recall::check(id, &rec, &attested, open))
+            .collect();
+        let count = |s: &str| results.iter().filter(|r| r["status"] == s).count();
+        json_reply(
+            "200 OK",
+            operator::refusal::ok(json!({
+                "policy": format!("{policy:#x}"),
+                "chain": t.chain,
+                "record": {
+                    "root": rec.root.to_hex(),
+                    "latest": rec.latest,
+                    "events": rec.lines.len(),
+                    "anchorTx": rec.anchor["anchorTx"],
+                    "at": rec.anchor["at"],
+                },
+                "chainRead": chain_read,
+                "verified": count("verified"),
+                "unverified": count("unverified"),
+                "unknown": count("unknown"),
+                "results": results,
+            })),
+        )
+    }
+
     /// `GET /api/level1/statement?policy=&week=YYYY-Www[&format=csv]` — the
     /// week's paid, refused and needs-you lines from the anchored record,
     /// signed EIP-712 by the statement key (docs/76 §1d, row 8). The week
@@ -8805,6 +8993,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ("POST", "/api/level1/fund") => app.level1_fund(&body).await,
                     ("GET", "/api/level1/record") => app.level1_record(query, &req).await,
                     ("GET", "/api/level1/records") => app.level1_records(query).await,
+                    ("GET", "/api/level1/recall") => app.level1_recall(query, &req).await,
                     ("GET", "/api/level1/statement") => app.level1_statement(query).await,
                     ("POST", "/api/level1/run") => app.level1_run(&body).await,
                     ("POST", "/api/level1/mode") => app.level1_mode(&body).await,

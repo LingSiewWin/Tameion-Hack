@@ -240,3 +240,15 @@ while on testnet); Tameion takes nothing per payment.
   `note` are carried for people and are not hashed — the note's words sit
   inside `canonical` as an 8-byte big-endian length then UTF-8, so compare
   them before acting on the words.
+- Check what you remember before you rely on it:
+  `GET /api/level1/recall?policy=…&ids=evt:0,evt:3[&root=…]` (MCP `recall`,
+  CLI `tameion recall evt:3`). `evt:N` is the event's `seq` in one record —
+  every pass writes its own record from 0 — read in the latest anchored record
+  unless you name an earlier root. The service re-hashes each event from its
+  `canonical` bytes and folds its path to the root the chain holds (`rootOf`,
+  or the anchoring transaction): `verified`, `unverified` (the record changed
+  after it was anchored: do not rely on it) or `unknown` (`recall_unknown`: no
+  such event; `by: rpc`: no chain to ask, and nothing is verified without it).
+  The agent's own sentences cite the events they rest on as `[evt:N]`; a
+  sentence citing an event its case was not given is refused and the rule
+  decides.
