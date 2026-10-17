@@ -2416,9 +2416,21 @@ pub async fn mode_action(t: &Tenant, action: &str) -> Result<Value, String> {
                 .await
                 .map_err(|e| e.to_string())?,
         ),
+        // docs/60 P-265: the operator drops a raise the owner's cut answered
+        // (`cancelPending` is the principal's or the operator's; it only shrinks).
+        "cancel" => {
+            let call = arc::prepare_cancel_pending(policy);
+            let data = alloy::hex::decode(&call.data).map_err(|e| e.to_string())?;
+            Some(
+                client
+                    .send_call(policy, data)
+                    .await
+                    .map_err(|e| e.to_string())?,
+            )
+        }
         other => {
             return Err(format!(
-                "unknown action {other:?}; use status, pause, propose, autopilot or apply"
+                "unknown action {other:?}; use status, pause, propose, autopilot, apply or cancel"
             ));
         }
     };

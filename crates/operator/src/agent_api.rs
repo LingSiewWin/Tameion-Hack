@@ -97,6 +97,30 @@ pub fn shrinks_trust(data: &str) -> Option<&'static str> {
     }
 }
 
+/// The caps a `setLimits(uint256,uint256,uint256)` call asks for — per payment,
+/// per day, floor, in minor units — from its calldata hex; `None` for any other call.
+pub fn set_limits_asked(data: &str) -> Option<[i128; 3]> {
+    let hex = data.trim().trim_start_matches("0x").to_lowercase();
+    if hex.get(..8)? != "189ae5f2" || hex.len() != 8 + 64 * 3 {
+        return None;
+    }
+    let word = |i: usize| {
+        let w = hex.get(8 + 64 * i..8 + 64 * (i + 1))?;
+        // A cap above 2^127 minor units is not money anyone holds.
+        (w[..32].bytes().all(|b| b == b'0'))
+            .then(|| i128::from_str_radix(&w[32..], 16).ok())
+            .flatten()
+    };
+    Some([word(0)?, word(1)?, word(2)?])
+}
+
+/// Whether limits `asked` only shrink what the agent may do from `current` (both
+/// caps lower or equal, the floor higher or equal, something different): the
+/// contract applies them at once (`BudgetPolicy.setLimits`). Minor units.
+pub fn limits_shrink(current: [i128; 3], asked: [i128; 3]) -> bool {
+    asked != current && asked[0] <= current[0] && asked[1] <= current[1] && asked[2] >= current[2]
+}
+
 /// Who signs every prepared call: the owner's passkey, never the caller.
 pub const SIGNER: &str =
     "only the owner's passkey can sign this, on the account page; an agent key cannot";
@@ -106,11 +130,9 @@ pub const SIGNER: &str =
 /// do (both caps lower or equal, the floor higher or equal), otherwise after
 /// the delay, and the owner can cancel it until then. Minor units.
 pub fn limits_apply(current: [i128; 3], asked: [i128; 3], delay_secs: u64) -> String {
-    let [per, day, floor] = current;
-    let [new_per, new_day, new_floor] = asked;
     if current == asked {
         "nothing changes: these are the limits now".into()
-    } else if new_per <= per && new_day <= day && new_floor >= floor {
+    } else if limits_shrink(current, asked) {
         "at once when signed: it only lowers what the agent may spend".into()
     } else {
         format!(
@@ -276,6 +298,25 @@ mod tests {
         assert!(mode_apply(2, 0, 3600).starts_with("at once"));
         assert!(payees_apply(true, 60).contains("1 minute(s)"));
         assert!(payees_apply(false, 60).starts_with("at once"));
+    }
+
+    /// docs/60 P-265: a lowering `setLimits` is read from its calldata and counts as a
+    /// cut; a raise, an equal set and another call do not.
+    #[test]
+    fn a_lowering_set_limits_is_a_cut() {
+        let call = |p: u64, d: u64, f: u64| format!("0x189ae5f2{p:064x}{d:064x}{f:064x}");
+        let now = [50_000_000, 100_000_000, 0];
+        let lower = set_limits_asked(&call(1_000, 100_000_000, 0)).unwrap();
+        assert_eq!(lower, [1_000, 100_000_000, 0]);
+        assert!(limits_shrink(now, lower));
+        let raise = set_limits_asked(&call(60_000_000, 100_000_000, 0)).unwrap();
+        assert!(!limits_shrink(now, raise));
+        assert!(!limits_shrink(now, now), "nothing changes");
+        assert!(set_limits_asked("0xdedad97d").is_none());
+        assert!(
+            set_limits_asked(&call(1, 2, 3)[..40]).is_none(),
+            "cut short"
+        );
     }
 
     #[test]

@@ -2176,7 +2176,20 @@ impl App {
         // docs/60 P-171: a cancel, a pause or a revoke only shrinks trust. From
         // the moment one is on its way, no automatic apply of a raise asked
         // before it goes ahead (`shrink_blocks_apply`): the owner's brake wins.
-        let shrink = operator::agent_api::shrinks_trust(data);
+        let mut shrink = operator::agent_api::shrinks_trust(data);
+        // docs/60 P-265: a lowering `setLimits` is a cut too (the contract applies it at
+        // once); it must not be undone when a raise asked before it applies.
+        if shrink.is_none()
+            && let Some(asked) = operator::agent_api::set_limits_asked(data)
+            && let Ok(client) = level1::read_client(preset)
+            && let Ok((per, day, floor)) = client.caps(target).await
+            && operator::agent_api::limits_shrink(
+                [per.to_minor(), day.to_minor(), floor.to_minor()],
+                asked,
+            )
+        {
+            shrink = Some("cut");
+        }
         if shrink.is_some() {
             shrinks()
                 .lock()
@@ -2189,8 +2202,21 @@ impl App {
         .await
         {
             Ok(r) if r["pending"] == true => json_reply("202 Accepted", r),
-            Ok(r) => {
+            Ok(mut r) => {
                 self.recovery_landed(owner, target, data);
+                // docs/60 P-265: the cut landed; the raise it answers is dropped on chain
+                // too (the operator may cancel), so nobody's `applyPending` brings it back.
+                if shrink == Some("cut")
+                    && let Some(t) = level1::load(&self.dir, &format!("{target:#x}"))
+                {
+                    r["raiseCancelled"] = match level1::mode_action(&t, "cancel").await {
+                        Ok(c) => c["tx"].clone(),
+                        Err(e) if e.contains("NothingPending") || e.contains("175c1aea") => {
+                            Value::Null
+                        }
+                        Err(e) => json!({ "error": e }),
+                    };
+                }
                 json_reply("200 OK", r)
             }
             // A cancel that found nothing pending came after the change applied.
@@ -7724,7 +7750,7 @@ impl App {
         if action == "apply" && self.shrink_blocks_apply(&tenant).await {
             return json_reply(
                 "409 Conflict",
-                json!({ "error": "the owner lowered trust after this change was asked (a cancel, a pause or a revoke), so it is not applied automatically; the owner can cancel it or ask again" }),
+                json!({ "error": "the owner lowered trust after this change was asked (a cancel, a pause, a revoke or a lower limit), so it is not applied automatically; the owner can cancel it or ask again" }),
             );
         }
         match level1::mode_action(&tenant, action).await {
