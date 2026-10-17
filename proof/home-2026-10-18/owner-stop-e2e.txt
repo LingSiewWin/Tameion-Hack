@@ -1,0 +1,34 @@
+Owner home, "Stop the agent", end to end on the lane service (2026-10-18 06:50 +08, seat H2)
+
+Account: northwind-agents (a demo account opened on the lane service http://127.0.0.1:7890 at 06:15 +08, Arbitrum Sepolia; funded 0.05 USDC
+by the demo; Demo Vendor approved, its 0.002 USDC / 2 min bill saved, limits lowered to 0.005 per payment and 0.05 a day, Autopilot asked and
+applied by the service after the 30 s delay; 15 payments landed 06:20–06:48).
+
+What ran: the Owner home's own flow code, apps/home/src/features/owner/owner-call.ts — prepare-mode {mode: 0} through the home app's proxy
+(http://localhost:3011/api/…, the account named, the proxy turning the name into the address) → the prepared call compared byte for byte with
+calls.setMode(0) built on the page → POST /api/level1/challenge → the challenge recomputed on the page (PasskeyPrincipal.challengeFor) and
+compared → the passkey assertion → POST /api/level1/execute. Only the browser's passkey prompt was replaced, by a software authenticator holding
+the account's throwaway owner key and signing the WebAuthn assertion as a browser does for origin http://localhost:3011 (rpId localhost).
+The click path in the browser (Stop → the question in words → Stop the agent) was screenshotted (owner-home-stop-question-owner-390.png) but not
+signed in the browser: loading the owner key into Playwright's virtual authenticator was refused by the session's permission classifier.
+
+Output (scratchpad stop-e2e.mts):
+{
+ "account": "northwind-agents",
+ "startedAt": "2026-10-17T22:50:27.017Z",
+ "modeBefore": "Autopilot",
+ "asked": 0,
+ "phases": ["Signing", "Sent"],
+ "executed": {
+  "explorer": "https://sepolia.arbiscan.io/tx/0x2d244f0dbcd4983a8d60d9a5e85c628916a9218a9bb9dc4fa86d3c64ef8c8098",
+  "tx": "0x2d244f0dbcd4983a8d60d9a5e85c628916a9218a9bb9dc4fa86d3c64ef8c8098"
+ },
+ "modeAfter": "Watch"
+}
+
+Earlier owner calls on the same account, signed the same way by the seat's harness against the lane service directly:
+  approve Demo Vendor (setPayees)  https://sepolia.arbiscan.io/tx/0xf3b36981a4d711d64748a865d1d9dc827f59e1176910b5d21e242af26c99a260
+  limits 0.005 / 0.05 (setLimits)  https://sepolia.arbiscan.io/tx/0x8d8f129250bcb9b7f113818b5b7533921a7f0f3ce3088bdd53cee7396d8222d0
+  ask Autopilot (setMode 2)        https://sepolia.arbiscan.io/tx/0x296aa340172662c18857d4097e5a5ea15c8dec1eb5ffb27103f9cc2fd617a5f3
+  demo funding 0.05 USDC           https://sepolia.arbiscan.io/tx/0xfc3a9882ca8e722f0df0c3ae45d71cd6c245308ee9807780b7b2f0b8f2f5826a
+  first agent payment 0.002 USDC   https://sepolia.arbiscan.io/tx/0xbd5bb78b3f5e7ed6bda96455a611844c2dbf27d77ab5ffd2a3a66c36c539d0f5
