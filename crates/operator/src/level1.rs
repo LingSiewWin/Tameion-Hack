@@ -3101,15 +3101,17 @@ pub fn runway_floor_days() -> i64 {
         .unwrap_or(14)
 }
 
-/// The first pass of each UTC day (docs/117 §1): a `FlowCheck` of the
-/// account's book against the chain since the last check (or since the
-/// account was made), and, when at this burn the floor is nearer than
-/// [`runway_floor_days`], a `Decision` proposing to move reserve in. Only
-/// for an account that holds its money (`kind` "hold"): a pull or wallet
-/// account's balance is the owner's wallet, which pays for more than the
-/// agent's bills. A chain read that fails skips the day's check, said on
-/// stderr; the next pass tries again. `pending` are the purchases and
-/// payments this pass records: made before it, so counted in the period.
+/// The book against the chain, and the reserve, checked at the start of a
+/// pass (docs/117 §1): the first pass of each UTC day records a `FlowCheck`
+/// of the account's book against the chain since the last check (or since
+/// the account was made); any pass that finds the floor nearer than
+/// [`runway_floor_days`] at this burn records, once that day, a `Decision`
+/// proposing to move reserve in. Only for an account that holds its money
+/// (`kind` "hold"): a pull or wallet account's balance is the owner's
+/// wallet, which pays for more than the agent's bills. A chain read that
+/// fails skips both, said on stderr; the next pass tries again. `pending`
+/// are the purchases and payments this pass records: made before it, so
+/// counted.
 async fn daily_checks(
     app_dir: &Path,
     t: &Tenant,
@@ -3118,7 +3120,7 @@ async fn daily_checks(
     policy_transfers: &[crate::Transfer],
     pending: &[(u64, ledger::EventBody)],
 ) -> Vec<(u64, ledger::EventBody)> {
-    use ledger::momentum::{DAY, flow_check, fold};
+    use ledger::momentum::{DAY, flow_check, fold, reserve_move};
     use ledger::{Event, EventBody};
     let Ok(policy) = Address::from_str(&t.policy) else {
         return Vec::new();
@@ -3127,6 +3129,10 @@ async fn daily_checks(
         return Vec::new();
     }
     let at = now.as_unix();
+    let day = at.div_euclid(DAY);
+    let move_hash = ledger::ActionHash::from_bytes(
+        alloy::primitives::keccak256(format!("move-reserve:{policy:#x}:{day}")).0,
+    );
     let mut events = crate::audit::book(
         &tenants_dir(app_dir)
             .join(format!("{policy:#x}"))
@@ -3139,66 +3145,75 @@ async fn daily_checks(
             _ => None,
         })
         .max();
-    if last_end.is_some_and(|end| end.div_euclid(DAY) == at.div_euclid(DAY)) {
-        return Vec::new();
-    }
+    let check_due = last_end.is_none_or(|end| end.div_euclid(DAY) != day);
+    let moved_today = events.iter().any(
+        |e| matches!(&e.body, EventBody::Decision { action_hash, .. } if *action_hash == move_hash),
+    );
     events.extend(pending.iter().map(|(when, body)| Event {
         seq: 0,
         at: Timestamp::from_unix((*when as i64).min(at - 1)),
         body: body.clone(),
     }));
-    let start = match last_end {
-        Some(end) => Ok(end),
-        None => client
-            .block_timestamp(t.created_block)
-            .await
-            .map(|ts| ts.as_unix()),
-    };
     let (balance, governance) =
         tokio::join!(client.usdc_balance(policy), client.governance(policy));
-    let (start, balance, floor) = match (start, balance, governance) {
-        (Ok(s), Ok(b), Ok(g)) => (s, b, g.reserve_floor),
-        (s, b, g) => {
+    let (balance, floor) = match (balance, governance) {
+        (Ok(b), Ok(g)) => (b, g.reserve_floor),
+        (b, g) => {
             eprintln!(
-                "flow check {policy:#x}: skipped today, a chain read failed: {:?} {:?} {:?}",
-                s.err(),
+                "flow check {policy:#x}: skipped, a chain read failed: {:?} {:?}",
                 b.err(),
                 g.err()
             );
             return Vec::new();
         }
     };
-    let inflows: i128 = policy_transfers
-        .iter()
-        .filter(|tr| tr.direction == ledger::Direction::In)
-        .filter(|tr| tr.at.as_unix() >= start && tr.at.as_unix() < at)
-        .map(|tr| tr.amount.to_minor())
-        .sum();
-    let check = flow_check(
-        &events,
-        start,
-        at,
-        Money::minor(inflows, Currency::Usdc),
-        balance,
-    );
-    let mut out = vec![(at as u64, check)];
+    let mut out = Vec::new();
+    if check_due {
+        let start = match last_end {
+            Some(end) => Ok(end),
+            None => client
+                .block_timestamp(t.created_block)
+                .await
+                .map(|ts| ts.as_unix()),
+        };
+        match start {
+            Ok(start) => {
+                let inflows: i128 = policy_transfers
+                    .iter()
+                    .filter(|tr| tr.direction == ledger::Direction::In)
+                    .filter(|tr| tr.at.as_unix() >= start && tr.at.as_unix() < at)
+                    .map(|tr| tr.amount.to_minor())
+                    .sum();
+                out.push((
+                    at as u64,
+                    flow_check(
+                        &events,
+                        start,
+                        at,
+                        Money::minor(inflows, Currency::Usdc),
+                        balance,
+                    ),
+                ));
+            }
+            Err(e) => eprintln!("flow check {policy:#x}: skipped, the start block's time: {e}"),
+        }
+    }
     let window = burn_window_days();
     let line = runway_floor_days();
     let m = fold(&events, &[], balance, floor, at, window);
-    if let Some(days) = m.runway_by_rate_days.filter(|d| *d < line) {
-        let above = (balance.to_minor() - floor.to_minor()).max(0);
-        let need = m.rate_per_day.to_minor() * i128::from(line) - above;
+    if let (false, Some(need), Some(days)) = (
+        moved_today,
+        reserve_move(&m, balance, floor, line),
+        m.runway_by_rate_days,
+    ) {
         let rate = m.rate_per_day;
         out.push((
             at as u64,
             EventBody::Decision {
                 counterparty: ledger::Counterparty::new(format!("{policy:#x}")),
-                amount: Money::minor(need, Currency::Usdc),
+                amount: need,
                 decision: ledger::Decision::Review,
-                action_hash: ledger::ActionHash::from_bytes(
-                    alloy::primitives::keccak256(format!("move-reserve:{policy:#x}:{}", at.div_euclid(DAY)))
-                        .0,
-                ),
+                action_hash: move_hash,
                 confidence: ledger::Confidence::clamped(1.0),
                 balance_seen: balance,
                 weakest_evidence: Some(ledger::Provenance::Onchain),
@@ -3210,10 +3225,9 @@ async fn daily_checks(
                 ],
                 note: format!(
                     "MoveReserve, proposed: at this burn ({rate} a day over the last {window} days) the floor is {days} days away, \
-                     under the {line}-day line; moving {} in restores {line} days. Proposed, not done: the reserve is the owner's \
+                     under the {line}-day line; moving {need} in restores {line} days. Proposed, not done: the reserve is the owner's \
                      to move (the agent's key cannot withdraw or subscribe), and USYC on Arc testnet admits only entitled holders, \
-                     which this account is not.",
-                    Money::minor(need, Currency::Usdc)
+                     which this account is not."
                 ),
             },
         ));
