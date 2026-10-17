@@ -21,7 +21,8 @@ export const palette = {
     rule: "#D5DCD2",
     attention: "#B3261E",
     transit: "#3FB8B0",
-    up: "#2F7A00",
+    // one step darker than DESIGN's #2F7A00 (4.39:1 on plate-2) so every pair reaches 4.5:1 (PM ruling 07:2x, founder may veto)
+    up: "#2E7800",
     down: "#B3261E",
     scrim: "#000000B3",
     skeleton: "#DEE4DA",
@@ -44,18 +45,12 @@ export const palette = {
 
 export type ColorToken = keyof (typeof palette)["owner"];
 
-const TEXT = ["ink", "ink-2", "attention", "up", "down"] as const;
 /** Text and the surfaces it sits on: each pair must reach 4.5:1 in both views (scripts/contrast.mjs). */
 export const textPairs: readonly { text: ColorToken; on: ColorToken }[] = [
-  ...TEXT.flatMap((text) => (["paper", "plate"] as const).map((on) => ({ text, on }))),
-  // plate-2 holds inner groups, inputs and pressed rows: reading text sits there, direction figures do not (see `warnPairs`)
-  ...(["ink", "ink-2", "attention"] as const).map((text) => ({ text, on: "plate-2" as const })),
-  { text: "paper", on: "ink" }, // the one primary action, and the active capsule segment
-];
-/** Pairs reported but not enforced: light `up` on plate-2 reads 4.39:1 at the founder's value (#2E7800 would read 4.51). */
-export const warnPairs: readonly { text: ColorToken; on: ColorToken }[] = [
-  { text: "up", on: "plate-2" },
-  { text: "down", on: "plate-2" },
+  ...(["ink", "ink-2", "attention", "up", "down"] as const).flatMap((text) =>
+    (["paper", "plate", "plate-2"] as const).map((on) => ({ text, on })),
+  ),
+  { text: "paper", on: "ink" }, // the one primary action
 ];
 
 /** The sheet is the only raised thing (and the capsule while it slides). */
