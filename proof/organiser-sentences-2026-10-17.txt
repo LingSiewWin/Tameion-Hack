@@ -1,0 +1,243 @@
+The organiser's three sentences as three tests (S21, docs/117 §9). Written 2026-10-17 23:51 +0800.
+
+The organiser's brief (docs/04:89, "Agents and Ledgers"): "A ledger checks that debits equal credits. It does not check that the
+vendor was the right one, that the invoice was real, or that a retry didn't pay it twice."
+
+Test file: crates/operator/tests/organiser.rs (branch seat/S21). Each test starts anvil with Arc's chain id 5042002, deploys the policy
+from contracts/bytecode/BudgetPolicy.hex (the bytes tameion-app deploys for every account), funds it with 10 USDC, approves one payee and
+lets its 60 s cooling-off pass on the chain's clock, writes the account record and agent key the way the service keeps them, and runs the
+real tameion-app binary against it. Each test reads the chain (Paid events, balances, executed(actionHash), rootOf) and the account's
+files before it reads the service's reply.
+
+- wrong_vendor: the agent pays the approved payee 0.10 USDC (control), then asks to pay an address nobody approved. Checked: no Paid to
+  it, its balance 0 wei, executed(op) false, one Paid in total; reply 409 payee_not_approved, executed "no".
+- phantom_invoice: the approved payee's own signed invoice and a "phantom" (same payee named, new reference, signed by another key) are
+  posted to /api/level1/invoice; then one pass runs and anchors. Checked: the phantom is not in tenants/<policy>.invoices.jsonl and not
+  in tenants/<policy>/log/<root>.events.jsonl; the real one is in both; MemoryAnchor.rootOf(agent) equals the record's root; reply
+  422 with the reason, executed "no".
+- double_pay_on_retry: one payment (0.25 USDC) under one Idempotency-Key, sent four times: the first send's client hangs up before the
+  reply (a timeout); the retry and one more send come back 200 with Idempotent-Replayed: true; a second copy of the service on its own
+  disk (no replay store, no payments file) answers from the chain's executed(actionHash). Checked: one Paid for the action hash,
+  executed true, the payee holds exactly 0.25 USDC; every reply names the same transaction.
+
+== 1. The three runs (worktree at the commit below, clean) ==
+
+date: 2026-10-17 23:45:58 +0800
+commit: b38da5c test(operator): the organiser's three sentences as three tests on anvil
+worktree clean: 0 changed files
+anvil Version: 1.5.1-stable
+forge Version: 1.5.1-stable
+rustc 1.99.1 (58cf8f9c3 2026-10-13) (Homebrew)
+
+$ cargo test --locked -p operator --test organiser -- --nocapture --test-threads=1
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.01s
+     Running tests/organiser.rs (/Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/seats/S21/target/debug/deps/organiser-9ca16937df8a5064)
+
+running 3 tests
+test double_pay_on_retry ... double_pay_on_retry: operation op_organiser-retry-0001, action hash 0x5e598ba0998612d2aade6b8c0d9d067836a54637f918710f2ae8afb2f98e1668: first send abandoned; retry 200 replayed after 0 x 409 idempotency_pending; again 200 replayed; second service 200 replayed from executed(); Paid events for it: 1; tx 0x846fb8fa18718f8937f6b2a8c62062ad93d63fffccaaa585c5745a73e84a088f; executed: true
+ok
+test phantom_invoice ... phantom_invoice: real invoice 201; phantom 422 "not signed by the payee: the signature is 0x717eea2de29646e7cd1c807d45b41bcd996631a3's, the money would go to 0x52acf32d5654dbfc39b18bfffaabd04a2054821f"; invoices.jsonl lines 1; pass root 0xa22aafa4781862a2a4ee2bae2321319d010f65be5df6e50b54937b39284177c7 anchored by tx 0x400816fa0f89b897cbb184838e9cd63c7bec9e7b01bf840da07b9239618a6f8b at 0x5fbdb2315678afecb367f032d93f642f64180aa3; record lines 2, phantom in it: no
+ok
+test wrong_vendor ... wrong_vendor: approved payee paid 0.10 USDC, tx 0x3aadc9a03c9bb8e50922004062a02137d2359fab423b35e94e22b23ec76b3b5e; unapproved 0x7aaed9e1951800dc8e639754883ccec9b6ca5037 refused "payee_not_approved" (executed: "no"); Paid events on policy 0x063e1b30405150986238288cb42e59b6ce88fa13: 1; unapproved balance 0 wei
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.67s
+
+
+== 2. Control: the bytes the tests deploy are the bytes the source compiles to ==
+
+Scratch copy of the worktree, contracts/ (unmutated source):
+$ forge inspect src/BudgetPolicy.sol:BudgetPolicy bytecode   # compared with contracts/bytecode/BudgetPolicy.hex
+inspect bytes 9983 committed bytes 9983 identical
+
+So a mutated source compiled the same way (forge inspect, written over BudgetPolicy.hex in the scratch copy) differs from the shipped
+bytes only by the mutation.
+
+== 3. Remove the mechanism and the test fails (scratch copy, then deleted; nothing of this is committed) ==
+
+Each run: rsync of the worktree to a scratch directory (with the contract libraries), one mechanism commented out, the one test run with
+its own target dir; the source restored between runs; the copy and its target deleted at the end.
+
+--- M1, wrong_vendor: the contract's payee allowlist removed (BudgetPolicy._payChecked) ---
+--- <original>/BudgetPolicy.sol.orig	2026-10-17 23:35:42
++++ contracts/src/BudgetPolicy.sol	2026-10-17 23:35:42
+@@ -452,7 +452,7 @@
+     function _payChecked(address to, uint256 usdcUnits, bytes32 actionHash) internal {
+         if (to == address(0)) revert ZeroAddress();
+         if (usdcUnits == 0) revert ZeroAmount();
+-        if (!attestedPayee[to]) revert PayeeNotAttested(to);
++        // MUTATION M1: if (!attestedPayee[to]) revert PayeeNotAttested(to);
+         // A payee the principal named an hour ago is the one an attacker
+         // most wants paid now. The cooling-off gives the principal `delay`
+         // to notice and revoke (docs/46 #3, CFO seat).
+mutated policy bytes 9942 (forge inspect, written to contracts/bytecode/BudgetPolicy.hex)
+$ cargo test --locked -p operator --test organiser -- --exact wrong_vendor --nocapture
+running 1 test
+
+thread 'wrong_vendor' (6832562) panicked at crates/operator/tests/organiser.rs:450:5:
+the policy paid a vendor nobody approved: [PrincipalSettlement { to: 0x42a86aa996f50d7fb96cd1bd7dc0370193d32220, amount: Money { minor: 100000, ccy: Usdc }, action_hash: 0x8009f172e0febe25dee0763ece5b8ea441b7765234f10ada2e15363653754594, tx: 0xc013f54a4a509b6131c20ff53c8ee318fa997125b28e6ae1ac3e25d21eb6822c, block: 5 }, PrincipalSettlement { to: 0xd2cca3b016f10529e0248af3add34574e24ff697, amount: Money { minor: 100000, ccy: Usdc }, action_hash: 0x1355626c0f79cb1ed6df99aff1551bd1370c4018e9e3c6f2ce3bf00001b02114, tx: 0x47c4ab1204869d534e184b2353c4459258997d26be617ca0116eacaab2e6e3cf, block: 6 }]
+test wrong_vendor ... FAILED
+
+failures:
+
+failures:
+    wrong_vendor
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.27s
+
+error: test failed, to rerun pass `-p operator --test organiser`
+exit 101
+
+Result: FAILED on the chain check: the policy paid the address nobody approved (second PrincipalSettlement).
+
+--- M2, phantom_invoice: the invoice's signer check removed (invoice::verify) ---
+--- <original>/invoice.rs.orig	2026-10-17 23:40:29
++++ crates/operator/src/invoice.rs	2026-10-17 23:40:29
+@@ -222,12 +222,13 @@
+         .recover_address_from_prehash(&digest(chain_id, &inv))
+         .map_err(|e| format!("signature: {e}"))?;
+     // Any change to a field, the account or the chain recovers someone else.
+-    if signer != inv.payee {
+-        return Err(format!(
+-            "not signed by the payee: the signature is {signer:#x}'s, the money would go to {:#x}",
+-            inv.payee
+-        ));
+-    }
++    // MUTATION M2: if signer != inv.payee {
++    // MUTATION M2:     return Err(format!(
++    // MUTATION M2:         "not signed by the payee: the signature is {signer:#x}'s, the money would go to {:#x}",
++    // MUTATION M2:         inv.payee
++    // MUTATION M2:     ));
++    // MUTATION M2: }
++    let _ = signer;
+     if inv.amount == 0 || inv.amount > MAX_AMOUNT_MINOR {
+         return Err("the amount must be more than zero and at most 10,000,000 USDC".into());
+     }
+$ cargo test --locked -p operator --test organiser -- --exact phantom_invoice --nocapture
+running 1 test
+
+thread 'phantom_invoice' (6846434) panicked at crates/operator/tests/organiser.rs:536:5:
+the phantom invoice was written down: {"amount":"250000","amountText":"0.250000 USDC","approvedPayee":true,"at":1792251675,"discountBps":0,"dueAt":1792856475,"earlyDays":0,"everyDays":0,"frozen":false,"id":"0xe4961d038576af918c10022a8b6e69b77bbca92aade57047f225923adbb83b0f","issuedAt":1792251675,"notes":["No payment to this payee in the history the agent read.","One payment, not a repeating bill."],"payee":"0x7d8a33fe816827a91e0fcc95657bb56b9b88a48c","policy":"0x48b70e05f04520d876a9d433a5bd1f56e986c26a","ref":"0x1f6c1f5189f0e9569a7384eeb974c26fb6f8c53eb760d561746846f03ef96652","signature":"0xc5397854bf78322bd3008fffd8e496597d8c5a1e925613ed778e9d8a3ef537667c532dd46dbaf75aede85588259604d7d2ac6dc4da0dc47cce467a9808a191a61c","status":"received"}
+{"amount":"250000","amountText":"0.250000 USDC","approvedPayee":true,"at":1792251675,"discountBps":0,"dueAt":1792856475,"earlyDays":0,"everyDays":0,"frozen":false,"id":"0x0c7ab9aeafcde6a7f2f5ad908adb4c45b4d8398c1df195bdd881017202932f16","issuedAt":1792251675,"notes":["No payment to this payee in the history the agent read.","One payment, not a repeating bill."],"payee":"0x7d8a33fe816827a91e0fcc95657bb56b9b88a48c","policy":"0x48b70e05f04520d876a9d433a5bd1f56e986c26a","ref":"0xefcf8c7942328af866052c5709747b117133d6cefb677417196a134f51c75e35","signature":"0xdc7aa528f8f05dd0dca2d4c4e04f521977547466bfd75054fb17b88c7621bd87283130c7b38cd4359ddabe2fdd5226bc1e605d03e379c277793ff17df52032b51b","status":"received"}
+
+test phantom_invoice ... FAILED
+
+failures:
+
+failures:
+    phantom_invoice
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 4.17s
+
+error: test failed, to rerun pass `-p operator --test organiser`
+exit 101
+
+Result: FAILED on the account's file: the phantom invoice was written to invoices.jsonl as received.
+
+--- M3, double_pay_on_retry, step 1: the service's three replay layers removed, the contract left as it is ---
+(a) the Idempotency-Key replay store in tameion-app, (b) the payments file's record of the operation id, (c) the executed(actionHash)
+read before sending.
+--- <original>/tameion-app.rs.orig	2026-10-17 23:41:38
++++ crates/operator/src/bin/tameion-app.rs	2026-10-17 23:41:38
+@@ -8368,10 +8368,8 @@
+                     let slot = operator::guard::idem_slot(path, k, bearer.as_deref(), device);
+                     (k.to_string(), slot)
+                 });
+-            let replay = match &idem {
+-                Some((k, slot)) => app.idem_check(slot, k, &body).await,
+-                None => None,
+-            };
++            // MUTATION M3 (a): let replay = match &idem { Some((k, slot)) => app.idem_check(slot, k, &body).await, None => None };
++            let replay: Option<Vec<u8>> = None;
+             let first = replay.is_none();
+             let reply = if let Some(r) = denied {
+                 r
+--- <original>/pay.rs.orig	2026-10-17 23:41:38
++++ crates/operator/src/pay.rs	2026-10-17 23:41:38
+@@ -243,9 +243,7 @@
+         .into_iter()
+         .rev()
+         .find(|l| l["operationId"].as_str() == Some(op));
+-    if let Some(r) = before.as_ref().and_then(|l| earlier(l, payee, minor, why)) {
+-        return r;
+-    }
++    // MUTATION M3 (b): if let Some(r) = before.as_ref().and_then(|l| earlier(l, payee, minor, why)) { return r; }
+     let client = match level1::agent_client(app_dir, &t, c) {
+         Ok(client) => client,
+         Err(e) => return conflict("service_error", &e),
+@@ -282,7 +280,7 @@
+     // Settled under this id already (a reply lost before it was written down,
+     // or another copy of the service): it stands, and is never paid twice.
+     match client.executed(policy, hash).await {
+-        Ok(true) => return settled(line, earlier_tx, true).await,
++        Ok(true) => {} // MUTATION M3 (c): return settled(line, earlier_tx, true).await,
+         Ok(false) => {}
+         Err(e) => {
+             return (
+$ cargo test --locked -p operator --test organiser -- --exact double_pay_on_retry --nocapture
+running 1 test
+
+thread 'double_pay_on_retry' (6858193) panicked at crates/operator/tests/organiser.rs:648:9:
+assertion `left == right` failed: retry: {"contractVersion":"2026-10-17.1","error":{"audience":"agent","by":"idempotency","code":"already_paid","executed":"no","meaning":"This payment was already made.","nextStep":"Do not pay it again; read purchases or treasury_inbox for the receipt.","retryAfterSecs":0,"words":"Already paid — a payment is never made twice."},"ok":false}
+  left: 409
+ right: 200
+test double_pay_on_retry ... FAILED
+
+failures:
+
+failures:
+    double_pay_on_retry
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 3.25s
+
+error: test failed, to rerun pass `-p operator --test organiser`
+exit 101
+
+Result: FAILED on the reply (line 648), after the chain checks at lines 633-644 had passed: still one Paid on chain. With the service's
+layers gone, the contract's own executed(actionHash) refused the second payment (AlreadyExecuted -> already_paid); the agent no longer
+gets its payment back, but nothing was paid twice.
+
+--- M3, step 2: (a)-(c) and the contract's executed(actionHash) check removed ---
+--- <original>/BudgetPolicy.sol.orig	2026-10-17 23:35:42
++++ contracts/src/BudgetPolicy.sol	2026-10-17 23:42:26
+@@ -458,7 +458,7 @@
+         // to notice and revoke (docs/46 #3, CFO seat).
+         uint256 readyAt = uint256(attestedSince[to]) + delay;
+         if (block.timestamp < readyAt) revert PayeeCoolingOff(to, readyAt);
+-        if (executed[actionHash]) revert AlreadyExecuted(actionHash);
++        // MUTATION M3 (d): if (executed[actionHash]) revert AlreadyExecuted(actionHash);
+ 
+         if (usdcUnits > perActionCap) revert OverPerActionCap(usdcUnits, perActionCap);
+ 
+mutated policy bytes 9962 (forge inspect, written to contracts/bytecode/BudgetPolicy.hex)
+$ cargo test --locked -p operator --test organiser -- --exact double_pay_on_retry --nocapture
+running 1 test
+
+thread 'double_pay_on_retry' (6865910) panicked at crates/operator/tests/organiser.rs:633:5:
+assertion `left == right` failed: one operation id, 4 payments on chain: [PrincipalSettlement { to: 0xccc139754acbb40d3c52f70f2f6df45183e717f7, amount: Money { minor: 250000, ccy: Usdc }, action_hash: 0x246883d6fcaac1f09f2ca4ec2ead69ed1b0dfdaaf7074a206f707f4c839ba934, tx: 0x8473d6cc461254f09d1a17290dabbd7c8245f1ad58199010c7a02c5e596df4b5, block: 5 }, PrincipalSettlement { to: 0xccc139754acbb40d3c52f70f2f6df45183e717f7, amount: Money { minor: 250000, ccy: Usdc }, action_hash: 0x246883d6fcaac1f09f2ca4ec2ead69ed1b0dfdaaf7074a206f707f4c839ba934, tx: 0x80ace579a3813b1ab438a054a28a11b72f14a3a5232ad4bdb1f039578d019d1f, block: 6 }, PrincipalSettlement { to: 0xccc139754acbb40d3c52f70f2f6df45183e717f7, amount: Money { minor: 250000, ccy: Usdc }, action_hash: 0x246883d6fcaac1f09f2ca4ec2ead69ed1b0dfdaaf7074a206f707f4c839ba934, tx: 0x89667f5878f338e93b5cd080cd9fe824df7f51a0855ede96b1a0003a53153f62, block: 7 }, PrincipalSettlement { to: 0xccc139754acbb40d3c52f70f2f6df45183e717f7, amount: Money { minor: 250000, ccy: Usdc }, action_hash: 0x246883d6fcaac1f09f2ca4ec2ead69ed1b0dfdaaf7074a206f707f4c839ba934, tx: 0x927d794659e10819e9e693a43efa08cee73db7268a96c4adbec7393d810a75f0, block: 8 }]
+  left: 4
+ right: 1
+test double_pay_on_retry ... FAILED
+
+failures:
+
+failures:
+    double_pay_on_retry
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.68s
+
+error: test failed, to rerun pass `-p operator --test organiser`
+exit 101
+
+Result: FAILED on the chain check: one operation id, 4 payments on chain (the abandoned send, the retry, the second send, the second
+copy of the service), all under the same action hash.
+
+== What this does not show ==
+- anvil, not a public testnet: the transaction hashes above exist only on the test's throwaway chain. The same route and the same
+  contract checks (BudgetPolicyBase._payChecked, shared by the native and the token policy) ran live on Arbitrum Sepolia in
+  proof/mcp-http-pay-2026-10-17.txt.
+- phantom_invoice covers an invoice signed by a key that is not the payee's. An invoice signed by an unknown payee's own key is a
+  real invoice from a stranger: the service records it and the payee still needs the owner's passkey (docs/65 §5.4); that is a trust
+  decision, not a forgery.
+- The in-flight retry (409 idempotency_pending) is handled by the test's retry loop; in these runs the first send had finished within
+  300 ms, so the retry was answered from the replay store at once (0 x 409).
