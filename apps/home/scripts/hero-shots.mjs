@@ -3,6 +3,7 @@
 //   node scripts/hero-shots.mjs <outDir> [base=http://localhost:3017] [treatments=ABC]
 // PW_EXECUTABLE=<path> uses that Chromium instead of the installed Chrome.
 import { mkdirSync, readFileSync } from "node:fs";
+import { AxeBuilder } from "@axe-core/playwright";
 import { chromium } from "playwright-core";
 
 const [out, base = "http://localhost:3017", which = "ABC"] = process.argv.slice(2);
@@ -19,7 +20,8 @@ const scrollTo = (page, p) =>
 
 for (const t of which) {
   for (const [width, height] of sizes) {
-    const page = await browser.newPage({ viewport: { width, height } });
+    const ctx = await browser.newContext({ viewport: { width, height } }); // axe needs its own context
+    const page = await ctx.newPage();
     await page.goto(`${base}/?treatment=${t}`, { waitUntil: "networkidle" });
     await page.waitForSelector('[data-ready="1"]', { timeout: 20_000 });
     for (const p of [0, 0.2, 0.4, 0.6, 0.8, 1]) {
@@ -29,9 +31,16 @@ for (const t of which) {
       await page.screenshot({ path });
       console.log(path);
     }
+    // axe on the page at rest (p = 0) and at the book (p = 1)
+    for (const p of [0, 1]) {
+      await scrollTo(page, p);
+      await page.waitForTimeout(300);
+      const { violations } = await new AxeBuilder({ page }).analyze();
+      console.log(`axe ${t} ${width} p=${p}: ${violations.length ? violations.map((v) => `${v.id} (${v.nodes.length}) ${v.nodes[0]?.target}`).join("; ") : "clean"}`);
+    }
     const sw = await page.evaluate(() => document.documentElement.scrollWidth);
     if (sw > width) console.log(`WARN ${t} ${width}: the page scrolls sideways (scrollWidth ${sw})`);
-    await page.close();
+    await ctx.close();
   }
 }
 // reduced motion: three stills instead of the scroll sequence
