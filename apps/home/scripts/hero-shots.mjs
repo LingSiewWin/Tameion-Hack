@@ -27,6 +27,8 @@ for (const t of which) {
     for (const p of [0, 0.2, 0.4, 0.6, 0.8, 1]) {
       await scrollTo(page, p);
       await page.waitForTimeout(300);
+      // the book: wait until the Owner home has read the account (its skeleton says aria-busy while it loads)
+      if (p === 1) await page.waitForFunction(() => !document.querySelector("[data-hero] [aria-busy='true']"), null, { timeout: 20_000 }).catch(() => console.log(`WARN ${t} ${width}: the book was still loading`));
       const path = `${out}/hero-${t}-p${String(Math.round(p * 100)).padStart(3, "0")}-${width}.png`;
       await page.screenshot({ path });
       console.log(path);
