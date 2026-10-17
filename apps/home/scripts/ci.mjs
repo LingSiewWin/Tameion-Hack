@@ -9,6 +9,7 @@
 //   npm run ci -- --route account --state loading,error --view owner --width 390
 //   npm run ci -- --no-browser                  the static steps only
 //   npm run ci -- --dry                         list the matrix, run nothing
+//   npm run ci -- --lighthouse                  Lighthouse mobile on `/` (LH_URL for a production server): performance >= 85, LCP <= 2.5 s, no image over 350 KB
 //   npm run ci -- --fast                        use the Owner home's ?state= flag for loading, empty, error, offline (the real offline path waits ~20 s)
 //   npm run ci -- --strict                      a feature that is not built yet (no sheet, no account) counts as FAIL
 //
@@ -22,6 +23,7 @@
 //
 // Read-only: it loads pages, flips the capsule, presses Tab, opens a row. It never presses Stop, Approve, Decline or Raise.
 import { execFileSync, spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -177,6 +179,23 @@ function stepZeroHash() {
     return { name: "zero-hash", sev: r.status === 0 ? "pass" : "fail", lines: r.status === 0 ? [out.filter((l) => /^ℹ (tests|pass|fail)/.test(l)).join("  ")] : out.filter((l) => l.trim() && !/^ℹ /.test(l)).slice(-12) };
   }
   return run("zero-hash", ["--test", "test/owner-no-hash.test.mts"], "test/owner-no-hash.test.mts is missing (H2: DESIGN Rule 1, a seeded Owner page with no /0x[0-9a-fA-F]{8,}/ in the DOM)");
+}
+
+// DESIGN §Acceptance: Lighthouse mobile performance >= 85 and LCP <= 2.5 s on `/`, no image over 350 KB. Lighthouse mobile is its default (a Moto G class phone,
+// slow 4G, simulated). Measure a production server (`npm run build && npx next start -p 3015`, then LH_URL=http://localhost:3015), not `next dev`.
+function stepLighthouse(url) {
+  const file = join(tmpdir(), `lh-${process.pid}.json`);
+  const chrome = process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+  const r = spawnSync("npx", ["--yes", "lighthouse@13.5.0", `${url}/`, "--quiet", "--only-categories=performance", "--output=json", `--output-path=${file}`, "--chrome-flags=--headless=new"], { env: { ...process.env, CHROME_PATH: chrome }, encoding: "utf8", timeout: 300000 });
+  if (r.status !== 0 || !existsSync(file)) return { name: "lighthouse", sev: "fail", lines: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim().split("\n").slice(-6) };
+  const j = JSON.parse(readFileSync(file, "utf8")), a = j.audits;
+  const score = Math.round(j.categories.performance.score * 100), lcp = Math.round(a["largest-contentful-paint"].numericValue);
+  const imgs = (a["network-requests"]?.details?.items ?? []).filter((x) => x.resourceType === "Image").sort((x, y) => y.transferSize - x.transferSize);
+  const big = imgs.filter((x) => x.transferSize > 350 * 1024);
+  const lines = [`mobile performance ${score} (DESIGN >= 85), LCP ${lcp} ms (DESIGN <= 2500), TBT ${Math.round(a["total-blocking-time"].numericValue)} ms, CLS ${a["cumulative-layout-shift"].numericValue.toFixed(3)}, ${Math.round(a["total-byte-weight"].numericValue / 1024)} KB over the wire; Lighthouse ${j.lighthouseVersion} on ${url}/`];
+  if (imgs[0]) lines.push(`largest image ${Math.round(imgs[0].transferSize / 1024)} KB ${new URL(imgs[0].url).pathname.slice(0, 60)}`);
+  for (const x of big) lines.push(`over 350 KB: ${new URL(x.url).pathname.slice(0, 60)} ${Math.round(x.transferSize / 1024)} KB`);
+  return { name: "lighthouse", sev: score >= 85 && lcp <= 2500 && !big.length ? "pass" : "fail", lines };
 }
 
 // Steps another seat builds, wired in as soon as the npm script exists (DESIGN §Acceptance: the tokens-only hex lint, `21st review` with zero errors).
@@ -697,14 +716,15 @@ async function focusWalk(browser, sc, cfg) {
     let prevY = -1;
     mkdirSync(join(cfg.shotsDir, "focus"), { recursive: true });
     await page.evaluate(() => { document.activeElement?.blur?.(); window.scrollTo(0, 0); });
-    for (let i = 0; i < 80; i++) {
+    let capped = true;
+    for (let i = 0; i < 400; i++) {
       await page.keyboard.press("Tab");
       const h = await page.evaluateHandle(() => (document.activeElement && document.activeElement !== document.body && document.activeElement !== document.documentElement ? document.activeElement : null));
       const el = h.asElement();
-      if (!el) break;
+      if (!el) { capped = false; break; }
       const info = await el.evaluate(focusInfo);
       if (info.portal) continue;
-      if (seen.has(info.key)) break;
+      if (seen.has(info.key)) { capped = false; break; }
       seen.add(info.key);
       R.stops++;
       const box = await el.boundingBox();
@@ -727,7 +747,8 @@ async function focusWalk(browser, sc, cfg) {
       }
     }
     const missed = want.filter((k) => !seen.has(k));
-    if (missed.length) R.findings.push({ sev: "warn", rule: "not-reachable-by-tab", sel: missed[0].split("@")[0], text: "", detail: `${missed.length} interactive element(s) were never a Tab stop` });
+    if (capped) R.findings.push({ sev: "warn", rule: "focus-walk-capped", sel: "", text: "", detail: `${R.stops} stops and Tab had not wrapped yet: the walk stopped at 400 presses` });
+    else if (missed.length) R.findings.push({ sev: "warn", rule: "not-reachable-by-tab", sel: missed[0].split("@")[0], text: "", detail: `${missed.length} interactive element(s) were never a Tab stop` });
   } catch (e) {
     R.findings.push({ sev: "fail", rule: "scenario-error", sel: "", text: "", detail: String(e.message).split("\n")[0].slice(0, 160) });
   } finally {
@@ -751,7 +772,10 @@ async function motionAndShell(browser, sc, cfg) {
       const loops = idle.restRunning.filter((a) => !/pulse|skeleton/i.test(a.name) && (a.infinite || a.props.some((p) => !["opacity", "mixBlendMode"].includes(p))));
       if (loops.length) R.findings.push({ sev: "fail", rule: "moves-at-rest", sel: loops[0].id.split("|").pop(), text: "", detail: `${loops.length} animation(s) still run on a settled page (${loops.map((a) => a.name || a.id.split("|")[0]).join(", ")}); nothing moves that is not a state change` });
       for (const to of ["agent", "owner"]) {
+        // the picture that shows it: a frame 100 ms into the flip (a blend of both views with motion, already the new view when reduced)
+        const frame = cfg.shots ? (async () => { await page.waitForTimeout(100); mkdirSync(cfg.shotsDir, { recursive: true }); await page.screenshot({ path: join(cfg.shotsDir, `${reduced ? "reduced" : "motion"}-flip-to-${to}-${sc.width}.png`), caret: "hide" }); })() : null;
         const m = await page.evaluate(sampleMotion, { action: to, ms: 700 });
+        await frame;
         if (m.error) { R.findings.push({ sev: "fail", rule: "capsule", sel: "", text: "", detail: m.error }); break; }
         if (m.after !== to) R.findings.push({ sev: "fail", rule: "capsule-flip", sel: "", text: "", detail: `clicked ${to}, html[data-view] is ${m.after}` });
         // the UA's ::view-transition-group / image-pair animate size and position from the old snapshot to the new one; for the root they do not change
@@ -795,6 +819,12 @@ async function sheetCheck(browser, sc, cfg) {
     await settle(page);
     await setView(page, sc.view);
     if (!(await openDetail(page))) { R.findings.push({ sev: cfg.strict ? "fail" : "note", rule: "not-built-yet", sel: "", text: "", detail: "no row disclosure to open" }); return R; }
+    if (!(await page.$("dialog[open], [role=dialog]"))) {
+      // an inline disclosure: the control says what it opens and the opened region is on screen
+      const inline = await page.evaluate(() => { const b = document.querySelector('[aria-expanded="true"]'); const t = b && document.getElementById(b.getAttribute("aria-controls") ?? ""); return { controls: !!t, shown: !!t && window.__h6.vis(t) }; });
+      if (!inline.controls || !inline.shown) R.findings.push({ sev: "fail", rule: "disclosure-target", sel: "[aria-expanded]", text: "", detail: "an expanded row's aria-controls names no visible region" });
+      return R;
+    }
     const d = await page.evaluate(() => {
       const el = document.querySelector("dialog[open], [role=dialog]");
       const r = el.getBoundingClientRect();
@@ -953,6 +983,7 @@ async function main() {
   const palette = Object.fromEntries(["owner", "agent"].map((v) => [v, Object.keys(pal[v] ?? {}).length ? pal[v] : Object.fromEntries(Object.entries(css[v]).map(([k, x]) => [k, hexNorm(x)]).filter(([, x]) => x))]));
   for (const s of steps) console.log(`${s.sev.toUpperCase().padEnd(5)} ${s.name}${s.lines.length ? "\n        " + s.lines.join("\n        ") : ""}`);
 
+  if (args.lighthouse) { const lh = stepLighthouse((process.env.LH_URL ?? cfg.url).replace(/\/$/, "")); steps.push(lh); console.log(`${lh.sev.toUpperCase().padEnd(5)} ${lh.name}\n        ${lh.lines.join("\n        ")}`); }
   const results = [];
   const say = (R, extra = "") => console.log(`${worst(R.findings).toUpperCase().padEnd(5)} ${R.name}${extra}`);
   if (!args["no-browser"]) {
