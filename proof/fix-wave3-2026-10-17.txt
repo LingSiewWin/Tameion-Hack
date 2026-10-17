@@ -45,3 +45,14 @@ tameion-app settle_key_tests::a_priced_out_purchase_waits_until_a_later_purchase
 cargo fmt -p operator --check: clean. cargo clippy -p operator --lib --tests --bins --examples -D warnings: clean.
 cargo test -p operator: lib 176, tameion-app 14, tameion-mcp 1, app_http 13, claude_transport 4, decide_eval 3, hedge_advice 4, mcp_stdio 2 — all passed, 0 failed.
 apps/console: tsc --noEmit clean; eslint (verify.ts, test/verify.test.mts) clean; node --test test/*.mts: 58 pass, 0 fail.
+
+## Wave 3 follow-ups (P-218, P-219, P-220) — 2026-10-17 14:03:32 +0800
+P-220, live: scripts/verify_tenant.sh http://127.0.0.1:7903 0x42463b314d392fe34abe1854b925f0f6e55fa555 (uat-u1-acme, locked), both Arbitrum Sepolia nodes:
+  no key (14:01:11): events 2 lines downloaded / checked from the public leaf hashes only: this account is locked, and its events need TAMEION_TOKEN (a key with read)
+    recomputed root 0x79c9396d808f57d31ab1d644d4702e1ac7699223a8e624823a86606fc7030d73; chain rootOf (anchor 0xe7c381aafa077cc99359e8b297d2125efd76b8f5, agent 0x0d6a411b4a0bcb9ded981a3c229027a03443faf3) MATCH on block 319986845 and 319986881
+    verify_tenant: MATCH on both RPCs, checked from the public leaf hashes only: …
+  its read key in TAMEION_TOKEN (read from ~/.tameion/test-keys, not printed) (14:01:34): checked from the events themselves; [0000] SETTLEMENT bought x402 …, [0001] OBSERVATION Holding 0.998000 USDC …
+    verify_tenant: MATCH on both RPCs, checked from the events themselves
+P-219, live regression: uat-u2-fin's read-only plan with the orders now read (14:01:53): due [], aside [], next cycle …@1794748029 (unchanged).
+P-218 and P-219, pass tests on a fake chain: a_model_refusal_of_a_bill_asks_the_owner_unless_a_look_alike, a_cycle_a_standing_order_paid_is_not_asked_again — ok. Not run live (no model on a real pass; no real order).
+Gate: fmt clean; clippy -p operator --lib --tests --bins --examples -D warnings clean; cargo test -p operator: lib 178, tameion-app 14, mcp 1, app_http, claude_transport, decide_eval, hedge_advice, mcp_stdio all ok, 0 failed.
