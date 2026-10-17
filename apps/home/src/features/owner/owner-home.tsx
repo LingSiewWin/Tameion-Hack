@@ -128,8 +128,8 @@ export function OwnerHome({ name }: { name: string }) {
       const done = await act(phase);
       setPhase({ label: COPY.phase.confirmed, since: Date.now() });
       await refresh();
-      if (key === "stop") setToast(done);
-      else setOutcome({ key, text: done, failed: false });
+      // Success is a toast: the item it answered may be gone after the read that followed it.
+      setToast(done);
     } catch (e) {
       const closed = (e as Error).name === "NotAllowedError" || (e as Error).name === "AbortError";
       // Whether money (or a setting) may have moved: a refusal says so in its envelope; no answer at all after the call

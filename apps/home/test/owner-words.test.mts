@@ -94,6 +94,12 @@ test("needs you: one sentence and one action per item", () => {
     ["Let the agent pay Demo Vendor.", "Approve"],
     ["0.01 USDC to Demo Vendor is more than one payment may be.", "Raise the cap"],
   ]);
+  const asked = needs({
+    ...inbox,
+    pending: { kinds: 1, eta: 1792276848, perActionCap: "0.010000 USDC", dailyCap: "0.050000 USDC" },
+    needsYou: [{ counterparty: VENDOR, amount: "0.010000 USDC", why: "per-action-cap: over", to: POLICY, data: "0x" }],
+  });
+  assert.deepEqual(asked.map((x) => [x.sentence, x.action]), [["0.01 USDC to Demo Vendor waits for the cap to rise at 06:40.", null]], "a raise asked: no second ask");
   const onPropose = needs({ ...inbox, mode: "Propose", needsYou: [{ counterparty: VENDOR, amount: "0.010000 USDC", why: "per-action-cap: over", to: POLICY, data: "0x" }] });
   assert.deepEqual(onPropose.map((x) => [x.sentence, x.action]), [["The agent prepared 0.01 USDC to Demo Vendor.", "Approve"]], "asking mode: the owner's tap pays it");
 });

@@ -242,7 +242,8 @@ export function halvesWords(h: Halves | undefined, payee: string): string {
 export type Need = {
   key: string;
   sentence: string;
-  action: "Approve" | "Raise the cap";
+  /** null: the owner already acted and the account waits (a raise waiting out its delay) */
+  action: "Approve" | "Raise the cap" | null;
   kind: "seller" | "bill" | "invoice";
   counterparty: string;
   amount: string;
@@ -254,7 +255,7 @@ export type Need = {
 /** Needs you, from the lists the service counts in `waitingCount` (sellers, invoices, prepared payments; in its order).
  *  A payment over the per-payment cap asks to raise the cap only on Autopilot, where the agent then pays it itself; on
  *  the other modes the owner's tap pays it (Approve). */
-export function needs(inbox: Pick<Inbox, "sellersToApprove" | "invoices" | "needsYou" | "parties" | "payees" | "mode">): Need[] {
+export function needs(inbox: Pick<Inbox, "sellersToApprove" | "invoices" | "needsYou" | "parties" | "payees" | "mode" | "pending">): Need[] {
   const out: Need[] = [];
   for (const s of inbox.sellersToApprove ?? [])
     out.push({ key: `seller-${s.seller}-${s.host ?? ""}`, sentence: `Let the agent pay ${payeeName(inbox, s.seller)}.`, action: "Approve", kind: "seller", counterparty: s.seller, amount: s.amount });
@@ -271,12 +272,18 @@ export function needs(inbox: Pick<Inbox, "sellersToApprove" | "invoices" | "need
     });
   for (const n of inbox.needsYou ?? []) {
     const over = overCap(n.why) && inbox.mode === "Autopilot";
+    // A raise the owner already asked that covers this payment: the item says when, and offers no second ask.
+    const p = inbox.pending;
+    const raising = over && !!p?.eta && ((p.kinds ?? 0) & 1) !== 0 && (minor(p.perActionCap) ?? 0n) >= (minor(n.amount) ?? 0n);
+    const who = payeeName(inbox, n.counterparty);
     out.push({
       key: `bill-${n.actionHash ?? n.counterparty + n.amount}`,
-      sentence: over
-        ? `${money(n.amount)} to ${payeeName(inbox, n.counterparty)} is more than one payment may be.`
-        : `The agent prepared ${money(n.amount)} to ${payeeName(inbox, n.counterparty)}.`,
-      action: over ? "Raise the cap" : "Approve",
+      sentence: raising
+        ? `${money(n.amount)} to ${who} waits for the cap to rise at ${hhmm(new Date(p!.eta! * 1000))}.`
+        : over
+          ? `${money(n.amount)} to ${who} is more than one payment may be.`
+          : `The agent prepared ${money(n.amount)} to ${who}.`,
+      action: raising ? null : over ? "Raise the cap" : "Approve",
       kind: "bill",
       counterparty: n.counterparty,
       amount: n.amount,

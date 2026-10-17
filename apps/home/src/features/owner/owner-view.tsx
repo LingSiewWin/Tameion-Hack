@@ -180,6 +180,8 @@ function Needs(p: OwnerViewProps & { items: Need[] }) {
       <h2 id="needs-title" className={`row-title m-0 ${p.items.length ? "text-(--attention)" : ""}`}>
         {COPY.needsTitle}
       </h2>
+      {/* a failure whose item is gone after the read that followed it still says what happened */}
+      {p.outcome && p.outcome.key !== "stop" && !p.items.some((n) => n.key === p.outcome?.key) && <Result o={p.outcome} />}
       {p.items.length ? (
         <ul className={`${plate} m-0 list-none px-(--space-5) py-0`}>
           {p.items.map((n) => {
@@ -187,7 +189,7 @@ function Needs(p: OwnerViewProps & { items: Need[] }) {
             return (
               <li key={n.key} className="flex flex-col gap-(--space-3) border-b border-(--rule) py-(--space-4) last:border-b-0 md:flex-row md:items-center">
                 <p className="row-title m-0 min-w-0 flex-1">{n.sentence}</p>
-                {!p.guest && (
+                {!p.guest && n.action && (
                   <button type="button" onClick={() => p.onNeed?.(n)} className={compact}>
                     {ph ? phaseText(ph, p.clockMs ?? ph.since) : n.action}
                   </button>
