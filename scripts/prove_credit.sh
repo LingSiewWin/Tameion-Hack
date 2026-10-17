@@ -2,7 +2,9 @@
 # The credit line on Arc testnet: deploy, lock -> score -> draw -> repay -> draw -> slash.
 # No external lender; testnet; not a lending protocol.
 #
-#   TAMEION_RELAYER_KEY="$(cat ~/.tameion/treasury.key)" POLICY=0x… [GAS_PRICE=22gwei TIP=2gwei] scripts/prove_credit.sh
+#   TAMEION_RELAYER_KEY="$(cat ~/.tameion/treasury.key)" POLICY=0x… [GAS_PRICE=22gwei TIP=2gwei] [LINE=0x…] scripts/prove_credit.sh
+#
+# LINE resumes on a CreditLine already deployed and floated (from the lock on).
 #
 # The relayer is the account, the scorer and the judge at once (one funded key);
 # the forge tests hold the roles apart. POLICY is a BudgetPolicy the relayer is
@@ -34,12 +36,27 @@ EVIDENCE=$(cast keccak "tameion:credit-line:testnet-dummy-evidence:2026-10-18")
 FEES=()
 [ -n "${GAS_PRICE:-}" ] && FEES=(--gas-price "$GAS_PRICE" --priority-gas-price "${TIP:-1gwei}")
 
-usdc() { python3 -c "print(f'{int($1)/1e6:.6f}')"; }
+usdc() { [ -n "${1:-}" ] || { echo "?"; return; }; python3 -c "print(f'{int($1)/1e6:.6f}')"; }  # ? = the read failed
 rule() { printf '\n== %s ==\n' "$1"; }
 send() { # send <label> <cast send args…>; prints the tx and fails on a revert
-  local label=$1 out tx st; shift
-  out=$(cast send "$@" ${FEES[@]+"${FEES[@]}"} --rpc-url "$RPC_URL" --private-key "$TAMEION_RELAYER_KEY" --json)
-  tx=$(python3 -c "import sys,json;print(json.load(sys.stdin)['transactionHash'])" <<<"$out")
+  # Retries ONLY while the pending nonce shows nothing left (prove_arc.sh psend):
+  # a retry after a transaction did leave is how one lock becomes two.
+  local label=$1 out tx="" st gas before after; shift
+  for attempt in 1 2 3 4 5; do
+    before=$(cast nonce "$ME" --block pending --rpc-url "$RPC_URL")
+    if out=$(cast send --async "$@" ${FEES[@]+"${FEES[@]}"} --rpc-url "$RPC_URL" --private-key "$TAMEION_RELAYER_KEY" 2>&1); then
+      tx=$(tail -1 <<<"$out"); break
+    fi
+    sleep 3
+    after=$(cast nonce "$ME" --block pending --rpc-url "$RPC_URL")
+    [ "$after" = "$before" ] || { echo "  $label: endpoint errored but the nonce moved ($before -> $after); not resending"; exit 1; }
+    echo "  $label: attempt $attempt refused before sending ($(head -1 <<<"$out" | cut -c1-80)); retrying"
+  done
+  [ -n "$tx" ] || { echo "  $label: not sent"; exit 1; }
+  for _ in $(seq 1 60); do
+    out=$(cast receipt "$tx" --json --rpc-url "$RPC_URL" 2>/dev/null) && break
+    sleep 2
+  done
   st=$(python3 -c "import sys,json;print(int(json.load(sys.stdin)['status'],16))" <<<"$out")
   gas=$(python3 -c "import sys,json;print(int(json.load(sys.stdin)['gasUsed'],16))" <<<"$out")
   printf '  %-8s tx %s  status %s  gas %s\n           %s/tx/%s\n' "$label" "$tx" "$st" "$gas" "$EXPLORER" "$tx"
@@ -61,22 +78,26 @@ ME=$(cast wallet address --private-key "$TAMEION_RELAYER_KEY")
 BAL=$(cast balance "$ME" --rpc-url "$RPC_URL")
 echo "  Arc testnet 5042002 via $RPC_URL"
 echo "  relayer $ME holds $(python3 -c "print(f'{int($BAL)/1e18:.6f}')") USDC"
-python3 -c "import sys; sys.exit(0 if int('$BAL') >= 50 * 10**15 else 1)" || { echo "  needs >= 0.050 USDC"; exit 1; }
+NEED=$([ -n "${LINE:-}" ] && echo 25 || echo 50)
+python3 -c "import sys; sys.exit(0 if int('$BAL') >= $NEED * 10**15 else 1)" || { echo "  needs >= 0.0$NEED USDC"; exit 1; }
 [ "$(cast call "$POLICY" 'principal()(address)' --rpc-url "$RPC_URL")" = "$ME" ] || { echo "  $POLICY is not the relayer's policy"; exit 1; }
 POLICY_BEFORE=$(cast balance "$POLICY" --rpc-url "$RPC_URL")
 
-rule "deploy CreditLine (scorer = judge = $ME, cap $(usdc $CAP), maxAge ${MAX_AGE}s, unlock delay ${DELAY}s)"
-cd "$ROOT/contracts"
-# --force: a `forge lint` leaves abi-only artifacts that a plain build calls current (docs/60 P-6).
-LINE=$(forge create --force --broadcast src/credit/CreditLine.sol:CreditLine \
-  ${FEES[@]+"${FEES[@]}"} --rpc-url "$RPC_URL" --private-key "$TAMEION_RELAYER_KEY" \
-  --constructor-args "$ME" "$ME" $CAP $MAX_AGE $DELAY | tee /dev/stderr | awk '/Deployed to:/{print $3}')
-cd "$ROOT"
-echo "  CreditLine $LINE"
-echo "             $EXPLORER/address/$LINE"
-
-rule "float $(usdc $FLOAT) (anyone may send; never a deposit)"
-send float "$LINE" --value $((FLOAT * W))
+if [ -n "${LINE:-}" ]; then
+  rule "resume on CreditLine $LINE (deploy and float already sent)"
+else
+  rule "deploy CreditLine (scorer = judge = $ME, cap $(usdc $CAP), maxAge ${MAX_AGE}s, unlock delay ${DELAY}s)"
+  cd "$ROOT/contracts"
+  # --force: a `forge lint` leaves abi-only artifacts that a plain build calls current (docs/60 P-6).
+  LINE=$(forge create --force --broadcast src/credit/CreditLine.sol:CreditLine \
+    ${FEES[@]+"${FEES[@]}"} --rpc-url "$RPC_URL" --private-key "$TAMEION_RELAYER_KEY" \
+    --constructor-args "$ME" "$ME" $CAP $MAX_AGE $DELAY | tee /dev/stderr | awk '/Deployed to:/{print $3}')
+  cd "$ROOT"
+  echo "  CreditLine $LINE"
+  echo "             $EXPLORER/address/$LINE"
+  rule "float $(usdc $FLOAT) (anyone may send; never a deposit)"
+  send float "$LINE" --value $((FLOAT * W))
+fi
 rule "1. lock $(usdc $LOCK)"
 send lock "$LINE" "lock()" --value $((LOCK * W))
 state
