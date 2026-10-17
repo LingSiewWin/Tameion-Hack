@@ -241,7 +241,7 @@ function install({ key, view, pub }) {
     const p = [];
     for (let e = el, n = 0; e && e.nodeType === 1 && n < 3; e = e.parentElement, n++) {
       let s = e.tagName.toLowerCase();
-      if (e.id) { p.unshift(`${s}#${e.id}`); break; }
+      if (e.id && !/\d{3,}/.test(e.id) && !/^[:_]?r_/.test(e.id)) { p.unshift(`${s}#${e.id}`); break; }
       const c = [...e.classList].slice(0, 2).join(".");
       if (c) s += "." + c;
       p.unshift(s);
@@ -353,7 +353,7 @@ function domRules({ view, width, route, palette, spec }) {
       const frac = (m[1].split(".")[1] ?? "");
       if (frac.length > 6 || /0$/.test(frac)) add("warn", "money-not-shortest", e, `"${m[0]}": six decimals trimmed to the shortest that is exact`);
     }
-    if ((own.match(money) || clock.test(own)) && !/tabular-nums/.test(s.fontVariantNumeric) && !mono(e)) add("fail", "figures-not-tabular", e, `"${(own.match(money)?.[0] ?? own.match(clock)[0])}": tabular lining figures wherever money or time appears`);
+    if ((own.match(money) || clock.test(own)) && !/tabular-nums/.test(s.fontVariantNumeric) && !mono(e)) add("fail", "figures-not-tabular", e, `${own.match(money) ? "money" : "time"} is not set in tabular lining figures (font-variant-numeric)`);
   }
   for (const hd of all.filter((e) => /^H[1-6]$/.test(e.tagName) || e.getAttribute("role") === "heading")) if (/\s[—–]\s/.test(hd.textContent)) add("fail", "word-dash-heading", hd, "no WORD — fragment headings");
   for (const b of all.filter((e) => e.matches("button, a[href], [role=button]"))) {
