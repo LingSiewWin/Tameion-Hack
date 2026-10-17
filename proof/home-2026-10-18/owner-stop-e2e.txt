@@ -48,3 +48,22 @@ Earlier owner calls on the same account, signed the same way by the seat's harne
 }
 modeAfter is still Watch: the raise waits its delay, and the inbox carried pending {mode: Propose, eta 1792277686}; the Owner home showed
 "At 06:54 the agent starts again, asking before each payment." (owner-home-start-pending-owner-390.png) and no second Start.
+
+Needs you → "Approve" on a payment the agent prepared, the same flow (owner-e2e.mts approve), 07:10 +08. The account on Propose, a new
+Demo Vendor bill saved at 07:08 (0.002 USDC every 2 min); at 07:09:46 the agent's due check prepared the payment and it waited for the owner
+(waitingCount 1). The Owner home's checks before signing: the prepared call goes to this account, and it pays exactly the row's payee and
+amount (checkSettle), then the recomputed challenge, then the passkey.
+{
+ "action": "approve",
+ "what": { "counterparty": "Demo Vendor (…3854)", "amount": "0.002000 USDC" },
+ "modeBefore": "Propose",
+ "waitingBefore": 1,
+ "phases": ["Signing", "Sent"],
+ "executed": {
+  "explorer": "https://sepolia.arbiscan.io/tx/0xfcc52080bac0f4ec688230a795e94e813e4d9804795a68899f20135db62e4eaa",
+  "tx": "0xfcc52080bac0f4ec688230a795e94e813e4d9804795a68899f20135db62e4eaa"
+ },
+ "modeAfter": "Propose",
+ "waitingAfter": 0,
+ "paidAfter": 15
+}
