@@ -210,3 +210,28 @@ Idempotent-Replayed: true
    /api/openapi.json describes POST /api/level1/tokens/stop: yes; the stopped key on the inbox: 403; the live inbox and status replies
    validate against the branch's openapi.json with 0 errors (main's schema refused stoppedTokens as unevaluated, fixed in 6b67772).
    cargo test -p operator (own target dir): 251 passed, 0 failed, 1 ignored; clippy -D warnings clean; rustfmt clean.
+
+== H. docs/60 P-252 (a pass only to a caller that may read its account) and P-250 (device tokens scrubbed), written 2026-10-17 17:12 +0800 ==
+# branch seat/S15 on main a5bb912 + this change, built in runtime/seats/S15/target; start 8 (runtime/seats/S15/run8.log). The pass record
+# 6ad40000-00f1 is a seat fixture for desk-gold-2329 (no pass of that account exists on this host); credentials as in parts B and E.
+-- H1. a pass of desk-gold-2329 (seat fixture jobs/6ad40000-00f1.json), GET /api/watch/6ad40000-00f1:
+   no credential: 404 {"id": null, "status": null, "error.code": "not_found"}
+   the stopped agent key tok-96a43298: 404 {"id": null, "status": null, "error.code": "not_found"}
+   agent key tok-s15fix (prepare only, no read): 404 {"id": null, "status": null, "error.code": "not_found"}
+   a made-up key: 404 {"id": null, "status": null, "error.code": "not_found"}
+   the owner's device: 200 {"id": "6ad40000-00f1", "status": "done", "error.code": null}
+   an id that does not exist (same answer as a pass you may not read): 404 {"id": null, "status": null, "error.code": "not_found"}
+-- H2. a Watch scan stays open by id (6ad32f75-0000, no credential): 200 {"id": "6ad32f75-0000", "status": "done", "error.code": null}
+-- H3. a device token minted by the reserve flow: POST /api/level1/deploy {lazy, a new name, the public key in ~/.tameion/test-keys/lazy_pub.hex}
+   the reply carries the token once: length 64, hex: yes, "[redacted]" in the reply: 0
+   then GET /api/level1/resolve?q=<that token>.eth (the route repeats the name it was given):
+   {"error":"[redacted].eth is neither an ENS name nor a domain that lists an address for this chain"}
+== Leak checks over the whole file after part H ==
+   admin.token: 0
+   rpckey: 0
+   devtok2: 0
+   bearer.h value: 0
+   bearer2.h value: 0
+   device.h value: 0
+   run1–run8 logs: keyed RPC value 0, admin token 0, minted device token 0
+== :7915 stopped by PID at 2026-10-17 17:13 +0800 (the seat service ran PID 94283 for part H) ==
