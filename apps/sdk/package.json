@@ -1,0 +1,21 @@
+{
+  "name": "@tameion/sdk",
+  "version": "0.1.0",
+  "description": "Client and CLI for a Tameion account: read it, run a check, buy a paid API inside the mandate the owner signed.",
+  "type": "module",
+  "sideEffects": false,
+  "engines": { "node": ">=20" },
+  "main": "./dist/src/client.js",
+  "types": "./dist/src/client.d.ts",
+  "exports": { ".": { "types": "./dist/src/client.d.ts", "default": "./dist/src/client.js" } },
+  "bin": { "tameion": "./dist/src/cli.js" },
+  "files": ["dist/src", "README.md"],
+  "scripts": {
+    "build": "tsc -p .",
+    "test": "tsc -p . && node --test dist/test/"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.9",
+    "typescript": "5.9.3"
+  }
+}
