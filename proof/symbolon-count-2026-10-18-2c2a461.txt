@@ -1,0 +1,99 @@
+# symbolon_count over runtime/app (seat E1, main 2c2a461 + the uncommitted --show change in crates/operator/examples/symbolon_count.rs)
+# written 2026-10-18 05:46:41 +0800
+# command: TAMEION_RPC_ARC=https://rpc.testnet.arc.io cargo run -q -p operator --example symbolon_count -- runtime/app
+# why the override: rpc.testnet.arc.network answers NXDOMAIN from this Mac (S20s); rpc.testnet.arc.io answers for Arc testnet (chain 5042002)
+# chain for the invoice cycle: Arbitrum Sepolia (the relayer's Arc balance read 0.006 USDC at 05:29:49 < 0.3) -- but the cycle did NOT run (end of file)
+# slots: witness = the root's anchoring tx read back on its chain; counterparty = a payee-signed invoice for the paid bill cycle;
+#        agent = none: no code path signs a record with the agent key (sig::slot_sig is called only by two examples and tests)
+# service at run time: :7880 PID 29784, restarted 05:31:24 from main, GET /api/level1/status contractVersion 2026-10-18.1 with rails
+
+## run 1 (all accounts)
+# started 2026-10-18 05:39:46 +0800
+account                                    records unsigned single double triple  chain
+0x075feefbcce89cc6b4ebae366d00b7ade3e27916      10        0     10      0      0  arc-testnet
+0x08db42e5d8af1cec6640d4e1f52b4b5acf6eee32       2        0      2      0      0  arbitrum-sepolia
+0x1645951793f7ca2ae36d7a3eeae90ef93e1932ab      53        0     53      0      0  arc-testnet
+0x1a5121dbabecd0abb8bc8cdb7916748a9a507b88       4        0      4      0      0  arbitrum-sepolia
+0x1ea18505a2b7be40def78d4b2ad53f2e004ce488       2        0      2      0      0  arc-testnet
+0x224fa9badcffb95fe41f3257cfb4f5e94436991a       2        0      2      0      0  arc-testnet
+0x26e6901e08b9928bbbc7d3523c9102da5e361e53      12        0     12      0      0  arbitrum-sepolia
+0x2ecdabed2b8c48a8ce37fcb56bfee94c4991e8a3       6        0      6      0      0  arc-testnet
+0x35a2e2701d4d72be257bf7708c67d1433c60342f      31        0     31      0      0  arbitrum-sepolia
+0x42463b314d392fe34abe1854b925f0f6e55fa555       2        0      2      0      0  arbitrum-sepolia
+0x48274c7904edb23f75ea607c932d5c441c1a80e3       4        0      4      0      0  arbitrum-sepolia
+0x489dbd3dfc2985a65c9b5d555e2b42986c151661       3        3      0      0      0  arc-testnet
+0x5d74363c6d599b334dfe3e601f576079436a4c37       6        6      0      0      0  arc-testnet
+0x727e659593e183a1a7ba663e2f44075fba8be5f3       5        0      5      0      0  arbitrum-sepolia
+0x74cf5962e9a316a0693afd04c244e6586b1b6be6       4        0      4      0      0  arbitrum-sepolia
+0x7839d74d424dd14ad7147d11bc26745a82ed0df9       8        8      0      0      0  arc-testnet
+0x7bae6c3e651355c0b8bd8810d8dabd9b8e4be6d2       2        0      2      0      0  arbitrum-sepolia
+0x7ebc3894ec793fa6c9225841992001e580da9273      17        0     17      0      0  arbitrum-sepolia
+0x800d8171813bcfff6fccd40bcd90656af6f4665c       0        0      0      0      0  arc-testnet
+0x818e56c043e052f1c7d8dc8c0f239ad6a1b9e58c       2        0      2      0      0  arbitrum-sepolia
+0xa754b69c61f0a0bb7fde565ff99f40fd90787bcd       3        0      3      0      0  arbitrum-sepolia
+0xaafa130bd044ec682df1a8846e0bb4d64f777679       0        0      0      0      0  arbitrum-sepolia
+0xb011f7e71ec90fcc7632e7e1f243853d0221b5b9       2        0      2      0      0  arc-testnet
+0xb19f130d30ab1cf00188bbc749bce1d7005474de       7        0      7      0      0  arc-testnet
+0xb32753851113869778fec66c51c3a13405edcfab       1        0      1      0      0  arbitrum-sepolia
+0xc0111f35f9a8faf4a19ded77c6f457a7afbbbe7c       2        0      2      0      0  arc-testnet
+0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1      14        0     14      0      0  arbitrum-sepolia
+0xf0ae90c66d410dc0cc3bc9e6a667af8c39fb6b85      11        0     11      0      0  arbitrum-sepolia
+0xf1c78d0b940ee10a683e3ba899c5a829890004a8      11        0     11      0      0  arbitrum-sepolia
+0xf69d65413cb255f2c409acd93579c6a58c8d26ae       0        0      0      0      0  arbitrum-sepolia
+0xf799a85496580af9a63c35223443688f8693635d       5        0      5      0      0  arc-testnet
+total                                          231       17    214      0      0
+events files 166: not witnessed 2, chain read failed 3; lines not decodable 0
+payee-signed invoices that verify 13; settlement lines of their bill cycles 0
+# finished 2026-10-18 05:46:01 +0800
+# stderr (Arc RPC rate limit, counted as 'chain read failed', never as 'not witnessed'):
+#   0x489dbd3dfc2985a65c9b5d555e2b42986c151661: 0xbc29b80c627e94d8e536cfb4bec3200344f4f5613597d21380980a41b82f8d1d: chain read failed: rpc transport: Max retries exceeded server returned an error response
+#   0x5d74363c6d599b334dfe3e601f576079436a4c37: 0xecd0087b18ddfee89bfb76b18cfb0b73001d2761805bb84ec6ee27eb09c79b42: chain read failed: rpc transport: Max retries exceeded server returned an error response
+#   0x7839d74d424dd14ad7147d11bc26745a82ed0df9: 0x671634c7bb2294f289d893a4484ab31f368d11ce3a1f4a17a1bd8745c7bb8ca0: chain read failed: rpc transport: Max retries exceeded server returned an error response
+
+## run 2: the three accounts whose Arc read failed, alone (05:46:01-05:46:05), same binary, same RPC
+# command: TAMEION_RPC_ARC=https://rpc.testnet.arc.io target/debug/examples/symbolon_count <scratch app dir holding only these three tenants, symlinked>
+account                                    records unsigned single double triple  chain
+0x489dbd3dfc2985a65c9b5d555e2b42986c151661       3        0      3      0      0  arc-testnet
+0x5d74363c6d599b334dfe3e601f576079436a4c37       6        0      6      0      0  arc-testnet
+0x7839d74d424dd14ad7147d11bc26745a82ed0df9       8        0      8      0      0  arc-testnet
+total                                           17        0     17      0      0
+events files 3: not witnessed 0, chain read failed 0; lines not decodable 0
+payee-signed invoices that verify 0; settlement lines of their bill cycles 0
+
+## the count (run 1 with run 2's three accounts): 231 records / 228 made before the signature envelope / 0 double / 0 triple
+#   231 records, 231 single (the chain's witness, read back), 0 unsigned, 0 double, 0 triple.
+#   228 of them are the records S20s counted at 00:09 (proof/symbolon-count-2026-10-18.txt): 228 single then, 228 single now.
+#   3 were written by the post-S23 binary at 05:35:43-46 (flow checks of 0x35a2...342f, 0x7ebc...9273, 0xf0ae...6fb85): single too.
+#   13 payee-signed invoices verify; 0 settlements of their bill cycles are in the book, so 0 counterparty slots.
+#   (These 228 are records. The 228 forge tests are a different number.)
+
+## --show on the newest record (no triple record exists; this is a record written after S23)
+# command: TAMEION_RPC_ARC=https://rpc.testnet.arc.io target/debug/examples/symbolon_count <scratch app dir holding only 0xf0ae...6fb85> --show 0x6041163c63a1f919f1568481beb662f87335efe2b6f16f410b0dbdad4b518630
+# (the leaf is keccak256(0x00 || canonical) of seq 0 of runtime/app/tenants/0xf0ae.../log/0x1dda6890...events.jsonl, written 05:35:43)
+account                                    records unsigned single double triple  chain
+0xf0ae90c66d410dc0cc3bc9e6a667af8c39fb6b85      11        0     11      0      0  arbitrum-sepolia
+total                                           11        0     11      0      0
+events files 10: not witnessed 0, chain read failed 0; lines not decodable 0
+payee-signed invoices that verify 0; settlement lines of their bill cycles 0
+record 0x6041163c63a1f919f1568481beb662f87335efe2b6f16f410b0dbdad4b518630 · FlowCheck · seq 0 · account 0xf0ae90c66d410dc0cc3bc9e6a667af8c39fb6b85 · Single
+  agent        none                verified no
+  counterparty none                verified no
+  witness      chain-receipt       verified yes  key chain:421614  tx 0x117192e87736e3005c80f5fde36c5f9e087b6684c3334d5eecc4642d8a68a220  at 1792272943
+# anchor tx read back with cast receipt on https://sepolia-rollup.arbitrum.io/rpc at 05:44:01: status 1, block 320198775,
+#   from 0x9c8892c9c7e86f5df51bb9798d2beeb61a003d54 (the agent named in the anchor line; anchored_in checked the sender), to 0xe7c381aafa077cc99359e8b297d2125efd76b8f5 (the record contract)
+
+## why no record is double via the agent, and none is triple
+# The agent slot needs the agent's signature over the record hash (sig::slot_sig signs over the record hash itself). Nothing writes one:
+#   crates/operator/src/sig.rs:191 slot_sig is called by examples/symbolon_count.rs:71 and examples/score_all.rs:141 (both verify a payee's invoice)
+#   and by sig.rs tests; ledger::symbolon Extras.agent is filled only in crates/ledger/src/symbolon.rs:277 (a unit test).
+#   S23 added the alg envelope, the verifier and agent_alg on the tenant; the pass writers (lib.rs, pay.rs, x402.rs) sign no record.
+# Filling it needs the pass to sign each leaf with the agent key as it writes it: a new writer and a stored field (features frozen tonight).
+# Not backfilled: an agent signature dated after the fact proves nothing about when the record was made.
+
+## the payee-signed invoice cycle: not run
+# 05:34:23 (tenant created) opened acme-agents-9838 (policy 0x534c150428c6a0d5b16da1e4ad275133e07a6fb3, arbitrum-sepolia, owner 0x0c2fea984b483826a7106b21a6f191fc3dd8b39d,
+#   agent 0x6eb9eb0c3dd7ee1ce972ee0b43cf69883aea2336) on :7880 through the demo path with a CDP virtual passkey; funded 0.05 USDC by the demo,
+#   tx 0x7cca27856328df479b89510001fe4f468551e00bcb4ceb1bc3dc54734dfd0df7.
+# Step 2 (approve Demo Vendor) never completed: the Playwright browser is shared, and another seat navigated the same page twice
+#   (to 127.0.0.1:7880/?policy=0xf0ae...6fb85 and ?policy=0xb327...cfab, 'Open someone else's account read-only?') during the step.
+#   The account has billCount 0, mode 1, no payee approved; the E1 seat stopped rather than drive a page another seat was using.
