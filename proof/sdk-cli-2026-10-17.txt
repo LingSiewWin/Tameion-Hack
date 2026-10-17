@@ -1,0 +1,118 @@
+S18 — @tameion/sdk and the tameion CLI, proved against http://localhost:7880 (2026-10-17)
+Written 2026-10-17 16:16:51 +0800 by the S18 seat. Service :7880 = PID 16364 (the 15:42 build, before S13's envelope): replies carry
+`error` as a string, no contractVersion, no /api/level1/status. Account uat2-u1-rc (policy 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1,
+Arbitrum Sepolia, Autopilot) with its agent key research-bot (scopes read, run, buy) read from ~/.tameion/test-keys/uat2-u1-rc-buy.token by
+--token-file. The token is never printed: the CLI replaces it with [token] in every line; this file was grepped for it (0 hits).
+Build: apps/sdk, `npm test` = tsc -p . && node --test dist/test/ (Node v26.12.0, TypeScript 5.9.3, zero runtime dependencies).
+
+== TESTS
+✔ https rule: plain http only on this machine (0.683833ms)
+✔ operationId: op_ + UUID, checked before anything is sent (2.362125ms)
+✔ a spend sends the operationId as Idempotency-Key, the token as Bearer, and saves before sending (10.625042ms)
+✔ a lost reply is resent once with the same id and body; the replay is delivered (0.243792ms)
+✔ lost twice: executed unknown, never a third send, not even on a later call (0.194416ms)
+✔ executed yes: the same id is never sent again (0.232125ms)
+✔ the same id with a different body is refused here, unsent (0.180542ms)
+✔ rate_limited with executed no: one resend after retryAfterSecs, clamped to 1-60 s (0.910667ms)
+✔ no resend for other refusals, for executed unknown, or for a reply without a code (0.256875ms)
+✔ old string errors: the string is the meaning; a 5xx on a spend is unknown, on a read it is no (0.29525ms)
+✔ the envelope: error.code and its fields are read (0.15475ms)
+✔ after a lost reply a refusal cannot say no (0.115292ms)
+✔ contractVersion: warned once when it differs, never when equal or absent (0.193208ms)
+✔ cli: exit 0 delivered, 1 refused, 2 usage (1.330625ms)
+✔ cli: unknown command gets a did-you-mean and never echoes the input (0.17375ms)
+✔ cli: the token is never taken from argv and never printed (0.19625ms)
+✔ cli: --token-file warns when group or others can read it (0.157791ms)
+✔ cli: https rule, --json raw reply, buy prints its operationId before sending (0.3815ms)
+ℹ tests 18
+ℹ pass 18
+ℹ fail 0
+tsc --strict: clean
+
+== 2026-10-17 16:14:25 +0800 reads
+token file mode: 600 (contents never printed)
+
+$ tameion status --url http://localhost:7880 --policy 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 --token-file ~/.tameion/test-keys/uat2-u1-rc-buy.token
+refused (HTTP 404, executed: no): not found
+exit=1
+
+$ tameion inbox --url http://localhost:7880 --policy 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 --token-file ~/.tameion/test-keys/uat2-u1-rc-buy.token
+Autopilot · balance 0.095000 USDC
+per payment 0.010000 USDC · per 24 h 0.048000 USDC (spent 0.000000 USDC, left now 0.010000 USDC) · floor 0.000000 USDC
+payees: 2 approved, 2 payable now
+waiting for the owner: 4
+  - invoice 0.004000 USDC 0x1aac…ca63: accept or decline an invoice a vendor sent
+  - invoice 0.003000 USDC 0x1aac…ca63: accept or decline an invoice a vendor sent
+  - bill 0.001000 USDC 0xee80…b1f3: approve a payment the agent prepared — 0xee80b9…1bb1f3 was approved moments ago and has never been paid, so the owner should see this 0.001 USDC bill before it goes out.
+  - bill 0.002000 USDC 0xf4d0…0e43: approve a payment the agent prepared — 0xf4d08a…860e43 has been paid 6 times and 0.002 USDC is the usual amount, but the schedule is only 0.6 confident, so please confirm. · cycles-behind: 1 more cycle of this bill fell due after this one and nobody paid it: it may have ended. Settle one by hand to confirm, and I will continue from there · pre:confidence: confidence 0.60 below floor 0.75
+paid: 0.005000 USDC in 2 payments
+exit=0
+
+$ tameion bills --url http://localhost:7880 --policy 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 --token-file ~/.tameion/test-keys/uat2-u1-rc-buy.token
+bills the agent knows: 1
+  - 0.001 USDC every 30 days to 0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3, next due 2026-10-17 06:41 UTC
+standing orders: 0
+bill payments waiting for the owner: 2
+  - 0.001000 USDC to 0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3 — 0xee80b9…1bb1f3 was approved moments ago and has never been paid, so the owner should see this 0.001 USDC bill before it goes out.
+  - 0.002000 USDC to 0xf4d08abf297f57acd381f000a25442186d860e43 — 0xf4d08a…860e43 has been paid 6 times and 0.002 USDC is the usual amount, but the schedule is only 0.6 confident, so please confirm. · cycles-behind: 1 more cycle of this bill fell due after this one and nobody paid it: it may have ended. Settle one by hand to confirm, and I will continue from there · pre:confidence: confidence 0.60 below floor 0.75
+exit=0
+
+== SPEND: there is no route for an agent to pay a payee directly (docs/60 P-270), so the spend is a buy over x402 from a seller whose
+   payTo is the account's approved payee 0xee80…b1f3: scripts/x402_seller.py on 127.0.0.1:7918 (PID 85032, its own facilitator
+   0x805A…4dAD on Arbitrum Sepolia, price 1000 = 0.001 USDC), started 16:14, stopped by PID 16:16:29.
+== 2026-10-17 16:14:55 +0800 chain before (Arbitrum Sepolia, USDC 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d, block 320017208)
+payee  0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3 USDC minor 0
+policy 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 USDC minor 95000 [9.5e4]
+
+== 2026-10-17 16:15:00 +0800 buy #1 (no --op: the CLI makes one and prints it before sending)
+$ tameion buy 'http://127.0.0.1:7918/v1/mid?coin=ETH' --max 0.001 --why 'ETH mid price for the SDK proof (S18)' --url http://localhost:7880 --policy 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 --token-file ~/.tameion/test-keys/uat2-u1-rc-buy.token
+exit=0 (12 s)
+-- stderr
+operation op_4df085d1-b61b-4f87-a462-06bbd954cf08 — if no answer comes back, resend with --op op_4df085d1-b61b-4f87-a462-06bbd954cf08, never a new one
+-- stdout
+paid 0.001000 USDC to 0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3 · https://sepolia.arbiscan.io/tx/0xdac6d67825192e38dcc93802db922eb2772083fb95531462c4aec02320ece2fd
+operation op_4df085d1-b61b-4f87-a462-06bbd954cf08
+
+== 2026-10-17 16:15:33 +0800 buy #2, the same operationId (a resend after a lost reply looks exactly like this)
+$ tameion buy 'http://127.0.0.1:7918/v1/mid?coin=ETH' --max 0.001 --why 'ETH mid price for the SDK proof (S18)' --op op_4df085d1-b61b-4f87-a462-06bbd954cf08 --url http://localhost:7880 --policy 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 --token-file ~/.tameion/test-keys/uat2-u1-rc-buy.token
+exit=0 (0 s)
+-- stderr
+operation op_4df085d1-b61b-4f87-a462-06bbd954cf08 — if no answer comes back, resend with --op op_4df085d1-b61b-4f87-a462-06bbd954cf08, never a new one
+-- stdout
+paid 0.001000 USDC to 0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3 · https://sepolia.arbiscan.io/tx/0xdac6d67825192e38dcc93802db922eb2772083fb95531462c4aec02320ece2fd
+replayed: this is the first answer to this operationId; nothing was paid again
+operation op_4df085d1-b61b-4f87-a462-06bbd954cf08
+
+== 2026-10-17 16:15:38 +0800 chain after (block 320017364)
+payee  0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3 USDC minor 1000   (was 0: one payment of 1000 = 0.001 USDC)
+policy 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 USDC minor 94000 [9.4e4]   (was 95000)
+receipt 0xdac6d67825192e38dcc93802db922eb2772083fb95531462c4aec02320ece2fd: status 1 (success) block 320017252
+seller log (its own facilitator): the first 402 is this seat's curl probe at 16:14:02, the second the service's first ask, the 200 the one settlement:
+seller: "GET /v1/mid?coin=ETH HTTP/1.1" 402 -
+seller: "GET /v1/mid?coin=ETH HTTP/1.1" 402 -
+seller: "GET /v1/mid?coin=ETH HTTP/1.1" 200 -
+
+== 2026-10-17 16:15:57 +0800 the account's purchases (tameion inbox --json, purchases field)
+  1 purchase(s)
+   {'status': 'paid', 'amount': '0.001000 USDC', 'seller': '0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3', 'tx': '0xdac6d67825192e38dcc93802db922eb2772083fb95531462c4aec02320ece2fd', 'reason': 'ETH mid price for the SDK proof (S18)', 'url': 'http://127.0.0.1:7918/v1/mid?coin=ETH'}
+  caps now: {'daily': '0.048000 USDC', 'floor': '0.000000 USDC', 'leftNow': '0.010000 USDC', 'perAction': '0.010000 USDC', 'spent24h': '0.001000 USDC'}
+
+all USDC Transfer events in blocks 320017208-320017364: 2 (the other is between two unrelated addresses)
+  to the payee ee80…: 1; from the account: 1
+  tx 0xdac6d67825192e38dcc93802db922eb2772083fb95531462c4aec02320ece2fd from 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 to 0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3 value 1000
+
+RESULT  two buys with the same operationId: the first paid 0.001 USDC (tx 0xdac6d678…e2fd, status 1, block 320017252), the second came back
+        with Idempotent-Replayed: true in 0 s and paid nothing: one Transfer from the account to the payee, payee 0 -> 1000, account
+        95000 -> 94000, one purchase in the account's book, spent24h 0.001000 USDC, the seller settled once.
+
+== FINDING (docs/60 P-273): the replay is served before the token check
+== 2026-10-17 16:16:29 +0800 the same Idempotency-Key and body, sent with NO Authorization header (curl)
+HTTP/1.1 200 OK
+Idempotent-Replayed: true
+Content-Type: application/json
+Content-Length: 920
+{"body":"{\"coin\": \"ETH\", \"mid\": \"2434.05\", \"source\": \"hyperliquid allMids\"}","contentType":"application/json","paid":true,"purchase":{"actionHash":"0xb4425a6cd2866cacd42a7d8f9295207ca95eca5c18fd7479016fe12f2b27cc40","amount":"0.001000 USDC","at":1792224900,"explorer":"https://sepolia.arbiscan.io/tx/0xdac6d67825192e38dcc93802db922eb2772083fb95531462c4aec02320ece2fd","host":"127.0.0.1","
+
+-- control: a fresh key, no Authorization
+HTTP/1.1 401 Unauthorized
+{"error":"this account's owner requires an agent key: send Authorization: Bearer <token> (the owner mints one on the account page)","scope":"buy"}
