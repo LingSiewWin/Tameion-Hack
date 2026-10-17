@@ -25,6 +25,8 @@ primary_region = "sin"
   TAMEION_LEVEL1_WATCH_SECS = "60"
   # One scheduled agent pass per account per hour; due bills and the page's button still run between.
   TAMEION_LEVEL1_EVERY_SECS = "3600"
+  # The relayer here is a dedicated demo key: keep 1 USDC (20 accounts' worth), not the treasury floor of 20 (P-291).
+  TAMEION_DEMO_FLOOR_USDC = "1"
   TAMEION_CONTACT_URL = "https://discord.gg/rsVfYutFZg"
   TAMEION_REPO_URL = "https://github.com/lingsiewwin/Tameion-Hack"
 

@@ -51,7 +51,7 @@ railway volume list --json 2>/dev/null | grep -q '"/data"' || railway volume add
 railway variable set --service "$SERVICE" --skip-deploys \
   PORT=8080 TAMEION_APP_DIR=/data/app TAMEION_DEMO=1 \
   TAMEION_DEMO_VENDOR=0xE5E2d8dCC2038fd0A010A6e7845378b646e33854 TAMEION_REASONER=cloud-redacted \
-  TAMEION_LEVEL1_WATCH_SECS=60 TAMEION_LEVEL1_EVERY_SECS=3600 \
+  TAMEION_LEVEL1_WATCH_SECS=60 TAMEION_LEVEL1_EVERY_SECS=3600 TAMEION_DEMO_FLOOR_USDC=1 \
   TAMEION_CONTACT_URL=https://discord.gg/rsVfYutFZg TAMEION_REPO_URL=https://github.com/lingsiewwin/Tameion-Hack \
   RAILWAY_RUN_UID=0 >/dev/null
 # Secrets one at a time over stdin: the value never appears in a process's arguments or in this script's output.

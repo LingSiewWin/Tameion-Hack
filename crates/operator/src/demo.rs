@@ -36,6 +36,18 @@ pub const CYCLES: u64 = 15;
 const RELAYER_FLOOR_MINOR: i128 = 20_000_000;
 const RELAYER_FLOOR_WEI: u128 = 20_000_000_000_000_000;
 
+/// The USDC floor in force: `TAMEION_DEMO_FLOOR_USDC` (decimal USDC) where the relayer is a
+/// dedicated demo key holding only demo money (the public host, P-291: it paused after one
+/// account because the default floor was set for the treasury key), else the default above.
+fn usdc_floor() -> Money {
+    usdc_floor_from(std::env::var("TAMEION_DEMO_FLOOR_USDC").ok().as_deref())
+}
+
+fn usdc_floor_from(set: Option<&str>) -> Money {
+    set.and_then(|v| Money::parse(v.trim(), Currency::Usdc).ok())
+        .unwrap_or(Money::minor(RELAYER_FLOOR_MINOR, Currency::Usdc))
+}
+
 alloy::sol! {
     function transfer(address to, uint256 amount) external returns (bool);
 }
@@ -136,10 +148,10 @@ async fn relayer_short(c: &ChainPreset) -> Result<Option<String>, String> {
     let (usdc, wei) = tokio::join!(client.usdc_balance(relayer), client.native_wei(relayer));
     let usdc = usdc.map_err(|e| format!("the relayer's USDC could not be read ({e})"))?;
     let wei = wei.map_err(|e| format!("the relayer's gas could not be read ({e})"))?;
-    if usdc.to_minor() < RELAYER_FLOOR_MINOR {
+    let floor = usdc_floor();
+    if usdc.to_minor() < floor.to_minor() {
         return Ok(Some(format!(
-            "the relayer holds {usdc}, under its floor of {}",
-            Money::minor(RELAYER_FLOOR_MINOR, Currency::Usdc)
+            "the relayer holds {usdc}, under its floor of {floor}"
         )));
     }
     if wei < U256::from(RELAYER_FLOOR_WEI) {
@@ -251,6 +263,17 @@ async fn send(t: &Tenant) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn usdc_floor_is_the_default_unless_set() {
+        assert_eq!(usdc_floor_from(None).to_minor(), RELAYER_FLOOR_MINOR);
+        assert_eq!(usdc_floor_from(Some("1")).to_minor(), 1_000_000);
+        assert_eq!(usdc_floor_from(Some(" 0.5 ")).to_minor(), 500_000);
+        assert_eq!(
+            usdc_floor_from(Some("nonsense")).to_minor(),
+            RELAYER_FLOOR_MINOR
+        );
+    }
 
     #[test]
     fn a_bill_repeats_in_seconds_only_from_a_minute() {
