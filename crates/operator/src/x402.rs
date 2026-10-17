@@ -355,6 +355,138 @@ fn guard(app_dir: &Path, policy: &str, seller: &str, spent: bool, now: u64) -> R
     Ok(())
 }
 
+/// This seller's usual price for the account: the median of its last five paid
+/// purchases, USDC minor units; `None` before the first (docs/60 P-217).
+pub fn usual_price(app_dir: &Path, policy: &str, seller: &str) -> Option<u128> {
+    let mut last: Vec<u128> = purchases(app_dir, policy)
+        .iter()
+        .filter(|p| p["status"] == "paid")
+        .filter(|p| {
+            p["seller"]
+                .as_str()
+                .is_some_and(|x| x.eq_ignore_ascii_case(seller))
+        })
+        .filter_map(|p| p["minor"].as_str().and_then(|m| m.parse().ok()))
+        .take(5)
+        .collect();
+    if last.is_empty() {
+        return None;
+    }
+    last.sort_unstable();
+    Some(last[last.len() / 2])
+}
+
+/// What code allows for one purchase, in the decider's terms (docs/60 P-217): a
+/// price more than a quarter above the seller's usual goes to the owner — ask or
+/// refuse, never pay — as a bill's amount off its usual does; a first purchase
+/// has no usual and no band. Computed by the decider's own rule for a verdict.
+pub fn purchase_allowed(price: u128, usual: Option<u128>) -> Vec<crate::decide::Action> {
+    let off_band = usual.is_some_and(|u| price.saturating_mul(4) > u.saturating_mul(5));
+    let verdict = if off_band {
+        ledger::Decision::Review
+    } else {
+        ledger::Decision::Allow
+    };
+    crate::decide::allowed_for_bill(verdict, true, false, 0)
+}
+
+fn price_approvals_path(app_dir: &Path, policy: &str) -> PathBuf {
+    level1::tenants_dir(app_dir).join(format!("{}.price-approvals.json", policy.to_lowercase()))
+}
+
+/// The owner's tap on a "Let the agent buy from … at …" row: the next purchase
+/// from `seller` at up to `max_minor` passes the price band once, until `until`.
+pub fn approve_price(app_dir: &Path, policy: &str, seller: &str, max_minor: u128, until: u64) {
+    let path = price_approvals_path(app_dir, policy);
+    let mut m = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    m.insert(
+        seller.to_lowercase(),
+        json!({ "max": max_minor.to_string(), "until": until }),
+    );
+    let _ = std::fs::write(path, Value::Object(m).to_string());
+}
+
+/// Whether the owner approved this price for this seller (and use it up).
+fn take_price_approval(app_dir: &Path, policy: &str, seller: &str, price: u128, now: u64) -> bool {
+    let path = price_approvals_path(app_dir, policy);
+    let Some(mut m) = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .and_then(|v| v.as_object().cloned())
+    else {
+        return false;
+    };
+    let key = seller.to_lowercase();
+    let ok = m.get(&key).is_some_and(|a| {
+        a["until"].as_u64().unwrap_or(0) >= now
+            && a["max"]
+                .as_str()
+                .and_then(|x| x.parse::<u128>().ok())
+                .unwrap_or(0)
+                >= price
+    });
+    if ok {
+        m.remove(&key);
+        let _ = std::fs::write(path, Value::Object(m).to_string());
+    }
+    ok
+}
+
+/// The account's purchase lock (docs/60 P-214). ponytail: one lock per account
+/// for the life of the process; a lock per seller if one account must buy from
+/// many sellers at the same instant.
+fn account_lock(policy: &str) -> std::sync::Arc<tokio::sync::Mutex<()>> {
+    type Locks = std::collections::HashMap<String, std::sync::Arc<tokio::sync::Mutex<()>>>;
+    static LOCKS: std::sync::OnceLock<std::sync::Mutex<Locks>> = std::sync::OnceLock::new();
+    LOCKS
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .entry(policy.to_lowercase())
+        .or_default()
+        .clone()
+}
+
+/// The P-75 rule as one step under the account's lock (docs/60 P-214): read the
+/// seller's pending signature, ask whether the chain spent it (`spent`), judge
+/// (`guard`), sign and simulate (`sign`, which returns its result and the new
+/// pending entry), and record that entry before the lock is let go. Without
+/// the lock two concurrent buys from one seller both passed the check and both
+/// were signed; now the second finds the first pending and is refused in words.
+/// `Err` is the guard's refusal; `Ok(Err)` is `sign`'s.
+async fn one_signature_per_seller<T, S, SF, G, GF>(
+    app_dir: &Path,
+    policy: &str,
+    seller: &str,
+    spent: S,
+    sign: G,
+) -> Result<Result<T, String>, String>
+where
+    S: FnOnce(B256) -> SF,
+    SF: std::future::Future<Output = bool>,
+    G: FnOnce() -> GF,
+    GF: std::future::Future<Output = Result<(T, Value), String>>,
+{
+    let lock = account_lock(policy);
+    let _held = lock.lock().await;
+    let held = pending(app_dir, policy)
+        .get(&seller.to_lowercase())
+        .and_then(|p| p["digest"].as_str().and_then(|d| B256::from_str(d).ok()));
+    let spent = match held {
+        Some(d) => spent(d).await,
+        None => false,
+    };
+    guard(app_dir, policy, seller, spent, now_secs())?;
+    Ok(sign().await.map(|(out, entry)| {
+        set_pending(app_dir, policy, seller, Some(entry));
+        out
+    }))
+}
+
 /// After the seller answered that it settled (P-75, docs/60 P-162): its pending
 /// entry is cleared only when the outcome is known — the receipt read back
 /// (`confirmed`), or the chain shows this purchase's digest spent (`spent`). A
@@ -688,6 +820,34 @@ pub async fn buy(app_dir: &Path, t: &Tenant, r: BuyRequest<'_>) -> Result<Value,
             json!({ "error": line["why"], "needsYou": line }),
         ));
     }
+    // A price far above what this seller usually charges is the owner's call,
+    // as a bill's amount off its usual is (docs/60 P-217).
+    let usual = usual_price(app_dir, &t.policy, &format!("{pay_to:#x}"));
+    if !purchase_allowed(amount, usual).contains(&crate::decide::Action::Pay)
+        && !take_price_approval(
+            app_dir,
+            &t.policy,
+            &format!("{pay_to:#x}"),
+            amount,
+            now_secs(),
+        )
+    {
+        let u = usual.unwrap_or_default();
+        line["status"] = json!("needs-you");
+        line["band"] = json!(true);
+        line["usual"] = json!(usdc_text(u));
+        line["why"] = json!(format!(
+            "Let the agent buy from {seller_host} at {} (usually {}): more than a quarter above what it usually pays this seller, so it asks you first. The agent's reason: {}",
+            usdc_text(amount),
+            usdc_text(u),
+            r.reason
+        ));
+        record(app_dir, &t.policy, &line);
+        return Err((
+            "409 Conflict",
+            json!({ "error": line["why"], "needsYou": line }),
+        ));
+    }
     if !level1::issuer_frozen(t, &[pay_to]).await.is_empty() {
         return Err(refuse(
             &mut line,
@@ -698,47 +858,44 @@ pub async fn buy(app_dir: &Path, t: &Tenant, r: BuyRequest<'_>) -> Result<Value,
 
     // One redeemable signature per seller at a time (P-75): an earlier one the
     // seller may still redeem, or that the chain shows redeemed, settles first.
+    // Checked, signed and recorded under the account's lock (docs/60 P-214).
     let seller_key = format!("{pay_to:#x}");
-    let held = pending(app_dir, &t.policy)
-        .get(&seller_key)
-        .and_then(|p| p["digest"].as_str().and_then(|d| B256::from_str(d).ok()));
-    let spent = match held {
-        Some(d) => client.executed(policy, d).await.unwrap_or(false),
-        None => false,
-    };
-    if let Err(w) = guard(app_dir, &t.policy, &seller_key, spent, now_secs()) {
-        return Err(refuse(&mut line, "409 Conflict", w));
-    }
-    let nonce = random_nonce().map_err(conflict)?;
-    // A short window: the seller holds a signature it can redeem until then.
-    let deadline = now_secs() + timeout.clamp(30, 120);
-    let digest = arc::purchase_digest(c.chain_id, policy, pay_to, amount, nonce, deadline);
-    let sig = signer
-        .sign_hash_sync(&digest)
-        .map_err(|e| conflict(e.to_string()))?;
-    let context = arc::purchase_context(nonce, deadline, &sig.as_bytes());
-    // Ask the chain first: a refusal is said here, in words, before the
-    // seller is involved.
-    let calldata = arc::redeem_calldata(
-        context.clone(),
-        arc::purchase_execution(usdc, pay_to, amount),
-    );
-    if let Err(e) = client.call_raw(None, policy, calldata).await {
-        let e = e.to_string();
-        let w = refusal_words(&e).map(String::from).unwrap_or(e);
-        return Err(refuse(
-            &mut line,
-            "409 Conflict",
-            format!("the account refuses: {w}"),
-        ));
-    }
-    line["actionHash"] = json!(format!("{digest:#x}"));
-    set_pending(
+    let signed = one_signature_per_seller(
         app_dir,
         &t.policy,
         &seller_key,
-        Some(json!({ "digest": format!("{digest:#x}"), "deadline": deadline })),
-    );
+        |d| {
+            let client = &client;
+            async move { client.executed(policy, d).await.unwrap_or(false) }
+        },
+        || async {
+            let nonce = random_nonce()?;
+            // A short window: the seller holds a signature it can redeem until then.
+            let deadline = now_secs() + timeout.clamp(30, 120);
+            let digest = arc::purchase_digest(c.chain_id, policy, pay_to, amount, nonce, deadline);
+            let sig = signer.sign_hash_sync(&digest).map_err(|e| e.to_string())?;
+            let context = arc::purchase_context(nonce, deadline, &sig.as_bytes());
+            // Ask the chain first: a refusal is said here, in words, before the
+            // seller is involved.
+            let calldata = arc::redeem_calldata(
+                context.clone(),
+                arc::purchase_execution(usdc, pay_to, amount),
+            );
+            if let Err(e) = client.call_raw(None, policy, calldata).await {
+                let e = e.to_string();
+                let w = refusal_words(&e).map(String::from).unwrap_or(e);
+                return Err(format!("the account refuses: {w}"));
+            }
+            let entry = json!({ "digest": format!("{digest:#x}"), "deadline": deadline });
+            Ok(((digest, context, deadline), entry))
+        },
+    )
+    .await;
+    let (digest, context, deadline) = match signed {
+        Ok(Ok(v)) => v,
+        Ok(Err(w)) | Err(w) => return Err(refuse(&mut line, "409 Conflict", w)),
+    };
+    line["actionHash"] = json!(format!("{digest:#x}"));
     let mut payload = payment_payload(&required, &offer, policy, &context);
     // Receipt v1: the payment identifier, when the seller takes one, is this
     // purchase's digest, sent with the payment and kept on the line.
@@ -874,6 +1031,105 @@ pub async fn buy(app_dir: &Path, t: &Tenant, r: BuyRequest<'_>) -> Result<Value,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// docs/60 P-217: a price more than a quarter above the seller's usual (the
+    /// median of its last five purchases) is not paid by the agent alone; a first
+    /// purchase has no usual and no band; the owner's tap lets one through.
+    #[test]
+    fn a_purchase_far_above_its_usual_price_asks_the_owner() {
+        use crate::decide::Action;
+        let dir = std::env::temp_dir().join(format!("tameion-x402-band-{}", std::process::id()));
+        std::fs::create_dir_all(level1::tenants_dir(&dir)).unwrap();
+        let policy = "0x00000000000000000000000000000000000000c2";
+        let seller = "0x00000000000000000000000000000000000000a1";
+        assert_eq!(
+            usual_price(&dir, policy, seller),
+            None,
+            "first purchase: no history"
+        );
+        assert!(
+            purchase_allowed(1_000_000, None).contains(&Action::Pay),
+            "no band without history"
+        );
+        for (i, m) in [1000u128, 1000, 1200, 900, 1000, 50].iter().enumerate() {
+            record(
+                &dir,
+                policy,
+                &json!({ "at": i, "seller": seller, "minor": m.to_string(), "status": if *m == 50 { "refused" } else { "paid" } }),
+            );
+        }
+        assert_eq!(
+            usual_price(&dir, policy, seller),
+            Some(1000),
+            "median of the paid ones"
+        );
+        assert!(
+            purchase_allowed(1250, Some(1000)).contains(&Action::Pay),
+            "a quarter above: still paid"
+        );
+        let twice = purchase_allowed(2000, Some(1000));
+        assert!(
+            !twice.contains(&Action::Pay) && twice.contains(&Action::Ask),
+            "{twice:?}"
+        );
+        assert!(!take_price_approval(&dir, policy, seller, 2000, 10));
+        approve_price(&dir, policy, seller, 2000, 100);
+        assert!(
+            !take_price_approval(&dir, policy, seller, 2001, 10),
+            "above what the owner approved"
+        );
+        assert!(take_price_approval(&dir, policy, seller, 2000, 10));
+        assert!(
+            !take_price_approval(&dir, policy, seller, 2000, 10),
+            "used once"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// docs/60 P-214: two concurrent buys from one seller. The chain round trip
+    /// between the check and the pending write is where both used to pass; under
+    /// the account's lock exactly one is signed and the other is refused in
+    /// words. A buy from another seller of the same account is not refused.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn two_concurrent_buys_from_one_seller_sign_once() {
+        let dir = std::env::temp_dir().join(format!("tameion-x402-lock-{}", std::process::id()));
+        std::fs::create_dir_all(level1::tenants_dir(&dir)).unwrap();
+        let policy = "0x00000000000000000000000000000000000000c1";
+        let signed = std::sync::atomic::AtomicUsize::new(0);
+        let buy = |seller: &'static str, byte: u8| {
+            let (dir, signed) = (&dir, &signed);
+            async move {
+                one_signature_per_seller(dir, policy, seller, |_| async { false }, || async move {
+                    // The signature and the chain's simulation: a round trip.
+                    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                    signed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    let entry = json!({ "digest": format!("{:#x}", B256::repeat_byte(byte)), "deadline": now_secs() + 60 });
+                    Ok((byte, entry))
+                })
+                .await
+            }
+        };
+        let s1 = "0x00000000000000000000000000000000000000a1";
+        let (a, b, other) = tokio::join!(
+            buy(s1, 1),
+            buy(s1, 2),
+            buy("0x00000000000000000000000000000000000000a2", 3)
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        let ok = [&a, &b].iter().filter(|r| matches!(r, Ok(Ok(_)))).count();
+        assert_eq!(ok, 1, "{a:?} {b:?}");
+        let refused = [a, b]
+            .into_iter()
+            .find_map(|r| r.err())
+            .expect("one refused");
+        assert!(refused.contains("can still be redeemed"), "{refused}");
+        assert!(matches!(other, Ok(Ok(3))), "{other:?}");
+        assert_eq!(
+            signed.load(std::sync::atomic::Ordering::SeqCst),
+            2,
+            "one per seller"
+        );
+    }
 
     #[test]
     fn a_seller_whose_receipt_does_not_read_back_keeps_its_signature_pending_until_the_deadline() {
