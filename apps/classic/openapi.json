@@ -1,9 +1,9 @@
 {
-  "openapi": "3.0.3",
+  "openapi": "3.1.0",
   "info": {
     "title": "Tameion Watch",
     "version": "0.1.0",
-    "description": "Level 0 of the trust ladder: read-only. Submit an address, poll the run, read what it owes, what the agent would pay or ask about, and the maximum a stolen key could lose under caps you choose. Nothing is signed or sent.\n\nIdempotency (PLAN 5.42): any POST may carry `Idempotency-Key` (1–255 chars). A retry with the same key and body returns the first 2xx answer with `Idempotent-Replayed: true`; the same key with a different body answers 422; a key still in flight answers 409; keys live 24 hours. Agent-readable summary: GET /llms.txt."
+    "description": "Level 0 of the trust ladder: read-only. Submit an address, poll the run, read what it owes, what the agent would pay or ask about, and the maximum a stolen key could lose under caps you choose. Nothing is signed or sent.\n\nIdempotency (PLAN 5.42): any POST may carry `Idempotency-Key` (1–255 chars). A retry with the same key and body returns the first 2xx answer with `Idempotent-Replayed: true`; the same key with a different body answers 422; a key still in flight answers 409; keys live 24 hours. Agent-readable summary: GET /llms.txt.\n\nThe agent envelope (contract `2026-10-17.1`, docs/115 §2). Every reply an agent can get — the routes the MCP tools call and every route that accepts an agent key — carries `ok` and `contractVersion`. `ok: true` adds them to the route's own fields, nothing removed. `ok: false` is a `Refusal`: `error.code` (one of `RefusalCode`, the catalogue at GET /api/level1/codes), `error.by`, `error.executed` (yes | no | unknown: whether money may have moved; read from the chain), `error.audience` (user = a human must act; agent = the caller may act), `error.meaning`, `error.nextStep`, `error.retryAfterSecs`, and `error.words`, the sentence the route already returned. HTTP status codes do not change. Never resend a spend when `executed` is yes or unknown; resend once after `retryAfterSecs` only on `rate_limited` or `idempotency_pending` with `executed: no`."
   },
   "servers": [
     {
@@ -62,30 +62,64 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
                     },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "queued"
-                      ]
+                    {
+                      "$ref": "#/components/schemas/PassStarted"
                     }
-                  }
+                  ]
                 }
               }
             }
           },
           "400": {
-            "description": "Bad chain, address or body"
+            "description": "Bad chain, address or body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           },
           "429": {
-            "description": "All scan slots busy"
+            "description": "All scan slots busy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           },
           "200": {
-            "description": "a recent identical run answers at once: { id, status: \"done\", cached: true }"
+            "description": "a recent identical run answers at once: { id, status: \"done\", cached: true }",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PassStarted"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -109,13 +143,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Run"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/Run"
+                        },
+                        {
+                          "$ref": "#/components/schemas/PassRun"
+                        }
+                      ]
+                    }
+                  ]
                 }
               }
             }
           },
           "404": {
-            "description": "No such run"
+            "description": "No such run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         },
         "description": "progress carries phase, scannedBlocks, totalBlocks, transfersSoFar, elapsedSecs and etaSecs (rate so far × blocks left); a Level 1 pass reports the same fields. A Level 1 pass report also carries obligationsList (counterparty, amount, intervalSecs, nextDue, confidence, samples), reasoner, settled, escalated, pendingSignature (with actionHash and why), root, anchorTx, agentGasTopUpTx."
@@ -209,7 +274,31 @@
         },
         "responses": {
           "200": {
-            "description": "to, data, summary"
+            "description": "to, data, summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -246,10 +335,41 @@
         },
         "responses": {
           "200": {
-            "description": "to, data, summary"
+            "description": "to, data, summary, signer, applies, ownerSees",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Prepared"
+                    }
+                  ]
+                }
+              }
+            }
           },
           "400": {
-            "description": "bad mode or policy"
+            "description": "bad mode or policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -286,10 +406,41 @@
         },
         "responses": {
           "200": {
-            "description": "to, data, summary"
+            "description": "to, data, summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            }
           },
           "400": {
-            "description": "missing field or zero amount"
+            "description": "missing field or zero amount",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -320,7 +471,24 @@
             "description": "application/x-ndjson"
           },
           "404": {
-            "description": "no record of that root for that policy"
+            "description": "no record of that root for that policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -360,10 +528,41 @@
         },
         "responses": {
           "200": {
-            "description": "to, data, summary"
+            "description": "to, data, summary, signer, applies, ownerSees",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Prepared"
+                    }
+                  ]
+                }
+              }
+            }
           },
           "400": {
-            "description": "missing field or per-action above daily"
+            "description": "missing field or per-action above daily",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -502,16 +701,61 @@
         },
         "responses": {
           "200": {
-            "description": "typedData {types, primaryType, domain, message}, fees, describe"
+            "description": "typedData {types, primaryType, domain, message}, fees, describe",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/FundTypedData"
+                    }
+                  ]
+                }
+              }
+            }
           },
           "400": {
-            "description": "missing field, unknown domain"
+            "description": "missing field, unknown domain",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           },
           "404": {
-            "description": "no such tenant"
+            "description": "no such tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           },
           "502": {
-            "description": "Gateway's estimate failed"
+            "description": "Gateway's estimate failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -549,13 +793,51 @@
         },
         "responses": {
           "200": {
-            "description": "transferId, fees, expirationBlock, mintTx, explorer, policy"
+            "description": "transferId, fees, expirationBlock, mintTx, explorer, policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            }
           },
           "400": {
-            "description": "intent does not pay this policy"
+            "description": "intent does not pay this policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           },
           "502": {
-            "description": "Gateway refused the transfer, or the mint reverted (attestation returned so it can be retried)"
+            "description": "Gateway refused the transfer, or the mint reverted (attestation returned so it can be retried)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -587,10 +869,41 @@
         },
         "responses": {
           "200": {
-            "description": "to (the owner), data, summary"
+            "description": "to (the owner), data, summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            }
           },
           "400": {
-            "description": "missing field"
+            "description": "missing field",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -610,10 +923,41 @@
         ],
         "responses": {
           "200": {
-            "description": "{ policy, records: [...] }"
+            "description": "{ policy, records: [...] }",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Records"
+                    }
+                  ]
+                }
+              }
+            }
           },
           "404": {
-            "description": "no anchored records for that policy"
+            "description": "no anchored records for that policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -633,13 +977,55 @@
         ],
         "responses": {
           "200": {
-            "description": "the inbox"
+            "description": "the inbox",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Inbox"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InboxStatus"
+                    }
+                  ],
+                  "unevaluatedProperties": false
+                }
+              }
+            }
           },
           "404": {
-            "description": "no such tenant"
+            "description": "no such tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           },
           "502": {
-            "description": "the chain did not answer"
+            "description": "the chain did not answer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -743,10 +1129,48 @@
         },
         "responses": {
           "200": {
-            "description": "policy, bills (kept), refused (with why)"
+            "description": "policy, bills (kept), refused (with why)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/BillsSaved"
+                        },
+                        {
+                          "$ref": "#/components/schemas/BillsCheck"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
           },
           "404": {
-            "description": "no such tenant"
+            "description": "no such tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -984,7 +1408,31 @@
         },
         "responses": {
           "200": {
-            "description": "to, data, summary"
+            "description": "to, data, summary, signer, applies, ownerSees",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Prepared"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -1013,10 +1461,58 @@
         },
         "responses": {
           "200": {
-            "description": "{ id, status } (202 when new; 200 with cached: true when a recent pass answers)"
+            "description": "a recent pass answers: cached: true, with note (and next when a fresh one is due)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PassStarted"
+                    }
+                  ]
+                }
+              }
+            }
           },
           "404": {
-            "description": "no such tenant"
+            "description": "no such tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "a new pass, queued; poll GET /api/watch/{id}",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PassStarted"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -1141,13 +1637,67 @@
         },
         "responses": {
           "200": {
-            "description": "to, data, summary"
+            "description": "to, data, summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "to": {
+                          "type": "string"
+                        },
+                        "data": {
+                          "type": "string"
+                        },
+                        "summary": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "to",
+                        "data",
+                        "summary"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
           },
           "400": {
-            "description": "payee not approved, cadence too short, missing field"
+            "description": "payee not approved, cadence too short, missing field",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           },
           "404": {
-            "description": "no such tenant"
+            "description": "no such tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -1179,7 +1729,31 @@
         },
         "responses": {
           "200": {
-            "description": "to, data, summary"
+            "description": "to, data, summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -1248,10 +1822,57 @@
         },
         "responses": {
           "200": {
-            "description": "to, data, summary"
+            "description": "to, data, summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "to": {
+                          "type": "string"
+                        },
+                        "data": {
+                          "type": "string"
+                        },
+                        "summary": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "to",
+                        "data",
+                        "summary"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
           },
           "400": {
-            "description": "bad date"
+            "description": "bad date",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -1290,10 +1911,41 @@
         },
         "responses": {
           "200": {
-            "description": "to (the owner contract), data, summary"
+            "description": "to (the owner contract), data, summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            }
           },
           "400": {
-            "description": "bad list or threshold"
+            "description": "bad list or threshold",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -1557,19 +2209,71 @@
         },
         "responses": {
           "200": {
-            "description": "{paid, purchase {amount, seller, tx, explorer, actionHash, reason, status}, status, contentType, body}; paid=false with the service's status and body when it did not ask for payment"
+            "description": "{paid, purchase {amount, seller, tx, explorer, actionHash, reason, status}, status, contentType, body}; paid=false with the service's status and body when it did not ask for payment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BuyReply"
+                    }
+                  ]
+                }
+              }
+            }
           },
           "401": {
-            "description": "no agent key with the buy scope"
+            "description": "no agent key with the buy scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           },
           "409": {
-            "description": "refused in words: above maxUsdc, above a cap, not on Autopilot, frozen seller, or `needsYou` (a seller nobody approved, now waiting on the account page)"
+            "description": "refused in words: above maxUsdc, above a cap, not on Autopilot, frozen seller, or `needsYou` (a seller nobody approved, now waiting on the account page)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           },
           "402": {
-            "description": "the service takes no payment this account can make (accepts echoed)"
+            "description": "the service takes no payment this account can make (accepts echoed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           },
           "502": {
-            "description": "the seller did not settle, or did not answer"
+            "description": "the seller did not settle, or did not answer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -1643,19 +2347,71 @@
         },
         "responses": {
           "201": {
-            "description": "received: the body plus status \"received\", at, amountText, approvedPayee, frozen, notes (the agent's checks in words)"
+            "description": "received: the body plus status \"received\", at, amountText, approvedPayee, frozen, notes (the agent's checks in words)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvoiceReceived"
+                    }
+                  ]
+                }
+              }
+            }
           },
           "404": {
-            "description": "no such account"
+            "description": "no such account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           },
           "413": {
-            "description": "body over 4 KiB"
+            "description": "body over 4 KiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           },
           "422": {
-            "description": "refused, in words: not signed by the payee, wrong account or chain, amount or dates out of range, discount over 10%, or a ref already received"
+            "description": "refused, in words: not signed by the payee, wrong account or chain, amount or dates out of range, discount over 10%, or a ref already received",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           },
           "429": {
-            "description": "twenty invoices an hour per account; try later"
+            "description": "twenty invoices an hour per account; try later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -1692,16 +2448,61 @@
         },
         "responses": {
           "200": {
-            "description": "decision {ref, status accepted|declined, at} and bill (the added bill, or null)"
+            "description": "decision {ref, status accepted|declined, at} and bill (the added bill, or null)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            }
           },
           "404": {
-            "description": "no such account or invoice"
+            "description": "no such account or invoice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           },
           "409": {
-            "description": "answered already"
+            "description": "answered already",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           },
           "422": {
-            "description": "refused in words (payee frozen by the issuer, payee not approved yet, terms out of range)"
+            "description": "refused in words (payee frozen by the issuer, payee not approved yet, terms out of range)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -1732,13 +2533,44 @@
             }
           },
           "400": {
-            "description": "policy is not an address"
+            "description": "policy is not an address",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           },
           "401": {
-            "description": "locked account, no or wrong agent key"
+            "description": "locked account, no or wrong agent key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           },
           "404": {
-            "description": "no such account"
+            "description": "no such account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -1766,19 +2598,78 @@
         },
         "responses": {
           "201": {
-            "description": "{agentId, agentRegistry (CAIP-10 of the registry), tx, explorerTx, owner (the agent), at}"
+            "description": "{agentId, agentRegistry (CAIP-10 of the registry), tx, explorerTx, owner (the agent), at}",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            }
           },
           "200": {
-            "description": "already registered: the same record"
+            "description": "already registered: the same record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            }
           },
           "404": {
-            "description": "no such account"
+            "description": "no such account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           },
           "409": {
-            "description": "no agent key"
+            "description": "no agent key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           },
           "502": {
-            "description": "the chain refused or did not answer"
+            "description": "the chain refused or did not answer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
           }
         }
       }
@@ -1815,6 +2706,408 @@
           }
         }
       }
+    },
+    "/api/level1/prepare-coowners": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "to": {
+                          "type": "string"
+                        },
+                        "data": {
+                          "type": "string"
+                        },
+                        "summary": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "to",
+                        "data",
+                        "summary"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Calldata for the owner's passkey to name co-owners on its PasskeyPrincipal: setCoOwners(keys, threshold); threshold approvals then sign every change (docs/104)."
+      }
+    },
+    "/api/level1/purchases.jsonl": {
+      "get": {
+        "summary": "Every x402 purchase the account's agent made, one JSON line each (application/x-ndjson), oldest first: the receipts behind the inbox's purchases. Needs the read scope on a locked account. The MCP tool `purchases` returns them as an array.",
+        "parameters": [
+          {
+            "name": "policy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "one Purchase per line (each line is not enveloped; a refusal is)",
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/Purchase"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/level1/statement": {
+      "get": {
+        "summary": "The account's statement (the read scope on a locked account).",
+        "parameters": [
+          {
+            "name": "policy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/desk": {
+      "get": {
+        "summary": "The desk's book (docs/83): deals, exposure, parties, root, the venue read back.",
+        "parameters": [
+          {
+            "name": "policy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DeskBook"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/desk/milestone": {
+      "post": {
+        "summary": "Book one counterparty-signed step of a deal (EIP-712, docs/83 W5).",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "booked": {
+                          "type": "string"
+                        },
+                        "signer": {
+                          "type": "string"
+                        },
+                        "root": {},
+                        "offset": {},
+                        "priceNote": {}
+                      },
+                      "required": [
+                        "booked",
+                        "signer"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/desk/statement": {
+      "post": {
+        "summary": "Issue one deal's lender statement, signed and anchored.",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DeskKit"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/desk/statements/all": {
+      "post": {
+        "summary": "Issue the whole-stock statement.",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/desk/party/revoke": {
+      "post": {
+        "summary": "Stop a counterparty, instantly.",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "stopped": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "stopped"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/level1/codes": {
+      "get": {
+        "summary": "The refusal-code catalogue (no key): name, by, audience, meaning for every `error.code`.",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Codes"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/level1/status": {
+      "get": {
+        "summary": "The service as it stands: contractVersion, recentUpdates [{date, note}], and the kill switches (paused, stoppedTokens, halt).",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Status"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1835,8 +3128,10 @@
             "type": "string"
           },
           "usdc": {
-            "type": "string",
-            "nullable": true,
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "null = native USDC (Arc)"
           },
           "dust": {
@@ -1849,7 +3144,13 @@
           "note": {
             "type": "string"
           }
-        }
+        },
+        "required": [
+          "key",
+          "name",
+          "chainId",
+          "explorer"
+        ]
       },
       "Money": {
         "type": "string",
@@ -1925,6 +3226,15 @@
           },
           "transfersSoFar": {
             "type": "integer"
+          },
+          "elapsedSecs": {
+            "type": "integer"
+          },
+          "etaSecs": {
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         }
       },
@@ -1997,8 +3307,31 @@
           },
           "attested": {
             "type": "boolean"
+          },
+          "intervalSecs": {
+            "type": "integer"
           }
-        }
+        },
+        "required": [
+          "counterparty",
+          "kind",
+          "amount",
+          "amountMin",
+          "amountMax",
+          "dueWindowDays",
+          "every",
+          "intervalSecs",
+          "confidence",
+          "lastPaid",
+          "nextDue",
+          "overdueDays",
+          "samples",
+          "evidence",
+          "explain",
+          "verdict",
+          "why",
+          "attested"
+        ]
       },
       "MaxLoss": {
         "type": "object",
@@ -2113,8 +3446,14 @@
             }
           },
           "maxLoss": {
-            "$ref": "#/components/schemas/MaxLoss",
-            "nullable": true
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MaxLoss"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "readOnly": {
             "type": "boolean",
@@ -2124,8 +3463,62 @@
           },
           "elapsedMs": {
             "type": "integer"
+          },
+          "exposure": {
+            "type": "object"
+          },
+          "alsoHistory": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "secsPerBlock": {
+            "type": "number"
+          },
+          "orderRule": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "counterparty": {
+                  "type": "string"
+                },
+                "rationale": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "counterparty",
+                "rationale"
+              ]
+            }
           }
-        }
+        },
+        "required": [
+          "chain",
+          "address",
+          "exposure",
+          "alsoHistory",
+          "days",
+          "fromBlock",
+          "toBlock",
+          "now",
+          "secsPerBlock",
+          "transfers",
+          "outgoing",
+          "counterparties",
+          "balance",
+          "holdingsElsewhere",
+          "obligations",
+          "upcoming30d",
+          "dueNow",
+          "liquidity30d",
+          "orderRule",
+          "maxLoss",
+          "readOnly",
+          "elapsedMs"
+        ]
       },
       "Run": {
         "type": "object",
@@ -2146,21 +3539,2770 @@
             ]
           },
           "progress": {
-            "$ref": "#/components/schemas/Progress",
-            "nullable": true
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Progress"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "report": {
-            "$ref": "#/components/schemas/Report",
-            "nullable": true
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Report"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "error": {
-            "type": "string",
-            "nullable": true
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "request": {
             "$ref": "#/components/schemas/WatchRequest"
           }
-        }
+        },
+        "required": [
+          "id",
+          "created",
+          "status",
+          "progress",
+          "report",
+          "error",
+          "request"
+        ],
+        "description": "A Level 0 watch run (POST /api/watch). A Level 1 pass (POST /api/level1/run) answers as PassRun."
+      },
+      "ContractVersion": {
+        "type": "string",
+        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}\\.[0-9]+$",
+        "examples": [
+          "2026-10-17.1"
+        ],
+        "description": "date-stamped; a client warns once when it differs from the one it was built for"
+      },
+      "Ok": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "contractVersion": {
+            "$ref": "#/components/schemas/ContractVersion"
+          }
+        },
+        "required": [
+          "ok",
+          "contractVersion"
+        ],
+        "description": "added to every ok reply on an agent-facing route; the route's own fields are unchanged"
+      },
+      "RefusalCode": {
+        "type": "string",
+        "enum": [
+          "token_missing",
+          "token_invalid",
+          "token_scope",
+          "token_stopped",
+          "mode_watch",
+          "mode_propose",
+          "payee_not_approved",
+          "payee_cooling_off",
+          "over_per_payment",
+          "over_24h",
+          "below_floor",
+          "needs_owner",
+          "idempotency_conflict",
+          "idempotency_pending",
+          "invalid_body",
+          "body_too_large",
+          "rate_limited",
+          "chain_unavailable",
+          "upstream_unavailable",
+          "price_out_of_band",
+          "x402_unsupported",
+          "token_expired",
+          "account_not_deployed",
+          "account_keyless",
+          "account_busy",
+          "agent_lapsed",
+          "already_paid",
+          "chain_refused",
+          "insufficient_funds",
+          "not_found",
+          "over_max_price",
+          "payee_frozen",
+          "purchase_expired",
+          "seller_pending",
+          "service_error",
+          "service_unavailable",
+          "state_conflict"
+        ],
+        "description": "the catalogue `refusal::CODES`, served at GET /api/level1/codes"
+      },
+      "RefusalBy": {
+        "type": "string",
+        "enum": [
+          "auth",
+          "input",
+          "mandate",
+          "budget",
+          "payee",
+          "idempotency",
+          "chain",
+          "upstream",
+          "service"
+        ]
+      },
+      "Refusal": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "const": false
+          },
+          "contractVersion": {
+            "$ref": "#/components/schemas/ContractVersion"
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "$ref": "#/components/schemas/RefusalCode"
+              },
+              "by": {
+                "$ref": "#/components/schemas/RefusalBy"
+              },
+              "executed": {
+                "type": "string",
+                "enum": [
+                  "yes",
+                  "no",
+                  "unknown"
+                ],
+                "description": "whether a payment may have gone out: read from the chain (executed(actionHash)); a failed read is unknown; refused before sending is no"
+              },
+              "audience": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "agent"
+                ],
+                "description": "user = a human must act (approve, raise, switch mode, sign)"
+              },
+              "meaning": {
+                "type": "string",
+                "minLength": 1
+              },
+              "nextStep": {
+                "type": "string",
+                "minLength": 1
+              },
+              "retryAfterSecs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "words": {
+                "type": "string",
+                "minLength": 1,
+                "description": "the sentence the route already returned, for a human"
+              }
+            },
+            "required": [
+              "code",
+              "by",
+              "executed",
+              "audience",
+              "meaning",
+              "nextStep",
+              "retryAfterSecs",
+              "words"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "ok",
+          "contractVersion",
+          "error"
+        ],
+        "description": "every refusal on an agent-facing route; fields a route already returned beside `error` (scope, purchase, needsYou, frozen…) stay. A request from a browser page (it sends Sec-Fetch-Mode) keeps `error` as the sentence, for the pages that show it."
+      },
+      "Codes": {
+        "type": "object",
+        "properties": {
+          "codes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "$ref": "#/components/schemas/RefusalCode"
+                },
+                "by": {
+                  "$ref": "#/components/schemas/RefusalBy"
+                },
+                "audience": {
+                  "type": "string",
+                  "enum": [
+                    "user",
+                    "agent"
+                  ]
+                },
+                "meaning": {
+                  "type": "string"
+                },
+                "nextStep": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "by",
+                "audience",
+                "meaning"
+              ]
+            }
+          },
+          "by": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RefusalBy"
+            }
+          },
+          "executed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "audience": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "retry": {
+            "type": "string"
+          },
+          "recentUpdates": {}
+        },
+        "required": [
+          "codes"
+        ],
+        "description": "the catalogue: every error.code with its by, audience, meaning and next step, and the retry rule"
+      },
+      "Update": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "note"
+        ],
+        "description": "one change to the contract or the service (apps/classic/updates.json)"
+      },
+      "InboxStatus": {
+        "type": "object",
+        "properties": {
+          "recentUpdates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Update"
+            }
+          },
+          "paused": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "the contract is on Watch"
+          },
+          "halt": {
+            "type": "boolean",
+            "description": "a read-back mismatch only a human clears (halted says why)"
+          }
+        },
+        "required": [
+          "recentUpdates",
+          "paused",
+          "halt"
+        ],
+        "description": "docs/115 §2: the status fields the inbox (MCP treasury_inbox) carries beside its own"
+      },
+      "Status": {
+        "type": "object",
+        "properties": {
+          "recentUpdates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Update"
+            }
+          },
+          "codes": {
+            "type": "string"
+          },
+          "policy": {
+            "type": "string"
+          },
+          "mode": {},
+          "paused": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "with ?policy=: the contract is on Watch (null when the chain read failed)"
+          },
+          "halt": {
+            "type": "boolean",
+            "description": "with ?policy=: a read-back mismatch only a human clears"
+          },
+          "stoppedTokens": {
+            "type": "array",
+            "items": {}
+          }
+        },
+        "required": [
+          "recentUpdates"
+        ],
+        "description": "the service as it stands: the contract version, what changed, and with ?policy= the kill switches"
+      },
+      "Call": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string"
+          },
+          "data": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "to",
+          "data"
+        ],
+        "description": "a call the owner's passkey signs"
+      },
+      "Prepared": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string"
+          },
+          "data": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "signer": {
+            "type": "string"
+          },
+          "applies": {
+            "type": "string"
+          },
+          "ownerSees": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "to",
+          "data",
+          "summary",
+          "signer",
+          "applies",
+          "ownerSees"
+        ],
+        "description": "calldata for the owner's passkey, who signs it, when it applies, and what the owner sees (docs/60 P-182)"
+      },
+      "PassStarted": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "failed"
+            ]
+          },
+          "cached": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": "string"
+          },
+          "next": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "description": "202 with status queued when new; 200 with cached: true when a recent pass or run answers (note, next say why and when)"
+      },
+      "PassRequest": {
+        "type": "object",
+        "properties": {
+          "level1": {
+            "const": "run"
+          },
+          "policy": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string"
+          },
+          "watched": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level1",
+          "policy",
+          "chain"
+        ]
+      },
+      "PassReport": {
+        "type": "object",
+        "properties": {
+          "obligations": {
+            "type": "integer"
+          },
+          "obligationsList": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "counterparty": {
+                  "type": "string"
+                },
+                "amount": {
+                  "$ref": "#/components/schemas/Money"
+                },
+                "intervalSecs": {
+                  "type": "integer"
+                },
+                "nextDue": {
+                  "type": "integer"
+                },
+                "confidence": {
+                  "type": "number"
+                },
+                "samples": {
+                  "type": "integer"
+                },
+                "provenance": {
+                  "type": "string"
+                },
+                "evidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "counterparty",
+                "amount"
+              ]
+            }
+          },
+          "settled": {
+            "type": "array",
+            "items": {}
+          },
+          "escalated": {
+            "type": "array",
+            "items": {}
+          },
+          "pendingSignature": {
+            "type": "array",
+            "items": {}
+          },
+          "blocked": {
+            "type": "array",
+            "items": {}
+          },
+          "caughtUp": {
+            "type": "array",
+            "items": {}
+          },
+          "decisions": {
+            "type": "array",
+            "items": {}
+          },
+          "log": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reasoner": {
+            "type": "string"
+          },
+          "decider": {
+            "type": "string"
+          },
+          "root": {
+            "type": "string"
+          },
+          "anchorTx": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "anchorError": {},
+          "agentGasTopUpTx": {},
+          "agentExpiry": {
+            "type": "integer"
+          },
+          "balance": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "now": {
+            "type": "integer"
+          },
+          "transfers": {
+            "type": "integer"
+          },
+          "historyNote": {},
+          "historyReadFromBlock": {
+            "type": "integer"
+          },
+          "staleEscalations": {
+            "type": "integer"
+          },
+          "deciderFallbacks": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "obligations",
+          "obligationsList",
+          "settled",
+          "escalated",
+          "pendingSignature",
+          "root",
+          "reasoner"
+        ]
+      },
+      "PassRun": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "created": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "failed"
+            ]
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Progress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PassReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "request": {
+            "$ref": "#/components/schemas/PassRequest"
+          }
+        },
+        "required": [
+          "id",
+          "created",
+          "status",
+          "progress",
+          "report",
+          "error",
+          "request"
+        ],
+        "description": "a Level 1 pass, polled on GET /api/watch/{id}"
+      },
+      "Paid": {
+        "type": "object",
+        "properties": {
+          "counterparty": {
+            "type": "string"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "tx": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "at": {
+            "type": "integer"
+          },
+          "explorer": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "bought": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "early": {},
+          "saved": {},
+          "dueAt": {},
+          "actionHash": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "counterparty",
+          "amount",
+          "at",
+          "explorer",
+          "reason"
+        ],
+        "additionalProperties": false,
+        "description": "one payment: the agent's (a pass or a purchase) or the owner's (by: you), with why"
+      },
+      "NeedRow": {
+        "type": "object",
+        "properties": {
+          "counterparty": {
+            "type": "string"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "data": {
+            "type": "string"
+          },
+          "actionHash": {
+            "type": "string"
+          },
+          "settlementKey": {},
+          "cycleKey": {},
+          "attest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Call"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "why": {
+            "type": "string"
+          },
+          "boundUntil": {
+            "type": "integer"
+          },
+          "askedBy": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "counterparty",
+          "amount",
+          "to",
+          "data"
+        ],
+        "description": "a payment the agent prepared and the owner's passkey signs (bound to `terms` for ten minutes: boundUntil)"
+      },
+      "Invoice": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "policy": {
+            "type": "string"
+          },
+          "payee": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string"
+          },
+          "amountText": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "dueAt": {
+            "type": "integer"
+          },
+          "everyDays": {
+            "type": "integer"
+          },
+          "discountBps": {
+            "type": "integer"
+          },
+          "earlyDays": {
+            "type": "integer"
+          },
+          "issuedAt": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "at": {
+            "type": "integer"
+          },
+          "approvedPayee": {
+            "type": "boolean"
+          },
+          "frozen": {},
+          "notes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "signature": {
+            "type": "string"
+          },
+          "pay": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Call"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "payee",
+          "amountText",
+          "status"
+        ]
+      },
+      "Seller": {
+        "type": "object",
+        "properties": {
+          "seller": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "reason": {},
+          "url": {},
+          "to": {
+            "type": "string"
+          },
+          "data": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "boundUntil": {
+            "type": "integer"
+          },
+          "askedBy": {},
+          "bill": {
+            "type": "object",
+            "properties": {
+              "everySecs": {
+                "type": "integer"
+              },
+              "nextDue": {
+                "type": "integer"
+              },
+              "samples": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "everySecs",
+              "nextDue"
+            ]
+          }
+        },
+        "required": [
+          "seller",
+          "amount",
+          "to",
+          "data"
+        ],
+        "description": "a seller (or a payee an agent asked for, askedBy) to approve with one tap; to/data attest it"
+      },
+      "Purchase": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "integer"
+          },
+          "host": {
+            "type": "string"
+          },
+          "seller": {
+            "type": "string"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "minor": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "tx": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "explorer": {
+            "type": "string"
+          },
+          "actionHash": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "idFrom": {
+            "type": "string"
+          },
+          "network": {
+            "type": "string"
+          },
+          "policy": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "amount",
+          "status"
+        ],
+        "description": "one x402 purchase as recorded (paid, refused, or waiting on the owner); one line of purchases.jsonl"
+      },
+      "Runway": {
+        "type": "object",
+        "properties": {
+          "returnable": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "returnTo": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "days": {
+            "type": "integer"
+          },
+          "horizonDays": {
+            "type": "integer"
+          },
+          "firstAtRisk": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "counterparty": {
+                    "type": "string"
+                  },
+                  "amount": {
+                    "$ref": "#/components/schemas/Money"
+                  },
+                  "onUnix": {
+                    "type": "integer"
+                  },
+                  "inHours": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "counterparty",
+                  "amount",
+                  "onUnix",
+                  "inHours"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "billsInHorizon": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "idleCover": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "horizonTotal": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "shortfall": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "basis": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "returnable",
+          "returnTo",
+          "days",
+          "horizonDays",
+          "firstAtRisk",
+          "billsInHorizon",
+          "idleCover",
+          "horizonTotal",
+          "shortfall",
+          "basis"
+        ],
+        "additionalProperties": false
+      },
+      "Preview": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "reading",
+              "done",
+              "failed"
+            ]
+          },
+          "days": {
+            "type": "integer"
+          },
+          "transfers": {
+            "type": "integer"
+          },
+          "bills": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "counterparty": {
+                  "type": "string"
+                },
+                "amount": {
+                  "$ref": "#/components/schemas/Money"
+                },
+                "every": {
+                  "type": "string"
+                },
+                "intervalSecs": {
+                  "type": "integer"
+                },
+                "nextDue": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "counterparty",
+                "amount"
+              ]
+            }
+          },
+          "next30": {
+            "type": "string"
+          },
+          "fundMinor": {
+            "type": "string"
+          },
+          "suggestedLimit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "usdc": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "Party": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "you",
+              "tameion",
+              "domain",
+              "ens",
+              "x402",
+              "invoice",
+              "clash",
+              "new"
+            ]
+          },
+          "verified": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": "string"
+          },
+          "tail": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "kind",
+          "verified",
+          "note",
+          "tail"
+        ],
+        "description": "a party as a person reads it (docs/81)"
+      },
+      "Inbox": {
+        "type": "object",
+        "properties": {
+          "policy": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "Watch",
+              "Propose",
+              "Autopilot"
+            ]
+          },
+          "caps": {
+            "type": "object",
+            "properties": {
+              "perAction": {
+                "type": "string"
+              },
+              "daily": {
+                "type": "string"
+              },
+              "floor": {
+                "type": "string"
+              },
+              "spent24h": {
+                "$ref": "#/components/schemas/Money"
+              },
+              "leftNow": {
+                "$ref": "#/components/schemas/Money"
+              }
+            },
+            "required": [
+              "perAction",
+              "daily",
+              "floor"
+            ],
+            "additionalProperties": false,
+            "description": "spent24h and leftNow are the contract's trailing-24-hour figures (deployed accounts only)"
+          },
+          "balance": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "pending": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kinds": {
+                    "type": "integer"
+                  },
+                  "eta": {
+                    "type": "integer"
+                  },
+                  "words": {
+                    "type": "string"
+                  },
+                  "perActionCap": {
+                    "type": "string"
+                  },
+                  "dailyCap": {
+                    "type": "string"
+                  },
+                  "reserveFloor": {
+                    "type": "string"
+                  },
+                  "mode": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kinds",
+                  "eta",
+                  "words"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "protectedPerDay": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "lastPass": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "at": {
+                    "type": "integer"
+                  },
+                  "reasoner": {
+                    "type": "string"
+                  },
+                  "modelUnavailable": {
+                    "type": "boolean"
+                  },
+                  "root": {},
+                  "anchorTx": {},
+                  "obligations": {
+                    "type": "integer"
+                  },
+                  "transfers": {
+                    "type": "integer"
+                  },
+                  "historyNote": {}
+                },
+                "required": [
+                  "id",
+                  "at",
+                  "reasoner",
+                  "modelUnavailable",
+                  "root",
+                  "anchorTx",
+                  "obligations",
+                  "transfers",
+                  "historyNote"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "running": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "progress": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/Progress"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "progress"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "halted": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  },
+                  "clear": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reason",
+                  "clear"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "deployed": {
+            "type": "boolean"
+          },
+          "chosenDaily": {
+            "type": "string"
+          },
+          "preview": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Preview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pull": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "suggestedBasis": {
+                    "type": "string"
+                  },
+                  "wallet": {
+                    "type": "string"
+                  },
+                  "usdc": {
+                    "type": "string"
+                  },
+                  "allowance": {
+                    "type": "string"
+                  },
+                  "walletBalance": {
+                    "type": "string"
+                  },
+                  "suggestedAllowance": {
+                    "$ref": "#/components/schemas/Money"
+                  },
+                  "approveData": {
+                    "type": "string"
+                  },
+                  "revokeData": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "suggestedBasis",
+                  "wallet",
+                  "usdc",
+                  "allowance",
+                  "walletBalance",
+                  "suggestedAllowance",
+                  "approveData",
+                  "revokeData",
+                  "error"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "error"
+                ],
+                "additionalProperties": false,
+                "description": "the chain could not be read"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "pull tenants: the bill wallet's allowance; {error} alone when the chain could not be read"
+          },
+          "agentAuthority": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "lapsesAt": {
+                    "type": "integer"
+                  },
+                  "lapsed": {
+                    "type": "boolean"
+                  },
+                  "daysLeft": {
+                    "type": "integer"
+                  },
+                  "renewSuggested": {
+                    "type": "boolean"
+                  },
+                  "renewUntil": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "lapsesAt",
+                  "lapsed",
+                  "daysLeft",
+                  "renewSuggested"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "guardians": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "list": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "threshold": {
+                    "type": "integer"
+                  },
+                  "pendingEta": {}
+                },
+                "required": [
+                  "list",
+                  "threshold"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "agentTokens": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "scopes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "expires": {
+                  "type": "integer"
+                },
+                "issued": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "scopes",
+                "expires"
+              ]
+            }
+          },
+          "gated": {
+            "type": "boolean"
+          },
+          "terms": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "perActionCap": {
+                    "type": "string"
+                  },
+                  "dailyCap": {
+                    "type": "string"
+                  },
+                  "reserveFloor": {
+                    "type": "string"
+                  },
+                  "mode": {
+                    "type": "integer"
+                  },
+                  "agent": {
+                    "type": "string"
+                  },
+                  "operator": {
+                    "type": "string"
+                  },
+                  "delay": {
+                    "type": "string"
+                  },
+                  "agentExpiry": {
+                    "type": "integer"
+                  },
+                  "pendingEta": {
+                    "type": "integer"
+                  },
+                  "pendingKinds": {
+                    "type": "integer"
+                  },
+                  "fingerprint": {
+                    "type": "string"
+                  },
+                  "recomputed": {
+                    "type": "string"
+                  },
+                  "consistent": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "standingOrders": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "payee": {
+                      "type": "string"
+                    },
+                    "amount": {
+                      "$ref": "#/components/schemas/Money"
+                    },
+                    "everySecs": {
+                      "type": "integer"
+                    },
+                    "nextDue": {
+                      "type": "integer"
+                    },
+                    "active": {
+                      "type": "boolean"
+                    },
+                    "due": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "payee",
+                    "amount",
+                    "everySecs",
+                    "nextDue",
+                    "active"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "standingOrderCandidates": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "payee": {
+                      "type": "string"
+                    },
+                    "amount": {
+                      "$ref": "#/components/schemas/Money"
+                    },
+                    "everySecs": {
+                      "type": "integer"
+                    },
+                    "nextDue": {
+                      "type": "integer"
+                    },
+                    "confidence": {},
+                    "basis": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "payee",
+                    "amount",
+                    "everySecs",
+                    "nextDue"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "needsYou": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NeedRow"
+            }
+          },
+          "invoices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Invoice"
+            }
+          },
+          "sellersToApprove": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Seller"
+            }
+          },
+          "pricesToApprove": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "seller": {
+                  "type": "string"
+                },
+                "host": {
+                  "type": "string"
+                },
+                "amount": {
+                  "$ref": "#/components/schemas/Money"
+                },
+                "minor": {
+                  "type": "string"
+                },
+                "usual": {},
+                "reason": {},
+                "url": {},
+                "at": {
+                  "type": "integer"
+                },
+                "why": {}
+              },
+              "required": [
+                "seller",
+                "amount"
+              ]
+            }
+          },
+          "purchases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Purchase"
+            }
+          },
+          "exposure": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "complete": {
+                    "type": "boolean"
+                  },
+                  "holdings": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "size": {
+                          "type": "string"
+                        },
+                        "coin": {
+                          "type": "string"
+                        },
+                        "chain": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "size",
+                        "coin",
+                        "chain"
+                      ]
+                    }
+                  },
+                  "notionalUsd": {
+                    "type": "string"
+                  },
+                  "ethTotal": {
+                    "type": "string"
+                  },
+                  "ethMark": {
+                    "type": "string"
+                  },
+                  "fall30Usd": {
+                    "type": "string"
+                  },
+                  "fall30Days": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "hedge": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "on": {
+                            "type": "boolean"
+                          },
+                          "state": {}
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "unread": {
+                    "type": "array",
+                    "items": {}
+                  },
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "keyless": {
+            "type": "boolean"
+          },
+          "owners": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "threshold": {
+                    "type": "integer"
+                  },
+                  "keys": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "index": {
+                          "type": "integer"
+                        },
+                        "qx": {
+                          "type": "string"
+                        },
+                        "qy": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "qx",
+                        "qy"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "threshold",
+                  "keys"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "approvals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "challenge": {},
+                "target": {
+                  "type": "string"
+                },
+                "data": {
+                  "type": "string"
+                },
+                "have": {
+                  "type": "integer"
+                },
+                "need": {
+                  "type": "integer"
+                },
+                "keys": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "required": [
+                "target",
+                "data",
+                "have",
+                "need"
+              ]
+            }
+          },
+          "joinRequests": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "qx": {
+                  "type": "string"
+                },
+                "qy": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "qx",
+                "qy",
+                "label"
+              ]
+            }
+          },
+          "delegation": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "implementation": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "wallet": {
+                    "type": "string"
+                  },
+                  "initializeData": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "active": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "string"
+                  },
+                  "data": {
+                    "type": "string"
+                  },
+                  "summary": {
+                    "type": "string"
+                  },
+                  "count": {
+                    "type": "integer"
+                  },
+                  "total": {
+                    "$ref": "#/components/schemas/Money"
+                  },
+                  "boundUntil": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "to",
+                  "data",
+                  "count",
+                  "total"
+                ],
+                "description": "every waiting bill in one owner approval"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refused": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "counterparty": {
+                  "type": "string"
+                },
+                "amount": {
+                  "$ref": "#/components/schemas/Money"
+                },
+                "why": {
+                  "type": "string"
+                },
+                "actionHash": {
+                  "type": "string"
+                },
+                "purchase": {
+                  "type": "boolean"
+                },
+                "at": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "counterparty",
+                "amount"
+              ]
+            }
+          },
+          "paid": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Paid"
+            }
+          },
+          "paidTotal": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "paidByAgent": {
+            "type": "integer"
+          },
+          "paidByYou": {
+            "type": "integer"
+          },
+          "nextPassSecs": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "suggestedLimit": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "daily": {
+                    "$ref": "#/components/schemas/Money"
+                  },
+                  "perAction": {
+                    "$ref": "#/components/schemas/Money"
+                  },
+                  "basis": {
+                    "type": "string"
+                  },
+                  "floor": {},
+                  "byAgent": {
+                    "type": "boolean"
+                  },
+                  "askedAt": {}
+                },
+                "required": [
+                  "daily",
+                  "perAction",
+                  "basis"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "approvedByYou": {
+            "type": "integer"
+          },
+          "runway": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Runway"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "protection": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "bills30d": {
+                    "$ref": "#/components/schemas/Money"
+                  },
+                  "protectedUsd": {
+                    "$ref": "#/components/schemas/Money"
+                  },
+                  "coveragePct": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "funding30d": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "usdc": {
+                            "type": "string"
+                          },
+                          "entries": {
+                            "type": "integer"
+                          },
+                          "from": {
+                            "type": "integer"
+                          },
+                          "to": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "usdc"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "basis": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "holdingsElsewhere": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string"
+                  },
+                  "total": {
+                    "$ref": "#/components/schemas/Money"
+                  },
+                  "chains": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "domain": {
+                          "type": "integer"
+                        },
+                        "chain": {
+                          "type": "string"
+                        },
+                        "balance": {
+                          "$ref": "#/components/schemas/Money"
+                        }
+                      },
+                      "required": [
+                        "domain",
+                        "chain",
+                        "balance"
+                      ]
+                    }
+                  },
+                  "arriving": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "domain": {
+                          "type": "integer"
+                        },
+                        "chain": {
+                          "type": "string"
+                        },
+                        "amount": {
+                          "$ref": "#/components/schemas/Money"
+                        },
+                        "tx": {},
+                        "since": {}
+                      },
+                      "required": [
+                        "chain",
+                        "amount"
+                      ]
+                    }
+                  },
+                  "error": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recommendAutopilot": {
+            "type": "boolean"
+          },
+          "autopilotAsk": {
+            "type": "object",
+            "properties": {
+              "by": {},
+              "reason": {},
+              "at": {}
+            }
+          },
+          "typedBills": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "payee": {
+                  "type": "string"
+                },
+                "amount": {
+                  "$ref": "#/components/schemas/Money"
+                },
+                "everySecs": {
+                  "type": "integer"
+                },
+                "nextDue": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "payee",
+                "amount",
+                "everySecs",
+                "nextDue"
+              ]
+            }
+          },
+          "payees": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "approvedAt": {
+                  "type": "integer"
+                },
+                "payableFrom": {
+                  "type": "integer"
+                },
+                "payableNow": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "address",
+                "approvedAt",
+                "payableFrom",
+                "payableNow"
+              ]
+            }
+          },
+          "waitingCount": {
+            "type": "integer"
+          },
+          "waiting": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "seller",
+                    "invoice",
+                    "bill"
+                  ]
+                },
+                "what": {
+                  "type": "string"
+                },
+                "counterparty": {},
+                "amount": {},
+                "why": {},
+                "dueAt": {},
+                "decidedBy": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "what"
+              ]
+            }
+          },
+          "agentAsks": {
+            "type": "object"
+          },
+          "parties": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Party"
+            },
+            "description": "every party in this reply, by lowercase address"
+          }
+        },
+        "required": [
+          "policy",
+          "mode",
+          "caps",
+          "balance",
+          "pending",
+          "protectedPerDay",
+          "lastPass",
+          "running",
+          "halted",
+          "kind",
+          "deployed",
+          "chosenDaily",
+          "preview",
+          "pull",
+          "agentAuthority",
+          "guardians",
+          "agentTokens",
+          "gated",
+          "terms",
+          "standingOrders",
+          "standingOrderCandidates",
+          "needsYou",
+          "invoices",
+          "sellersToApprove",
+          "pricesToApprove",
+          "purchases",
+          "exposure",
+          "keyless",
+          "owners",
+          "approvals",
+          "joinRequests",
+          "delegation",
+          "run",
+          "refused",
+          "paid",
+          "paidTotal",
+          "paidByAgent",
+          "paidByYou",
+          "nextPassSecs",
+          "suggestedLimit",
+          "approvedByYou",
+          "runway",
+          "protection",
+          "holdingsElsewhere",
+          "recommendAutopilot",
+          "typedBills",
+          "waitingCount",
+          "waiting",
+          "agentAsks",
+          "parties"
+        ],
+        "description": "GET /api/level1/inbox. Every field is present on every reply (null when it does not apply) except payees (deployed accounts, read from the contract) and autopilotAsk (when an agent asked for Autopilot)."
+      },
+      "BillsSaved": {
+        "type": "object",
+        "properties": {
+          "policy": {
+            "type": "string"
+          },
+          "bills": {
+            "type": "array",
+            "items": {}
+          },
+          "refused": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "bill": {},
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "why"
+              ]
+            }
+          }
+        },
+        "required": [
+          "policy",
+          "bills",
+          "refused"
+        ]
+      },
+      "BillsCheck": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "summary"
+        ],
+        "description": "check: true asks only whether this caller may import"
+      },
+      "FundTypedData": {
+        "type": "object",
+        "properties": {
+          "typedData": {
+            "type": "object"
+          },
+          "fees": {},
+          "describe": {}
+        },
+        "required": [
+          "typedData",
+          "fees"
+        ]
+      },
+      "InvoiceReceived": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "at": {
+            "type": "integer"
+          },
+          "amountText": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "payee": {
+            "type": "string"
+          },
+          "approvedPayee": {
+            "type": "boolean"
+          },
+          "frozen": {},
+          "notes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "at",
+          "amountText",
+          "payee"
+        ]
+      },
+      "Records": {
+        "type": "object",
+        "properties": {
+          "policy": {
+            "type": "string"
+          },
+          "chain": {},
+          "records": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "root": {
+                  "type": "string"
+                },
+                "anchorTx": {},
+                "at": {},
+                "events": {},
+                "agent": {},
+                "anchor": {}
+              },
+              "required": [
+                "root"
+              ]
+            }
+          }
+        },
+        "required": [
+          "policy",
+          "records"
+        ]
+      },
+      "BuyReply": {
+        "type": "object",
+        "properties": {
+          "paid": {
+            "type": "boolean"
+          },
+          "purchase": {
+            "$ref": "#/components/schemas/Purchase"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "contentType": {},
+          "body": {}
+        },
+        "required": [
+          "paid",
+          "status",
+          "body"
+        ],
+        "description": "paid with the purchase and the seller's answer; paid: false with the seller's status and body when it did not ask for payment"
+      },
+      "DeskMilestone": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "bought",
+              "shipped",
+              "arrived",
+              "to_fabrication",
+              "consigned",
+              "returned",
+              "sold"
+            ]
+          },
+          "quantity": {
+            "type": "string"
+          },
+          "usdc": {},
+          "counterparty": {
+            "type": "string"
+          },
+          "document": {
+            "type": "string"
+          },
+          "signer": {
+            "type": "string"
+          },
+          "signed": {
+            "type": "boolean"
+          },
+          "at": {
+            "type": "integer"
+          },
+          "words": {
+            "type": "string"
+          },
+          "priceNote": {}
+        },
+        "required": [
+          "kind",
+          "quantity",
+          "usdc",
+          "counterparty",
+          "document",
+          "signer",
+          "signed",
+          "at",
+          "words",
+          "priceNote"
+        ]
+      },
+      "DeskDeal": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "goods": {
+            "type": "string"
+          },
+          "supplier": {
+            "type": "string"
+          },
+          "bought": {
+            "type": "string"
+          },
+          "cost": {
+            "type": "string"
+          },
+          "held": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "byStage": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "stage": {
+                  "type": "string"
+                },
+                "words": {
+                  "type": "string"
+                },
+                "class": {
+                  "type": "string",
+                  "enum": [
+                    "eligible",
+                    "consigned",
+                    "ineligible"
+                  ]
+                },
+                "grams": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "stage",
+                "words",
+                "class",
+                "grams"
+              ]
+            }
+          },
+          "milestones": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeskMilestone"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "goods",
+          "supplier",
+          "bought",
+          "cost",
+          "held",
+          "stage",
+          "byStage",
+          "milestones"
+        ]
+      },
+      "DeskBook": {
+        "type": "object",
+        "properties": {
+          "deals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeskDeal"
+            }
+          },
+          "exposure": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "goods": {
+                  "type": "string"
+                },
+                "held": {
+                  "type": "string"
+                },
+                "market": {
+                  "type": "string"
+                },
+                "offsetTarget": {
+                  "type": "string"
+                },
+                "unhedgedBase": {
+                  "type": "string"
+                },
+                "autoLimit": {
+                  "type": "string"
+                },
+                "autoMoved": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "goods",
+                "held",
+                "market",
+                "offsetTarget",
+                "unhedgedBase"
+              ]
+            }
+          },
+          "parties": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "address": {
+                  "type": "string"
+                },
+                "kinds": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "stopped": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name",
+                "address"
+              ]
+            }
+          },
+          "root": {
+            "type": "string"
+          },
+          "venueAccount": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "control": {},
+          "chainId": {
+            "type": "integer"
+          },
+          "venue": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "account": {
+                    "type": "string"
+                  },
+                  "market": {
+                    "type": "string"
+                  },
+                  "position": {},
+                  "mark": {},
+                  "error": {},
+                  "readAt": {}
+                },
+                "required": [
+                  "account",
+                  "market"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "deals",
+          "exposure",
+          "parties",
+          "root",
+          "venueAccount",
+          "control",
+          "chainId"
+        ],
+        "description": "GET /api/desk (docs/83)"
+      },
+      "DeskKit": {
+        "type": "object",
+        "properties": {
+          "signed": {
+            "type": "object",
+            "properties": {
+              "statement": {
+                "type": "object"
+              },
+              "signature": {
+                "type": "string"
+              },
+              "signer": {
+                "type": "string"
+              },
+              "statementHash": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "statement",
+              "signature",
+              "signer",
+              "statementHash"
+            ]
+          },
+          "anchor": {
+            "type": "object",
+            "properties": {
+              "tx": {
+                "type": "string"
+              },
+              "chainId": {
+                "type": "integer"
+              },
+              "contract": {
+                "type": "string"
+              },
+              "from": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "tx",
+              "chainId",
+              "contract",
+              "from"
+            ]
+          },
+          "parties": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "address": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "address"
+              ]
+            }
+          }
+        },
+        "required": [
+          "signed",
+          "anchor",
+          "parties"
+        ],
+        "description": "a lender kit (docs/83 W7)"
       }
     }
   }
