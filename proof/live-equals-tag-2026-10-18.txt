@@ -1,0 +1,23 @@
+Live link equals the tag — 2026-10-18 06:21:13 +0800 (PM). Tag submission-2026-10-18 = 2d35e384513bc81ca66fec7a5b0bfea4449b4477; working tree clean at deploy (git status: 0 tracked changes).
+
+## Deploy (runtime/railway-deploy.log, the run after '=== redeploy from tag')
+=== redeploy from tag 2d35e38 06:17:21 ===
+    Finished `release` profile [optimized] target(s) in 1m 50s
+Deploy complete
+GET https://tameion-agents-production-064a.up.railway.app/healthz -> 200 ok
+operator (relayer): 0x5f3f40daa525230289af8d40746dd12d10a151d6 | invite needed: True | publicUrl: https://tameion-agents-production-064a.up.railway.app
+
+## Probes from this Mac (2026-10-18 06:21:13), responses only the merged build gives (the 22:18 build answered contractVersion 2026-10-17.1 and 38 codes)
+GET /api/level1/status -> {'ok': True, 'contractVersion': '2026-10-18.1'} rails: ['arc-native-usdc', 'arbitrum-sepolia-usdc', 'eurc-stablefx']
+GET /api/level1/status?policy=0xf0ae90c66d410dc0cc3bc9e6a667af8c39fb6b85 -> {'contractVersion': '2026-10-18.1', 'rate': None, 'windowDays': None, 'runway': None}
+GET /api/level1/codes -> 42 codes; True True
+GET /api/level1/recall?policy=0xf0ae90c66d410dc0cc3bc9e6a667af8c39fb6b85&ids=evt:0 -> {"contractVersion":"2026-10-18.1","error":{"audience":"agent","by":"input","code":"not_found","executed":"no","meaning":"No such account, job or record on this service.","nextStep":"Check the address or id; an account lives on the service that opened it.","retryAfterSecs":0,"words":"no such account 
+GET /llms.txt mentions recall: 4 line(s); symbolon/top: 0 line(s)
+GET /healthz -> 200 in 0.176600s
+GET /api/level1/demo -> {"bill":{"cycles":15,"everySecs":120,"usdc":"0.002"},"delaySecs":30,"enabled":true,"vendor":"0xe5e2d8dcc2038fd0a010a6e7845378b646e33854"}
+
+## The same probes on an account that lives on the public host (acme-agents-1541 from the judge path run 3), 06:21:32
+GET /api/level1/status?policy=0xb1da17cf2b327cacf2acd7418f3debb24ff4a795 -> {'contractVersion': '2026-10-18.1', 'rate': '0.004285 USDC', 'windowDays': 7, 'runway': {'byRateDays': 4, 'firstShortfallDays': None}, 'mode': 'Autopilot'}
+GET /api/level1/recall?policy=0xb1da17cf2b327cacf2acd7418f3debb24ff4a795&ids=evt:0 -> {"chain":"arbitrum-sepolia","chainRead":{"agent":"0x517272e09f6b40efca798d57483c00af6723e0e6","anchor":"0xe7c381aafa077cc99359e8b297d2125efd76b8f5","chain":"arbitrum-sepolia","how":"rootOf","rootOf":"0x1780f9300deded8eb5a308529740add999e1d70cea10ad1e8f93529b70
+
+Verdict: the host answers contractVersion 2026-10-18.1, 42 refusal codes (incl. recall_unknown, sig_alg_missing), three rails, the recall route, and the momentum fields — none of which the build deployed 2026-10-17 22:18 had. Live = tag.
