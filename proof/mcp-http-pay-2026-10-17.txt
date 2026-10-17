@@ -312,3 +312,22 @@ Lines in the book for this operationId: 1
 Not shown live: mode_propose / mode_watch / payee_cooling_off / over_24h (this account is on Autopilot with its payee long cooled off and
 0.046 USDC of daily room; changing that needs the owner's passkey). They map from the contract's errors by selector, the same path as
 d and e above: operator::pay::tests::the_contracts_refusals_come_back_by_their_codes.
+
+== 7. After the rebase on main (S15's gate and kept replies) and P-284: the inbox lists the payment (2026-10-17 17:23:58 +0800, binary 9ba1f7f+P-284, :7916 PID 24468)
+$ GET /api/level1/inbox?policy=0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1  (Authorization: Bearer <uat2-u1-rc-buy key>) -> .payments
+ok True · payments 1
+[
+ {
+  "actionHash": "0x74bed25fcc1f580a43b2113cbffe275391ad9a89ef5549573b06ca77b300f132",
+  "amount": "0.001000 USDC",
+  "at": 1792228309,
+  "explorer": "https://sepolia.arbiscan.io/tx/0xcf66a705eb7e972908d009ad87bf83de910a8ec5ed3f1cad5b3397f01395965d",
+  "minor": "1000",
+  "operationId": "op_s16-9d0579cd-f8a3-4c47-9ed2-fce56e8c2982",
+  "payee": "0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3",
+  "policy": "0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1",
+  "status": "paid",
+  "tx": "0xcf66a705eb7e972908d009ad87bf83de910a8ec5ed3f1cad5b3397f01395965d",
+  "why": "S16 proof: one direct payment to the approved payee"
+ }
+]
