@@ -433,8 +433,10 @@ fn keep_stepped(
 /// A model refuses a bill only as a look-alike; any other refusal becomes the
 /// owner's question, with the model's own why (docs/60 P-218) — the rule
 /// `decide_or_rule` applies to invoices (P-216). A model's refusal left a real
-/// bill unpaid with no one asked. The rule decider's refusals come from code
-/// and stand, and so does a refusal where code does not allow `ask`.
+/// bill unpaid with no one asked. A look-alike is the case's fact, not the
+/// model's word: the basis counts only when code found one (P-223). The rule
+/// decider's refusals come from code and stand, and so does a refusal where
+/// code does not allow `ask`.
 fn model_refusal_asks(
     case: &decide::Case,
     d: decide::Decision,
@@ -443,7 +445,7 @@ fn model_refusal_asks(
 ) -> (decide::Decision, Option<String>) {
     if d.by != ActorKind::Model
         || d.action != decide::Action::Refuse
-        || d.basis == decide::Basis::LookAlike
+        || (d.basis == decide::Basis::LookAlike && case.lookalike_of.is_some())
         || !case.allowed.contains(&decide::Action::Ask)
     {
         return (d, note);
@@ -3444,18 +3446,24 @@ mod decide_pass_tests {
             "{log:?}"
         );
 
-        let (o, log, seen) = pass(2, &LookAlike, "refuse-lookalike").await;
+        // P-223: "look-alike" is the case's fact, not the model's word. This
+        // payee is approved, so code found no look-alike: the owner is asked.
+        let (o, _, seen) = pass(2, &LookAlike, "refuse-lookalike").await;
         assert_eq!(
             (o.blocked.len(), o.pending_signature.len(), o.settled.len()),
-            (1, 0, 0)
+            (0, 1, 0)
         );
         assert!(!paid(&seen));
-        assert!(
-            log.iter()
-                .any(|l| l.contains("Refused for")
-                    && l.contains("Decided by model fake-model: refuse")),
-            "{log:?}"
-        );
+        // Where code found one, the model's look-alike refusal stands.
+        let (mut case, d, _) = o.decisions[0].clone();
+        let refused = decide::Decision {
+            action: Action::Refuse,
+            basis: Basis::LookAlike,
+            ..d
+        };
+        case.lookalike_of = Some("0x111111…111111".into());
+        let (kept, note) = model_refusal_asks(&case, refused, None, "fake-model");
+        assert_eq!((kept.action, note), (Action::Refuse, None));
     }
 
     /// docs/60 P-219: a cycle an ended standing order paid (`PaidDue` under the
