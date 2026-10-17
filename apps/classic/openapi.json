@@ -2142,6 +2142,61 @@
         }
       }
     },
+    "/api/level1/tokens/stop": {
+      "post": {
+        "summary": "Stop agent key `id` now, from the owner's device (X-Tameion-Device, or reserveToken in the body): its calls get 403 token_stopped from then on, also after a restart. No chain call and no passkey: a stop only shrinks trust. Removing the key for good stays token-revoke-signed (the passkey).",
+        "parameters": [
+          {
+            "name": "X-Tameion-Device",
+            "in": "header",
+            "required": false,
+            "description": "the device token of the device that opened the account",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "id"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "reserveToken": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "policy, stopped, stoppedTokens, summary"
+          },
+          "400": {
+            "description": "policy and id are required"
+          },
+          "401": {
+            "description": "not the owner's device"
+          },
+          "404": {
+            "description": "no such account, or no agent key with that id"
+          }
+        }
+      }
+    },
     "/llms.txt": {
       "get": {
         "summary": "The agent-readable map of this service: what Tameion is, what an agent may and may not do, auth, idempotency, errors.",
@@ -5016,6 +5071,13 @@
               ]
             }
           },
+          "stoppedTokens": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "ids of the agent keys the owner's device stopped (POST /api/level1/tokens/stop); their calls get 403 token_stopped"
+          },
           "gated": {
             "type": "boolean"
           },
@@ -5798,6 +5860,7 @@
           "agentAuthority",
           "guardians",
           "agentTokens",
+          "stoppedTokens",
           "gated",
           "terms",
           "standingOrders",
