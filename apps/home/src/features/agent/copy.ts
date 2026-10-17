@@ -10,7 +10,7 @@ export const copy = {
   didNotAnswer: (what: string, since: string | null) => `${what} did not answer${since ? `; shown as of ${since}` : ""}.`,
   tryAgain: "Try again",
   details: "What the service said",
-  recordsMissing: "The records did not load; the figures above still stand.",
+  recordsMissing: (figures: boolean) => (figures ? "The records did not load; the figures above still stand." : "The records did not load."),
   none: "–",
   top: {
     region: "The account now",

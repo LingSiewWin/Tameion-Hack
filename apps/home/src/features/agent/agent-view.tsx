@@ -94,7 +94,7 @@ export function AgentScreen({ reads, onRetry, now }: { reads: Reads; onRetry?: (
           </div>
           {failed.some((k) => reads[k].error) && (
             <details className="meta">
-              <summary className="cursor-pointer">{copy.details}</summary>
+              <summary className="cursor-pointer py-(--space-1)">{copy.details}</summary>
               {failed.map((k) => (
                 <p key={k} className="m-0 break-all">
                   {k}: {reads[k].error}
@@ -105,7 +105,7 @@ export function AgentScreen({ reads, onRetry, now }: { reads: Reads; onRetry?: (
         </div>
       )}
       <Top status={status.value} inbox={inbox.value} />
-      {symbolon.value ? <Stream data={symbolon.value} now={now} /> : <p className="mono-read m-0">{copy.recordsMissing}</p>}
+      {symbolon.value ? <Stream data={symbolon.value} now={now} /> : <p className="mono-read m-0">{copy.recordsMissing(!!(status.value || inbox.value))}</p>}
     </div>
   );
 }

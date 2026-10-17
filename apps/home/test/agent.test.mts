@@ -141,4 +141,7 @@ test("a read that failed keeps the last answer, says since when, and offers one 
   assert.match(html, /<details[^>]*><summary[^>]*>What the service said<\/summary><p[^>]*>symbolon: The service did not answer\.<\/p><\/details>/);
   assert.match(html, />Try again<\/button>/);
   assert.match(html, /The records did not load; the figures above still stand\./);
+  const silent = { value: null, at: null, error: "The service did not answer." };
+  const none = renderToStaticMarkup(createElement(AgentScreen, { reads: { status: silent, inbox: silent, symbolon: silent } }));
+  assert.match(none, /The records did not load\.<\/p>/, "no figure stands when none was read");
 });

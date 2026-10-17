@@ -15,6 +15,10 @@ const SLOTS: { name: SlotName; of: (r: SymbolonRecord) => Slot | null | undefine
   { name: "witness", of: (r) => r.witness },
 ];
 const LINK = "text-(--ink) underline underline-offset-4";
+// Hit area by padding, never by a larger text: a link in a row is as tall as the row's 44 px toggle; one in an opened
+// line takes 4 px above and below its 20 px line (28 px, over the 24 px minimum) so the lines stay close.
+const ROW_LINK = `${LINK} inline-flex min-h-(--touch) items-center`;
+const LINE_LINK = `${LINK} inline-block py-(--space-1)`;
 
 /** A slot as one mark: ✓ verified, – none, ? its anchoring could not be read this time (witness only). */
 function mark(s: Slot | null | undefined, unread: boolean): { glyph: string; words: string } {
@@ -134,7 +138,7 @@ export function Stream({ data, now }: { data: Symbolon; now?: number }) {
                       </td>
                       <td>
                         {anchor ? (
-                          <a href={anchor} target="_blank" rel="noreferrer" className={LINK} title={r.anchorTx ?? ""}>
+                          <a href={anchor} target="_blank" rel="noreferrer" className={ROW_LINK} title={r.anchorTx ?? ""}>
                             {short(r.anchorTx)}
                           </a>
                         ) : (
@@ -206,7 +210,7 @@ function Detail({ r, explorer, unread }: { r: SymbolonRecord; explorer?: string 
         <div className={line}>
           <span className="meta">{D.anchorTx}</span>
           {anchor ? (
-            <a href={anchor} target="_blank" rel="noreferrer" className={LINK}>
+            <a href={anchor} target="_blank" rel="noreferrer" className={LINE_LINK}>
               {r.anchorTx}
             </a>
           ) : (
@@ -218,7 +222,7 @@ function Detail({ r, explorer, unread }: { r: SymbolonRecord; explorer?: string 
         <div className={line}>
           <span className="meta">{D.paymentTx}</span>
           {paid ? (
-            <a href={paid} target="_blank" rel="noreferrer" className={LINK}>
+            <a href={paid} target="_blank" rel="noreferrer" className={LINE_LINK}>
               {r.tx}
             </a>
           ) : (
