@@ -1,0 +1,78 @@
+The judge's five minutes, page side (seat S17b, docs/115 §3) — written 2026-10-17 16:51 +0800
+
+Where: this tree's apps/console/src, served by a next dev on :3003 (a clone of apps/console in the seat's scratch folder, src synced from the
+main tree before each run, because next refuses a second dev server in the same folder while the PM's :3000 runs), TAMEION_SERVICE =
+http://127.0.0.1:7917 (S17a's service: binary started 16:15:22, PID 90743; S17a restarted it around 16:41:55, new PID 31417).
+Browser: a fresh Playwright context with a CDP virtual passkey (ctap2, internal, user verification on); the passkey lives only in that
+context. No key or token printed. The invite word came from the link (/?invite=…), not typed; it is not written here.
+Chain: Arbitrum Sepolia. Spend: 0.05 test USDC from the relayer (the demo's own funding of one account); 0.002 USDC paid to the demo vendor.
+
+Account: acme-agents-8812 · policy 0x5a78fa92d4914a0a1cba0f69a0a35b8082bf9ddb · owner 0xcc00e970a2f6b6c2fb68a922f462b475626c0011 · delay 30 s
+Demo vendor (GET /api/level1/demo): 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854; bill 0.002 USDC every 120 s.
+
+1 Open — PASS (one tap; nothing typed: the name was suggested, the invite came from the link)
+  16:22:36 home: "Try it in 5 minutes" card, no invite field (the link carried it); 390 wide: scrollWidth 375 = clientWidth 375.
+  16:23:11 tap "Try it in 5 minutes" → passkey → POST /api/level1/deploy {demo: true, invite, lazy: true} 200 at 16:23:27.
+  16:23:30 account page; the strip on step 2; "Funded: 0.05 USDC, by the demo, no wallet needed. Receipt" — funding tx (from the deploy reply)
+           0x724da4346aed3048ddd03b5888cb345b2506258c7883e56ca3f3753170fd7e55; account deploy tx 0x36cfa5b17c7db88424420f11a8cbf31ab20fcd1b2d789920b164e7cc7e26b12b.
+  19 s from tap to funded.
+
+2 Bill — PASS (one passkey tap)
+  16:24:32 tap "Let the agent pay Demo Vendor 0.002 USDC every 2 minutes": POST /api/level1/bills {check:true} 200 → prepare-payees → challenge →
+           execute (PayeeSet tx 0xd84514e9c1b013fcdf41aaec4abdafc7897754f3c9232db547a475f44d0e736a, approvedAt 1792225487) → POST /api/level1/bills
+           {payee, amount "0.002", everyDays 0, everySecs 120, nextDue now+120} → contacts "Demo Vendor".
+  16:25:01 strip on step 3: "Demo Vendor approved; the bill saved: 0.002 USDC every 2 minutes." inbox typedBills: everySecs 120, nextDue 1792225607.
+  29 s from tap to saved (one passkey prompt; the account had no agent keys, so no signed save was needed).
+
+3 Autopilot — PASS (one passkey tap + the guardians gate's "Go on anyway", see concerns)
+  16:25:17 tap "Turn Autopilot on" → the gate (P-202): "1 of 3 keys set … Add two guardians first … Or go on." → "Go on anyway".
+  16:25:24 setMode(2) executed (ChangeProposed tx 0xe48d7c66cea36d5f926f4f0403ce52000fd0e8cbb93385bfc44bb8097773ba06).
+  16:25:30 "Autopilot applies in 0:22 unless you cancel." with Cancel; applied by the page itself after eta
+           (ModeChanged tx 0x34404412cd40cb14223b857549a78eaa5264e348028a3c4776241088c0018df8). 16:26:18 strip on step 4.
+
+4 Watch it pay — page PASS, service NOT (the agent asked instead of paying; P-267)
+  16:26:19 "The bill is due in 0:29 … Then the agent pays Demo Vendor 0.002 USDC by itself, inside your limits, and says why." Live line from
+           the event stream: "Account changed: mode", then "Check running", "Check done: paid 0, needs you 1, recorded on chain 0x1af13d…6720".
+  The agent's why, verbatim (needsYou[0].why, shown in the strip):
+    "0xe5e2d8…e33854 was approved moments ago and has never been paid, so the owner should see this 0.002 USDC bill before it goes out."
+  and from the next passes:
+    "0xe5e2d8…e33854 was approved 0 days ago and has never been paid, so you should see this 0.002 USDC bill before it goes out. · cycles-behind:
+     8 more cycles of this bill fell due after this one and nobody paid them: it may have ended. Settle one by hand to confirm, and I will continue from there"
+  16:34:56 the owner's one tap in Needs you → execute 200 16:35:02, SettledByPrincipal tx 0x4903d2c39e29a7e7aa317a78d3180b9f07485a0cc4c9ac56ce2541359773ab33.
+  16:35:18 the row in the strip: "0.002 USDC to Demo Vendor · by you · Receipt"
+           "Why, as recorded: paid by the owner; the agent asked: a bill the owner typed: 0.002000 USDC"
+           "In the book: paid 0.002 USDC — paid by the owner with the passkey; the agent asked: cycles-behind: 4 more cycles … ; read from the
+            chain's own record of the payment."  (GET /api/level1/statement 200: the line is kind paid, paidBy owner, tx 0x4903…ab33; the week's
+            record root 0x9630fabc…6102, anchorTx 0x9f08db451e25871ef32918d2d92d40a1152c724f2ee82d1acf78995dea5f9dce)
+  The next cycles (due 16:36:47, 16:38:47, …): the agent asked again each time (16:37:44, 16:39:14, … 16:44:52); paid by itself: no.
+
+5 Raise and cut — PASS for the raise's wait and the instant cut; the cancel failed during S17a's restart (P-268)
+  16:41:39 "Raise one payment to 100.00 USDC" (from 50.00) → the gate → "Go on anyway" → ChangeProposed tx 0xf7be91a999c3dd259a9e5efd69284a355b4adf1f6aec3becd7fd764a03d4f690.
+  16:41:52 "The higher cap, 100.00 USDC a payment, applies in 0:22. It waits on chain where anyone can see it coming. The raise ↗ [Cancel the raise]"
+  16:41:54 Cancel → execute 500 at 16:41:59 (dev proxy: connect ECONNREFUSED 127.0.0.1:7917 — the service was restarting); the raise applied at
+           its eta (page's mode apply 200 at 16:42:19; LimitsChanged tx 0xc9ecb47e6838cdd295db188367802a4b498ace038fc74b749d16847573dc19e7).
+  16:43:04 "Cut one payment to 0.002 USDC" → execute 200 at 16:43:10, LimitsChanged tx 0x0105d237991199ad9a1ea425d58e94cd18343b8f6931e24a098d0cc7d389c068;
+           inbox caps after: perAction 0.002, daily 100, leftNow 0.002, pending null. 6 s from tap to applied.
+
+Finish card (16:45:21, after a reload):
+  "Done in 19 min 43 s. The agent asked you before paying, and your one tap paid; the limits held the whole time."
+  Agents can spend now 0.002 (USDC in one payment; 0.002 of 100.00 left today) · Paid by the agent 0.00 (0 payments) · Paid with no human 0
+  (of 1 bill paid, 0.002 USDC each; 1 by your tap) · "The raise waited 30 s where anyone could see it ↗; the cut applied at once ↗."
+  Mandate: "Pay this bill when due, up to 100.00 USDC a day, only to payees I approved; ask me for anything else."
+  "Keys: your passkey, on this device. The agent holds a bounded key: it pays only payees you approved, up to the mandate you signed. Two
+   guardians, added in Settings, bring the account back if this device is lost."
+  (19 min, not 5: 8 minutes waited on the agent's ask before the owner paid, and the run paused for diagnosis.)
+
+Widths: every step captured at 1280 and 390 (desktop context: 390 window = 375 content beside the scrollbar); no element wider than the content
+(checked at step 5 by scanning every element's right edge), documentElement.scrollWidth = clientWidth = 375 at each step. The strip shows all
+five steps at 1280 and "Step N of 5 · <name>" at 390.
+
+Screenshots: proof/judge-path-page-home-{1280,390}.png, -1-open-{1280,390}, -2-bill-{1280,390} (tap in flight), -3-gate-1280,
+-3-autopilot-{1280,390}, -4-countdown-{1280,390}, -4-due-1280, -4-asked-{1280,390}, -5-raise-1280, -5-wait-{1280,390}, -6-finish-{1280,390}.
+
+Not validated: the agent paying the demo bill by itself (service, P-267); the strip's "by the agent" row and its book line for an agent payment
+(line in an anchored record, "on chain" link) — no agent payment happened; a successful "Cancel the raise" (failed on the restart); the
+signed save (P-226) of a seconds bill on an account with agent keys (billsChallenge v2 matches demo.rs by reading, not by a vector).
+Gates: tsc 0 errors; eslint src test 0 problems; node --test test/*.mts pass 59 fail 0; judge logic check (scratch test, 5 cases) pass 5 fail 0.
+Left: acme-agents-8812 holds 0.048 test USDC, Autopilot, one payee, the bill (Needs you keeps asking each cycle); its passkey lives only in
+the Playwright context.
