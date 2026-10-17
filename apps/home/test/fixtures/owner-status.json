@@ -1,0 +1,74 @@
+{
+    "codes": "/api/level1/codes",
+    "contractVersion": "2026-10-18.1",
+    "forces": [
+        {
+            "at": 1792275529,
+            "counterparty": "0xe5e2d8dcc2038fd0a010a6e7845378b646e33854",
+            "deltaPerDay": "-0.000285 USDC",
+            "kind": "mode_changed"
+        },
+        {
+            "at": 1792275648,
+            "counterparty": "0xe5e2d8dcc2038fd0a010a6e7845378b646e33854",
+            "deltaPerDay": "0.002571 USDC",
+            "kind": "bill_added"
+        }
+    ],
+    "halt": false,
+    "mode": "Autopilot",
+    "ok": true,
+    "paused": false,
+    "policy": "0x907a9f4fe960017ee9c31550d2f1956e07e2df4f",
+    "rails": [
+        {
+            "currency": "USDC",
+            "finality": null,
+            "finalitySecs": null,
+            "id": "arc-native-usdc",
+            "includedSecs": null,
+            "measuredAt": null
+        },
+        {
+            "currency": "USDC",
+            "finality": null,
+            "finalitySecs": null,
+            "id": "arbitrum-sepolia-usdc",
+            "includedSecs": null,
+            "measuredAt": null
+        },
+        {
+            "currency": "EURC",
+            "finality": "not available",
+            "finalitySecs": null,
+            "id": "eurc-stablefx",
+            "includedSecs": null,
+            "measuredAt": null
+        }
+    ],
+    "rate": "0.002571 USDC",
+    "recentUpdates": [
+        {
+            "date": "2026-10-18",
+            "note": "Contract 2026-10-18.1: invoices are version 3 and name their alg (secp256k1-eip712 or ml-dsa-65) beside the signature; v1/v2 bodies are accepted until 2026-11-15 and the reply says deprecated. A payee binds an ML-DSA-65 key once with POST /api/level1/key-binding; from then on only that key bills (a v1, v2 or secp256k1 invoice is refused with sig_alg_missing). New codes: sig_alg_missing, sig_alg_unknown."
+        },
+        {
+            "date": "2026-10-17",
+            "note": "Contract 2026-10-17.1: every agent reply carries ok and contractVersion; a refusal is one error object with code, by, executed, audience, meaning, nextStep, retryAfterSecs and words (the old sentence). The codes are served at GET /api/level1/codes."
+        },
+        {
+            "date": "2026-10-17",
+            "note": "A paid-API purchase refused after its signature reached the seller says executed: yes or unknown from the chain; never resend it then."
+        },
+        {
+            "date": "2026-10-17",
+            "note": "treasury_inbox adds paused, halt and recentUpdates; MCP tool results carry structuredContent, and an error's text is the error object."
+        }
+    ],
+    "runway": {
+        "byRateDays": 12,
+        "firstShortfallDays": 0
+    },
+    "stoppedTokens": [],
+    "windowDays": 7
+}
