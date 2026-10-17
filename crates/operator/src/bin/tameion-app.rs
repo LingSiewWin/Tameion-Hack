@@ -641,7 +641,7 @@ async fn block_times(client: &arc::ArcClient, chain: &str, blocks: Vec<u64>) -> 
 /// after the pass, so the pass is no answer for it (docs/60 P-229). A bill an
 /// x402 receipt suggests is never paid by a pass and does not count.
 fn due_after(report: &Value, bills: &[level1::SeededBill], since: u64, now: u64) -> Option<u64> {
-    dues_after(report, bills, since)
+    dues_after(report, bills, since, now)
         .into_iter()
         .filter(|d| *d <= now)
         .min()
@@ -651,8 +651,13 @@ fn due_after(report: &Value, bills: &[level1::SeededBill], since: u64, now: u64)
 /// (docs/60 P-229): a few seconds after the earliest due time the last pass
 /// knew that is still ahead of it, and never within a minute of that pass.
 /// `None` when no bill falls due after it.
-fn due_pass_at(report: &Value, bills: &[level1::SeededBill], last_pass: u64) -> Option<u64> {
-    dues_after(report, bills, last_pass)
+fn due_pass_at(
+    report: &Value,
+    bills: &[level1::SeededBill],
+    last_pass: u64,
+    now: u64,
+) -> Option<u64> {
+    dues_after(report, bills, last_pass, now)
         .into_iter()
         .min()
         .map(|d| (d + 5).max(last_pass + 60))
@@ -661,8 +666,10 @@ fn due_pass_at(report: &Value, bills: &[level1::SeededBill], last_pass: u64) -> 
 /// Each bill's first due time after `after`, from the pass's report and the typed
 /// bills (docs/60 P-260): the pass that pays a cycle reports that cycle's due time,
 /// which is behind it, so a due time at or before `after` steps on by the bill's
-/// interval; a bill typed after the pass is not in its report at all.
-fn dues_after(report: &Value, bills: &[level1::SeededBill], after: u64) -> Vec<u64> {
+/// interval; a bill typed after the pass is not in its report at all. `now` is the
+/// clock a typed bill's end is judged by: passed in, never read here, so a test's
+/// fixed times stay true after the wall clock passes them (docs/60 P-294).
+fn dues_after(report: &Value, bills: &[level1::SeededBill], after: u64, now: u64) -> Vec<u64> {
     let known = report["obligationsList"]
         .as_array()
         .into_iter()
@@ -676,7 +683,7 @@ fn dues_after(report: &Value, bills: &[level1::SeededBill], after: u64) -> Vec<u
         });
     let typed = bills
         .iter()
-        .filter(|b| !operator::demo::ended(b, operator::demo::now()))
+        .filter(|b| !operator::demo::ended(b, now))
         .map(|b| (b.next_due, b.interval_secs()));
     known
         .chain(typed)
@@ -8091,7 +8098,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .last_done_pass(&t.policy)
                         .await
                         .unwrap_or((t.created, Value::Null));
-                    let Some(at) = due_pass_at(&report, &t.bills, ran) else {
+                    let Some(at) = due_pass_at(&report, &t.bills, ran, operator::demo::now())
+                    else {
                         continue;
                     };
                     if at > now_secs() + watch_every || due_set.get(&t.policy) == Some(&at) {
@@ -9225,17 +9233,17 @@ mod settle_key_tests {
             "fell due after the pass: run again"
         );
         assert_eq!(
-            due_pass_at(&report, &[], ran),
+            due_pass_at(&report, &[], ran, ran),
             Some(ran + 60),
             "a minute after the last pass"
         );
         assert_eq!(
-            due_pass_at(&report, &[], ran - 300),
+            due_pass_at(&report, &[], ran - 300, ran),
             Some(due + 5),
             "due + 5 s"
         );
         assert_eq!(
-            due_pass_at(&json!({ "obligationsList": [] }), &[], ran),
+            due_pass_at(&json!({ "obligationsList": [] }), &[], ran, ran),
             None
         );
     }
@@ -9251,7 +9259,7 @@ mod settle_key_tests {
         let report = json!({ "obligationsList": [
             { "nextDue": due1, "intervalSecs": every, "provenance": "imported" },
         ]});
-        assert_eq!(due_pass_at(&report, &[], ran), Some(due1 + every + 5));
+        assert_eq!(due_pass_at(&report, &[], ran, ran), Some(due1 + every + 5));
         assert_eq!(due_after(&report, &[], ran, due1 + every - 1), None);
         assert_eq!(
             due_after(&report, &[], ran, due1 + every + 5),
@@ -9267,7 +9275,7 @@ mod settle_key_tests {
             every_secs: every,
         };
         assert_eq!(
-            due_pass_at(&Value::Null, std::slice::from_ref(&typed), due1),
+            due_pass_at(&Value::Null, std::slice::from_ref(&typed), due1, due1),
             Some(due1 + 605),
             "typed after the last pass"
         );
