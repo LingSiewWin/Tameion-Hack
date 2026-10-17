@@ -5,7 +5,6 @@
 // on this device the moment the burn has a hash, so a closed tab resumes from the chain and nothing is sent twice.
 import { useEffect, useRef, useState } from "react";
 import type { Address, Hex } from "viem";
-import type { Inbox } from "../../lib/types.ts";
 import { useView } from "../../lib/view.ts";
 import type { AddAccount } from "./add-money.tsx";
 import {
@@ -24,7 +23,7 @@ import {
   type Domain,
   type Move,
 } from "./cctp.ts";
-import { ledgerText, parseUsdc, usdcText, whenText } from "./format.ts";
+import { asOfText, ledgerText, parseUsdc, usdcText, whenText, type Held } from "./format.ts";
 import { cta, explorer, FAUCET, inner, link, mark, plate, quiet } from "./ui.ts";
 import { allowed, codeOf, connect, gasHeld, injected, minted, receiptStatus, send, usdcHeld, type Phase } from "./wallet.ts";
 
@@ -122,7 +121,20 @@ function useElapsed(since: number | null): number {
 /** A wait in words: the verb, its seconds after 3 s, and after 15 s the promise that nothing is sent twice. */
 const waitWords = (verb: string, secs: number) => (secs >= 15 ? "Still checking. It will not be sent twice." : secs >= 3 ? `${verb}, ${secs} s` : verb);
 
-export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain; account: AddAccount; inbox: Inbox | null; onLanded: () => void }) {
+export function MovePlate({
+  dest,
+  account,
+  figures,
+  asOf,
+  onLanded,
+}: {
+  dest: CctpChain;
+  account: AddAccount;
+  /** the account's balance and Gateway holdings as last read; `asOf` (ms) when they are stale */
+  figures: Pick<Held, "balance" | "holdingsElsewhere"> | null;
+  asOf: number | null;
+  onLanded: () => void;
+}) {
   const view = useView();
   const sources = sourcesFor(dest);
   const [fromDomain, setFromDomain] = useState<Domain>(sources[0].domain);
@@ -269,7 +281,7 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
           </p>
           <p className="meta">Arrived on {dest.name}</p>
           {view === "agent" && <Hashes from={moveFrom} dest={dest} move={move} mintTx={mintTx} nonce={burn?.nonce} />}
-          <Witnesses dest={dest} inbox={inbox} />
+          <Witnesses dest={dest} figures={figures} asOf={asOf} />
         </div>
       )}
 
@@ -537,19 +549,22 @@ function Hashes({ from, dest, move, mintTx, nonce }: { from: CctpChain; dest: Cc
   );
 }
 
-/** When a move lands: the account's balance as the service reads it, beside Circle Gateway's (inbox.holdingsElsewhere). */
-function Witnesses({ dest, inbox }: { dest: CctpChain; inbox: Inbox | null }) {
+/** When a move lands: the account's balance as the service reads it, beside Circle Gateway's (inbox.holdingsElsewhere);
+ *  the last figures this device read, marked with their time, when the service does not answer. */
+function Witnesses({ dest, figures, asOf }: { dest: CctpChain; figures: Pick<Held, "balance" | "holdingsElsewhere"> | null; asOf: number | null }) {
   const view = useView();
-  const g = inbox?.holdingsElsewhere as { total?: string; error?: string } | null | undefined;
+  const g = figures?.holdingsElsewhere as { total?: string; error?: string } | null | undefined;
   return (
     <dl className={`grid grid-cols-2 gap-(--space-3) ${inner}`}>
       <div className="flex flex-col gap-(--space-1)">
         <dt className="meta">The account on {dest.name}</dt>
-        <dd className="row money m-0">{inbox ? ledgerText(inbox.balance) : "Not read"}</dd>
+        <dd className="row money m-0">{figures ? ledgerText(figures.balance) : "Not read"}</dd>
+        {figures && asOf && <dd className="meta m-0">{asOfText(asOf)}</dd>}
       </div>
       <div className="flex flex-col gap-(--space-1)">
         <dt className="meta">Circle Gateway, other chains</dt>
         <dd className="row money m-0">{g?.total ? ledgerText(g.total) : "Not read"}</dd>
+        {g?.total && asOf && <dd className="meta m-0">{asOfText(asOf)}</dd>}
         {view === "agent" && g?.error && <dd className="meta m-0">{g.error}</dd>}
       </div>
     </dl>

@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { toFunctionSelector, type Hex } from "viem";
 import { GET } from "../src/features/add-money/attestation.ts";
 import { attestationOf, burnData, byDomain, byKey, parseMove, readMessage, sourcesFor, toBytes32 } from "../src/features/add-money/cctp.ts";
-import { grouped, ledgerText, parseUsdc, usdcText, whenText } from "../src/features/add-money/format.ts";
+import { asOfText, grouped, ledgerText, parseHeld, parseUsdc, usdcText, whenText } from "../src/features/add-money/format.ts";
 
 type Msg = { message: Hex; attestation: Hex; status: string; destinationMintTxHash?: string; decodedMessage: Record<string, unknown> & { decodedMessageBody: Record<string, string> } };
 type Sample = { tx: string; sourceDomain: number; body: { messages: Msg[] } };
@@ -113,4 +113,16 @@ test("the attestation route refuses what is not a burn on a known domain, before
     assert.equal(r.status, 400, q);
     assert.equal(((await r.json()) as { state: string }).state, "unreadable");
   }
+});
+
+test("a kept balance comes back only with a time, and is marked stale in words", () => {
+  const at = new Date(2026, 9, 18, 6, 12).getTime();
+  assert.deepEqual(parseHeld(JSON.stringify({ balance: "0.050000 USDC", at })), { balance: "0.050000 USDC", at });
+  assert.equal(parseHeld(JSON.stringify({ balance: "0.050000 USDC" })), null, "no time, not shown as a kept figure");
+  assert.equal(parseHeld(JSON.stringify({ at })), null);
+  assert.equal(parseHeld("{"), null);
+  assert.equal(parseHeld(null), null);
+  assert.equal(asOfText(at, new Date(2026, 9, 18, 9, 0).getTime()), "as of 06:12");
+  assert.equal(asOfText(at, new Date(2026, 9, 19, 9, 0).getTime()), "as of yesterday");
+  assert.equal(asOfText(at, new Date(2026, 9, 25, 9, 0).getTime()), "as of 18 Oct");
 });

@@ -11,7 +11,7 @@ import { fetchDemo, fetchInbox, fetchTenant } from "../../lib/api.ts";
 import type { Demo, Inbox, Tenant } from "../../lib/types.ts";
 import { useView } from "../../lib/view.ts";
 import { byKey, type CctpChain } from "./cctp.ts";
-import { grouped, ledgerText, usdcText, whenText } from "./format.ts";
+import { asOfText, grouped, ledgerText, parseHeld, usdcText, whenText, type Held } from "./format.ts";
 import { MovePlate } from "./move-plate.tsx";
 import { explorer, FAUCET, link, plate, quiet } from "./ui.ts";
 import { demoFunding } from "./wallet.ts";
@@ -24,6 +24,22 @@ export type AddAccount = { name: string; address: Address; chain: string };
 /** What the page read from the service. `null` while reading; an `Error` when that read failed. */
 type Reads = { inbox: Inbox | Error | null; tenant: Tenant | Error | null; demo: Demo | Error | null };
 
+const HELD = (name: string) => `tameion.home.add.${name}`;
+const loadHeld = (name: string) => {
+  try {
+    return parseHeld(localStorage.getItem(HELD(name)));
+  } catch {
+    return null;
+  }
+};
+const saveHeld = (name: string, h: Held) => {
+  try {
+    localStorage.setItem(HELD(name), JSON.stringify(h));
+  } catch {
+    // storage blocked: the figure is still kept while the page stays open
+  }
+};
+
 const asValue = <T,>(r: PromiseSettledResult<T>) => (r.status === "fulfilled" ? r.value : r.reason instanceof Error ? r.reason : new Error(String(r.reason)));
 async function readAll(name: string): Promise<Reads> {
   const [inbox, tenant, demo] = await Promise.allSettled([fetchInbox(name), fetchTenant(name), fetchDemo()]);
@@ -35,22 +51,38 @@ export function AddMoney({ account: props }: { account: AddProps }) {
   const account: AddAccount = { name: props.name, address: (isAddress(joined) ? joined : "0x") as Address, chain: props.chain };
   const dest = isAddress(joined) ? byKey(account.chain) : undefined;
   const [reads, setReads] = useState<Reads>({ inbox: null, tenant: null, demo: null });
+  // the last balance this device read, and when: what stays on screen, marked stale, when the service stops answering
+  const [held, setHeld] = useState<Held | null>(() => loadHeld(props.name));
+  const take = useCallback(
+    (r: Reads) => {
+      setReads(r);
+      if (r.inbox && !(r.inbox instanceof Error)) {
+        const h: Held = { balance: r.inbox.balance, holdingsElsewhere: r.inbox.holdingsElsewhere, at: Date.now() };
+        setHeld(h);
+        saveHeld(account.name, h);
+      }
+    },
+    [account.name],
+  );
   useEffect(() => {
     let live = true;
-    readAll(account.name).then((r) => live && setReads(r));
+    readAll(account.name).then((r) => live && take(r));
     return () => {
       live = false;
     };
-  }, [account.name]);
+  }, [account.name, take]);
   // Try again, and a move that lands: read the account again, keeping what is shown until the answer comes
   const reload = useCallback(() => {
-    readAll(account.name).then(setReads);
-  }, [account.name]);
+    readAll(account.name).then(take);
+  }, [account.name, take]);
 
   const showSkeleton = useSkeleton(reads.inbox === null);
   if (!dest) return <Unsupported chain={account.chain} />;
   if (showSkeleton) return <AddMoneySkeleton />;
-  const inbox = reads.inbox instanceof Error ? null : reads.inbox;
+  const fresh = reads.inbox instanceof Error ? null : reads.inbox;
+  // fresh figures, or the last ones this device read, at full ink with their time (DESIGN §States, Offline)
+  const shown = fresh ?? held;
+  const staleAt = fresh ? null : (held?.at ?? null);
   const tenant = reads.tenant instanceof Error ? null : reads.tenant;
   const demo = reads.demo instanceof Error ? null : reads.demo;
 
@@ -61,14 +93,22 @@ export function AddMoney({ account: props }: { account: AddProps }) {
         <h1 id="add-title" className="row-title">
           Add money
         </h1>
-        {inbox ? (
+        {shown && (
           <>
-            <p className="balance money">{ledgerText(inbox.balance)}</p>
-            <p className="meta">In the account on {dest.name}</p>
+            <p className="balance money">{ledgerText(shown.balance)}</p>
+            <p className="meta">
+              In the account on {dest.name}
+              {staleAt ? `, ${asOfText(staleAt)}` : ""}
+            </p>
           </>
-        ) : (
-          <div className="flex flex-col items-start gap-(--space-2)">
-            <p className="row">The service did not answer, so the balance is not shown. Moving money below still works.</p>
+        )}
+        {!fresh && (
+          <div className="mt-(--space-2) flex flex-col items-start gap-(--space-2)">
+            <p className="row">
+              {shown
+                ? "The service did not answer. Moving money below still works."
+                : "The service did not answer, so the balance is not shown. Moving money below still works."}
+            </p>
             <button type="button" className={quiet} onClick={reload}>
               Try again
             </button>
@@ -77,7 +117,7 @@ export function AddMoney({ account: props }: { account: AddProps }) {
       </section>
       <AddressPlate dest={dest} address={account.address} />
       <FaucetPlate dest={dest} address={account.address} tenant={tenant} demo={demo} />
-      <MovePlate key={account.address} dest={dest} account={account} inbox={inbox} onLanded={reload} />
+      <MovePlate key={account.address} dest={dest} account={account} figures={shown} asOf={staleAt} onLanded={reload} />
     </div>
   );
 }
@@ -109,7 +149,8 @@ function AddressPlate({ dest, address }: { dest: CctpChain; address: Address }) 
       <h2 id="address-title" className="row-title">
         The account&apos;s address on {dest.name}
       </h2>
-      <p className="row money break-all">{view === "agent" ? address : grouped(address)}</p>
+      {/* grouped, the Owner view's address wraps between groups; the Agent view's unbroken hex wraps anywhere */}
+      <p className={`row money ${view === "agent" ? "break-all" : "break-words"}`}>{view === "agent" ? address : grouped(address)}</p>
       <div className="flex flex-wrap items-center gap-(--space-3)">
         <button type="button" className={quiet} onClick={copy}>
           Copy

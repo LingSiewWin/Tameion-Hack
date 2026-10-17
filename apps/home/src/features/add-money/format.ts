@@ -1,5 +1,6 @@
 // Money and dates in the page's words (DESIGN §Typography, §Copy): "0.05 USDC", six decimals trimmed to the shortest
 // that is exact, never "$"; "Today 05:41", "Yesterday", "12 Oct". Strings and bigints only: no floating point near money.
+import type { Inbox } from "../../lib/types.ts";
 
 /** USDC minor units (6 decimals) as "0.05 USDC". */
 export function usdcText(minor: bigint): string {
@@ -40,3 +41,23 @@ export function whenText(unixSecs: number, nowMs = Date.now()): string {
 
 /** An address in groups of four, so a person can compare it with what their wallet shows; Copy takes it unspaced. */
 export const grouped = (address: string) => [address.slice(0, 6), ...(address.slice(6).match(/.{1,4}/g) ?? [])].join(" ");
+
+/** What the page last read of the account and when (ms), kept on this device so a service that stops answering leaves
+ *  the figures at full ink, marked stale with their time (DESIGN §States, Offline). */
+export type Held = { balance: string; holdingsElsewhere?: Inbox["holdingsElsewhere"]; at: number };
+
+/** A kept read back from storage; null unless it has a balance and a time (storage is the device's, not ours). */
+export function parseHeld(raw: string | null): Held | null {
+  try {
+    const h = JSON.parse(raw ?? "null") as Partial<Held> | null;
+    return h && typeof h.balance === "string" && typeof h.at === "number" ? (h as Held) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The stale mark: "as of 06:12" today, "as of yesterday", "as of 12 Oct". */
+export function asOfText(ms: number, nowMs = Date.now()): string {
+  const w = whenText(ms / 1000, nowMs);
+  return `as of ${w.startsWith("Today ") ? w.slice(6) : w.charAt(0).toLowerCase() + w.slice(1)}`;
+}
