@@ -1,6 +1,6 @@
 # @tameion/sdk — a Tameion account from code or a terminal
 
-Your agent reads the account, asks for a check, and buys paid APIs over x402. It can only pay sellers the owner approved, and only up
+Your agent reads the account, asks for a check, pays approved payees, and buys paid APIs over x402. It can only pay payees and sellers the owner approved, and only up
 to the mandate the owner signed. The owner's passkey holds the keys. The agent holds a bounded key that cannot add a payee, raise a
 limit or withdraw. The contract enforces the limit, not this SDK.
 
@@ -18,6 +18,7 @@ export TAMEION_URL=http://localhost:7880 TAMEION_POLICY=0x…            # the s
 tameion inbox  --token-file ~/.tameion/agent.token                     # or TAMEION_TOKEN in the environment
 tameion bills  --token-file ~/.tameion/agent.token
 tameion status
+tameion pay 0xee80…b1f3 0.25 --why "October hosting" --token-file ~/.tameion/agent.token
 tameion buy 'https://seller.example/v1/report' --max 0.01 --why "weekly research report" --token-file ~/.tameion/agent.token
 ```
 
@@ -26,13 +27,16 @@ tameion buy 'https://seller.example/v1/report' --max 0.01 --why "weekly research
 | `status` | contract version, recent updates, the kill switches | none |
 | `inbox` | mode, balance, limits (spent in 24 h, left now), payees, everything waiting for the owner, what was paid | `read` |
 | `bills` | the bills the agent knows, standing orders, and bill payments waiting for the owner | `read` |
+| `pay <payee> <usdc> --why <text> [--op <id>]` | pays a payee the owner approved, now, from the account, inside the mandate. Autopilot only, and only once the payee's cooling-off has ended. | `buy` |
 | `buy <url> --max <usdc> --why <text> [--op <id>]` | one call of a paid API, paid from the account inside the mandate | `buy` |
 
 `--json` prints the service's reply as JSON. Exit codes: **0** delivered, **1** the service refused or the outcome is unknown,
 **2** usage (nothing was sent).
 
-There is no `pay <payee> <amount>`. No route lets an agent pay a payee directly. The agent pays bills on its own checks (`run`, on
-Autopilot, inside the caps) and pays sellers through `buy`.
+`pay` and `buy` both spend, and both follow the operationId rules below. For `pay`, the payment's action hash is
+keccak256(account ‖ operationId), so the chain itself refuses a second payment under the same id, even after the service restarts.
+A resend with the same id answers with the first payment (`replayed`). The same id with a different payee, amount or why is
+refused with `idempotency_conflict`.
 
 ## The client
 
@@ -43,6 +47,9 @@ const t = new TameionClient({ baseUrl: "https://tameion.example", token: process
 const inbox = await t.inbox(policy);
 if (inbox.ok) console.log(inbox.data.caps.leftNow, inbox.data.waitingCount);
 
+const paid = await t.pay({ policy, payee, amount: "0.25", why: "October hosting", operationId: newOperationId() });
+if (paid.ok) console.log(paid.data.payment.tx, paid.replayed);
+
 const operationId = newOperationId();               // keep it until you know the outcome
 const r = await t.buy({ policy, url, maxUsdc: "0.01", reason: "weekly research report", operationId });
 if (r.ok) console.log(r.data.purchase?.tx, r.replayed);
@@ -51,7 +58,7 @@ else if (r.error.audience === "user") { /* a person must act on the account page
 ```
 
 Methods: `status(policy?)`, `inbox(policy)`, `run(policy)` (a check now; one per account per ten minutes, otherwise the recent one
-answers), `bills(policy, bills)` (tell the agent about bills; scope `import`; it pays nothing by itself), `buy(input)`.
+answers), `bills(policy, bills)` (tell the agent about bills; scope `import`; it pays nothing by itself), `pay(input)`, `buy(input)`.
 Every method returns `{ ok: true, data }` or `{ ok: false, error }`, plus `status`, `replayed` and `raw`. A method throws only when
 it is called wrongly: a bad `baseUrl`, or a spend with no valid `operationId`.
 
@@ -60,10 +67,11 @@ it is called wrongly: a bad `baseUrl`, or a spend with no valid `operationId`.
 | Behaviour | When it fails | What to do |
 |---|---|---|
 | `baseUrl` must be `https:`. Plain `http:` works only for `localhost`, `127.0.0.1` and `[::1]`, because the agent key travels in every request. | The constructor throws, or the CLI exits 2. Nothing is sent. | Use the service's https address. |
-| Every spend (`buy`) needs an `operationId`: `op_` plus a UUID, 8–128 characters of `[A-Za-z0-9_.:-]`. It is sent as `Idempotency-Key`. | A missing or malformed id throws before anything is sent. | Use `newOperationId()`. Make one id per purchase, not one per attempt. |
+| Every spend (`pay`, `buy`) needs an `operationId`: `op_` plus a UUID, 8–128 characters of `[A-Za-z0-9_.:-]`. It is sent as `Idempotency-Key`. | A missing or malformed id throws before anything is sent. | Use `newOperationId()`. Make one id per purchase, not one per attempt. |
 | The spend is saved before it is sent. The client keeps `{operationId, path, body, sends}`. With `save` set, it awaits your hook first. The CLI prints the id on stderr first. | If `save` throws, nothing is sent. | Fix the store, then call again with the same id. |
 | A lost reply (timeout, network error, or a body that is not JSON) is `executed: "unknown"`. The client resends it once, with the same id and the same body. | If the second reply is lost too, the result is `executed: "unknown"`. The client never sends that id a third time. | Read `inbox` (`paid`, `purchases`, `caps.spent24h`) or the chain. Never pay again under a new id. If nothing went out, the CLI may resend with `--op <id>`. |
 | After a lost reply, no refusal can prove the first send did not pay. | The refusal is reported as `executed: "unknown"`. | The same as above. |
+| `pay` answers `paid: false` (the transaction went out, but its receipt did not match the payment) | The CLI prints `sent … but the receipt did not match` and exits 0, because the payment was made. | Never resend. Read `inbox` and the transaction. |
 | `executed: "yes"` | Not a failure. | Never resend. In this process, the same id returns the saved reply without sending. Another process gets the first reply back with `Idempotent-Replayed: true`. |
 | Same id, different body | The client refuses it with `executed: "no"` and does not send it. The service would answer 422. | Use a new `operationId` for a new purchase. |
 | `rate_limited` or `idempotency_pending` with `executed: "no"` | The client resends once, after `retryAfterSecs` clamped to 1–60 s. If that is refused too, it returns the refusal. | Wait and call again with the same id. |
@@ -95,5 +103,5 @@ Every reply an agent can get carries `ok` and `contractVersion`:
 - The codes the contract starts with: `token_missing` `token_invalid` `token_scope` `token_stopped` `mode_watch` `mode_propose`
   `payee_not_approved` `payee_cooling_off` `over_per_payment` `over_24h` `below_floor` `needs_owner` `idempotency_conflict`
   `idempotency_pending` `invalid_body` `body_too_large` `rate_limited` `chain_unavailable` `upstream_unavailable` `price_out_of_band`
-  `x402_unsupported` `service_paused`. The live catalogue, with each code's meaning, is served at `GET /api/level1/codes`.
+  `x402_unsupported` `service_paused`. `pay` can also refuse with `mode_watch`, `agent_lapsed` and `insufficient_funds`. The live catalogue, with each code's meaning, is served at `GET /api/level1/codes`.
 - The client reads `error.code` when it is present. Otherwise it reads the older `error` string.

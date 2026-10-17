@@ -16,6 +16,7 @@ import {
   type Reply,
   type Status,
   type Bought,
+  type PaymentMade,
 } from "./client.js";
 
 export interface Io {
@@ -29,7 +30,7 @@ export interface Io {
   now: () => number;
 }
 
-const COMMANDS = ["status", "inbox", "bills", "buy", "help"] as const;
+const COMMANDS = ["status", "inbox", "bills", "pay", "buy", "help"] as const;
 const VALUE_FLAGS = new Set(["--policy", "--url", "--token-file", "--why", "--max", "--op", "--method"]);
 const BOOL_FLAGS = new Set(["--json", "--help"]);
 const USDC = /^\d+(\.\d{1,6})?$/;
@@ -39,6 +40,8 @@ const USAGE = `tameion — a Tameion account from the terminal
   tameion status                         the service: contract version, recent updates, kill switches
   tameion inbox                          mode, balance, limits, payees, what waits for the owner
   tameion bills                          the bills the agent knows and the ones waiting for the owner
+  tameion pay <payee> <usdc> --why <text> [--op <operationId>]
+                                         pay an approved payee now, inside the mandate (Autopilot only)
   tameion buy <url> --max <usdc> --why <text> [--op <operationId>] [--method GET]
                                          buy one call of a paid API (x402) inside the mandate
 
@@ -46,7 +49,7 @@ const USAGE = `tameion — a Tameion account from the terminal
   --url <base>       the service (or TAMEION_URL; default http://127.0.0.1:7880; https unless localhost)
   --token-file <p>   the agent key, from a file (or TAMEION_TOKEN); never on the command line
   --json             print the service's reply as JSON
-  --op <id>          resend a buy with the operationId it printed; never invent a new one for the same purchase
+  --op <id>          resend a pay or buy with the operationId it printed; never invent a new one for the same payment
 
 exit 0 delivered · 1 refused or outcome unknown · 2 usage`;
 
@@ -155,6 +158,27 @@ function boughtLines(d: Bought, replayed: boolean, operationId?: string): string
   return lines;
 }
 
+function paymentLines(d: PaymentMade, replayed: boolean, operationId: string): string[] {
+  const p = d.payment;
+  const link = p.explorer ? ` · ${p.explorer}` : p.tx ? ` · tx ${p.tx}` : "";
+  const lines = d.paid
+    ? [`paid ${p.amount} to ${p.payee}${link}`]
+    : [`sent ${p.amount} to ${p.payee}${link}, but the receipt did not match (${p.note ?? p.status}); do not pay again, read \`tameion inbox\``];
+  if (replayed) lines.push("replayed: this operationId was already paid; nothing was paid again");
+  lines.push(`operation ${operationId}`);
+  return lines;
+}
+
+/** The operationId for a spend: --op when resending, else a new one, printed before anything is sent. */
+function operationFor(flags: Map<string, string | true>, err: (s: string) => void): string {
+  const given = flags.get("--op");
+  if (given !== undefined && !isOperationId(given)) throw new Usage("--op must be an operationId this CLI printed (op_ + UUID)");
+  const operationId = typeof given === "string" ? given : newOperationId();
+  // Saved before sending: the terminal holds the id the resend needs.
+  err(`operation ${operationId} — if no answer comes back, resend with --op ${operationId}, never a new one`);
+  return operationId;
+}
+
 export async function run(argv: string[], io: Io): Promise<number> {
   let token = "";
   const scrub = (s: string) => (token ? s.split(token).join("[token]") : s);
@@ -210,6 +234,17 @@ export async function run(argv: string[], io: Io): Promise<number> {
       const r = await client.inbox(policy);
       reply = r;
       if (r.ok) render = () => (cmd === "inbox" ? inboxLines(r.data) : billLines(r.data));
+    } else if (cmd === "pay") {
+      const [, payee, amount] = pos;
+      const why = flags.get("--why");
+      if (!payee || !amount || pos.length > 3) throw new Usage("usage: tameion pay <payee> <usdc> --why <text>");
+      if (!/^0x[0-9a-fA-F]{40}$/.test(payee)) throw new Usage("<payee> must be the 0x… address of a payee the owner approved");
+      if (!USDC.test(amount) || Number(amount) <= 0) throw new Usage("<usdc> must be an amount above zero, e.g. 0.25");
+      if (typeof why !== "string" || !why.trim()) throw new Usage("--why <text> is required: every payment is written to the book with what it was for");
+      const operationId = operationFor(flags, err);
+      const r = await client.pay({ policy, payee, amount, why: why.trim(), operationId });
+      reply = r;
+      if (r.ok) render = () => paymentLines(r.data, r.replayed, operationId);
     } else {
       const url = pos[1];
       const max = flags.get("--max");
@@ -217,11 +252,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
       if (!url || pos.length > 2) throw new Usage("usage: tameion buy <url> --max <usdc> --why <text>");
       if (typeof max !== "string" || !USDC.test(max)) throw new Usage("--max <usdc> is required, e.g. --max 0.01");
       if (typeof why !== "string" || !why.trim()) throw new Usage("--why <text> is required: every purchase is written down with its reason");
-      const given = flags.get("--op");
-      if (given !== undefined && !isOperationId(given)) throw new Usage("--op must be an operationId this CLI printed (op_ + UUID)");
-      const operationId = typeof given === "string" ? given : newOperationId();
-      // Saved before sending: the terminal holds the id the resend needs.
-      err(`operation ${operationId} — if no answer comes back, resend with --op ${operationId}, never a new one`);
+      const operationId = operationFor(flags, err);
       const method = flags.get("--method");
       const r = await client.buy({ policy, url, maxUsdc: max, reason: why.trim(), operationId, ...(typeof method === "string" ? { method } : {}) });
       reply = r;

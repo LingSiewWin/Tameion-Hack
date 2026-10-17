@@ -1,6 +1,6 @@
 // A client for a Tameion account's agent routes: read the account, ask for a
-// check, tell the agent about bills, buy a paid API (x402) inside the mandate
-// the owner signed. Zero dependencies: `fetch` only, Node 20+.
+// check, tell the agent about bills, pay an approved payee, buy a paid API
+// (x402) — inside the mandate the owner signed. Zero dependencies: `fetch` only, Node 20+.
 //
 // The one rule that matters: a spend carries an operationId, sent as
 // `Idempotency-Key`. A lost reply is `executed: "unknown"` and is resent once
@@ -169,6 +169,43 @@ export interface BuyInput {
   operationId: string;
 }
 
+export interface PayInput {
+  policy: string;
+  /** A payee the owner approved, past its cooling-off. */
+  payee: string;
+  /** USDC, e.g. "0.25". */
+  amount: string;
+  /** What the payment is for; written to the account's book beside it. At most 500 characters. */
+  why: string;
+  /** `op_` + a UUID (newOperationId()). The chain refuses a second payment under the same id. */
+  operationId: string;
+}
+export interface Payment {
+  at: number;
+  operationId: string;
+  /** keccak256(policy ‖ operationId): the chain's replay guard for this id. */
+  actionHash: string;
+  policy: string;
+  payee: string;
+  amount: string;
+  minor: string;
+  why: string;
+  /** `paid`, or `unconfirmed` when the receipt did not match the payment (see `note`). */
+  status: string;
+  tx?: string;
+  explorer?: string;
+  note?: string;
+  [field: string]: unknown;
+}
+export interface PaymentMade {
+  /** false when the transaction went out but its receipt did not match; never resend it. */
+  paid: boolean;
+  /** The service answered with the payment already made under this operationId. */
+  replayed?: boolean;
+  payment: Payment;
+  [field: string]: unknown;
+}
+
 /** A spend as it was saved before it was sent. */
 export interface SavedOperation {
   operationId: string;
@@ -278,6 +315,12 @@ export class TameionClient {
     return this.spend<Bought>("/api/level1/buy", body, operationId);
   }
 
+  /** Pay an approved payee now, inside the mandate (scope `buy`, Autopilot only). Spends. */
+  pay(input: PayInput): Promise<Reply<PaymentMade>> {
+    const { operationId, policy, payee, amount, why } = input;
+    return this.spend<PaymentMade>("/api/level1/pay", { policy, payee, amount, why }, operationId);
+  }
+
   /** The spend saved under this id, if this client sent it. */
   operation(operationId: string): SavedOperation | undefined {
     const e = this.ops.get(operationId);
@@ -381,7 +424,9 @@ export class TameionClient {
     }
     const j = s.json as Record<string, unknown> | null;
     const httpOk = s.status >= 200 && s.status < 300;
-    if (httpOk && !(j && j.ok === false)) return { ok: true, status: s.status, replayed: s.replayed, raw: j, data: j as T };
+    // A replay is the header, or the route's own `replayed: true` (pay answers from the chain's record).
+    const replayed = s.replayed || (j !== null && typeof j === "object" && j.replayed === true);
+    if (httpOk && !(j && j.ok === false)) return { ok: true, status: s.status, replayed, raw: j, data: j as T };
     return { ok: false, status: s.status, replayed: s.replayed, raw: j, error: refusalOf(s.status, j, spend) };
   }
 

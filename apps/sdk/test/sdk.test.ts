@@ -294,3 +294,84 @@ test("cli: https rule, --json raw reply, buy prints its operationId before sendi
   assert.equal(d.calls[0]!.headers["idempotency-key"], id);
   assert.match(d.out.join("\n"), /paid 0\.001000 USDC to 0xee80 · https:\/\/sepolia\.arbiscan\.io\/tx\/0xabc\nreplayed: /);
 });
+
+// ---- pay: an approved payee, now, under the same operationId rules as buy ----
+
+const PAYEE = "0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3";
+const payInput = (operationId: string) => ({ policy: POLICY, payee: PAYEE, amount: "0.001", why: "monthly hosting", operationId });
+const payment = (extra: Record<string, unknown> = {}) =>
+  json(200, {
+    paid: true,
+    payment: { at: 1, operationId: "op_x", actionHash: "0xah", policy: POLICY, payee: PAYEE, amount: "0.001000 USDC", minor: "1000", why: "monthly hosting", status: "paid", tx: "0xt", explorer: "https://sepolia.arbiscan.io/tx/0xt" },
+    ...extra,
+  });
+
+test("pay: POST /api/level1/pay with {policy, payee, amount, why}, the operationId as Idempotency-Key; no id, nothing sent", async () => {
+  const { c, calls } = client([payment()]);
+  await assert.rejects(() => c.pay(payInput("")));
+  assert.equal(calls.length, 0);
+  const id = newOperationId();
+  const r = await c.pay(payInput(id));
+  assert.ok(r.ok && r.data.paid && !r.replayed);
+  assert.equal(calls[0]!.url, "http://127.0.0.1:7880/api/level1/pay");
+  assert.equal(calls[0]!.method, "POST");
+  assert.equal(calls[0]!.headers["idempotency-key"], id);
+  assert.equal(calls[0]!.headers.authorization, `Bearer ${TOKEN}`);
+  assert.deepEqual(JSON.parse(calls[0]!.body!), { policy: POLICY, payee: PAYEE, amount: "0.001", why: "monthly hosting" });
+  assert.ok((await c.pay(payInput(id))).ok);
+  assert.equal(calls.length, 1, "executed yes: never sent again");
+});
+
+test("pay: the route's own replayed: true counts as a replay; lost replies follow the buy rules", async () => {
+  const a = client([lost(), payment({ replayed: true })]);
+  const r = await a.c.pay(payInput(newOperationId()));
+  assert.ok(r.ok && r.replayed);
+  assert.equal(a.calls.length, 2);
+  assert.equal(a.calls[0]!.headers["idempotency-key"], a.calls[1]!.headers["idempotency-key"]);
+
+  const b = client([lost(), lost()]);
+  const id = newOperationId();
+  const u = await b.c.pay(payInput(id));
+  assert.ok(!u.ok && u.error.executed === "unknown");
+  assert.ok(!(await b.c.pay(payInput(id))).ok);
+  assert.equal(b.calls.length, 2, "never a third send");
+
+  const d = client([refusal(502, "chain_unavailable", "unknown")]);
+  const e = await d.c.pay(payInput(newOperationId()));
+  assert.ok(!e.ok && e.error.executed === "unknown");
+  assert.equal(d.calls.length, 1, "executed unknown from the service: not resent");
+});
+
+test("cli pay: prose, replay, --op, refusals, usage", async () => {
+  const a = io([payment()]);
+  assert.equal(await run(["pay", PAYEE, "0.001", "--why", "monthly hosting"], a.io), 0);
+  const id = /operation (op_[0-9a-f-]{36})/.exec(a.err[0]!)?.[1];
+  assert.ok(id);
+  assert.equal(a.calls[0]!.headers["idempotency-key"], id);
+  assert.deepEqual(a.out, [`paid 0.001000 USDC to ${PAYEE} · https://sepolia.arbiscan.io/tx/0xt`, `operation ${id}`]);
+
+  const b = io([payment({ replayed: true })]);
+  assert.equal(await run(["pay", PAYEE, "0.001", "--why", "monthly hosting", "--op", id], b.io), 0);
+  assert.equal(b.calls[0]!.headers["idempotency-key"], id);
+  assert.match(b.out.join("\n"), /replayed: this operationId was already paid; nothing was paid again/);
+
+  const c = io([json(200, { paid: false, payment: { payee: PAYEE, amount: "0.001000 USDC", status: "unconfirmed", tx: "0xt", note: "the receipt does not match" } })]);
+  assert.equal(await run(["pay", PAYEE, "0.001", "--why", "x"], c.io), 0);
+  assert.match(c.out[0]!, /^sent 0\.001000 USDC .* did not match .*do not pay again/);
+
+  const d = io([refusal(409, "payee_cooling_off", "no", { by: "payee", audience: "agent", nextStep: "Wait until it can be paid." })]);
+  assert.equal(await run(["pay", PAYEE, "0.001", "--why", "x"], d.io), 1);
+  assert.equal(d.calls.length, 1);
+  assert.match(d.err.join("\n"), /refused \(payee_cooling_off, by payee, executed: no\): payee_cooling_off\nnext: Wait until it can be paid\./);
+
+  const e = io([]);
+  assert.equal(await run(["pay", "0x12", "0.001", "--why", "x"], e.io), 2);
+  assert.equal(await run(["pay", PAYEE, "0", "--why", "x"], e.io), 2);
+  assert.equal(await run(["pay", PAYEE, "1.1234567", "--why", "x"], e.io), 2);
+  assert.equal(await run(["pay", PAYEE, "0.001"], e.io), 2);
+  assert.equal(await run(["pay", PAYEE, "0.001", "--why", "x", "--op", "not-an-op"], e.io), 2);
+  assert.equal(e.calls.length, 0);
+  const f = io([]);
+  assert.equal(await run(["py"], f.io), 2);
+  assert.equal(f.err.join("\n"), "unknown command; did you mean `tameion pay`?");
+});
