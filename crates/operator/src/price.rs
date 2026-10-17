@@ -64,6 +64,17 @@ impl PriceTable {
         json!({ "source": self.source, "fetchedAt": self.fetched_at, "rows": self.rows, "hash": self.hash })
     }
 
+    /// The record's event for this table (`PRICETABLE`, tag 11).
+    pub fn event(&self) -> ledger::EventBody {
+        ledger::EventBody::PriceTable {
+            source: self.source.clone(),
+            fetched_at: self.fetched_at,
+            table_hash: self.hash.clone(),
+            rows: u32::try_from(self.rows.len()).unwrap_or(u32::MAX),
+            note: self.note(),
+        }
+    }
+
     /// The sentence the record carries: the models and their prices, no hash.
     pub fn note(&self) -> String {
         let rows: Vec<String> = self

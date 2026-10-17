@@ -2940,6 +2940,19 @@ pub async fn run(
     )
     .await;
     bought.extend(invoice_events);
+    // docs/121: the price table this account's reservations are priced at,
+    // recorded under this pass's root when it differs from the last anchored one.
+    let price = crate::price::current(app_dir, now.as_unix())
+        .await
+        .filter(|p| {
+            fs::read_to_string(price_pin_path(app_dir, &t.policy))
+                .ok()
+                .as_deref()
+                != Some(p.hash.as_str())
+        });
+    if let Some(p) = &price {
+        bought.push((now.as_unix() as u64, p.event()));
+    }
     let mut report = match choice {
         Choice::Local(r) => drive(client, config, r, &decider, now, history, bought).await?,
         Choice::Cloud(r) => drive(client, config, r, &decider, now, history, bought).await?,
@@ -2951,6 +2964,9 @@ pub async fn run(
     if !report["anchorTx"].is_null() {
         crate::x402::mark_anchored(app_dir, &t.policy, bought_upto);
         crate::pay::mark_anchored(app_dir, &t.policy, paid_upto);
+        if let Some(p) = &price {
+            let _ = fs::write(price_pin_path(app_dir, &t.policy), &p.hash);
+        }
     }
     // The invoices' decisions hold once the pass that records them did: kept
     // (so the next pass does not decide them again), and a refused one is
@@ -3145,6 +3161,12 @@ struct History {
     lo: u64,
     hi: u64,
     transfers: Vec<ledger::obligations::Transfer>,
+}
+
+/// The hash of the price table last recorded under an anchored root for
+/// this account (docs/121).
+fn price_pin_path(app_dir: &Path, policy: &str) -> PathBuf {
+    tenants_dir(app_dir).join(format!("{}.price", policy.to_lowercase()))
 }
 
 fn history_path(app_dir: &Path, policy: &str) -> PathBuf {
