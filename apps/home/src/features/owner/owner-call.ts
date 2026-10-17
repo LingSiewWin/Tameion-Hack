@@ -108,6 +108,8 @@ export function checkSettle(data: string, to: string, amount: bigint) {
 
 // ---- the flow in the browser ------------------------------------------------------------------------------------
 
+/** Where the owner signs: the account (policy) and its owner contract, by address — in memory and API calls only, never
+ *  rendered (DESIGN §Page grammar) — and the chain. */
 export type Account = { policy: string; owner: string; chain: string; chainId: number };
 /** The owner's passkey as apps/console keeps it (localStorage `tameion.pub`): its id narrows the browser's prompt. */
 type Pub = { qx: string; qy: string; credentialId: string };
@@ -139,18 +141,8 @@ export function savedPub(): Pub | null {
     return null;
   }
 }
-/** The owner's device token for this account (as apps/console keeps it), sent only to this app's own /api proxy. */
-export function deviceHeaders(policy: string): Record<string, string> {
-  try {
-    const t = localStorage.getItem(`tameion.reserve.${policy.toLowerCase()}`);
-    return t ? { "x-tameion-device": t } : {};
-  } catch {
-    return {};
-  }
-}
-
-async function post<T>(path: string, body: unknown, policy: string): Promise<T> {
-  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json", ...deviceHeaders(policy) }, body: JSON.stringify(body) });
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   const d = (await r.json().catch(() => ({}))) as { error?: string | { words?: string } };
   if (!r.ok) throw new Error(typeof d.error === "string" ? d.error : (d.error?.words ?? `The service answered ${r.status}.`));
   return d as T;
@@ -188,14 +180,14 @@ export async function ownerCall(
   const target = acct.policy;
   if (opts.prepared && (opts.prepared.to.toLowerCase() !== target.toLowerCase() || opts.prepared.data.toLowerCase() !== data.toLowerCase()))
     throw new Error("Not signing: the service prepared a different call than the one this button makes. Nothing was sent.");
-  const ch = await post<{ nonce: string; challenge: string }>("/api/level1/challenge", { chain: acct.chain, owner: acct.owner, target, data }, acct.policy);
+  const ch = await post<{ nonce: string; challenge: string }>("/api/level1/challenge", { chain: acct.chain, owner: acct.owner, target, data });
   const mine = challengeFor({ chainId: acct.chainId, owner: acct.owner, nonce: ch.nonce, target, data });
   if (mine.toLowerCase() !== String(ch.challenge).toLowerCase())
     throw new Error("Not signing: the service's challenge differs from the one this page computed. Nothing was sent.");
   opts.phase?.("Signing");
   const auth = await passkey(mine);
   opts.phase?.("Sent");
-  return post<Executed>("/api/level1/execute", { chain: acct.chain, owner: acct.owner, target, data, auth, keyIndex: opts.keyIndex ?? 0 }, acct.policy);
+  return post<Executed>("/api/level1/execute", { chain: acct.chain, owner: acct.owner, target, data, auth, keyIndex: opts.keyIndex ?? 0 });
 }
 
 /** level1::invoice_decide_challenge: keccak256(abi.encodePacked("tameion.invoice-decide.v1", uint64 chainId, address policy,
@@ -213,7 +205,7 @@ export function invoiceDecideChallenge(chainId: number, policy: string, id: stri
 export async function decideInvoice(acct: Account, id: string, accept: boolean) {
   const issued = Math.floor(Date.now() / 1000);
   const auth = await passkey(invoiceDecideChallenge(acct.chainId, acct.policy, id, accept, issued));
-  return post("/api/level1/invoice-decide", { policy: acct.policy, id, accept, issued, auth }, acct.policy);
+  return post("/api/level1/invoice-decide", { policy: acct.policy, id, accept, issued, auth });
 }
 
 /** The owner key this browser holds, as an index among the account's owner keys (0 when it cannot tell). */
@@ -224,5 +216,5 @@ export function keyIndexOf(keys?: { qx: string }[] | null): number {
 }
 
 /** prepare-* on the service, for the calls it builds (it reads the account's current state); the result is checked. */
-export const prepare = (route: string, body: Record<string, unknown>, policy: string) =>
-  post<{ to: string; data: string }>(`/api/level1/${route}`, { policy, ...body }, policy);
+export const prepare = (acct: Account, route: string, body: Record<string, unknown>) =>
+  post<{ to: string; data: string }>(`/api/level1/${route}`, { policy: acct.policy, ...body });
