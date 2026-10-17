@@ -1959,14 +1959,17 @@ impl<R: Reasoner> Operator<R> {
             .map(|v| v.into_iter().map(|(a, t)| (format!("{a:#x}"), t)).collect())
             .unwrap_or_default();
         // The decider's facts that are the same for every bill this pass: the
-        // runway against the balance above the floor, and whom a payee could
-        // imitate (the verifier's references for its look-alike rule).
+        // runway against the balance above the floor -- the one bill walk
+        // (`ledger::momentum`), every bill at its cadence, as the inbox walks
+        // it -- and whom a payee could imitate (the verifier's references for
+        // its look-alike rule).
         let available = balance.to_minor()
             - governance
                 .as_ref()
                 .map(|g| g.reserve_floor.to_minor())
                 .unwrap_or(0);
-        let runway = decide::runway_days(&upcoming_all, available, now.as_unix());
+        let bills: Vec<ledger::momentum::Bill> = obligations.iter().map(Into::into).collect();
+        let runway = ledger::momentum::first_shortfall_days(&bills, available, now.as_unix());
         let references: Vec<String> = known_payees
             .keys()
             .cloned()

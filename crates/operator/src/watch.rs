@@ -701,17 +701,13 @@ fn within_pay_lead(o: &Obligation, now: Timestamp) -> bool {
 /// times over in "the next 30 days come to"; projecting a bill that may have
 /// ended at its cadence told a client with 0.35 USDC of bills that the
 /// account needed 15,084 USDC more (docs/70 C8).
+///
+/// The dates are the one bill walk's (`ledger::momentum::due_dates`).
 pub fn due_within(o: &Obligation, now: Timestamp, horizon: Seconds) -> i128 {
-    let amount = o.typical_amount.to_minor();
-    let (step, due) = (o.interval.as_i64(), o.next_due.as_unix());
-    let end = now.as_unix().saturating_add(horizon.as_i64());
-    if due > end {
-        return 0;
-    }
-    if step <= 0 || now.as_unix() - due >= step {
-        return amount;
-    }
-    amount * i128::from((end - due) / step + 1)
+    ledger::momentum::due_dates(&[o.into()], now.as_unix(), horizon.as_i64())
+        .iter()
+        .map(|d| d.1)
+        .sum()
 }
 
 /// Read, infer, judge, and say so. `progress` is called between scan slices.

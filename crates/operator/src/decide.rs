@@ -24,7 +24,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use ledger::{ActorKind, Obligation, Transfer};
+use ledger::{ActorKind, Transfer};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -794,22 +794,6 @@ pub fn label(address: &str) -> String {
     }
 }
 
-/// Days until the first bill in `upcoming` that `available` (the balance
-/// above the floor) cannot cover, walking due dates in order; `None` when it
-/// covers them all -- the same "every bill in the horizon" `early_payments` uses.
-pub fn runway_days(upcoming: &[Obligation], available_minor: i128, now: i64) -> Option<i64> {
-    let mut list: Vec<&Obligation> = upcoming.iter().collect();
-    list.sort_by_key(|o| o.next_due);
-    let mut left = available_minor;
-    for o in list {
-        left -= o.typical_amount.to_minor();
-        if left < 0 {
-            return Some(days_until(o.next_due.as_unix(), now).max(0));
-        }
-    }
-    None
-}
-
 /// The decision point for an invoice line of `invoice.rs` (status
 /// `received`): its amount against what history says this payee is usually
 /// paid. `approved_since` is the policy's `attestedSince` for the payee (0 or
@@ -1484,31 +1468,6 @@ mod tests {
         assert_eq!(ratio_text(&c).as_deref(), Some("2500"));
         c.amount_minor = 5_000;
         assert_eq!(ratio_text(&c).as_deref(), Some("0.5"));
-    }
-
-    #[test]
-    fn runway_is_the_first_bill_the_balance_cannot_cover() {
-        use ledger::{
-            Confidence, Counterparty, Currency, Money, ObligationKind, Seconds, Timestamp,
-        };
-        let now = 1_800_000_000;
-        let bill = |due_days: i64, minor: i128| Obligation {
-            counterparty: Counterparty::new("0xaa"),
-            kind: ObligationKind::Subscription,
-            typical_amount: Money::minor(minor, Currency::Usdc),
-            interval: Seconds::days(30).unwrap(),
-            last_paid: Timestamp::from_unix(now - 86_400),
-            next_due: Timestamp::from_unix(now + due_days * 86_400),
-            confidence: Confidence::new(0.9).unwrap(),
-            sample_count: 4,
-            interval_cv: 0.0,
-            amount_cv: 0.0,
-            evidence: vec![],
-        };
-        let bills = vec![bill(12, 300), bill(2, 500)];
-        assert_eq!(runway_days(&bills, 800, now), None);
-        assert_eq!(runway_days(&bills, 799, now), Some(12));
-        assert_eq!(runway_days(&bills, 100, now), Some(2));
     }
 
     #[test]
