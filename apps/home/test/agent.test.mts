@@ -135,7 +135,8 @@ test("a read that failed keeps the last answer, says since when, and offers one 
     }),
   );
   assert.match(html, /role="alert"/);
-  assert.match(html, /symbolon did not answer \(The service did not answer\.\)/);
+  assert.match(html, /The records did not answer\./, "the source in words, the technical text behind a disclosure");
+  assert.match(html, /<details[^>]*><summary[^>]*>What the service said<\/summary><p[^>]*>symbolon: The service did not answer\.<\/p><\/details>/);
   assert.match(html, />Try again<\/button>/);
   assert.match(html, /The records did not load; the figures above still stand\./);
 });

@@ -1,13 +1,15 @@
 "use client";
-// The Agent view (DESIGN, "a terminal by night"): `tameion top` for the account, then its record stream with every
-// record's three slots. The one place a hash, a leaf, an explorer link or a slot id appears (DESIGN Rule 6). Reads
-// status, inbox and symbolon through the /api proxy every 30 s; each figure is labelled by the field it comes from and
-// the page computes no money (Rule 3). A read that fails keeps the last answer on screen, marked with its time.
+// The Agent view (DESIGN: the Agent is at sea): `tameion top` for the account, then its record stream with every
+// record's three slots. The one place a hash, a leaf, an explorer link or a slot id appears. Reads status, inbox and
+// symbolon through the /api proxy every 30 s; each figure is labelled by the field it comes from and the page computes no
+// money. A read that fails keeps the last answer on screen, marked with its time; what the service said sits behind a
+// disclosure.
 import { useCallback, useEffect, useState } from "react";
 import { useSkeleton } from "../../components/skeleton.tsx";
 import { AgentSkeleton } from "../../components/skeletons.tsx";
 import { fetchInbox, fetchStatus, fetchSymbolon } from "../../lib/api.ts";
 import type { Inbox, Status, Symbolon } from "../../lib/types.ts";
+import { copy, SOURCES } from "./copy.ts";
 import { clock, money, perMinute } from "./format.ts";
 import { Stream } from "./stream.tsx";
 
@@ -18,7 +20,7 @@ type Src<T> = { value: T | null; at: number | null; error: string | null };
 export type Reads = { status: Src<Status>; inbox: Src<Inbox>; symbolon: Src<Symbolon> };
 const none = <T,>(): Src<T> => ({ value: null, at: null, error: null });
 const settle = <T,>(prev: Src<T>, r: PromiseSettledResult<T>, at: number): Src<T> =>
-  r.status === "fulfilled" ? { value: r.value, at, error: null } : { ...prev, error: (r.reason as Error)?.message || "no answer" };
+  r.status === "fulfilled" ? { value: r.value, at, error: null } : { ...prev, error: (r.reason as Error)?.message || "" };
 
 /** `name`: the account's name from the route; the fetchers resolve it (an address works too). */
 export function AgentView({ name }: { name: string }) {
@@ -58,68 +60,77 @@ export function AgentScreen({ reads, onRetry, now }: { reads: Reads; onRetry?: (
   const { status, inbox, symbolon } = reads;
   // The address is the service's own word for the account; the Agent view is the one place it is shown.
   const policy = symbolon.value?.policy ?? status.value?.policy ?? inbox.value?.policy;
-  const failed = (Object.entries(reads) as [keyof Reads, Src<unknown>][]).filter(([, s]) => s.error);
+  const failed = (Object.keys(reads) as (keyof Reads)[]).filter((k) => reads[k].error !== null);
   const latest = Math.max(...Object.values(reads).map((s: Src<unknown>) => s.at ?? 0));
   return (
     <div className="mono flex flex-col gap-(--space-5)">
       <div className="flex flex-wrap gap-x-(--space-5) gap-y-(--space-1)">
-        <h1 className="mono m-0">tameion top</h1>
+        <h1 className="mono m-0">{copy.title}</h1>
         {policy && <span className="break-all">{policy}</span>}
         {symbolon.value?.chain && <span>{symbolon.value.chain}</span>}
-        {inbox.value?.mode && <span>mode {inbox.value.mode}</span>}
-        {latest > 0 && <span className="meta">as of {clock(latest)}</span>}
+        {inbox.value?.mode && <span>{copy.mode(inbox.value.mode)}</span>}
+        {latest > 0 && <span className="meta">{copy.asOf(clock(latest))}</span>}
       </div>
       {failed.length > 0 && (
-        <div role="alert" className="flex flex-wrap items-center gap-x-(--space-4) gap-y-(--space-2)">
-          <p className="m-0">
-            {failed.map(([k, s]) => (
-              <span key={k} className="mr-(--space-4) inline-block">
-                {k} did not answer ({s.error}){s.at ? `; shown as of ${clock(s.at)}` : ""}.
-              </span>
-            ))}
-          </p>
-          {onRetry && (
-            <button type="button" onClick={onRetry} className="min-h-(--touch) cursor-pointer rounded-(--radius-plate) border border-(--rule) bg-transparent px-(--space-3) text-(--ink) [font:inherit]">
-              Try again
-            </button>
+        <div role="alert" className="flex flex-col gap-(--space-2)">
+          <div className="flex flex-wrap items-center gap-x-(--space-4) gap-y-(--space-2)">
+            <p className="m-0">
+              {failed.map((k) => (
+                <span key={k} className="mr-(--space-4) inline-block">
+                  {copy.didNotAnswer(SOURCES[k], reads[k].at ? clock(reads[k].at) : null)}
+                </span>
+              ))}
+            </p>
+            {onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="min-h-(--touch) cursor-pointer rounded-(--radius-plate) border border-(--rule) bg-transparent px-(--space-3) text-(--ink) [font:inherit]"
+              >
+                {copy.tryAgain}
+              </button>
+            )}
+          </div>
+          {failed.some((k) => reads[k].error) && (
+            <details className="meta">
+              <summary className="cursor-pointer">{copy.details}</summary>
+              {failed.map((k) => (
+                <p key={k} className="m-0 break-all">
+                  {k}: {reads[k].error}
+                </p>
+              ))}
+            </details>
           )}
         </div>
       )}
       <Top status={status.value} inbox={inbox.value} />
-      {symbolon.value ? (
-        <Stream data={symbolon.value} now={now} />
-      ) : (
-        <p className="m-0">The records did not load; the figures above still stand.</p>
-      )}
+      {symbolon.value ? <Stream data={symbolon.value} now={now} /> : <p className="m-0">{copy.recordsMissing}</p>}
     </div>
   );
 }
 
 /** `tameion top` for one unit (USDC today): held, reserved, consumed, rate per minute, runway; each with its source. */
 export function Top({ status, inbox }: { status: Status | null; inbox: Inbox | null }) {
+  const T = copy.top;
   const qty = (s: string | null | undefined) => money(s)?.qty ?? null;
-  const days = (n: number | null | undefined) => (typeof n === "number" ? `${n} d` : null);
+  const days = (n: number | null | undefined) => (typeof n === "number" ? T.days(n) : null);
   const cols: { head: string; source: string; value: string | null }[] = [
-    { head: "Held", source: "inbox.balance", value: qty(inbox?.balance) },
-    {
-      head: "Reserved",
-      source: `inbox.runway.horizonTotal${inbox?.runway?.horizonDays ? ` (${inbox.runway.horizonDays} d)` : ""}`,
-      value: qty(inbox?.runway?.horizonTotal),
-    },
-    { head: "Consumed", source: "inbox.paidTotal", value: qty(inbox?.paidTotal) },
-    { head: "Rate / min", source: `status.rate${status?.windowDays ? ` (${status.windowDays} d)` : ""} ÷ 1440`, value: perMinute(status?.rate) },
-    { head: "Runway", source: "status.runway.byRateDays", value: days(status?.runway?.byRateDays) },
-    { head: "First shortfall", source: "status.runway.firstShortfallDays", value: days(status?.runway?.firstShortfallDays) },
+    { head: T.held.head, source: T.held.source, value: qty(inbox?.balance) },
+    { head: T.reserved.head, source: T.reserved.source(inbox?.runway?.horizonDays), value: qty(inbox?.runway?.horizonTotal) },
+    { head: T.consumed.head, source: T.consumed.source, value: qty(inbox?.paidTotal) },
+    { head: T.rate.head, source: T.rate.source(status?.windowDays), value: perMinute(status?.rate) },
+    { head: T.runway.head, source: T.runway.source, value: days(status?.runway?.byRateDays) },
+    { head: T.shortfall.head, source: T.shortfall.source, value: days(status?.runway?.firstShortfallDays) },
   ];
   const missing = cols.filter((c) => c.value === null).map((c) => c.source.split(" ")[0]);
   return (
-    <section aria-label="The account now" className="flex flex-col gap-(--space-1)">
-      <div role="region" aria-label="The account now, by unit" tabIndex={0} className="relative overflow-x-auto">
+    <section aria-label={T.region} className="flex flex-col gap-(--space-1)">
+      <div role="region" aria-label={T.table} tabIndex={0} className="relative overflow-x-auto">
         <table className="mono border-collapse whitespace-nowrap text-left">
           <thead>
             <tr>
               <th scope="col" className="pr-(--space-5) font-normal">
-                Unit
+                {T.unit}
               </th>
               {cols.map((c) => (
                 <th key={c.head} scope="col" className="pr-(--space-5) text-right font-normal">
@@ -129,7 +140,7 @@ export function Top({ status, inbox }: { status: Status | null; inbox: Inbox | n
             </tr>
             <tr className="meta border-b border-(--rule)">
               <th scope="col" className="pb-(--space-1) pr-(--space-5) font-normal">
-                <span className="sr-only">source</span>
+                <span className="sr-only">{T.source}</span>
               </th>
               {cols.map((c) => (
                 <th key={c.head} scope="col" className="pb-(--space-1) pr-(--space-5) text-right font-normal">
@@ -141,18 +152,18 @@ export function Top({ status, inbox }: { status: Status | null; inbox: Inbox | n
           <tbody>
             <tr>
               <th scope="row" className="pt-(--space-1) pr-(--space-5) font-normal">
-                USDC
+                {T.usdc}
               </th>
               {cols.map((c) => (
                 <td key={c.head} className="pt-(--space-1) pr-(--space-5) text-right">
-                  {c.value ?? "–"}
+                  {c.value ?? copy.none}
                 </td>
               ))}
             </tr>
           </tbody>
         </table>
       </div>
-      {missing.length > 0 && <p className="meta m-0">– the service gave no figure: {missing.join(", ")}.</p>}
+      {missing.length > 0 && <p className="meta m-0">{T.noFigure(missing)}</p>}
     </section>
   );
 }
