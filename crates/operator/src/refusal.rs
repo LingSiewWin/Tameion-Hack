@@ -466,6 +466,7 @@ pub fn agent_route(method: &str, path: &str) -> bool {
                 | ("GET", "/api/level1/status")
                 | ("GET", "/api/level1/records")
                 | ("GET", "/api/level1/record")
+                | ("GET", "/api/level1/recall")
                 | ("POST", "/api/level1/identity")
                 | ("POST", "/api/level1/wallets")
                 | ("POST", "/api/level1/invoice")
@@ -735,6 +736,7 @@ mod tests {
             ("POST", "/api/level1/invoice"),
             ("GET", "/api/level1/records"),
             ("GET", "/api/level1/record"),
+            ("GET", "/api/level1/recall"),
             ("POST", "/api/watch"),
             ("GET", "/api/watch/6acfc3a5-0001"),
             ("GET", "/api/level1/codes"),
