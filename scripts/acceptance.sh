@@ -388,7 +388,7 @@ APP2=$(mktemp -d); P2L=$(tr 'A-F' 'a-f' <<<"$P2"); OWN=$(tr 'A-F' 'a-f' <<<"$PRI
 mkdir -p "$APP2/tenants/$OWN"; echo "$AGENT2_PK" > "$APP2/tenants/$OWN/agent.key"
 TOK=acceptance-buy-key; TOKH=$(python3 -c "import hashlib;print(hashlib.sha256(b'$TOK').hexdigest())")
 cat > "$APP2/tenants/$P2L.json" <<EOF
-{"chain":"arc-testnet","owner":"$OWN","policy":"$P2L","agent":"$AGENT2","operator":"$OPERATOR","watched":"$P2L","recovery":"0x0000000000000000000000000000000000000000","per_action":"1","daily":"5","floor":"0","delay_secs":60,"mode":2,"created_block":0,"history_from_block":0,"created":0,"deployed":true,"agent_tokens":[{"id":"t1","label":"acceptance","scopes":["read","run","buy"],"expires":4102444800,"issued":0,"hash":"$TOKH"}]}
+{"chain":"arc-testnet","owner":"$OWN","policy":"$P2L","agent":"$AGENT2","operator":"$OPERATOR","watched":"$P2L","recovery":"0x0000000000000000000000000000000000000000","per_action":"1","daily":"5","floor":"0","delay_secs":60,"mode":2,"created_block":0,"history_from_block":0,"created":0,"deployed":true,"agent_tokens":[{"id":"t1","label":"acceptance","scopes":["read","run","buy","prepare"],"expires":4102444800,"issued":0,"hash":"$TOKH"}]}
 EOF
 # The rule-based reasoner: the receipt bills are appended by the pass whatever
 # reasons, and the check must not depend on a model call.
@@ -411,7 +411,8 @@ check "sha256 on the receipt is the hash of the bytes returned" "$(echo "$B1" | 
 # Three more on a cadence (integer-second gaps; the detector needs the gaps
 # to agree within 35 %).
 for _ in 1 2 3; do sleep 3; buy >/dev/null; done
-J=$(curl -s -X POST http://127.0.0.1:$PORT2/api/level1/run -H 'content-type: application/json' -H "Authorization: Bearer $TOK" -d "{\"policy\":\"$P2\"}" | jq_ "d['id']")
+RUN_STATUS=$(curl -s -o /tmp/acc-x402-run.json -w '%{http_code}' -X POST http://127.0.0.1:$PORT2/api/level1/run -H 'content-type: application/json' -H "Authorization: Bearer $TOK" -d "{\"policy\":\"$P2\"}")
+J=$(jq_ "d['id']" < /tmp/acc-x402-run.json)
 for _ in $(seq 1 180); do S=$(curl -s http://127.0.0.1:$PORT2/api/watch/$J | jq_ "d['status']"); { [ "$S" = done ] || [ "$S" = failed ]; } && break; sleep 1; done
 REP=$(curl -s http://127.0.0.1:$PORT2/api/watch/$J); echo "$REP" > /tmp/acc-x402-pass.json
 check "the pass finished" "$(echo "$REP" | jq_ "d['status']")" "done"
@@ -426,6 +427,98 @@ check "without the agent key the receipts are closed (401)" "$(curl -s -o /dev/n
 MCP=$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"purchases","arguments":{"policy":"'"$P2"'"}}}' \
   | TAMEION_URL=http://127.0.0.1:$PORT2 TAMEION_TOKEN=$TOK cargo run --locked -p operator --quiet --bin tameion-mcp 2>/dev/null)
 check "the MCP tool 'purchases' returns the same four receipts" "$(echo "$MCP" | jq_ "len([p for p in json.loads(d['result']['content'][0]['text'])['purchases'] if p['status']=='paid'])")" "4"
+
+rule "17. every agent reply above matches apps/classic/openapi.json (the contract, docs/115 §2)"
+# The contract test (docs/114 row 2): the replies rule 16 recorded, plus four refusals and the two routes
+# docs/115 §2 adds, validated against the published schema. Each reply is checked twice: its own fields,
+# and the agent envelope (ok, contractVersion; a refusal's error.code, by, executed, audience …).
+# Every schema must also refuse an empty reply: a server that answers {} fails here.
+A=http://127.0.0.1:$PORT2
+cs(){ local f=/tmp/acc-c-$1.json; shift; curl -s -o "$f" -w '%{http_code}' "$@"; }
+S_NOKEY=$(cs nokey "$A/api/level1/purchases.jsonl?policy=$P2")
+S_BADKEY=$(cs badkey -H "Authorization: Bearer not-$TOK" "$A/api/level1/inbox?policy=$P2")
+S_SCOPE=$(cs scope -X POST -H 'content-type: application/json' -H "Authorization: Bearer $TOK" \
+  -d "{\"policy\":\"$P2\",\"check\":true}" "$A/api/level1/bills")
+S_PREP=$(cs prepare -X POST -H 'content-type: application/json' -H "Authorization: Bearer $TOK" \
+  -d "{\"policy\":\"$P2\",\"payees\":[\"$SELLER\"],\"allow\":false,\"reason\":\"contract check\"}" "$A/api/level1/prepare-payees")
+S_CODES=$(cs codes "$A/api/level1/codes")
+S_STATUS=$(cs status -H "Authorization: Bearer $TOK" "$A/api/level1/status?policy=$P2")
+check "a wrong agent key is refused (403)"              "$S_BADKEY" "403"
+check "a key without the import scope is refused (403)" "$S_SCOPE" "403"
+check "an agent key with prepare gets calldata (200)"   "$S_PREP" "200"
+# The checker is written to a file first: bash 3.2 (macOS) cannot parse a here-document inside <( ).
+PYF=$(mktemp)
+cat > "$PYF" <<'PY'
+import json, sys
+import jsonschema
+
+doc = json.load(open(sys.argv[1]))
+ENVELOPE = {"ok", "contractVersion", "error", "recentUpdates", "paused", "halt"}  # docs/115 §2 fields, incl. the inbox's status
+esc = lambda s: s.replace("~", "~0").replace("/", "~1")
+
+
+def validator(method, path, status):
+    rs = doc["paths"][path][method.lower()]["responses"]
+    code = str(status) if str(status) in rs else "default"
+    ptr = f"#/paths/{esc(path)}/{method.lower()}/responses/{code}/content/{esc(next(iter(rs[code]['content'])))}/schema"
+    return jsonschema.Draft202012Validator({"$ref": ptr, "paths": doc["paths"], "components": doc["components"]})
+
+
+def words(errs, n):
+    errs = sorted(errs, key=lambda e: e.validator == "unevaluatedProperties")  # its list is noise once a field fails
+    return " -- " + "; ".join(f"{'/'.join(map(str, e.absolute_path)) or '(top)'}: {e.message[:140]}" for e in errs[:n])
+
+
+for spec in sys.argv[2:]:
+    label, method, path, status, file = spec.split("|")
+    refusal, ndjson = int(status) >= 400, path.endswith(".jsonl") and int(status) < 400
+    v = validator(method, path, status)
+    text = open(file).read()
+    try:
+        bodies = [json.loads(l) for l in text.splitlines() if l.strip()] if ndjson else [json.loads(text) if text.strip() else None]
+    except ValueError:
+        print(f"FAIL\t{label} ({status}): the reply is not JSON -- {text[:80]!r}")
+        continue
+    errs = [e for b in bodies for e in v.iter_errors(b)]
+    env = [e for e in errs if refusal or (e.absolute_path and e.absolute_path[0] in ENVELOPE)
+           or (not e.absolute_path and e.validator == "required" and any(f"'{k}'" in e.message for k in ENVELOPE))]
+    fields = [e for e in errs if e not in env]
+    if not refusal:
+        print(f"{'FAIL' if fields or not bodies else 'PASS'}\t{label} ({status}): its fields match openapi.json"
+              + (words(fields, 3) if fields else ""))
+    if not ndjson:
+        print(f"{'FAIL' if env else 'PASS'}\t{label} ({status}): the agent envelope"
+              + (words(env, 2) if env else ""))
+    if v.is_valid({}):
+        print(f"FAIL\t{label}: an empty reply {{}} passes its schema")
+    if path == "/api/level1/codes" and not refusal:
+        served = {c.get("code") for c in (bodies[0] or {}).get("codes", [])}
+        listed = set(doc["components"]["schemas"]["RefusalCode"]["enum"])
+        print(f"{'PASS' if served == listed else 'FAIL'}\tthe served code catalogue equals openapi.json's RefusalCode"
+              + ("" if served == listed else f" -- served only: {sorted(served - listed)}; listed only: {sorted(listed - served)}"))
+print("DONE\tthe contract check ran to the end")
+PY
+PYJS=$(for p in python3 python3.14 python3.13; do command -v "$p" >/dev/null && "$p" -c "import jsonschema" 2>/dev/null && { echo "$p"; break; }; done)
+RAN=0
+if [ -n "$PYJS" ]; then
+  while IFS=$'\t' read -r verdict what; do
+    case "$verdict" in PASS) ok "$what" ;; DONE) RAN=1 ;; *) bad "$what" ;; esac
+  done < <("$PYJS" "$PYF" "$ROOT/apps/classic/openapi.json" \
+  "buy|POST|/api/level1/buy|200|/tmp/acc-buy1.json" \
+  "run|POST|/api/level1/run|$RUN_STATUS|/tmp/acc-x402-run.json" \
+  "pass|GET|/api/watch/{id}|200|/tmp/acc-x402-pass.json" \
+  "inbox|GET|/api/level1/inbox|200|/tmp/acc-x402-inbox.json" \
+  "purchases.jsonl|GET|/api/level1/purchases.jsonl|200|/tmp/acc-x402-purchases.jsonl" \
+  "prepare-payees|POST|/api/level1/prepare-payees|$S_PREP|/tmp/acc-c-prepare.json" \
+  "no key|GET|/api/level1/purchases.jsonl|$S_NOKEY|/tmp/acc-c-nokey.json" \
+  "wrong key|GET|/api/level1/inbox|$S_BADKEY|/tmp/acc-c-badkey.json" \
+  "no scope|POST|/api/level1/bills|$S_SCOPE|/tmp/acc-c-scope.json" \
+  "codes|GET|/api/level1/codes|$S_CODES|/tmp/acc-c-codes.json" \
+  "status|GET|/api/level1/status|$S_STATUS|/tmp/acc-c-status.json")
+fi
+[ -n "$PYJS" ] || bad "no python with jsonschema for the contract check (pip install jsonschema)"
+[ -z "$PYJS" ] || [ "$RAN" = 1 ] || bad "the contract check stopped before the end (python error above)"
+rm -f "$PYF"
 kill $APP_PID $X402_PIDS 2>/dev/null; wait $APP_PID $X402_PIDS 2>/dev/null; rm -rf "$KD" "$APP2"
 
 rule "not covered here"
