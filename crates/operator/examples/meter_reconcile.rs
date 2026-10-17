@@ -80,13 +80,23 @@ async fn main() {
         );
     }
     let out = flag("--out").map_or_else(|| app_dir.join("meter"), PathBuf::from);
-    let (path, root) = meter::write_record(&out, &checks, now())
+    let read_at = now();
+    let (path, root) = meter::write_record(&out, &checks, read_at)
         .unwrap_or_else(|e| fail(&format!("{}: {e}", out.display())));
     println!(
         "record: {} ({} MeterCheck events, root {root})",
         path.display(),
         checks.len()
     );
+    // Each per-bucket check's witness slot: the bucket it was compared with.
+    for (seq, w) in meter::record_witnesses(&checks, read_at) {
+        println!(
+            "witness evt:{seq}: {} {} sha256 {}",
+            w.alg,
+            w.key_id,
+            alloy::hex::encode(&w.sig)
+        );
+    }
     let differs = checks
         .iter()
         .any(|c| c.class != meter::MATCH && c.class != meter::SUMMARY);
