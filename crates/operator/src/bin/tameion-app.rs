@@ -45,6 +45,8 @@
 use alloy::primitives::Address;
 use operator::level1;
 use operator::watch::{CHAINS, Caps, Progress, WatchParams, chain, watch};
+// Every printed line is scrubbed of loaded secrets (docs/60 P-250).
+use operator::{eprintln, println};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -52,7 +54,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::sync::{Mutex, Semaphore};
 
@@ -116,7 +118,7 @@ struct App {
     notify_used: Mutex<std::collections::HashSet<alloy::primitives::B256>>,
     /// `Idempotency-Key` on POST (PLAN 5.42, docs/62 F4): path + key → when,
     /// the body's hash, and the reply (empty while the first is in flight).
-    /// ponytail: in memory, lost on restart; persist when hosted at scale.
+    /// A 2xx reply is also kept under `idem/` and loaded at start (docs/60 P-249).
     idempotent: Mutex<HashMap<String, IdemEntry>>,
     /// PLAN 5.49: the bill wallet's exposure, per wallet, for ten minutes
     /// (three public RPC reads and one price per refresh is too many).
@@ -142,7 +144,7 @@ struct App {
 }
 
 /// When an idempotent POST was first seen, its body's hash, and its reply.
-type IdemEntry = (u64, alloy::primitives::B256, Vec<u8>);
+type IdemEntry = operator::guard::IdemEntry;
 
 /// The Start page's price sentence (PLAN 5.41): a flat monthly fee per
 /// protected account, the read-only report (Watch) free, nothing per
@@ -339,8 +341,9 @@ impl App {
 impl App {
     /// Start an idempotent POST: `Some(reply)` when the key was seen — the
     /// first reply again, a 422 if the body differs, a 409 while the first
-    /// is still running — or `None` when this request is the first.
-    async fn idem_check(&self, path: &str, key: &str, body: &str) -> Option<Vec<u8>> {
+    /// is still running — or `None` when this request is the first. `slot`
+    /// is `guard::idem_slot`: the route, the key and who sent it (P-273).
+    async fn idem_check(&self, slot: &str, key: &str, body: &str) -> Option<Vec<u8>> {
         if key.is_empty() || key.len() > 255 {
             return Some(json_reply(
                 "400 Bad Request",
@@ -351,8 +354,7 @@ impl App {
         let hash = alloy::primitives::keccak256(body.as_bytes());
         let mut m = self.idempotent.lock().await;
         m.retain(|_, v| now.saturating_sub(v.0) < 86_400);
-        let slot = format!("{path}\n{key}");
-        match m.get(&slot) {
+        match m.get(slot) {
             // docs/115 §2: this request did nothing either way (`executed: no`).
             Some((_, h, _)) if *h != hash => Some(json_reply(
                 "422 Unprocessable Entity",
@@ -388,7 +390,7 @@ impl App {
                 Some(out)
             }
             None => {
-                m.insert(slot, (now, hash, Vec::new()));
+                m.insert(slot.to_string(), (now, hash, Vec::new()));
                 None
             }
         }
@@ -396,16 +398,16 @@ impl App {
 
     /// Finish an idempotent POST: keep a 2xx reply for replay; forget
     /// anything else so the caller may retry with the same key.
-    async fn idem_finish(&self, path: &str, key: &str, reply: &[u8]) {
-        let slot = format!("{path}\n{key}");
+    async fn idem_finish(&self, slot: &str, reply: &[u8]) {
         let ok = reply.starts_with(b"HTTP/1.1 2");
         let mut m = self.idempotent.lock().await;
         if ok {
-            if let Some(v) = m.get_mut(&slot) {
+            if let Some(v) = m.get_mut(slot) {
                 v.2 = reply.to_vec();
+                operator::guard::idem_save(&self.dir, slot, v);
             }
         } else {
-            m.remove(&slot);
+            m.remove(slot);
         }
     }
 }
@@ -1322,7 +1324,9 @@ async fn serve_events(app: Arc<App>, sock: &mut tokio::net::TcpStream, query: &s
 }
 
 fn json_reply(status: &str, v: Value) -> Vec<u8> {
-    respond(status, "application/json", v.to_string().as_bytes())
+    // No loaded secret leaves in a reply (docs/60 P-250).
+    let body = operator::guard::scrub(&v.to_string());
+    respond(status, "application/json", body.as_bytes())
 }
 
 /// A refusal before anything was done (`executed: no`), with the catalogue's
@@ -4171,6 +4175,7 @@ impl App {
             "agentAuthority": agent_authority,
             "guardians": guardians,
             "agentTokens": tenant.agent_tokens.iter().map(|t| json!({ "id": t.id, "label": t.label, "scopes": t.scopes, "expires": t.expires, "issued": t.issued })).collect::<Vec<_>>(),
+            "stoppedTokens": operator::guard::stopped_tokens(&tenant.policy),
             "gated": !tenant.agent_tokens.is_empty(),
             "terms": terms_json,
             "standingOrders": standing_orders,
@@ -6034,12 +6039,15 @@ impl App {
         if let Err(e) = level1::save(&self.dir, &tenant) {
             return json_reply("500 Internal Server Error", json!({ "error": e }));
         }
-        json_reply(
+        let reply = json_reply(
             "200 OK",
             json!({ "id": id, "token": secret, "scopes": scopes, "label": label, "expires": expires,
                     "use": "set TAMEION_TOKEN=<token> for tameion-mcp, or send Authorization: Bearer <token>; shown once",
                     "gated": "from now on this account's read / run / prepare / import routes need an agent key; buying (x402) always did" }),
-        )
+        );
+        // Shown once, above; scrubbed from every later line and reply (docs/60 P-250).
+        operator::guard::remember(&secret);
+        reply
     }
 
     /// The challenge for revoking token `id` (the page asks, then signs).
@@ -7682,7 +7690,12 @@ impl App {
         // A job from before a restart: read it back from disk.
         let p = self.dir.join("jobs").join(format!("{id}.json"));
         match tokio::fs::read_to_string(&p).await {
-            Ok(s) => respond("200 OK", "application/json", s.as_bytes()),
+            // Scrubbed like every JSON reply: a pass's error may carry a keyed RPC URL (P-250).
+            Ok(s) => respond(
+                "200 OK",
+                "application/json",
+                operator::guard::scrub(&s).as_bytes(),
+            ),
             Err(_) => json_reply("404 Not Found", json!({ "error": "no such run" })),
         }
     }
@@ -7718,6 +7731,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dir =
         PathBuf::from(std::env::var("TAMEION_APP_DIR").unwrap_or_else(|_| "runtime/app".into()));
     operator::desk::set_app_dir(&dir);
+    // Secrets to scrub, key-file modes, stopped agent keys, retention (docs/60 P-248…P-252).
+    operator::guard::start(&dir)?;
     let contact = std::env::var("TAMEION_CONTACT_URL")
         .unwrap_or_else(|_| "https://discord.gg/rsVfYutFZg".into());
     let repo = std::env::var("TAMEION_REPO_URL")
@@ -7759,7 +7774,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let app = Arc::new(App {
         notify_used: Mutex::new(Default::default()),
-        idempotent: Mutex::new(Default::default()),
+        idempotent: Mutex::new(operator::guard::idem_load(&dir)),
         exposure_cache: Mutex::new(Default::default()),
         due_changes: Mutex::new(Default::default()),
         changed_at: Mutex::new(Default::default()),
@@ -8156,12 +8171,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (mut sock, _) = listener.accept().await?;
         let app = Arc::clone(&app);
         tokio::spawn(async move {
-            let mut buf = vec![0u8; 64 * 1024];
-            let n = match sock.read(&mut buf).await {
-                Ok(n) if n > 0 => n,
-                _ => return,
+            // The head, then the declared body up to the cap; over it, 413 (docs/60 P-248).
+            let cap = operator::guard::max_body_bytes();
+            let Some(buf) = operator::guard::read_request(&mut sock, cap).await else {
+                return;
             };
-            let req = String::from_utf8_lossy(&buf[..n]).to_string();
+            let req = String::from_utf8_lossy(&buf).to_string();
             let line = req.lines().next().unwrap_or("");
             let mut parts = line.split_whitespace();
             // HEAD is GET without the body (RFC 9110 §9.3.2): monitors and
@@ -8224,18 +8239,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 return;
             }
-            let idem_key = (method == "POST")
-                .then(|| header(&req, "idempotency-key").map(str::to_string))
-                .flatten();
-            let replay = match &idem_key {
-                Some(k) => app.idem_check(path, k, &body).await,
+            // docs/60 P-273: the agent-key gate runs before any replay, and the replay slot
+            // carries who sent the request, so a stored reply goes back only to its caller.
+            let denied = app.token_gate(method, path, query, &req, &body).await;
+            let idem = (method == "POST" && denied.is_none())
+                .then(|| header(&req, "idempotency-key"))
+                .flatten()
+                .map(|k| {
+                    let bearer = bearer_of(&req, query);
+                    let device = header(&req, "x-tameion-device");
+                    let slot = operator::guard::idem_slot(path, k, bearer.as_deref(), device);
+                    (k.to_string(), slot)
+                });
+            let replay = match &idem {
+                Some((k, slot)) => app.idem_check(slot, k, &body).await,
                 None => None,
             };
             let first = replay.is_none();
-            let reply = if let Some(r) = replay {
+            let reply = if let Some(r) = denied {
                 r
-            } else if let Some(denied) = app.token_gate(method, path, query, &req, &body).await {
-                denied
+            } else if let Some(r) = replay {
+                r
             } else {
                 match (method, path) {
                     // The console when it is built; the classic page until then
@@ -8587,6 +8611,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     ("POST", "/api/level1/prepare-renew") => app.level1_prepare_renew(&body),
                     ("POST", "/api/level1/prepare-token") => app.level1_prepare_token(&body).await,
+                    ("POST", "/api/level1/tokens/stop") => {
+                        let device = header(&req, "x-tameion-device");
+                        let (status, v) = operator::guard::stop_route(&app.dir, device, &body);
+                        json_reply(status, v)
+                    }
                     ("POST", "/api/level1/token-signed") => app.level1_token_signed(&body).await,
                     ("POST", "/api/level1/token-revoke-signed") => {
                         app.level1_token_revoke_signed(&body).await
@@ -8714,8 +8743,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
             let reply = shaped(reply, method, path, &req);
-            if let (Some(k), true) = (&idem_key, first) {
-                app.idem_finish(path, k, &reply).await;
+            if let (Some((_, slot)), true) = (&idem, first) {
+                app.idem_finish(slot, &reply).await;
             }
             // Any call that changed an account tells its event streams; the
             // console re-reads the inbox (the call's own route is the cause).
