@@ -28,9 +28,69 @@ them.
   the same key and body returns the first answer with `Idempotent-Replayed:
   true`; the same key with a different body is refused (422); a key still in
   flight answers 409. Keys live 24 hours.
-- Errors are JSON `{"error": "<words>"}` with an HTTP status that means what it
-  says (400 bad input, 401/403 agent key, 404 no such account, 409, 422,
-  502 the chain did not answer — retry).
+- Every reply is in one envelope (below); HTTP status codes mean what they
+  say (400 bad input, 401/403 agent key, 404 no such account, 409, 422, 429,
+  502/503 a dependency did not answer).
+
+## Every reply: the envelope (contract 2026-10-17.1)
+
+Every route an agent calls (the MCP tools' routes and every route an agent key
+opens) answers in one shape:
+
+    { "ok": true,  "contractVersion": "2026-10-17.1", ...the route's fields }
+    { "ok": false, "contractVersion": "2026-10-17.1",
+      "error": { "code": "payee_not_approved", "by": "payee", "executed": "no",
+                 "audience": "user", "meaning": "...", "nextStep": "...",
+                 "retryAfterSecs": 0, "words": "the sentence for a person" } }
+
+- `code`: one of the catalogue below, also served at `GET /api/level1/codes`
+  (no key). Read `error.code`; `words` is for the person you work for.
+- `by`: who refused — `auth` `input` `mandate` `budget` `payee` `idempotency`
+  `chain` `upstream` `service`.
+- `executed`: `yes` | `no` | `unknown` — whether the refused action happened.
+  After a paid-API purchase's signature reached the seller it is read from
+  the chain (`executed(digest)`): `yes` when it settled, `unknown` while the
+  seller may still collect or when the read failed. Anything refused before
+  sending is `no`.
+- `audience`: `user` when a human must act (approve a payee, raise a limit,
+  switch mode, sign with the passkey); `agent` when you can act yourself.
+- Retry rules: never resend a payment when `executed` is `yes` or `unknown` —
+  keep the Idempotency-Key and read the account. Resend once, after
+  `retryAfterSecs` (1–60 s), only on `rate_limited` or `idempotency_pending`
+  with `executed: "no"`. Every other code needs the change `nextStep` names.
+- MCP: a refused tool call is `isError: true`, `content[0].text` is the JSON of
+  the `error` object, `structuredContent` is the whole reply;
+  `serverInfo.version` is the contract version. Warn once when it changes.
+- What changed lately: `recentUpdates` in `GET /api/level1/codes` and in the
+  inbox, which also says `paused` (the account is on Watch) and `halt`
+  (a read-back mismatch stopped the agent until a human clears it).
+
+The codes:
+
+- Agent key (`auth`): `token_missing` (send one), `token_invalid` (wrong or
+  revoked), `token_expired` (owner mints a new one), `token_scope` (the key
+  lacks the scope in `scope`), `token_stopped` (the owner stopped this key),
+  `needs_owner` (only the owner's passkey or device does this).
+- Mandate: `mode_watch` (account paused), `mode_propose` (the agent asks before
+  every payment; only Autopilot pays), `agent_lapsed` (renew),
+  `account_keyless` (no agent key: the owner pays), `account_not_deployed`
+  (not on chain yet), `price_out_of_band` (a price over a quarter above the
+  seller's usual waits for the owner).
+- Budget: `over_per_payment`, `over_24h` (wait for room, `caps.leftNow`),
+  `below_floor`, `insufficient_funds`, `over_max_price` (above your maxUsdc).
+- Payee: `payee_not_approved` (the ask waits in Needs you), `payee_cooling_off`
+  (payable at `payableFrom`), `payee_frozen` (the issuer froze it).
+- Idempotency: `idempotency_conflict` (same key, other body),
+  `idempotency_pending` (still running), `seller_pending` (an earlier purchase
+  from this seller can still be collected), `already_paid`.
+- Input: `invalid_body`, `not_found`, `body_too_large`, `state_conflict` (the
+  request does not fit the account as it is now: read it first).
+- Service, chain, upstream: `rate_limited`, `account_busy`,
+  `service_unavailable`, `service_error`, `chain_unavailable`,
+  `chain_refused` (the contract refused; words say why), `purchase_expired`,
+  `upstream_unavailable` (a seller, Circle or a node did not answer as
+  expected), `x402_unsupported` (the seller takes no payment this account can
+  make).
 
 ## What an agent may usefully do
 

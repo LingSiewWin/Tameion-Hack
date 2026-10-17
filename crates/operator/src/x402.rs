@@ -41,6 +41,7 @@
 //! provenance "x402 receipt".
 
 use crate::level1::{self, Tenant};
+use crate::refusal::{self, Executed};
 use alloy::primitives::{Address, B256};
 use alloy::signers::SignerSync;
 use ledger::obligations::{Counterparty, DetectionConfig, Direction, Obligation, Transfer, detect};
@@ -157,60 +158,141 @@ pub fn receipt_of(settlement: &Value) -> Option<Value> {
     r.is_object().then(|| r.clone())
 }
 
+/// The policy's refusals: selector, catalogue code (`refusal::CODES`) and the
+/// owner's words.
+const REFUSALS: &[(&str, &str, &str)] = &[
+    (
+        "NotAutopilot(uint8)",
+        "mode_propose",
+        // docs/60 P-174: said where the owner reads refusals, so the words name the fix.
+        "the agent buys only on Autopilot: this account asks before paying, so the purchase was refused; turn Autopilot on to let it buy inside your limits",
+    ),
+    (
+        "AgentLapsed(uint64)",
+        "agent_lapsed",
+        "the agent's authority has lapsed; renew it on the account page",
+    ),
+    (
+        "PayeeNotAttested(address)",
+        "payee_not_approved",
+        "the seller is not one of your approved payees",
+    ),
+    (
+        "PayeeCoolingOff(address,uint256)",
+        "payee_cooling_off",
+        "the seller was approved too recently; it can be paid once the waiting period ends",
+    ),
+    (
+        "OverPerActionCap(uint256,uint256)",
+        "over_per_payment",
+        "the price is above the per-payment limit",
+    ),
+    (
+        "OverDailyCap(uint256,uint256)",
+        "over_24h",
+        "the price is above what is left of the 24-hour limit",
+    ),
+    (
+        "BelowReserveFloor(uint256,uint256)",
+        "below_floor",
+        "paying would take the balance under the floor you set",
+    ),
+    (
+        "InsufficientBalance(uint256,uint256)",
+        "insufficient_funds",
+        "the account does not hold enough",
+    ),
+    (
+        "AlreadyExecuted(bytes32)",
+        "already_paid",
+        "this purchase was already paid",
+    ),
+    (
+        "BadAgentSignature()",
+        "service_error",
+        "the purchase was not signed by this account's agent",
+    ),
+    (
+        "PurchaseExpired(uint64)",
+        "purchase_expired",
+        "the purchase expired before the seller redeemed it",
+    ),
+    (
+        "UnsupportedExecution()",
+        "x402_unsupported",
+        "it is not a plain USDC payment",
+    ),
+    (
+        "WindowFull()",
+        "over_24h",
+        "too many payments in the last 24 hours",
+    ),
+];
+
+/// `NotAutopilot(0)`: the account is on Watch, not Propose.
+const WATCH_WORDS: &str = "the agent buys nothing while this account is on Watch (paused), so the purchase was refused; the owner raises it to Autopilot to let it buy inside your limits";
+
+/// The refusal a node's revert message names by selector: its code and words.
+fn refusal_of(err: &str) -> Option<(&'static str, &'static str)> {
+    let lower = err.to_ascii_lowercase();
+    REFUSALS.iter().find_map(|(sig, code, words)| {
+        let sel = alloy::hex::encode(&alloy::primitives::keccak256(sig.as_bytes())[..4]);
+        let at = lower.find(&sel)?;
+        let mode_zero = lower
+            .get(at + 8..at + 72)
+            .is_some_and(|w| w.bytes().all(|b| b == b'0'));
+        Some(if *code == "mode_propose" && mode_zero {
+            ("mode_watch", WATCH_WORDS)
+        } else {
+            (*code, *words)
+        })
+    })
+}
+
 /// The policy's refusals, in the owner's words, found by selector in a
 /// node's revert message.
 pub fn refusal_words(err: &str) -> Option<&'static str> {
-    const WORDS: &[(&str, &str)] = &[
-        (
-            "NotAutopilot(uint8)",
-            // docs/60 P-174: said where the owner reads refusals, so the words name the fix.
-            "the agent buys only on Autopilot: this account asks before paying, so the purchase was refused; turn Autopilot on to let it buy inside your limits",
-        ),
-        (
-            "AgentLapsed(uint64)",
-            "the agent's authority has lapsed; renew it on the account page",
-        ),
-        (
-            "PayeeNotAttested(address)",
-            "the seller is not one of your approved payees",
-        ),
-        (
-            "PayeeCoolingOff(address,uint256)",
-            "the seller was approved too recently; it can be paid once the waiting period ends",
-        ),
-        (
-            "OverPerActionCap(uint256,uint256)",
-            "the price is above the per-payment limit",
-        ),
-        (
-            "OverDailyCap(uint256,uint256)",
-            "the price is above what is left of the 24-hour limit",
-        ),
-        (
-            "BelowReserveFloor(uint256,uint256)",
-            "paying would take the balance under the floor you set",
-        ),
-        (
-            "InsufficientBalance(uint256,uint256)",
-            "the account does not hold enough",
-        ),
-        ("AlreadyExecuted(bytes32)", "this purchase was already paid"),
-        (
-            "BadAgentSignature()",
-            "the purchase was not signed by this account's agent",
-        ),
-        (
-            "PurchaseExpired(uint64)",
-            "the purchase expired before the seller redeemed it",
-        ),
-        ("UnsupportedExecution()", "it is not a plain USDC payment"),
-        ("WindowFull()", "too many payments in the last 24 hours"),
-    ];
-    let lower = err.to_ascii_lowercase();
-    WORDS.iter().find_map(|(sig, words)| {
-        let sel = alloy::hex::encode(&alloy::primitives::keccak256(sig.as_bytes())[..4]);
-        lower.contains(&sel).then_some(*words)
-    })
+    refusal_of(err).map(|(_, w)| w)
+}
+
+/// The catalogue code of a purchase refused before anything reached the
+/// seller ([`Step::Refused`]), from the revert's selector or the words this
+/// file wrote. ponytail: matched on our own sentences; a typed
+/// `Step::Refused(code, words)` when a third kind of refusal appears.
+fn refused_code(w: &str) -> &'static str {
+    if let Some((code, _)) = refusal_of(w) {
+        return code;
+    }
+    if w.contains(WATCH_WORDS) {
+        return "mode_watch";
+    }
+    if let Some((_, code, _)) = REFUSALS.iter().find(|(_, _, words)| w.contains(words)) {
+        return code;
+    }
+    if w.contains("can still be redeemed until") {
+        "seller_pending"
+    } else if w.contains("was still being signed after") {
+        "account_busy"
+    } else if w.contains("the chain did not answer within") {
+        "chain_unavailable"
+    } else if w.starts_with("the account refuses: ") && w.contains("revert") {
+        "chain_refused"
+    } else if w.starts_with("the account refuses: ") {
+        "chain_unavailable"
+    } else {
+        "service_error"
+    }
+}
+
+/// `executed` once a purchase's signature reached the seller (docs/115 §2):
+/// the chain's `executed(digest)`; "not yet" while the seller may still collect
+/// (until `deadline`) is `Unknown`, and so is a failed read.
+fn chain_says<E>(read: &Result<bool, E>, deadline: u64) -> Executed {
+    match read {
+        Ok(true) => Executed::Yes,
+        Ok(false) if now_secs() > deadline => Executed::No,
+        _ => Executed::Unknown,
+    }
 }
 
 /// Whether an address points inside the host or its network (SSRF):
@@ -764,19 +846,31 @@ fn usdc_text(minor: u128) -> String {
 
 /// Buy one call of a paid API for the account `t`, inside its limits.
 pub async fn buy(app_dir: &Path, t: &Tenant, r: BuyRequest<'_>) -> Result<Value, Refusal> {
-    let conflict = |e: String| ("409 Conflict", json!({ "error": e }));
+    // docs/115 §2: every refusal names its code; nothing below reached a seller
+    // until the signature is sent, so these are `executed: no`.
+    let no = |status: &'static str, code: &str, words: String| -> Refusal {
+        (
+            status,
+            refusal::refuse(code, Executed::No, "", "", words, None),
+        )
+    };
+    let conflict = |e: String| no("409 Conflict", "service_error", e);
     if t.keyless {
-        return Err(conflict(
+        return Err(no(
+            "409 Conflict",
+            "account_keyless",
             "this account has no agent key, so it cannot buy anything by itself".into(),
         ));
     }
     if !t.deployed {
-        return Err(conflict(
+        return Err(no(
+            "409 Conflict",
+            "account_not_deployed",
             "this account is not on chain yet; the first check puts it there".into(),
         ));
     }
     let c = crate::watch::chain(&t.chain)
-        .ok_or(("400 Bad Request", json!({ "error": "unknown chain" })))?;
+        .ok_or_else(|| no("400 Bad Request", "service_error", "unknown chain".into()))?;
     let policy = Address::from_str(&t.policy).map_err(|e| conflict(e.to_string()))?;
     let owner = Address::from_str(&t.owner).map_err(|e| conflict(e.to_string()))?;
     let signer = level1::agent_key(app_dir, owner)
@@ -787,9 +881,9 @@ pub async fn buy(app_dir: &Path, t: &Tenant, r: BuyRequest<'_>) -> Result<Value,
         "tameion-agent/1 (x402)",
     )
     .await
-    .map_err(|e| ("400 Bad Request", json!({ "error": e })))?;
+    .map_err(|e| no("400 Bad Request", "invalid_body", e))?;
     let method = reqwest::Method::from_str(&r.method.to_ascii_uppercase())
-        .map_err(|_| ("400 Bad Request", json!({ "error": "bad method" })))?;
+        .map_err(|_| no("400 Bad Request", "invalid_body", "bad method".into()))?;
     let send = |extra: Option<String>| {
         let mut q = http.request(method.clone(), url.clone());
         if let Some(b) = &r.body {
@@ -800,7 +894,7 @@ pub async fn buy(app_dir: &Path, t: &Tenant, r: BuyRequest<'_>) -> Result<Value,
         }
         q.send()
     };
-    let bad_gateway = |e: String| ("502 Bad Gateway", json!({ "error": e }));
+    let bad_gateway = |e: String| no("502 Bad Gateway", "upstream_unavailable", e);
 
     let first = send(None).await.map_err(|e| bad_gateway(e.to_string()))?;
     if first.status().as_u16() != 402 {
@@ -813,19 +907,22 @@ pub async fn buy(app_dir: &Path, t: &Tenant, r: BuyRequest<'_>) -> Result<Value,
         None => serde_json::from_str::<Value>(&bounded_text(first).await)
             .map_err(|_| "402 without a PAYMENT-REQUIRED header".to_string()),
     }
-    .map_err(bad_gateway)?;
-    let client = level1::read_client(c).map_err(conflict)?;
+    .map_err(|e| no("502 Bad Gateway", "x402_unsupported", e))?;
+    let client = level1::read_client(c).map_err(|e| no("409 Conflict", "chain_unavailable", e))?;
     let usdc = client.token();
     let offer = pick_offer(&required, c.chain_id, usdc).ok_or_else(|| {
-        (
+        let (status, v) = no(
             "402 Payment Required",
-            json!({
-                "error": format!("the service does not take USDC on {} by the exact scheme, so the account cannot pay it", c.name),
-                "accepts": required["accepts"],
-            }),
-        )
+            "x402_unsupported",
+            format!(
+                "the service does not take USDC on {} by the exact scheme, so the account cannot pay it",
+                c.name
+            ),
+        );
+        (status, refusal::with(v, &[("accepts", required["accepts"].clone())]))
     })?;
-    let (pay_to, amount, timeout) = offer_terms(&offer).map_err(bad_gateway)?;
+    let (pay_to, amount, timeout) =
+        offer_terms(&offer).map_err(|e| no("502 Bad Gateway", "x402_unsupported", e))?;
     let seller_host = url.host_str().unwrap_or("").to_string();
     let base = json!({
         "at": now_secs(), "policy": t.policy, "url": r.url, "host": seller_host,
@@ -834,11 +931,17 @@ pub async fn buy(app_dir: &Path, t: &Tenant, r: BuyRequest<'_>) -> Result<Value,
         "reason": r.reason,
     });
     let mut line = base.clone();
-    let refuse = |line: &mut Value, status: &'static str, words: String| -> Refusal {
+    let refuse = |line: &mut Value,
+                  status: &'static str,
+                  code: &str,
+                  executed: Executed,
+                  words: String|
+     -> Refusal {
         line["status"] = json!("refused");
         line["why"] = json!(words.clone());
         record(app_dir, &t.policy, line);
-        (status, json!({ "error": words, "purchase": line }))
+        let v = refusal::refuse(code, executed, "", "", words, None);
+        (status, refusal::with(v, &[("purchase", line.clone())]))
     };
     if amount > r.max_minor {
         let w = format!(
@@ -846,7 +949,13 @@ pub async fn buy(app_dir: &Path, t: &Tenant, r: BuyRequest<'_>) -> Result<Value,
             usdc_text(amount),
             usdc_text(r.max_minor)
         );
-        return Err(refuse(&mut line, "409 Conflict", w));
+        return Err(refuse(
+            &mut line,
+            "409 Conflict",
+            "over_max_price",
+            Executed::No,
+            w,
+        ));
     }
     // A seller nobody approved is the owner's decision, not the agent's.
     if !client.is_attested(policy, pay_to).await.unwrap_or(false) {
@@ -856,10 +965,15 @@ pub async fn buy(app_dir: &Path, t: &Tenant, r: BuyRequest<'_>) -> Result<Value,
             usdc_text(amount)
         ));
         record(app_dir, &t.policy, &line);
-        return Err((
-            "409 Conflict",
-            json!({ "error": line["why"], "needsYou": line }),
-        ));
+        let v = refusal::refuse(
+            "payee_not_approved",
+            Executed::No,
+            format!("{pay_to:#x} is not on the account's payee list."),
+            "Ask the owner to approve the payee; the ask is in Needs you.",
+            line["why"].as_str().unwrap_or(""),
+            None,
+        );
+        return Err(("409 Conflict", refusal::with(v, &[("needsYou", line)])));
     }
     // A price far above what this seller usually charges is the owner's call,
     // as a bill's amount off its usual is (docs/60 P-217); the owner's approval
@@ -878,15 +992,25 @@ pub async fn buy(app_dir: &Path, t: &Tenant, r: BuyRequest<'_>) -> Result<Value,
             r.reason
         ));
         record(app_dir, &t.policy, line);
+        let v = refusal::refuse(
+            "price_out_of_band",
+            Executed::No,
+            "",
+            "",
+            line["why"].as_str().unwrap_or(""),
+            None,
+        );
         (
             "409 Conflict",
-            json!({ "error": line["why"], "needsYou": line }),
+            refusal::with(v, &[("needsYou", line.clone())]),
         )
     };
     if !level1::issuer_frozen(t, &[pay_to]).await.is_empty() {
         return Err(refuse(
             &mut line,
             "409 Conflict",
+            "payee_frozen",
+            Executed::No,
             level1::frozen_words(&[format!("{pay_to:#x}")]),
         ));
     }
@@ -931,7 +1055,10 @@ pub async fn buy(app_dir: &Path, t: &Tenant, r: BuyRequest<'_>) -> Result<Value,
     let (digest, context, deadline) = match signed {
         Step::Signed(v) => v,
         Step::Held => return Err(held_words(&mut line)),
-        Step::Refused(w) => return Err(refuse(&mut line, "409 Conflict", w)),
+        Step::Refused(w) => {
+            let code = refused_code(&w);
+            return Err(refuse(&mut line, "409 Conflict", code, Executed::No, w));
+        }
     };
     line["actionHash"] = json!(format!("{digest:#x}"));
     let mut payload = payment_payload(&required, &offer, policy, &context);
@@ -962,11 +1089,19 @@ pub async fn buy(app_dir: &Path, t: &Tenant, r: BuyRequest<'_>) -> Result<Value,
     let header = encode_header(&payload);
     // No answer from the seller: it holds a signature it may still redeem.
     // Say so, keep it pending, and refuse a retry until the deadline (P-75).
-    let paid = send(Some(header)).await.map_err(|e| {
-        bad_gateway(format!(
-            "the seller did not answer ({e}); it may still collect this purchase until {deadline} (unix) — do not retry before then"
-        ))
-    })?;
+    let paid = match send(Some(header)).await {
+        Ok(p) => p,
+        Err(e) => {
+            let executed = chain_says(&client.executed(policy, digest).await, deadline);
+            let words = format!(
+                "the seller did not answer ({e}); it may still collect this purchase until {deadline} (unix) — do not retry before then"
+            );
+            return Err((
+                "502 Bad Gateway",
+                refusal::refuse("upstream_unavailable", executed, "", "", words, None),
+            ));
+        }
+    };
     let status = paid.status().as_u16();
     let settlement = paid
         .headers()
@@ -1001,7 +1136,8 @@ pub async fn buy(app_dir: &Path, t: &Tenant, r: BuyRequest<'_>) -> Result<Value,
             .to_string();
         // A seller can redeem and still answer "failed": the chain, not the
         // seller, says whether the money moved.
-        if client.executed(policy, digest).await.unwrap_or(false) {
+        let read = client.executed(policy, digest).await;
+        if matches!(read, Ok(true)) {
             line["status"] = json!("paid");
             match client.paid_tx_for(policy, digest, 2_000).await {
                 Some(h) => {
@@ -1018,14 +1154,21 @@ pub async fn buy(app_dir: &Path, t: &Tenant, r: BuyRequest<'_>) -> Result<Value,
             identify(&mut line);
             set_pending(app_dir, &t.policy, &seller_key, None);
             record(app_dir, &t.policy, &line);
-            return Err((
-                "502 Bad Gateway",
-                json!({ "error": line["why"], "purchase": line }),
-            ));
+            let v = refusal::refuse(
+                "upstream_unavailable",
+                Executed::Yes,
+                "The seller answered that it failed, but the chain shows this purchase paid.",
+                "Do not buy again; ask the seller for the response (the purchase line has the transaction).",
+                line["why"].as_str().unwrap_or(""),
+                None,
+            );
+            return Err(("502 Bad Gateway", refusal::with(v, &[("purchase", line)])));
         }
         return Err(refuse(
             &mut line,
             "502 Bad Gateway",
+            "upstream_unavailable",
+            chain_says(&read, deadline),
             format!("the seller did not settle ({status}: {why})"),
         ));
     };
@@ -1354,6 +1497,56 @@ mod tests {
             refusal_words("execution reverted: custom error 0xe264d26a0000")
                 .is_some_and(|w| w.starts_with("the agent buys only on Autopilot"))
         );
+    }
+
+    /// docs/115 §2: a refused purchase names its catalogue code, from the
+    /// revert or from the words already said; Watch and Propose are apart.
+    #[test]
+    fn a_refused_purchase_names_its_code() {
+        let word = |v: u8| format!("{v:064x}");
+        let propose = format!("execution reverted, data: \"0xe264d26a{}\"", word(1));
+        let watch = format!("execution reverted, data: \"0xe264d26a{}\"", word(0));
+        assert_eq!(refused_code(&propose), "mode_propose");
+        assert_eq!(refused_code(&watch), "mode_watch");
+        // As buy says them: "the account refuses: <words>".
+        for raw in [&propose, &watch] {
+            let said = format!("the account refuses: {}", refusal_words(raw).unwrap());
+            assert_eq!(refused_code(&said), refused_code(raw), "{said}");
+        }
+        assert_eq!(
+            refused_code("the account refuses: the price is above the per-payment limit"),
+            "over_per_payment"
+        );
+        assert_eq!(
+            refused_code("the account refuses: execution reverted: 0xdeadbeef"),
+            "chain_refused"
+        );
+        assert_eq!(
+            refused_code("the account refuses: error sending request"),
+            "chain_unavailable"
+        );
+        assert_eq!(
+            refused_code(
+                "an earlier purchase from this seller can still be redeemed until 5 (unix); wait"
+            ),
+            "seller_pending"
+        );
+        assert_eq!(
+            refused_code("another purchase for this account was still being signed after 10 s"),
+            "account_busy"
+        );
+        for (_, code, _) in REFUSALS {
+            assert!(crate::refusal::code(code).is_some(), "{code}");
+        }
+        let now = now_secs();
+        assert_eq!(chain_says::<()>(&Ok(true), now + 60), Executed::Yes);
+        assert_eq!(
+            chain_says::<()>(&Ok(false), now + 60),
+            Executed::Unknown,
+            "the seller may still collect"
+        );
+        assert_eq!(chain_says::<()>(&Ok(false), now - 1), Executed::No);
+        assert_eq!(chain_says(&Err(()), now - 1), Executed::Unknown);
     }
 
     #[test]

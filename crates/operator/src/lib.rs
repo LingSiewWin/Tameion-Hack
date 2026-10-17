@@ -39,6 +39,7 @@ pub mod local;
 pub mod parties;
 pub mod push;
 pub mod reasoner;
+pub mod refusal;
 pub mod statement;
 pub mod watch;
 pub mod x402;

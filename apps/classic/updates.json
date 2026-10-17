@@ -1,0 +1,5 @@
+[
+  { "date": "2026-10-17", "note": "Contract 2026-10-17.1: every agent reply carries ok and contractVersion; a refusal is one error object with code, by, executed, audience, meaning, nextStep, retryAfterSecs and words (the old sentence). The codes are served at GET /api/level1/codes." },
+  { "date": "2026-10-17", "note": "A paid-API purchase refused after its signature reached the seller says executed: yes or unknown from the chain; never resend it then." },
+  { "date": "2026-10-17", "note": "treasury_inbox adds paused, halt and recentUpdates; MCP tool results carry structuredContent, and an error's text is the error object." }
+]
