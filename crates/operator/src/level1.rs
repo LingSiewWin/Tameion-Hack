@@ -330,9 +330,11 @@ pub fn scope_for(method: &str, path: &str) -> Option<&'static str> {
     let p = path.strip_prefix("/api/level1/")?;
     let p = p.split('?').next().unwrap_or(p);
     Some(match (method, p) {
-        // `records` and `record` are not here: the anchored roots and the events
-        // behind them are what the page tells anyone they can check, so a key for
-        // the agents never hides them (docs/60 P-176). Bills, payees' names,
+        // `records` and `record` are not here: the anchored roots are what the
+        // page tells anyone they can check, so a key for the agents never hides
+        // them (docs/60 P-176). On a locked account `record` serves an outsider
+        // each event's leaf hash, enough to rebuild the root, and the events only
+        // to `read` or the owner's device (P-212). Bills, payees' names,
         // purchases and the statement stay behind `read`.
         ("GET", "inbox") | ("GET", "purchases.jsonl") | ("GET", "statement") => "read",
         ("POST", "run") => "run",
@@ -2419,6 +2421,160 @@ async fn top_up_agent_gas(c: &ChainPreset, agent: Address) -> Result<Option<B256
         .map_err(|e| format!("top up agent gas: {e}"))
 }
 
+/// The pass's configuration for a tenant, in one place so a pass and the
+/// read-only [`plan`] act on the same bills, keys and offered references.
+fn pass_config(
+    app_dir: &Path,
+    t: &Tenant,
+    c: &ChainPreset,
+    anchor: Address,
+) -> Result<Config, String> {
+    let policy = Address::from_str(&t.policy).map_err(|e| e.to_string())?;
+    let mut config = Config::new(policy, policy, anchor);
+    config.also_history = history_sources(t);
+    config.history_from_block = t.history_from_block;
+    // The policy did not exist before its own deploy block.
+    config.policy_from_block = Some(t.created_block);
+    config.horizon = Seconds::days(30).expect("30 days");
+    config.detection.dust_line = Money::parse(c.dust, Currency::Usdc).ok();
+    config.seeded = seeds(&t.bills);
+    config.early = early_terms(&t.bills);
+    config.audit_dir = Some(
+        tenants_dir(app_dir)
+            .join(format!("{policy:#x}"))
+            .join("log"),
+    );
+    config.principal_id = format!("tenant:{policy:#x}");
+    config.offered = offered_cycles(app_dir, &t.policy);
+    Ok(config)
+}
+
+/// The policy's own transfers joined to the watched wallets' history, as the
+/// pass learns from them.
+async fn with_policy_transfers(
+    client: &ArcClient,
+    t: &Tenant,
+    history: &mut Vec<crate::Transfer>,
+    head: u64,
+) -> Result<(), String> {
+    let policy = Address::from_str(&t.policy).map_err(|e| e.to_string())?;
+    history.extend(
+        client
+            .transfers(policy, t.created_block.min(head), head)
+            .await
+            .map_err(|e| e.to_string())?,
+    );
+    // A wallet account is its own policy (policy == watched): its transfers
+    // were just read twice, and a doubled sample count inflates confidence.
+    crate::watch::dedup_transfers(history);
+    // Money moving between the policy and the owner's wallets is the owner's
+    // own, not evidence of a payee (the operator's own rule, kept here).
+    let own: std::collections::BTreeSet<String> = std::iter::once(&policy)
+        .chain(&history_sources(t))
+        .map(|a| format!("{a:#x}"))
+        .collect();
+    history.retain(|tr| !own.contains(&tr.counterparty.to_string().to_lowercase()));
+    history.sort_by_key(|tr| tr.at);
+    Ok(())
+}
+
+/// What the next pass would act on, read only (docs/60 P-210): every bill,
+/// stepped past the cycles already paid under its own key or a reference the
+/// service offered for it, those due now, and those set aside with why. Reads
+/// the cached history and the chain; sends nothing, writes nothing.
+pub async fn plan(app_dir: &Path, t: &Tenant) -> Result<Value, String> {
+    let c = crate::watch::chain(&t.chain).ok_or("tenant chain unknown")?;
+    let client = read_only_client(c)?;
+    let config = pass_config(app_dir, t, c, anchor_for(c)?)?;
+    let head = client.block_number().await.map_err(|e| e.to_string())?;
+    let now = client
+        .block_timestamp(head)
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut history = load_history(app_dir, t)
+        .map(|h| h.transfers)
+        .unwrap_or_default();
+    with_policy_transfers(&client, t, &mut history, head).await?;
+    let offered = config.offered.len();
+    let op = crate::Operator::new(client, config, RuleBased).map_err(|e| e.to_string())?;
+    let p = op
+        .obligations_due(&history, now)
+        .await
+        .map_err(|e| e.to_string())?;
+    let row = |o: &crate::Obligation| json!({ "cycleKey": o.cycle_key(), "amount": o.typical_amount.to_string(), "nextDue": o.next_due.as_unix(), "intervalSecs": o.interval.as_i64() });
+    Ok(json!({
+        "policy": t.policy, "now": now.as_unix(), "head": head, "offeredReferences": offered,
+        "obligations": p.obligations.iter().map(row).collect::<Vec<_>>(),
+        "due": p.due.iter().map(row).collect::<Vec<_>>(),
+        "aside": p.aside.iter().map(|(o, why)| json!({ "cycleKey": o.cycle_key(), "why": why })).collect::<Vec<_>>(),
+    }))
+}
+
+/// Whether this bill-cycle (`payee@due`) is already paid by any path the
+/// service knows (docs/60 P-211): under its own settlement key (the agent's
+/// pay, the owner's tap since P-175, Pay all, an early payment) or under a
+/// reference a pass offered for it (the owner's tap before P-175). Read only.
+pub async fn cycle_paid(app_dir: &Path, t: &Tenant, cycle: &str) -> Result<bool, String> {
+    let policy = Address::from_str(&t.policy).map_err(|e| e.to_string())?;
+    let key = B256::from(
+        *ledger::settlement_key_for(&ledger::Idempotency {
+            key: cycle.to_lowercase(),
+            scope: format!("tenant:{policy:#x}"),
+        })
+        .as_bytes(),
+    );
+    let mut refs: Vec<B256> = offered_cycles(app_dir, &t.policy)
+        .into_iter()
+        .filter(|(_, c)| c.eq_ignore_ascii_case(cycle))
+        .map(|(h, _)| h)
+        .collect();
+    refs.push(key);
+    Ok(!executed_hashes(t, &refs).await?.is_empty())
+}
+
+/// Every reference this service's passes offered the owner for a bill-cycle,
+/// with the cycle (`payee@due`): each Needs-you row's proposal hash and
+/// settlement key, from the finished passes' records in `jobs/`. The owner's
+/// tap was bound to the proposal hash before docs/60 P-175, so only these say
+/// which cycle a hand payment paid (P-210).
+pub fn offered_cycles(app_dir: &Path, policy: &str) -> std::collections::BTreeMap<B256, String> {
+    let mut out = std::collections::BTreeMap::new();
+    let Ok(rd) = fs::read_dir(app_dir.join("jobs")) else {
+        return out;
+    };
+    for e in rd.flatten() {
+        let Some(v) = fs::read_to_string(e.path())
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        else {
+            continue;
+        };
+        if v["request"]["level1"] != "run"
+            || !v["request"]["policy"]
+                .as_str()
+                .is_some_and(|p| p.eq_ignore_ascii_case(policy))
+            || v["status"] != "done"
+        {
+            continue;
+        }
+        for row in v["report"]["pendingSignature"]
+            .as_array()
+            .into_iter()
+            .flatten()
+        {
+            let Some(cycle) = row["cycleKey"].as_str() else {
+                continue;
+            };
+            for k in ["actionHash", "settlementKey"] {
+                if let Some(h) = row[k].as_str().and_then(|h| B256::from_str(h).ok()) {
+                    out.insert(h, cycle.to_lowercase());
+                }
+            }
+        }
+    }
+    out
+}
+
 /// One pass of the agent for a tenant: read the watched wallet's history,
 /// infer, verify against the policy's caps, and -- in Propose mode -- hand
 /// every payment to the owner as ready-to-sign calldata. Anchors the root
@@ -2459,21 +2615,7 @@ pub async fn run(
         top_up_agent_gas(c, agent_addr).await?
     };
 
-    let mut config = Config::new(policy, policy, anchor);
-    config.also_history = sources.clone();
-    config.history_from_block = t.history_from_block;
-    // The policy did not exist before its own deploy block.
-    config.policy_from_block = Some(t.created_block);
-    config.horizon = Seconds::days(30).expect("30 days");
-    config.detection.dust_line = Money::parse(c.dust, Currency::Usdc).ok();
-    config.seeded = seeds(&t.bills);
-    config.early = early_terms(&t.bills);
-    config.audit_dir = Some(
-        tenants_dir(app_dir)
-            .join(format!("{policy:#x}"))
-            .join("log"),
-    );
-    config.principal_id = format!("tenant:{policy:#x}");
+    let config = pass_config(app_dir, t, c, anchor)?;
 
     let head = client.block_number().await.map_err(|e| e.to_string())?;
     let now: Timestamp = client
@@ -2565,23 +2707,7 @@ pub async fn run(
     } else {
         None
     };
-    history.extend(
-        client
-            .transfers(policy, t.created_block.min(head), head)
-            .await
-            .map_err(|e| e.to_string())?,
-    );
-    // A wallet account is its own policy (policy == watched): its transfers
-    // were just read twice, and a doubled sample count inflates confidence.
-    crate::watch::dedup_transfers(&mut history);
-    // Money moving between the policy and the owner's wallets is the owner's
-    // own, not evidence of a payee (the operator's own rule, kept here).
-    let own: std::collections::BTreeSet<String> = std::iter::once(&policy)
-        .chain(&sources)
-        .map(|a| format!("{a:#x}"))
-        .collect();
-    history.retain(|tr| !own.contains(&tr.counterparty.to_string().to_lowercase()));
-    history.sort_by_key(|tr| tr.at);
+    with_policy_transfers(&client, t, &mut history, head).await?;
     progress(crate::watch::Progress {
         phase: "inferring the bills, verifying each against the policy, deciding".into(),
         scanned_blocks: total,
@@ -3544,6 +3670,45 @@ mod tests {
         assert!(load(&dir, "../tenants/x").is_none());
         assert_eq!(list(&dir).len(), 1);
         let _ = fs::remove_dir_all(dir);
+    }
+}
+
+#[cfg(test)]
+mod offered_cycles_tests {
+    use super::*;
+
+    /// docs/60 P-210: the references each finished pass of this account offered
+    /// for a bill-cycle, and nothing from another account or a failed pass.
+    #[test]
+    fn the_passes_offered_references_name_their_bill_cycle() {
+        let dir = std::env::temp_dir().join(format!("tameion-offered-{}", std::process::id()));
+        let jobs = dir.join("jobs");
+        fs::create_dir_all(&jobs).unwrap();
+        let cycle = "0x179dca89f69faef5765d2e7445aa5452b8159520@1792156029";
+        let row = |h: u8| json!({ "actionHash": format!("{:#x}", B256::repeat_byte(h)), "settlementKey": format!("{:#x}", B256::repeat_byte(0xf3)), "cycleKey": cycle });
+        let job = |policy: &str, status: &str, h: u8| json!({ "status": status, "request": { "level1": "run", "policy": policy }, "report": { "pendingSignature": [row(h)] } });
+        let mine = "0x48274c7904edb23f75ea607c932d5c441c1a80e3";
+        fs::write(jobs.join("a.json"), job(mine, "done", 0x85).to_string()).unwrap();
+        fs::write(
+            jobs.join("b.json"),
+            job(&mine.to_uppercase().replace("0X", "0x"), "done", 0xd1).to_string(),
+        )
+        .unwrap();
+        fs::write(jobs.join("c.json"), job(mine, "failed", 0x01).to_string()).unwrap();
+        fs::write(
+            jobs.join("d.json"),
+            job("0x0000000000000000000000000000000000000001", "done", 0x02).to_string(),
+        )
+        .unwrap();
+        let got = offered_cycles(&dir, mine);
+        let _ = fs::remove_dir_all(&dir);
+        assert_eq!(got.len(), 3, "{got:?}");
+        for h in [0x85, 0xd1, 0xf3] {
+            assert_eq!(
+                got.get(&B256::repeat_byte(h)).map(String::as_str),
+                Some(cycle)
+            );
+        }
     }
 }
 
