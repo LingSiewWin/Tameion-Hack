@@ -1,0 +1,117 @@
+UAT U1 live beat (10-17) — does the agent pay a bill it found, by itself, on its due date? (fix wave 4, P-228…P-231)
+Written 2026-10-17 16:27:16 +0800 by seat U1-LIVE. Brief: docs/research-data/102-team/briefs/U1-LIVE.md.
+Environment: http://localhost:7880/ only (service PID 16364, wave 4 build started 15:42; not restarted), model decider on, watcher every 60 s,
+Arbitrum Sepolia. Browser: a fresh headless Chromium with a CDP virtual passkey (scratchpad driver PID 19972 on 127.0.0.1:7953, started 15:45,
+stopped 16:24 by PID). No product code changed. No key or token printed: the agent key went to ~/.tameion/test-keys/uat3-live-buy.token (mode 600,
+redacted on screen); bill wallet, vendor and typed-bill payee keys ~/.tameion/test-keys/uat3-live-{billwallet,vendor,typedpayee}.key (mode 600).
+Relayer transfers were not refused by the permission system.
+
+RESULT: the agent paid the first cycle of a bill it found BY ITSELF (tx 0x1e8de13514ac10099b54931a2e3edcbb2012b0890a4f59c45aaa2eadf0bff624,
+16:07:15, 10 s after the due time, from the agent key, no human action after the approval at 16:04:21). It did NOT pay the next cycle: after a pass
+that pays, no pass is scheduled for the next due time (docs/60 P-233), so three cycles (16:11:03, 16:15:06, 16:19:09) went by with no pass at all.
+
+ACCOUNT  uat3-live-8569 · policy 0x727e659593e183a1a7ba663e2f44075fba8be5f3 · owner 0x45ffb04faeff4e772c628431606622345163ebf3
+         agent 0xd99460e3d75a0230de373ae99db5a0d642fc59b6 · bill wallet 0xAb8bbd4040a640b9b2Bba82703Fe9921B7662f8e · vendor 0x35c732969F43F71829637aa8fa22461d11fBC3B1
+
+STEP 1  open, fund, deploy, agent key                                                                                         PASS
+  15:47:22 opened through Start, one passkey tap (POST /api/level1/deploy 200, 2.0 s; the address reserved, nothing on chain yet).
+  15:48:31 0.1 USDC from the relayer, tx 0xc81d1af0c3b95ecd735332e7dd0635bd2fd8d9c968d6ecd6a6b671c881861f71.
+  15:49:25 the page's first check (POST /api/level1/run 202) put it on chain: policy_tx 0xe8551f940e7dc065aab3365c82f2d8a280b297f32c675caf5c5508f25f213b2b
+           (block 320011470), owner_tx 0xc4fcdcfc0da81438790b93af4514e442570011a433684c4e551ed1b70b8f1584, agent gas 0xe2ea29cc413c392a69e57c1bf44ad0591b334e0634e1f01df3ade8f2c1200296;
+           first record 0x90a08679a2b3e9b18ecfc34cf0bd4fd8e812b0028e9f971e625af16e7cff6e64. Caps 50 / 100 USDC, floor 0, delay 60 s.
+  15:53:03 Settings → Agents: "research-bot" (read, run checks, buy paid apis) — "Make this key?" → passkey → POST /api/level1/token-signed 200 (1.5 s).
+
+STEP 2  Autopilot before the due time                                                                                          PASS (slow)
+  15:50:25 "Turn autopilot on" → the P-232 gate: "1 of 3 keys set … Add two guardians first: if you lose this device you cannot get the account back …
+           [Not now] [Go on anyway]". 15:50:33 "Go on anyway" → prepare-mode 200 (540 ms) → challenge 200 (1,059 ms) → execute 200 after 78,766 ms
+           (the ask, tx 0xc003b98023ae7a3cff61e3cc9b072d21b945a0e6c5d1c0290412ac6789f703dc, mined 15:51:53). Re-check's execute was 27.8 s.
+  15:52:26 "Autopilot turns on in about 54 s unless you cancel" — the chain's ETA was 15:52:53 (27 s away): the countdown is still off (P-201).
+  15:52:58 the page applied it (POST /api/level1/mode 200, 2.2 s): ModeChanged tx 0xd3a582d90c837126f7c1d6407dd01c25007c610409771408eb79cb16744b768c (15:52:56);
+           chain mode() = 2 (Autopilot). The delay the page shows: "Pausing is instant; raising waits 60 s." (contract delay() = 60).
+           After it applied, the card still said "Asked. Autopilot turns on after the delay unless you cancel." (stale line, minor).
+  Screenshot proof/uat3-live-01-autopilot-1280.png.
+
+STEP 3  bill history, wallet connected after the 3rd payment                                                                  PASS
+  15:46:06 gas 0.0003 ETH to the bill wallet, tx 0x0ae03b1c4b088d9e8bdd2bdad90e6409612f666d4b082d30bb79aeb297e64a4a
+  15:46:10 0.012 USDC to the bill wallet, tx 0x4c49dda7b239318c51bc3ef71b20bd9753ff0efebdbfdff9b1d15e8f6bf0760f
+  15:46:45 round 1: 0.002 USDC to the vendor tx 0x224685fdacb316692b5cde6f9ab76dbc900e3a5c4c97bbce392bd535e3abf3ff block 320010852
+  15:50:48 round 2: 0.002 USDC to the vendor tx 0x54320ae7b3f2622f6a1ba806761392dba69285768e83c19875bf7d59a05337c6 block 320011761
+  15:54:51 round 3: 0.002 USDC to the vendor tx 0x3de34ff3ab68a36bba4685d6aa5c9c74815071bc9c94d2ac1a2f223747230ebe block 320012663
+  15:58:55 round 4: 0.002 USDC to the vendor tx 0xb2be57e1e62de82ab94eb957ad05a6cbb33b846f704c06f0e67baa8b1bbe8929 block 320013564
+  16:02:58 round 5: 0.002 USDC to the vendor tx 0xb9dfd4a4fb0ae7d520b9ff167cd9cd3c9e53054f8b9d4e9a83b43686ff555bcf block 320014501
+  15:55:03 "Connect a wallet that pays your bills today" → POST /api/level1/wallets 200 (6 ms), /api/watch 202, run 202; 45 s later
+           "1 recurring bill found · 0.002 a bill it found · every 4 minutes · next Oct 17". While that pass ran the page's inbox reads took up to 35 s each
+           (fourteen overlapping GET /api/level1/inbox, 4.3 s → 35.0 s).
+  Screenshot proof/uat3-live-02-wallet-connected-1280.png.
+
+STEP 4  the Needs-you row before the due date, one tap (P-228)                                                               PASS
+  15:55:4x (after 3 payments, before the next due) the row: "Let the agent pay a bill it found for its bill, 0.002 USDC every 4 minutes (next due Oct 17)
+           — The agent found this bill in your history, paid 3 times. Approve it before Oct 17 and the agent pays that cycle itself, never more than your
+           limits. [Approve]". Service reason: "it found this bill in your history: 0.002000 USDC every 4 minutes, paid 3 times; next due at unix 1792223933.
+           Approve it before then and the agent pays that cycle itself, once the payee's 60-second waiting time has passed" (1792223933 = 15:58:53;
+           the wallet's 4th payment came 15:58:55). proof/uat3-live-03-found-row-after-3-1280.png
+  15:58:58 the watcher's due pass (P-229, "a bill of 0x727e… fell due → pass 202"); its pass at 15:59:03 moved the row to "paid 4 times", next due 16:02:57.
+  16:03:0x the next due pass; its pass at 16:03:22: samples 5, confidence 0.8101, next due 1792224420 = 16:07:00. Row "paid 5 times".
+           proof/uat3-live-04-found-row-after-5-1280.png
+  16:03:48 tap "Approve" → "Let the agent pay this bill? Approves a bill it found as a payee, so the agent may pay this bill inside your limits.
+           [Not now] [Approve with passkey]" → prepare-payees 200 (1.0 s, device header) → challenge 200 (26.4 s) → execute 200 (4.1 s) →
+           16:04:21 "Approved. From about 04:05 PM, after the 60 s waiting period, the agent pays the Oct 17 bill itself."
+           PayeeSet tx 0xff8be717f1a3dc5e43ca1de303910de4ca728bdf1d13b519c4390a930afe13d9 (16:04:20); inbox payee payableFrom 16:05:20.
+  Approval vs due: approved 16:04:20, cooled off 16:05:20, due 16:07:00 → landed 160 s before the due time (100 s more than the 60 s cooling-off),
+           so the agent did not wait a cycle.
+
+STEP 5a THE AGENT PAYS BY ITSELF — first cycle                                                                                 PASS
+  16:07:05 the watcher's due pass (due 16:07:00 + 5 s), job 6ad32ca9-000b, mode Autopilot, decider claude-sonnet-5-5 (by: model), no fallback.
+           case: bill 0x35c7…@1792224420, 0.002 USDC, usual 0.002, samples 5, confidence 0.8101 (floor 0.75), payee_age_days 0, allowed [pay, ask, refuse].
+           decision: pay, basis usual — "0x35c732…fbc3b1 has been paid 5 times before, this 0.002 USDC bill matches the usual amount, and it is due now,
+           so paying is routine."
+  16:07:15 Paid(0x35c7…c3b1, 2000) tx 0x1e8de13514ac10099b54931a2e3edcbb2012b0890a4f59c45aaa2eadf0bff624 block 320015466, from the agent key
+           0xd99460e3d75a0230de373ae99db5a0d642fc59b6 to the policy; status 1. Chain after: balance 0.098, spentInWindow 0.002, vendor 0.012.
+           Record root 0xb76a01c5352d5b0f78f15d0db86a91788fd48434b1055007d9d295b4d77dd529, anchor tx 0x7a4a80fcd60dae09b7b5fd5ddd68e347732769185db4c0d7d2498b6b2f7778ad.
+  Account page (Recent): "Paid Payee ••C3B1 — paid by the agent: a bill found in the payment history: paid 5 times, 0.002000 USDC · 2 min ago · Receipt  0.002";
+           tiles "Paid 1 · 0.002 USDC", "Needs you 0 · all clear". proof/uat3-live-05-paid-by-itself-account-1280.png
+  /agent (Payments): "16:07:05  Payee ••C3B1  paid by the agent: a bill found in the payment history: paid 5 times, 0.002000 USDC  0.002  Receipt";
+           "Mode Autopilot · Waiting for you 0 · Last pass 16:07:05 · Pass latency 3 s · Last anchor 16:07:05 0x7a4a80…78ad".
+           proof/uat3-live-06-paid-by-itself-agent-1280.png
+           The model's own sentence and the confidence are in the pass record, not on either page (both show the bill's provenance line).
+  Book row (GET /api/level1/statement?week=2026-W42&format=csv, signed eip712 by 0x62f8…5062, linesHash 0x2149d914…e8a4):
+           2026-10-17T08:07:05Z,0x35c732969f43f71829637aa8fa22461d11fbc3b1,0.002000 USDC,paid,0x1e8de135…f624,agent,"Paid 0.002000 USDC to 0x35c7…c3b1,
+           settled in 0x1e8de135…f624. Read back from the receipt: the policy's Paid event matches."
+
+STEP 5b THE AGENT PAYS BY ITSELF — the next cycle                                                                              FAIL
+  Next due 16:11:03 (16:07:00 + 243 s). 16:12:00: no pass (log has no new "a bill of 0x727e… fell due" line), lastPass still 16:07:05, chain unchanged.
+  16:15:06 and 16:19:09: no pass either; 16:19:21 lastPass still 16:07:05, balance 0.098. Nothing ran for 12 minutes and three cycles.
+  Why (P-233): the paying pass's report lists the bill with nextDue 1792224420 — the cycle it just paid, read before it paid. The watcher's
+  due_pass_at (crates/operator/src/bin/tameion-app.rs:640-649) keeps only nextDue > the pass's time, so it returns None and no due pass is set.
+  The agent's own payment moved USDC, but that watcher pass was answered from the 10-minute cache ("USDC moved … → pass 200"); no clock
+  scheduler runs on :7880 (TAMEION_LEVEL1_EVERY_SECS unset). So after every cycle the agent pays, the account goes quiet until something else moves USDC.
+  16:19:58 my "Check now" (12 min after the last pass) ran a fresh pass, job 6ad32fae-0010: allowed [ask, refuse]; decision ask — "0x35c732…fbc3b1 was approved
+  0 days ago, so the owner should see this 0.002 USDC bill first, even though it was paid 5 times before." plus "cycles-behind: 2 more cycles of this bill fell
+  due after this one and nobody paid                  them: it may have ended. Settle one by hand to confirm, and I will                  continue from there".
+  Page: "Pay 0.002 USDC to Payee ••C3B1 — a bill found in the payment history: paid 5 times, 0.002000 USDC · 0x35c732…fbc3b1 was approved 0 days ago, so the owner
+  should see this 0.002 USDC bill first, even though it was paid 5 times before. Nobody has paid this bill for a while: it may have ended. If it has, tap
+  “Bill ended”. [Bill ended] [Pay]". proof/uat3-live-08-ask-after-missed-cycles-1280.png. Not tapped: paying by hand is not the agent paying by itself.
+
+STEP 6  side checks
+  6a "Check now" at a due time is a fresh pass (P-229)                                                                         FAIL
+     16:16:50 (two bills fell due since the 16:07:05 pass) → POST /api/level1/run 200 in 1 ms: {"cached":true,"id":"6ad32ca9-000b","note":"a run for this
+     policy started less than ten minutes ago","status":"done"}. Same cause as 5b: due_after (tameion-app.rs:626-635) also keeps only nextDue > the pass's
+     time. proof/uat3-live-07-check-now-at-due-1280.png
+  6b "Save bill" time (P-231, was 57,882 ms)                                                                                    PASS
+     16:22:55 0.001 USDC every 30 days to a new payee 0xC0FD856D3ab59F27d24AB8011d09c108649480D6: bills (check) 200 2 ms → prepare-payees 200 1.2 s →
+     challenge 200 2.0 s → execute 200 5.4 s (PayeeSet tx 0x2ff00a919ca9cbd5dd8d5b7e5d378c6a5a9218eb39d5f9aab954a24821b7723d) → bills (save) 200 3,396 ms →
+     "Added 0.001 USDC every 30 days." 12.2 s from tap to answer. The pass it started (16:23:07) asked for both bills; nothing paid.
+
+ALSO SEEN
+  - The found bill's payee is named "a bill it found" everywhere before approval (row, confirm "Approves a bill it found as a payee", wallet list, runway)
+    and the inbox marks that name verified (parties: {"label":"a bill it found","kind":"x402","verified":true}) — P-234.
+  - "next due Oct 17" / "Approve it before Oct 17" on a 4-minute bill: no time of day, so the owner cannot see whether the 60 s cooling-off fits (P-234).
+  - "Once money lands the agent asks you to approve each payee" under the found bill on a funded account (stale, as in the re-check).
+  - Six due passes got "pass 429" at the 15:42 start (all scan slots busy) and are never retried — not on this account (P-235).
+  - Slow owner calls: Autopilot execute 78.8 s, approve challenge 26.4 s, inbox reads up to 35 s during a pass (P-237).
+
+SPEND  from the relayer: 0.1 USDC (account) + 0.012 USDC + 0.0003 ETH (bill wallet) = 0.112 USDC of the 0.3 cap. The account paid 0.002 (the agent) and
+  holds 0.098; the bill wallet holds 0.002 USDC and 0.000295 ETH; the vendor 0.012 USDC.
+LEFT   uat3-live-8569 on Autopilot with the research-bot key, two approved payees (the vendor; 0xC0FD…80D6 with a typed 0.001/30-day bill) and two asks in
+  Needs you; its owner passkey lived only in the stopped headless browser (no guardians), so nobody can change it now. The driver (PID 19972) is stopped.
+SCREENSHOTS proof/uat3-live-0{1..8}-*-1280.png
