@@ -498,6 +498,10 @@ pub fn token_allows(
     let Some(tok) = t.agent_tokens.iter().find(|x| x.hash == h) else {
         return Err("unknown agent key");
     };
+    // docs/60 P-251: the owner's device stopped it; no chain, no passkey.
+    if crate::guard::is_stopped(&t.policy, &tok.id) {
+        return Err("the owner stopped this agent key"); // refusal: token_stopped
+    }
     if now >= tok.expires {
         return Err("this agent key has expired; the owner can mint a new one");
     }

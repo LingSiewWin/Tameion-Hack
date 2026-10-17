@@ -25,6 +25,19 @@
 //! container and a fresh machine. The log is the audit record; the chain is
 //! the authority on what has already been paid.
 
+// Every line this crate and the service print passes `guard::scrub` first (docs/114 row 9, docs/60 P-250):
+// these shadow std's `println!` / `eprintln!` in every module below, and in a binary that imports them.
+#[macro_export]
+macro_rules! println {
+    () => { ::std::println!() };
+    ($($t:tt)*) => { ::std::println!("{}", $crate::guard::scrub(&::std::format!($($t)*))) };
+}
+#[macro_export]
+macro_rules! eprintln {
+    () => { ::std::eprintln!() };
+    ($($t:tt)*) => { ::std::eprintln!("{}", $crate::guard::scrub(&::std::format!($($t)*))) };
+}
+
 pub mod agent_api;
 pub mod audit;
 pub mod claude;
@@ -32,6 +45,7 @@ pub mod decide;
 pub mod desk;
 pub mod desk_invite;
 pub mod desk_live;
+pub mod guard;
 pub mod hedge_advice;
 pub mod invoice;
 pub mod level1;
