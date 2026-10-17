@@ -134,18 +134,24 @@ export const invoiceDecideChallenge = (chainId: number, policy: string, id: stri
     encodePacked(["string", "uint64", "address", "bytes32", "uint8", "uint64"], ["tameion.invoice-decide.v1", BigInt(chainId), addr(policy), id as Hex, accept ? 1 : 0, BigInt(issued)]),
   );
 
-/** level1::bills_challenge — save exactly these bills when only the owner's device opened the import (docs/60 P-226). */
+/** level1::bills_challenge — save exactly these bills when only the owner's device opened the import (docs/60 P-226).
+ *  A list with a bill in seconds (demo mode, docs/115 §3) is "tameion.bills.v2", each bill's everySecs u64 after earlyDays. */
 export const billsChallenge = (
   chainId: number,
   policy: string,
-  bills: { payee: string; amount: string; everyDays: number; nextDue: number; discountBps?: number; earlyDays?: number }[],
+  bills: { payee: string; amount: string; everyDays: number; nextDue: number; discountBps?: number; earlyDays?: number; everySecs?: number }[],
   issued: number,
 ) => {
+  const v2 = bills.some((b) => (b.everySecs ?? 0) > 0);
   const types: string[] = ["string", "uint64", "address"];
-  const values: unknown[] = ["tameion.bills.v1", BigInt(chainId), addr(policy)];
+  const values: unknown[] = [v2 ? "tameion.bills.v2" : "tameion.bills.v1", BigInt(chainId), addr(policy)];
   for (const b of bills) {
     types.push("address", "uint256", "uint32", "uint64", "uint16", "uint32");
     values.push(addr(b.payee), minor(b.amount), b.everyDays, BigInt(b.nextDue), b.discountBps ?? 0, b.earlyDays ?? 0);
+    if (v2) {
+      types.push("uint64");
+      values.push(BigInt(b.everySecs ?? 0));
+    }
   }
   types.push("uint64");
   values.push(BigInt(issued));

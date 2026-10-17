@@ -4,7 +4,7 @@
 
 import { encodeFunctionData, erc20Abi, getAddress } from "viem";
 import { checkCall, type Expect } from "@/lib/guard";
-import type { Cfg, DeskBook, DeskStatementRow, Inbox, NameRecord, Pub, Tenant } from "@/lib/types";
+import type { Cfg, DeskBook, DeskStatementRow, Demo, Inbox, NameRecord, Pub, Tenant } from "@/lib/types";
 
 // ---- bytes ------------------------------------------------------------------
 export const hex = (buf: ArrayBuffer | Uint8Array) =>
@@ -349,6 +349,8 @@ export async function getJson<T>(path: string, policy?: string, extra?: Record<s
 }
 
 export const fetchConfig = () => getJson<Cfg>("/api/level1/config");
+/** Demo mode on this host, or null where the host has no such route (docs/115 §3). */
+export const fetchDemo = () => getJson<Demo>("/api/level1/demo").catch((e) => (e instanceof ApiError && e.status === 404 ? null : Promise.reject(e)));
 /** The account a handle names, or null when no account has it. */
 export async function fetchName(handle: string): Promise<NameRecord | null> {
   try {

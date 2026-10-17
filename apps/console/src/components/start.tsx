@@ -1,18 +1,19 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronRight, Fingerprint, Loader2, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Page } from "@/components/layout/page";
-import { Why } from "@/components/layout/section";
+import { Stat, Stats, Why } from "@/components/layout/section";
 import { Seal } from "@/components/seal";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ApiError, createKey, fetchName, isAddr, isHandle, post, remember, reserveToken, store } from "@/lib/tameion";
-import type { Cfg, Tenant } from "@/lib/types";
+import { ApiError, createKey, everyText, fetchDemo, fetchName, isAddr, isHandle, post, remember, reserveToken, store, usd } from "@/lib/tameion";
+import type { Cfg, Demo, Tenant } from "@/lib/types";
 
 /** The busy state while the browser's passkey prompt is open. */
 const PROMPT = "prompt";
@@ -45,7 +46,11 @@ export function Start({ cfg, onStarted, partner }: { cfg: Cfg; onStarted: (t: Te
   const [name, setName] = useState(suggestName);
   const [checked, setChecked] = useState<{ name: string; taken: boolean | null; error?: string }>({ name: "", taken: null });
   const [keyless, setKeyless] = useState(false);
-  const [invite, setInvite] = useState("");
+  // A judge's link carries the invite word (`/?invite=…`, docs/115 §3): nothing to type but the name.
+  const [linkInvite] = useState(() => new URLSearchParams(location.search).get("invite")?.trim() ?? "");
+  const [invite, setInvite] = useState(linkInvite);
+  const demo = useQuery({ queryKey: ["demo"], queryFn: fetchDemo, staleTime: 300_000 });
+  const trial = demo.data?.enabled ? demo.data : null;
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   // The open passkey prompt, so Cancel can end it (docs/60 P-100).
@@ -71,7 +76,7 @@ export function Start({ cfg, onStarted, partner }: { cfg: Cfg; onStarted: (t: Te
 
   const status = !name ? "idle" : !isHandle(name) ? "invalid" : checked.name !== name ? "checking" : checked.error ? "unknown" : checked.taken ? "taken" : "free";
 
-  async function open() {
+  async function open(asDemo = false) {
     setError("");
     if (!isHandle(name)) return setError("Pick a name: 3 to 32 lowercase letters, numbers or dashes, not starting or ending with a dash.");
     if (status === "taken") return setError(`${name} is taken. Try another.`);
@@ -81,7 +86,7 @@ export function Start({ cfg, onStarted, partner }: { cfg: Cfg; onStarted: (t: Te
       const pub = await createKey("tameion.pub", prompt.current.signal);
       prompt.current = null;
       setBusy("Opening your account…");
-      const d = await post<{ tenant: Tenant; reserveToken?: string | null }>("/api/level1/deploy", {
+      const d = await post<{ tenant: Tenant; reserveToken?: string | null; demo?: { tx?: string; usdc?: string; error?: string } }>("/api/level1/deploy", {
         chain,
         qx: pub.qx,
         qy: pub.qy,
@@ -91,8 +96,13 @@ export function Start({ cfg, onStarted, partner }: { cfg: Cfg; onStarted: (t: Te
         days: 90,
         invite,
         lazy: true,
+        // Demo mode funds the new account by itself (docs/115 §3); the account page then walks the five steps.
+        demo: asDemo || undefined,
       });
       remember(d.tenant);
+      // The demo's funding answers with the open (its transaction, or why nothing was sent): the account page shows it.
+      if (asDemo)
+        store.set(`tameion.judge.${d.tenant.policy}`, JSON.stringify({ openedAt: Date.now(), fundTx: d.demo?.tx, fundError: d.demo?.error }));
       reserveToken.set(d.tenant.policy, d.reserveToken);
       if (isAddr(fromWatch)) {
         try {
@@ -132,6 +142,7 @@ export function Start({ cfg, onStarted, partner }: { cfg: Cfg; onStarted: (t: Te
           </p>
 
           <div className="mt-8 rounded-xl border bg-card p-4 shadow-card sm:p-6">
+            {trial && <TryHead d={trial} />}
             <Label htmlFor="name" className="text-title font-medium">
               Your account&apos;s name
             </Label>
@@ -139,7 +150,7 @@ export function Start({ cfg, onStarted, partner }: { cfg: Cfg; onStarted: (t: Te
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value.toLowerCase().replace(/\s+/g, "-"))}
-              onKeyDown={(e) => e.key === "Enter" && !busy && void open()}
+              onKeyDown={(e) => e.key === "Enter" && !busy && void open(!!trial)}
               placeholder="acme"
               autoComplete="off"
               autoCapitalize="none"
@@ -164,7 +175,7 @@ export function Start({ cfg, onStarted, partner }: { cfg: Cfg; onStarted: (t: Te
               {status === "taken" && <span className="text-destructive">{name} is taken. Try another.</span>}
               {status === "unknown" && "Could not check the name just now; opening still tells you."}
             </p>
-            {cfg.inviteNeeded && (
+            {cfg.inviteNeeded && !linkInvite && (
               <div className="mt-4 max-w-xs">
                 <Label htmlFor="invite" className="text-sm font-medium">
                   Invite word
@@ -174,9 +185,9 @@ export function Start({ cfg, onStarted, partner }: { cfg: Cfg; onStarted: (t: Te
             )}
 
             <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
-              <Button size="lg" className="h-11 px-6" disabled={!!busy || !cfg.operator || status === "taken"} onClick={open}>
+              <Button size="lg" className="h-11 px-6" disabled={!!busy || !cfg.operator || status === "taken"} onClick={() => open(!!trial)}>
                 {busy ? <Loader2 className="size-4 animate-spin" /> : <Fingerprint className="size-4" />}
-                {busy === PROMPT ? "Waiting for your passkey…" : (busy ?? "Open the account with my passkey")}
+                {busy === PROMPT ? "Waiting for your passkey…" : (busy ?? (trial ? "Try it in 5 minutes" : "Open the account with my passkey"))}
               </Button>
               {busy === PROMPT ? (
                 <Button size="lg" variant="outline" className="h-11" onClick={() => prompt.current?.abort()}>
@@ -184,11 +195,13 @@ export function Start({ cfg, onStarted, partner }: { cfg: Cfg; onStarted: (t: Te
                 </Button>
               ) : (
                 <p className="text-caption text-muted-foreground">
-                  Nothing goes on chain until money arrives.{" "}
-                  <Why label="What opening does">
-                    It creates a key on this device (Face ID, Touch ID or your password manager) and reserves your account&apos;s address under this name. The contract
-                    is created when money can reach it; until then nothing is on chain.
-                  </Why>
+                  {trial ? "It opens on chain with test USDC from the demo; nothing here moves real money. " : "Nothing goes on chain until money arrives. "}
+                  {!trial && (
+                    <Why label="What opening does">
+                      It creates a key on this device (Face ID, Touch ID or your password manager) and reserves your account&apos;s address under this name. The contract
+                      is created when money can reach it; until then nothing is on chain.
+                    </Why>
+                  )}
                 </p>
               )}
             </div>
@@ -210,6 +223,8 @@ export function Start({ cfg, onStarted, partner }: { cfg: Cfg; onStarted: (t: Te
               </a>
             </p>
 
+            {/* The demo runs on the chain it is funded on, with an agent key: no other way to set it up. */}
+            {!trial && (
             <details className="group mt-5 border-t pt-4 text-sm">
               <summary className="flex cursor-pointer list-none select-none items-center gap-1.5 text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
                 <ChevronRight className="size-4 transition-transform duration-150 group-open:rotate-90" aria-hidden />
@@ -239,6 +254,7 @@ export function Start({ cfg, onStarted, partner }: { cfg: Cfg; onStarted: (t: Te
                 </div>
               </div>
             </details>
+            )}
           </div>
 
           <p className="mt-6 max-w-[62ch] text-caption text-muted-foreground">
@@ -268,5 +284,27 @@ export function Start({ cfg, onStarted, partner }: { cfg: Cfg; onStarted: (t: Te
         </aside>
       </div>
     </Page>
+  );
+}
+
+/** The judge's five minutes on the home page (docs/115 §3): the benefit as numbers from the host's own demo values, the
+ *  becoming line, and the one button below it. */
+function TryHead({ d }: { d: Demo }) {
+  return (
+    <div className="mb-6 space-y-4 border-b pb-6">
+      <div>
+        <p className="text-sm font-medium text-protect">Try it in 5 minutes</p>
+        <p className="mt-1 text-balance text-title">
+          Your agent pays a bill of <strong className="figures">{usd(d.bill.usdc)} USDC {everyText(d.bill.everySecs)}</strong> by itself, only to the payee you approved,
+          and never past the mandate you sign. Five steps, each one tap or a wait.
+        </p>
+      </div>
+      <Stats>
+        <Stat label="To type" value="0" sub="seed phrases or addresses" />
+        <Stat label="A raise waits" value={`${d.delaySecs} s`} sub="anyone can see it; a cut is instant" />
+        <Stat label="A bill" value={usd(d.bill.usdc)} sub={`USDC ${everyText(d.bill.everySecs)}, test money`} />
+      </Stats>
+      <p className="text-sm text-muted-foreground">Run your agents the way a finance team runs its payables.</p>
+    </div>
   );
 }
