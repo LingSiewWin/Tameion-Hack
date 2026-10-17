@@ -305,11 +305,14 @@ fn the_service_answers_what_needs_no_chain_and_refuses_what_it_should() {
     assert!(b.contains("address must be"));
     let (st, _) = http(p, "GET", "/api/watch/does-not-exist", "");
     assert_eq!(st, 404);
+    // docs/60 P-253: the admin token in the Authorization header, never the URL.
     let (st, _) = http(p, "GET", "/api/runs", "");
+    assert_eq!(st, 401);
+    let (st, _, _) = http_with(p, "GET", "/api/runs", "", "Authorization: Bearer wrong\r\n");
     assert_eq!(st, 403);
-    let (st, _) = http(p, "GET", "/api/runs?token=wrong", "");
-    assert_eq!(st, 403);
-    let (st, b) = http(p, "GET", "/api/runs?token=t0k3n", "");
+    let (st, _) = http(p, "GET", "/api/runs?token=t0k3n", "");
+    assert_eq!(st, 400, "the URL form is refused");
+    let (st, _, b) = http_with(p, "GET", "/api/runs", "", "Authorization: Bearer t0k3n\r\n");
     assert_eq!(st, 200);
     assert!(b.contains("\"runs\""));
     let (st, b) = http(
@@ -2016,4 +2019,98 @@ fn the_agent_envelope_names_every_refusal() {
         (404, "not_found".into()),
         "{b}"
     );
+}
+
+/// docs/60 P-248…P-253, P-273 (seat S15): a body over the cap is refused from its head; an idempotent reply
+/// goes back only to the caller that sent the first request, and still after a restart; the owner's device
+/// stops one agent key at once, and the stop outlives a restart; the admin token counts only in a header.
+#[test]
+fn the_service_caps_bodies_binds_replays_to_their_caller_and_stops_one_key() {
+    let dir = std::env::temp_dir().join(format!("tameion-app-test-{}-151", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("tenants")).unwrap();
+    let policy = "0x00000000000000000000000000000000000015a1";
+    let dev = "d15a".repeat(16);
+    std::fs::write(
+        dir.join("tenants").join(format!("{policy}.json")),
+        format!(
+            r#"{{"chain":"arc-testnet","owner":"0x0000000000000000000000000000000000000001","policy":"{policy}","agent":"0x0000000000000000000000000000000000000003","operator":"0x0000000000000000000000000000000000000004","watched":"0x0000000000000000000000000000000000000005","recovery":"0x0000000000000000000000000000000000000000","per_action":"1","daily":"1","floor":"0","delay_secs":60,"mode":1,"created_block":0,"history_from_block":0,"created":0,"deployed":true,"reserve_token_hash":"{}","agent_tokens":[{{"id":"t-prep","label":"ops","scopes":["read","prepare"],"expires":4102444800,"issued":0,"hash":"{}"}},{{"id":"t-read","label":"reader","scopes":["read"],"expires":4102444800,"issued":0,"hash":"{}"}}]}}"#,
+            operator::level1::token_hash(&dev),
+            operator::level1::token_hash("k-prep"),
+            operator::level1::token_hash("k-read"),
+        ),
+    )
+    .unwrap();
+    let env = [("TAMEION_RPC_ARC", "http://127.0.0.1:9")];
+    let srv = start_with(151, &env);
+    let p = srv.port;
+
+    // P-248: 2 MiB declared, 413 from the head; the default cap is 1 MiB.
+    let big = "x".repeat(2 << 20);
+    let (st, _, b) = http_with(p, "POST", "/api/level1/run", &big, "");
+    assert_eq!(st, 413, "{b}");
+    assert!(b.contains("at most 1048576"), "{b}");
+
+    // P-273: the stored reply is the caller's.
+    let body =
+        format!(r#"{{"policy":"{policy}","perAction":"0.004","daily":"0.008","floor":"0"}}"#);
+    let idem = "Idempotency-Key: s15-op-1\r\n";
+    let prep = format!("{idem}Authorization: Bearer k-prep\r\n");
+    let (st, h1, first) = http_with(p, "POST", "/api/level1/prepare-limits", &body, &prep);
+    assert_eq!(st, 200, "{first}");
+    assert!(!h1.contains("Idempotent-Replayed"));
+    let (st, h, b) = http_with(p, "POST", "/api/level1/prepare-limits", &body, idem);
+    assert_eq!(
+        st, 401,
+        "no agent key: refused, never the stored reply: {b}"
+    );
+    assert!(!h.contains("Idempotent-Replayed"));
+    let other = format!("{idem}Authorization: Bearer k-read\r\n");
+    let (st, _, b) = http_with(p, "POST", "/api/level1/prepare-limits", &body, &other);
+    assert_eq!(st, 403, "another key without the scope: {b}");
+    let (st, h, b) = http_with(p, "POST", "/api/level1/prepare-limits", &body, &prep);
+    assert_eq!(st, 200);
+    assert!(h.contains("Idempotent-Replayed: true"), "{h}");
+    assert_eq!(b, first);
+
+    // P-251: the owner's device stops t-read; its calls get 403; the inbox lists it.
+    let stop = format!(r#"{{"policy":"{policy}","id":"t-read"}}"#);
+    let (st, _, b) = http_with(p, "POST", "/api/level1/tokens/stop", &stop, "");
+    assert_eq!(st, 401, "{b}");
+    let device = format!("X-Tameion-Device: {dev}\r\n");
+    let (st, _, b) = http_with(p, "POST", "/api/level1/tokens/stop", &stop, &device);
+    assert_eq!(st, 200, "{b}");
+    assert!(b.contains(r#""stoppedTokens":["t-read"]"#), "{b}");
+    let inbox = format!("/api/level1/inbox?policy={policy}");
+    let read = "Authorization: Bearer k-read\r\n";
+    let (st, _, b) = http_with(p, "GET", &inbox, "", read);
+    assert_eq!(st, 403, "{b}");
+    assert!(b.contains("the owner stopped this agent key"), "{b}");
+
+    // P-253: the admin token from the header only.
+    let (st, _, b) = http_with(
+        p,
+        "GET",
+        "/api/level1/tenants",
+        "",
+        "Authorization: Bearer t0k3n\r\n",
+    );
+    assert_eq!(st, 200, "{b}");
+    let (st, _, _) = http_with(p, "GET", "/api/level1/tenants", "", "");
+    assert_eq!(st, 401);
+    let (st, _, _) = http_with(p, "GET", "/api/level1/tenants?token=t0k3n", "", "");
+    assert_eq!(st, 400);
+
+    // P-249: after a restart the reply is still kept for its caller, and the stop still holds.
+    drop(srv);
+    let srv = start_with(151, &env);
+    let p = srv.port;
+    let (st, h, b) = http_with(p, "POST", "/api/level1/prepare-limits", &body, &prep);
+    assert_eq!(st, 200, "{b}");
+    assert!(h.contains("Idempotent-Replayed: true"), "{h}");
+    assert_eq!(b, first);
+    let (st, _, _) = http_with(p, "POST", "/api/level1/prepare-limits", &body, idem);
+    assert_eq!(st, 401);
+    let (st, _, b) = http_with(p, "GET", &inbox, "", read);
+    assert_eq!(st, 403, "{b}");
 }

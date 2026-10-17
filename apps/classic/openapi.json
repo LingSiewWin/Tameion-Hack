@@ -1545,9 +1545,10 @@
         "summary": "Admin: every tenant on this host. Public view (Tenant::public): never the webhook secret nor agent-key hashes; carries notifySet and agentTokenCount instead.",
         "parameters": [
           {
-            "name": "token",
-            "in": "query",
+            "name": "Authorization",
+            "in": "header",
             "required": true,
+            "description": "Bearer <TAMEION_APP_ADMIN_TOKEN>. Never in the URL: a ?token= query is refused (400), because proxies and access logs keep URLs.",
             "schema": {
               "type": "string"
             }
@@ -1556,6 +1557,12 @@
         "responses": {
           "200": {
             "description": "tenants"
+          },
+          "400": {
+            "description": "the token was sent in the URL"
+          },
+          "401": {
+            "description": "no Authorization header"
           },
           "403": {
             "description": "admin token"
@@ -1568,9 +1575,10 @@
         "summary": "Admin: every run this host made (Watch and Level 1), one line each, for the founder to see who tried.",
         "parameters": [
           {
-            "name": "token",
-            "in": "query",
+            "name": "Authorization",
+            "in": "header",
             "required": true,
+            "description": "Bearer <TAMEION_APP_ADMIN_TOKEN>. Never in the URL: a ?token= query is refused (400), because proxies and access logs keep URLs.",
             "schema": {
               "type": "string"
             }
@@ -1579,6 +1587,12 @@
         "responses": {
           "200": {
             "description": "runs"
+          },
+          "400": {
+            "description": "the token was sent in the URL"
+          },
+          "401": {
+            "description": "no Authorization header"
           },
           "403": {
             "description": "admin token"

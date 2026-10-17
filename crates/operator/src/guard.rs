@@ -381,6 +381,47 @@ pub fn stop_route(dir: &Path, device: Option<&str>, body: &str) -> (&'static str
     }
 }
 
+// ---- The admin token (docs/60 P-253) ----
+
+/// Equal, in time that does not depend on where they differ.
+fn same_secret(a: &str, b: &str) -> bool {
+    a.len() == b.len()
+        && a.bytes()
+            .zip(b.bytes())
+            .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+            == 0
+}
+
+/// The operator's admin token on `GET /api/runs` and `GET /api/level1/tenants`: `Authorization: Bearer <token>`
+/// only, because a URL's query string lands in proxy and access logs. `None` lets the request through;
+/// otherwise the status and the refusal.
+pub fn admin_refusal(
+    want: Option<&str>,
+    authorization: Option<&str>,
+    query: &str,
+) -> Option<(&'static str, Value)> {
+    if query.split('&').any(|kv| kv.starts_with("token=")) {
+        return Some((
+            "400 Bad Request",
+            json!({ "error": "send the admin token as Authorization: Bearer <token>, never in the URL: proxies and access logs keep URLs" }), // refusal: token_in_query
+        ));
+    }
+    let given = authorization
+        .and_then(|v| v.trim().strip_prefix("Bearer "))
+        .map(str::trim)
+        .filter(|t| !t.is_empty());
+    let Some(given) = given else {
+        return Some((
+            "401 Unauthorized",
+            json!({ "error": "this route needs the admin token: Authorization: Bearer <TAMEION_APP_ADMIN_TOKEN>" }), // refusal: token_missing
+        ));
+    };
+    match want.map(str::trim).filter(|t| !t.is_empty()) {
+        Some(w) if same_secret(w, given) => None,
+        _ => Some(("403 Forbidden", json!({ "error": "admin token" }))), // refusal: token_invalid
+    }
+}
+
 // ---- Retention (docs/60 P-252, docs/116 §1) ----
 
 /// `TAMEION_RETENTION_DAYS`, default 30; 0 keeps job files for ever.
@@ -557,6 +598,32 @@ mod tests {
         assert!(
             !mine.contains("s3cret"),
             "the slot is kept on disk: a hash, never the key"
+        );
+    }
+
+    #[test]
+    fn the_admin_token_counts_only_in_the_authorization_header() {
+        let ok = Some("t0k3n-admin");
+        assert_eq!(admin_refusal(ok, Some("Bearer t0k3n-admin"), ""), None);
+        assert_eq!(admin_refusal(ok, None, "").unwrap().0, "401 Unauthorized");
+        assert_eq!(
+            admin_refusal(ok, Some("Bearer wrong"), "").unwrap().0,
+            "403 Forbidden"
+        );
+        assert_eq!(
+            admin_refusal(ok, Some("Bearer t0k3n-admin"), "token=t0k3n-admin")
+                .unwrap()
+                .0,
+            "400 Bad Request",
+            "the URL form is refused even when the header is right"
+        );
+        assert_eq!(
+            admin_refusal(None, Some("Bearer x"), "").unwrap().0,
+            "403 Forbidden"
+        );
+        assert_eq!(
+            admin_refusal(Some(""), Some("Bearer "), "").unwrap().0,
+            "401 Unauthorized"
         );
     }
 

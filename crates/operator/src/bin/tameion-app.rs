@@ -12,7 +12,7 @@
 //!   PORT                     default 7880
 //!   HOST                     default 127.0.0.1 (0.0.0.0 in a container)
 //!   TAMEION_APP_DIR          default runtime/app (jobs/, runs.jsonl)
-//!   TAMEION_APP_ADMIN_TOKEN  required for GET /api/runs?token=…
+//!   TAMEION_APP_ADMIN_TOKEN  required for GET /api/runs and /api/level1/tenants, as Authorization: Bearer
 //!   TAMEION_CONTACT_URL      the "talk to us" link on the page
 //!   TAMEION_REPO_URL         the "read the code" link (set once the repo is public)
 //!   TAMEION_PRICE_MONTHLY    the founder's monthly price per protected account, USD (unset: the testnet sentence)
@@ -29,12 +29,12 @@
 //!
 //! Routes: GET / (the account page, docs/53) · GET /watch (Level 0) · GET /api/chains · POST /api/watch · GET /api/watch/<id> ·
 //! GET /api/level1/inbox?policy= ·
-//! GET /api/runs?token= · GET /api/openapi.json · GET /healthz ·
+//! GET /api/runs (admin, Bearer) · GET /api/openapi.json · GET /healthz ·
 //! Level 1 (docs/52): GET /level1 · GET /api/level1/config · POST /api/level1/deploy ·
 //! POST /api/level1/challenge · POST /api/level1/execute · POST /api/level1/prepare-payees ·
 //! POST /api/level1/run · POST /api/level1/mode · POST /api/level1/prepare-mode ·
 //! POST /api/level1/prepare-cancel · POST /api/level1/prepare-withdraw · GET /level1/call.js ·
-//! GET /api/level1/tenant/<policy> · GET /api/level1/tenants?token= ·
+//! GET /api/level1/tenant/<policy> · GET /api/level1/tenants (admin, Bearer) ·
 //! POST /api/level1/wallets · POST /api/level1/reserve-token · POST /api/level1/contacts ·
 //! GET /api/level1/resolve?q=&chain=
 
@@ -7700,14 +7700,13 @@ impl App {
         }
     }
 
-    async fn runs(&self, query: &str) -> Vec<u8> {
-        let given = query
-            .split('&')
-            .find_map(|kv| kv.strip_prefix("token="))
-            .unwrap_or("");
-        match &self.admin_token {
-            Some(t) if !t.is_empty() && t == given => {}
-            _ => return json_reply("403 Forbidden", json!({ "error": "admin token" })),
+    async fn runs(&self, raw: &str, query: &str) -> Vec<u8> {
+        // The admin token in a header, never the URL (docs/60 P-253).
+        let auth = header(raw, "authorization");
+        if let Some((status, v)) =
+            operator::guard::admin_refusal(self.admin_token.as_deref(), auth, query)
+        {
+            return json_reply(status, v);
         }
         let text = tokio::fs::read_to_string(self.dir.join("runs.jsonl"))
             .await
@@ -8704,22 +8703,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                     ("GET", "/api/level1/tenants") => {
-                        let given = query
-                            .split('&')
-                            .find_map(|kv| kv.strip_prefix("token="))
-                            .unwrap_or("");
-                        match &app.admin_token {
-                            Some(t) if !t.is_empty() && t == given => json_reply(
+                        // The admin token in a header, never the URL (docs/60 P-253).
+                        let auth = header(&req, "authorization");
+                        match operator::guard::admin_refusal(
+                            app.admin_token.as_deref(),
+                            auth,
+                            query,
+                        ) {
+                            Some((status, v)) => json_reply(status, v),
+                            None => json_reply(
                                 "200 OK",
                                 json!({ "tenants": level1::list(&app.dir).iter().map(level1::Tenant::public).collect::<Vec<_>>() }),
                             ),
-                            _ => json_reply("403 Forbidden", json!({ "error": "admin token" })),
                         }
                     }
                     ("GET", p) if p.starts_with("/api/watch/") => {
                         app.get(&p["/api/watch/".len()..]).await
                     }
-                    ("GET", "/api/runs") => app.runs(query).await,
+                    ("GET", "/api/runs") => app.runs(&req, query).await,
                     ("POST", "/api/level1/identity") => app.level1_identity(&body).await,
                     ("GET", p) if p.starts_with("/proof/") => {
                         proof_file(&p["/proof/".len()..]).await
