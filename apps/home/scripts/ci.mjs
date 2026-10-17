@@ -122,7 +122,8 @@ export function matrix(args, have = { policy: true }) {
     for (const state of list(args.state, ROUTES[route]?.states ?? []))
       for (const view of list(args.view, ["owner", "agent"]))
         for (const width of list(args.width, ["1280", "390"]).map(Number)) {
-          if (!ROUTES[route]?.states.includes(state) || (state === "guest" && view === "agent")) continue;
+          // read-only guest, a bill waiting for a tap and an account with no bills are the Owner's states; the Agent view has records, not taps
+          if (!ROUTES[route]?.states.includes(state) || (view === "agent" && ["guest", "needs-you", "empty"].includes(state))) continue;
           out.push({ route, state, view, width, needsPolicy: route !== "guest" && route !== "new", skip: route !== "guest" && route !== "new" && !have.policy });
         }
   return out;
@@ -547,6 +548,7 @@ async function patchJson(page, re, mutate, R) {
   await page.route(re, async (route) => {
     const res = await route.fetch();
     let body;
+    if (!res.ok()) return route.fulfill({ response: res });
     try { body = await res.json(); } catch { return route.fulfill({ response: res }); }
     R.mocked = true;
     return route.fulfill({ response: res, json: mutate(body) ?? body });
@@ -566,6 +568,14 @@ async function arrange(page, ctx, sc, cfg, R) {
     await page.route(API, fail503); // the service never answers: nothing was read, nothing is cached
   } else if (state === "empty" && !cfg.policyEmpty) {
     await patchJson(page, /\/api\/level1\/inbox/, (b) => ({ ...b, paid: [], waiting: [], waitingCount: 0, needsYou: [], paidTotal: "0", purchases: [], refused: [], invoices: [] }), R);
+  } else if (state === "sealed") {
+    // No real account has a triple-signed record yet (the agent slot is never filled today), so the symbolon reply is patched: every record carries
+    // all three halves, verified. The log says "mocked": this screenshot is a fixture of the sealed look, not an account's proof.
+    const slot = { alg: "secp256k1-eip712", keyId: "0x" + "ab".repeat(20), verified: true };
+    await patchJson(page, /\/api\/level1\/symbolon/, (b) => {
+      const records = (b.records ?? []).map((r) => ({ ...r, agent: slot, counterparty_slot: slot, witness: slot }));
+      return { ...b, records, counts: { unsigned: 0, single: 0, double: 0, triple: records.length } };
+    }, R);
   } else if (state === "needs-you" && !cfg.policyNeeds) {
     const item = { kind: "bill", what: "Pay Demo Vendor 0.002 USDC for the hosting bill", counterparty: "0x" + "11".repeat(20), amount: "0.002", why: "hosting bill, due today" };
     await patchJson(page, /\/api\/level1\/inbox/, (b) => ({ ...b, waiting: [item], waitingCount: 1, needsYou: [{ counterparty: item.counterparty, amount: item.amount, why: item.why, to: item.counterparty, data: "0x" }] }), R);
@@ -599,9 +609,9 @@ async function openDetail(page) {
   const el = handle.asElement();
   if (!el) return false;
   await el.click();
-  await page.waitForSelector("dialog[open], [role=dialog]", { timeout: 2500 }).catch(() => {});
+  await page.waitForSelector('dialog[open], [role=dialog], [aria-expanded="true"]', { timeout: 2500 }).catch(() => {});
   await page.waitForTimeout(350);
-  return !!(await page.$("dialog[open], [role=dialog]"));
+  return !!(await page.$('dialog[open], [role=dialog], [aria-expanded="true"]'));
 }
 
 async function axeFindings(page, AxeBuilder, R) {
