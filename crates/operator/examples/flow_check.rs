@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let mut book = audit::book(&level1::tenants_dir(dir).join(&policy).join("log"));
     println!(
-        "account {policy} on {} · created block {} ({}) · record: {} money events",
+        "account {policy} on {} · created block {} ({}) · record: {} events",
         c.name,
         t.created_block,
         operator::statement::iso8601(created),
