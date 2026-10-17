@@ -149,9 +149,11 @@ function stepTokens() {
       const raw = have[view][name], got = hexNorm(raw);
       if (got === hex) continue;
       const core = CORE.includes(name.slice(2));
-      // --up / --down: DESIGN says "same" at night, which reads 2.3 to 2.5 : 1 there; a lifted value that passes is the right call.
-      const lifted = !core && got && view === "agent" && contrast(hex, want.agent["--paper"]) < 4.5 && contrast(got, have.agent["--paper"] ? hexNorm(have.agent["--paper"]) : want.agent["--paper"]) >= 4.5;
-      lines.push(`${view} ${name}: DESIGN ${hex}, tokens.css ${raw ?? "missing"}${lifted ? " (deliberate: DESIGN's value fails 4.5:1 on night paper)" : ""}`);
+      // a value of DESIGN's own that reads under 4.5:1 on one of its surfaces, replaced by one that reaches it, is the right call (DESIGN is wrong there)
+      const surfaces = ["--paper", "--plate", "--plate-2"].map((x) => want[view][x]).filter(Boolean);
+      const low = (c) => Math.min(...surfaces.map((x) => contrast(c, x)));
+      const lifted = !core && got && surfaces.length > 0 && low(hex) < 4.5 && low(got) >= 4.5;
+      lines.push(`${view} ${name}: DESIGN ${hex}, tokens.css ${raw ?? "missing"}${lifted ? ` (deliberate: DESIGN's value reads ${low(hex).toFixed(2)}:1 on its surfaces, this one ${low(got).toFixed(2)}:1)` : ""}`);
       if (lifted) continue;
       if (core || raw === undefined) sev = "fail";
       else if (sev !== "fail") sev = "warn";
@@ -184,7 +186,7 @@ function stepScripts(name, keys, missing, strict) {
   if (!key) return { name, sev: strict ? "fail" : "note", lines: [missing] };
   const r = spawnSync("npm", ["run", "--silent", key], { cwd: APP, encoding: "utf8" });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim().split("\n").filter((l) => l.trim());
-  return { name, sev: r.status === 0 ? "pass" : "fail", lines: r.status === 0 ? out.slice(-2) : out.slice(-12) };
+  return { name, sev: r.status === 0 ? "pass" : "fail", lines: r.status === 0 ? (out.length > 2 ? [out[0], out.at(-1)] : out) : out.slice(-12) };
 }
 
 function stepLiterals() {
@@ -942,7 +944,7 @@ async function main() {
   const steps = [
     stepTokens(), run("contrast", ["scripts/contrast.mjs"], "scripts/contrast.mjs is missing (H1: WCAG 4.5:1 for every pair in both views)"), stepZeroHash(), stepLiterals(),
     stepScripts("hex-lint", ["lint:tokens", "lint:hex", "tokens:lint", "lint-tokens"], "no tokens-only hex lint script yet (H1 writes it: no literal colour outside src/tokens.*; npm script lint:tokens)", cfg.strict),
-    stepScripts("21st-review", ["review:21st", "21st:review", "21st-review", "design:review"], "no `21st review` script yet (H1 finds the CLI; npm script review:21st)", cfg.strict),
+    stepScripts("21st-review", ["review", "review:21st", "21st:review", "21st-review", "design:review"], "no `21st review` script yet (npm script review: `21st review src`, 0 errors expected)", cfg.strict),
   ];
   const md = join(APP, "DESIGN.md"), tk = join(APP, "src/tokens.css");
   const pal = existsSync(md) ? designPalette(readFileSync(md, "utf8")) : {};
