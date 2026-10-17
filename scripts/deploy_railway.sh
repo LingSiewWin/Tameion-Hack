@@ -43,7 +43,8 @@ fi
 railway service list --json 2>/dev/null | grep -Eq "\"name\": *\"$SERVICE\"" || railway add --service "$SERVICE"
 railway service "$SERVICE" >/dev/null
 # The volume at /data (TAMEION_APP_DIR=/data/app, the book in /data/log: Dockerfile ENV), once.
-railway volume list --json 2>/dev/null | grep -q '"/data"' || railway volume add --mount-path /data --service "$SERVICE"
+# (`volume add` takes no --service: it uses the service linked just above.)
+railway volume list --json 2>/dev/null | grep -q '"/data"' || railway volume add --mount-path /data
 
 # Plain settings (fly.toml [env]) in one call; RAILWAY_RUN_UID=0 because the volume is mounted as root and the image's
 # CMD chowns it before dropping to the service user.
