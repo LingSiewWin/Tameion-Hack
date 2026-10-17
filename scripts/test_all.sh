@@ -32,6 +32,10 @@ step "rust: clippy, warnings are errors" run 'cargo clippy --locked --workspace 
 step "rust: formatting" run 'cargo fmt --all --check'
 step "evidence desk: python unittest" run 'python3 -m unittest scripts/evidence/test_desk.py 2>&1 | tail -3'
 step "lender verifier: python unittest (offline)" run 'python3 -m unittest scripts/test_verify_desk.py 2>&1 | tail -3'
+# The audit pack (docs/117 §5), built offline from a real account's files and the chain's recorded answers; its ledger
+# then goes to bean-check, a validator we did not write (`uv tool install beancount`).
+step "audit pack: python unittest (offline)" run 'python3 -m unittest scripts/test_audit_pack.py 2>&1 | tail -3'
+step "audit pack: bean-check on the fixture's ledger" run 'f=crates/operator/tests/fixtures/audit-pack; a="file://$PWD/$f/answers.json"; out=$(mktemp -d); trap "rm -rf \"$out\"" EXIT; python3 scripts/audit_pack.py "$f" 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 2026-10-16 2026-10-17 --rpc "$a" --rpc2 "$a" --gateway "$a" --block 320121361 --out "$out" >/dev/null || exit 1; if command -v bean-check >/dev/null; then bean-check "$out"/*/*/ledger.beancount && echo "  bean-check $(bean-check --version | head -1): exit 0"; else printf "  \033[31mskipped: bean-check not installed\033[0m\n"; fi'
 step "passkey page: node --test" run 'node --test apps/classic/passkey/call.test.mjs 2>&1 | grep -E "^ℹ (pass|fail)"'
 step "chip bridge: python unittest" run 'python3 -m unittest scripts/test_desk_se_bridge.py 2>&1 | tail -3'
 # The descriptor check validates against the ERC-7730 JSON schema: run it with a Python that has `jsonschema`
