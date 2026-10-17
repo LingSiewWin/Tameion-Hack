@@ -266,6 +266,89 @@ fn decode(canonical: &[u8], root: &str) -> Result<Option<Line>, String> {
     })
 }
 
+/// What an event's canonical bytes say, for a reader who wants more than the
+/// statement's three kinds (`recall`, docs/117 §8): `kind`, `seq`, `at`; for an
+/// event about a payee its `payee` and, where the event has them, the `amount`
+/// (and `minor`, its USDC minor units), the verdict (`decision`) or the
+/// settling transaction (`tx`); an observation's `balance`. `None` when the
+/// bytes do not read as an event this code knows.
+pub(crate) fn fields(canonical: &[u8]) -> Option<Value> {
+    let mut r = Reader(canonical);
+    if r.str()? != EVENT_VERSION {
+        return None;
+    }
+    let seq = r.u64()?;
+    let at = i64::try_from(r.u64()?).ok()?;
+    let mut v = json!({ "seq": seq, "at": at });
+    let money = |v: &mut Value, m: Money| {
+        v["amount"] = json!(m.to_string());
+        v["minor"] = json!(m.to_minor().to_string());
+    };
+    let kind = match r.u8()? {
+        1 => {
+            v["balance"] = json!(r.money()?.to_string());
+            r.u64()?;
+            r.u64()?;
+            r.money()?;
+            "OBSERVATION"
+        }
+        2 => {
+            v["payee"] = json!(r.str()?);
+            money(&mut v, r.money()?);
+            v["decision"] = json!(match r.u8()? {
+                1 => "ALLOW",
+                2 => "REVIEW",
+                3 => "BLOCK",
+                _ => return None,
+            });
+            r.bytes()?;
+            r.u64()?;
+            r.money()?;
+            if r.u8()? == 1 {
+                r.u8()?;
+            }
+            for _ in 0..r.u64()? {
+                r.str()?;
+            }
+            "DECISION"
+        }
+        3 => {
+            v["payee"] = json!(r.str()?);
+            r.str()?;
+            money(&mut v, r.money()?);
+            v["tx"] = json!(r.str()?);
+            r.bytes()?;
+            r.bytes()?;
+            "SETTLEMENT"
+        }
+        4 => {
+            v["payee"] = json!(r.str()?);
+            money(&mut v, r.money()?);
+            v["reason"] = json!(r.str()?);
+            "ESCALATION"
+        }
+        5 => {
+            v["payee"] = json!(r.str()?);
+            r.str()?;
+            "SKIPPED"
+        }
+        6 => "HEDGE",
+        7 => "PROPOSAL",
+        8 => "FLOWCHECK",
+        9 => "RESERVATION",
+        10 => "METERCHECK",
+        11 => "PRICETABLE",
+        _ => return None,
+    };
+    // The note is the last field of the five kinds read in full; it is
+    // inside the hashed bytes, unlike the file's `note` column.
+    if v["payee"].is_string() || kind == "OBSERVATION" {
+        v["note"] = json!(r.str()?);
+    }
+    v["kind"] = json!(kind);
+    Some(v)
+}
+
 /// Every statement line in `[from, to)` across the account's anchored
 /// records, oldest first (ties by root, then sequence), so two readers of
 /// the same files get the same bytes.

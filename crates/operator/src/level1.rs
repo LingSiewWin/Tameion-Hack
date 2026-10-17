@@ -3100,7 +3100,7 @@ async fn decide_invoices<D: Decider + Sync>(
     let mut records = Vec::new();
     for line in &pending {
         let payee = line["payee"].as_str().unwrap_or("").to_lowercase();
-        let Some(case) = crate::decide::invoice_case(
+        let Some(mut case) = crate::decide::invoice_case(
             line,
             history,
             detection,
@@ -3111,13 +3111,22 @@ async fn decide_invoices<D: Decider + Sync>(
         ) else {
             continue;
         };
+        // docs/117 §8: what the decider may cite about this payee.
+        (case.evidence_root, case.evidence) = crate::recall::evidence(
+            &tenants_dir(app_dir)
+                .join(format!("{policy:#x}"))
+                .join("log"),
+            &payee,
+            now.as_unix(),
+        );
         let (d, note) = crate::decide::decide_or_rule(decider, &case).await;
         let amount = Money::minor(
             i128::try_from(case.amount_minor).unwrap_or(0),
             Currency::Usdc,
         );
         let counterparty = ledger::Counterparty::new(&payee);
-        let said = crate::decide::record_line(&d, note.as_deref());
+        let said = crate::decide::record_line(&d, note.as_deref())
+            + &crate::decide::cited_record(&case, &d).unwrap_or_default();
         let body = if d.action == crate::decide::Action::Refuse {
             ledger::EventBody::Decision {
                 counterparty,

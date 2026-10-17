@@ -57,6 +57,7 @@ pub mod pay;
 pub mod price;
 pub mod push;
 pub mod reasoner;
+pub mod recall;
 pub mod refusal;
 pub mod statement;
 pub mod watch;
@@ -2360,11 +2361,26 @@ impl<R: Reasoner> Operator<R> {
                 kind: Some(decide::CaseKind::Bill),
                 cap_minor: u128::try_from(authority.per_action_cap.to_minor()).ok(),
                 typed: obligation.sample_count == 0 && self.is_seeded(&obligation),
+                evidence: Vec::new(),
+                evidence_root: None,
+            };
+            // docs/117 §8: what the decider may cite about this payee, from the
+            // latest anchored record (this pass's own is not anchored yet).
+            let (evidence_root, evidence) = recall::evidence(
+                &self.config.audit_dir.clone().unwrap_or_else(audit::dir),
+                &payee,
+                now.as_unix(),
+            );
+            let case = decide::Case {
+                evidence,
+                evidence_root,
+                ..case
             };
             let (decided, decided_note) = decide::decide_or_rule(decider, &case).await;
             let (decided, decided_note) =
                 model_refusal_asks(&case, decided, decided_note, decider.name());
-            let decided_line = decide::record_line(&decided, decided_note.as_deref());
+            let decided_line = decide::record_line(&decided, decided_note.as_deref())
+                + &decide::cited_record(&case, &decided).unwrap_or_default();
 
             self.log.append(
                 now,
