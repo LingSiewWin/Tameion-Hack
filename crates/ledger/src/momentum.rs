@@ -26,11 +26,9 @@
 //!
 //! Pure: the operator reads the record and the chain and passes them in.
 
-use crate::canon::ActionHash;
 use crate::log::{Event, EventBody};
 use crate::money::{Currency, Money};
-use crate::obligations::{Confidence, Counterparty, Obligation};
-use crate::time::Timestamp;
+use crate::obligations::Obligation;
 use crate::verify::Decision;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -392,137 +390,16 @@ pub fn flow_check(
     }
 }
 
-// ---- the record read back: the events the fold reads ----
-
-struct Reader<'a>(&'a [u8]);
-
-impl<'a> Reader<'a> {
-    fn take(&mut self, n: usize) -> Option<&'a [u8]> {
-        (self.0.len() >= n).then(|| {
-            let (head, tail) = self.0.split_at(n);
-            self.0 = tail;
-            head
-        })
-    }
-    fn u8(&mut self) -> Option<u8> {
-        self.take(1).map(|b| b[0])
-    }
-    fn u64(&mut self) -> Option<u64> {
-        Some(u64::from_be_bytes(self.take(8)?.try_into().ok()?))
-    }
-    fn bytes(&mut self) -> Option<&'a [u8]> {
-        let n = usize::try_from(self.u64()?).ok()?;
-        self.take(n)
-    }
-    fn str(&mut self) -> Option<String> {
-        std::str::from_utf8(self.bytes()?).ok().map(String::from)
-    }
-    fn hash(&mut self) -> Option<ActionHash> {
-        Some(ActionHash::from_bytes(self.bytes()?.try_into().ok()?))
-    }
-    fn money(&mut self) -> Option<Money> {
-        let minor = i128::from_be_bytes(self.take(16)?.try_into().ok()?);
-        let ccy = match self.u8()? {
-            1 => Currency::Usdc,
-            2 => Currency::Eurc,
-            3 => Currency::Usd,
-            4 => Currency::Eur,
-            5 => Currency::GoldGram,
-            _ => return None,
-        };
-        Some(Money::minor(minor, ccy))
-    }
-}
-
-/// An event the fold reads (`Settlement`, `Decision`, `Escalation`,
-/// `FlowCheck`) from its canonical bytes, the form an anchored record is kept
-/// in (the operator's `audit::persist`). `None` for any other kind, and for
-/// bytes that do not read: the fold then counts nothing it cannot vouch for.
-pub fn read_event(canonical: &[u8]) -> Option<Event> {
-    use crate::action::Provenance;
-    let mut r = Reader(canonical);
-    if r.str()? != "air-log/v0.1" {
-        return None;
-    }
-    let seq = r.u64()?;
-    let at = Timestamp::from_unix(r.u64()? as i64);
-    let body = match r.u8()? {
-        2 => {
-            let counterparty = Counterparty::new(r.str()?);
-            let amount = r.money()?;
-            let decision = match r.u8()? {
-                1 => Decision::Allow,
-                2 => Decision::Review,
-                3 => Decision::Block,
-                _ => return None,
-            };
-            let action_hash = r.hash()?;
-            let confidence = Confidence::clamped(r.u64()? as f64 / 10_000.0);
-            let balance_seen = r.money()?;
-            let weakest_evidence = match r.u8()? {
-                0 => None,
-                1 => Some(match r.u8()? {
-                    1 => Provenance::Inferred,
-                    2 => Provenance::CounterpartyAsserted,
-                    3 => Provenance::HumanConfirmed,
-                    4 => Provenance::Onchain,
-                    _ => return None,
-                }),
-                _ => return None,
-            };
-            let n = r.u64()?;
-            let evidence = (0..n).map(|_| r.str()).collect::<Option<Vec<_>>>()?;
-            EventBody::Decision {
-                counterparty,
-                amount,
-                decision,
-                action_hash,
-                confidence,
-                balance_seen,
-                weakest_evidence,
-                evidence,
-                note: r.str()?,
-            }
-        }
-        3 => EventBody::Settlement {
-            counterparty: Counterparty::new(r.str()?),
-            cycle_key: r.str()?,
-            amount: r.money()?,
-            tx_hash: r.str()?,
-            action_hash: r.hash()?,
-            settlement_key: r.hash()?,
-            note: r.str()?,
-        },
-        4 => EventBody::Escalation {
-            counterparty: Counterparty::new(r.str()?),
-            amount: r.money()?,
-            reason: r.str()?,
-            note: r.str()?,
-        },
-        8 => EventBody::FlowCheck {
-            period_start: r.u64()? as i64,
-            period_end: r.u64()? as i64,
-            balance_start: r.money()?,
-            inflows: r.money()?,
-            outflows: r.money()?,
-            balance_end_book: r.money()?,
-            balance_end_chain: r.money()?,
-            diff: r.money()?,
-            note: r.str()?,
-        },
-        _ => return None,
-    };
-    r.0.is_empty().then_some(Event { seq, at, body })
-}
-
-/// The events of several passes' records as one book: the money events read
-/// back, each once (a purchase whose first record failed to anchor is
-/// recorded again by the next pass), oldest first.
+/// The events of several passes' records as one book, from their canonical
+/// bytes (the form an anchored record is kept in, read back by
+/// [`Event::decode`]): each event once (a purchase whose first record failed
+/// to anchor is recorded again by the next pass), oldest first. Bytes that do
+/// not decode are left out: the fold counts nothing it cannot vouch for.
 pub fn book(records: impl IntoIterator<Item = Vec<u8>>) -> Vec<Event> {
     let mut seen = BTreeSet::new();
     let mut out: Vec<Event> = records
         .into_iter()
-        .filter_map(|c| read_event(&c))
+        .filter_map(|c| Event::decode(&c))
         .filter(|e| {
             seen.insert(
                 Event {
@@ -540,6 +417,9 @@ pub fn book(records: impl IntoIterator<Item = Vec<u8>>) -> Vec<Event> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::canon::ActionHash;
+    use crate::obligations::{Confidence, Counterparty};
+    use crate::time::Timestamp;
 
     fn usdc(minor: i128) -> Money {
         Money::minor(minor, Currency::Usdc)
@@ -712,23 +592,11 @@ mod tests {
             },
         });
         for e in &events {
-            assert_eq!(read_event(&e.canonical()).as_ref(), Some(e));
+            assert_eq!(Event::decode(&e.canonical()).as_ref(), Some(e));
         }
-        // A kind the fold does not read, and bytes cut short, read as nothing.
-        let obs = Event {
-            seq: 9,
-            at: Timestamp::from_unix(1),
-            body: EventBody::Observation {
-                balance: usdc(1),
-                transfers_seen: 0,
-                obligations_found: 0,
-                total_due: usdc(0),
-                note: String::new(),
-            },
-        };
-        assert_eq!(read_event(&obs.canonical()), None);
+        // Bytes cut short are left out of the book.
         let c = events[1].canonical();
-        assert_eq!(read_event(&c[..c.len() - 1]), None);
+        assert!(book([c[..c.len() - 1].to_vec(), events[2].canonical()]).len() == 1);
         // The same purchase recorded by two passes is one event of the book.
         let twice = [paid(5, "0xaa", 1), paid(5, "0xaa", 1), paid(4, "0xbb", 1)];
         let b = book(twice.iter().map(Event::canonical));

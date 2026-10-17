@@ -1,7 +1,7 @@
 //! The fold's two laws (docs/117 §1), over any record: flow is conserved, and
 //! more money never means less runway.
 
-use ledger::momentum::{Bill, DAY, flow_check, fold, read_event};
+use ledger::momentum::{Bill, DAY, flow_check, fold};
 use ledger::{ActionHash, Counterparty, Currency, Event, EventBody, Money, Timestamp};
 use proptest::prelude::*;
 
@@ -81,7 +81,7 @@ proptest! {
         let short = flow_check(&events, 0, T, inflow(0, T), usdc(chain_at(T).to_minor() - missing));
         prop_assert_eq!(check(&short).4, usdc(-missing));
         // What the record keeps is what the fold reads back.
-        prop_assert_eq!(read_event(&Event { seq: 1, at: Timestamp::from_unix(T), body: whole.clone() }.canonical()).map(|e| e.body), Some(whole));
+        prop_assert_eq!(Event::decode(&Event { seq: 1, at: Timestamp::from_unix(T), body: whole.clone() }.canonical()).map(|e| e.body), Some(whole));
     }
 
     /// More money above the floor never shortens either runway.
