@@ -1,0 +1,63 @@
+UAT fix wave 4, page side (seat S2) — written 2026-10-17 15:39 +0800
+
+(1) A bill the agent found, offered before it falls due (P-228): "Let the agent pay <payee> for its bill, <amount> <cadence> (next due <date>)",
+    the reason in words, one tap: prepare-payees + passkey.
+(2) U1 step 8 (docs/110 row 8): "1 of 3 keys set" on the account page itself; Autopilot and a raised limit first warn
+    "Add two guardians first: if you lose this device you cannot get the account back", with "Not now" / "Go on anyway".
+(3) Invoice Pay / Decline on an account with an agent key, after wave 3c signs every invoice decision (:7880 since 15:16).
+
+Account: acme-agents-8384 · policy 0xaafa130bd044ec682df1a8846e0bb4d64f777679 · owner 0x99221abead9bfb4caca017dba863b270faae128f · Arbitrum Sepolia.
+Browser: a clean Playwright context with a CDP virtual passkey (one tab; the passkey stays with that tab). No key or token printed.
+
+1. Set-up, on :7880's own page (the PM's build)
+   15:22:35 opened through Start (one tap).
+   15:23:57 0.1 USDC from the relayer 0x6c1c…9A25, tx 0x4effbe1e378cb58ea851aeceeb4481caa660abfa8f1b4045e2eedd74cff6291a.
+   15:24:36 deployed by the first check the page asked for (POST /api/level1/run 202).
+   15:24:46 agent key "research-bot" from Settings → Agents: POST /api/level1/token-signed 200 (id tok-d0948f3c; "from now on this account's
+            read / run / prepare / import routes need an agent key"). The key was neither printed nor kept.
+   15:24:57 two one-off invoices signed by vendor 0x6a865ed05E6B3878b8117dc41DA619434860c8EE (crates/operator/examples/sign_invoice):
+            0.003 USDC id 0x1e4a9996a81f136cca7680d45af009b12fefc7f9a9a91bcdba7ebd4e277e6e80; 0.004 USDC id 0xf5fdca6510faa41040924e5cba8de75e038258c37dd52f72ed8f9c26bd4e51fc.
+
+2. (3) Invoice Pay / Decline with the agent key on the account, on :7880's own page — PASS
+   rows: "Invoice from Payee ••C8EE: 0.003 USDC, due Oct 24, once … Decline Pay" and the same for 0.004.
+   Pay 0.003: challenge 200 → execute 200, tx 0x77f6569c50b41cb78664924dab4dd9efb62cd18ec5a929f817265e6e8897ef99 → POST /api/level1/invoice-decide
+              (x-tameion-device sent, accept true, passkey assertion) 200 → the row: "Paid 0.003 USDC. Receipt".
+   Decline 0.004: POST /api/level1/invoice-decide (x-tameion-device sent, accept false, passkey assertion) 200 → "Declined."
+   After: inbox 200, invoices [], balance 0.097000 USDC, 1 agent key.
+   Screenshots: proof/uat-fix5-invoice-rows-1280.png, proof/uat-fix5-invoice-paid-1280.png, proof/uat-fix5-invoice-declined-1280.png
+
+3. (1) and (2) on a dev page of this tree (next dev :3003, TAMEION_SERVICE=http://127.0.0.1:7880), same tab, same account
+   (2) the nag, at the top of the account page:
+       "1 of 3 keys set — add two guardians before raising a limit. Today one lost device loses this account's key for good. [Add guardians]"
+       "Add guardians" opened Settings on the "Owners" tab, where the Keys panel is.
+   (1) the found bill, Asks before paying:
+       "Let the agent pay Payee ••C8EE for its bill, 0.001 USDC every 30 days (next due Oct 22) — The agent found this bill in your history,
+        paid 5 times. Approve it now and on Oct 22 paying it is one tap here; on Autopilot the agent would pay it by itself. [Approve]"
+       confirm: "Let the agent pay this bill? Approves Payee ••C8EE as a payee, so the agent may pay this bill inside your limits once Autopilot is on."
+       POST /api/level1/prepare-payees (x-tameion-device sent) {"payees":["0x6a865ed05e6b3878b8117dc41da619434860c8ee"]} 200 → challenge 200 →
+       execute 200, tx 0x0deccf9a93004c17f070ff61def58b3b5a095a62a7d70704d4b797b80cb68c7c →
+       "Approved. On Oct 22 paying it is one tap here; on Autopilot the agent would pay it by itself."
+       The row was injected into sellersToApprove in the shape S3's inbox now builds (seller, host "a bill it found", amount, askedBy
+       "Your agent", reason, bill {everySecs, nextDue, samples}), because a fresh account has no history. The approval is real.
+   (2) the gate:
+       "Turn autopilot on" → "1 of 3 keys set. You are about to turn Autopilot on, so the agent pays approved payees by itself inside your limits.
+        Add two guardians first: if you lose this device you cannot get the account back, and what you approve now stays approved. Your email
+        wallet and a hardware wallet can be the two. Or go on. [Not now] [Go on anyway]". "Not now": no owner call sent.
+       Limits → daily 200 → "You are about to raise the limits to 50.00 USDC a payment and 200.00 USDC a day. Add two guardians first: …".
+        "Not now": no owner call sent.
+       "Go on anyway": prepare-mode 200 → execute 200, tx 0xa06d05b5cebaaf1141203c3c5d56441aebef5686b43b38084ff30bd0bc74d5a4 →
+        "Asked. Autopilot turns on after the delay unless you cancel." Then "Cancel the change": prepare-cancel 200 → execute 200,
+        tx 0x09d2ba76c337926e991ba9b9be9fa0c4e320a4253299fa8bb8c6ad2d6dae71cd → "Cancelled: Autopilot will not apply." (the account stays on Asks before paying).
+   Screenshots: proof/uat-fix5-keys-nag-1280.png, proof/uat-fix5-keys-nag-390.png, proof/uat-fix5-keys-panel-1280.png,
+   proof/uat-fix5-found-bill-1280.png, proof/uat-fix5-found-bill-approved-1280.png, proof/uat-fix5-gate-autopilot-1280.png,
+   proof/uat-fix5-gate-limit-1280.png, proof/uat-fix5-gate-continue-1280.png
+   (The "Needs you 0" tile beside the injected row: the service counts the rows it sends; it counts found bills, tameion-app.rs waitingCount.)
+   390 wide in a desktop context: the nag wraps; the top bar is 3 px wider than 375 (account name + menu button) because the desktop scrollbar
+   takes 15 px; in a mobile context the page is 390 = 390 (fix wave 3 check).
+
+Not validated: a found bill from a real history, and the agent paying it by itself on its due date (needs Autopilot and a due cycle); the nag
+and gate after two guardians are set (needs a wallet extension; keysReady in lib/keys.ts decides it).
+Left: acme-agents-8384 holds 0.097 test USDC, the research-bot key, one approved payee (0x6a86…c8EE), Asks before paying; its passkey lives
+only in the Playwright context "tameion-s2-fix5". Spend: 0.1 USDC from the relayer.
+Gates: tsc 0 errors; eslint src test 0 problems; node --test test/*.mts pass 59, fail 0. Dev server :3003 stopped by PID.
+Files: apps/console/src/components/account/{account,agent,mandate,needs,keys-nag}.tsx, apps/console/src/lib/types.ts.
