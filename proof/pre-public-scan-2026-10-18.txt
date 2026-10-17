@@ -1,0 +1,13 @@
+Pre-public scan of the repository — 2026-10-18 05:55 +0800 (PM), before the founder flips it public. No value of anything under ~/.tameion appears here.
+
+a. gitleaks 8.30.1, full history, every branch (339 commits, 10.11 MB; `gitleaks git --redact`): 40 findings, all rule generic-api-key,
+   classified one by one: settlement keys (keccak hashes), Idempotency-Key nonces, WebAuthn authenticatorData (public), spare-key and
+   passkey public coordinates (addresses / qx), an event-topic hash (scripts/research/exposure_census.py), file and component names in
+   proofs, one literal bearer token inside a unit test (crates/operator/src/guard.rs) — 0 real secrets. 7 findings were literal P-256 test
+   scalars in forge tests (contracts/test/Passkey*.t.sol: test-only, no funds); replaced on main by values derived from labels
+   (commit 3eb4fdf; 46 passkey tests pass). The literals remain in history as test values.                                   PASS
+b. The public host's invite word: not in any tracked file, not in the history of any branch, not in any ref name (git grep, git log -p --all).
+   The local word on :7880 lives only in RESUME.md, which is not tracked.                                                   PASS
+c. Tracked files matching .env / .key / .pem: none. 558 tracked screenshots under proof/; the ones named for keys, tokens or settings were
+   opened: the console masks a minted key behind a solid block (console-agent-key-listed.png, console-coowner-key.png) and the settings
+   sheet shows no secret.                                                                                                    PASS
