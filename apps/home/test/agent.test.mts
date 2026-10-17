@@ -88,12 +88,12 @@ test("top: each figure from its field, labelled by it; a field the service left 
   for (const label of ["inbox.balance", "inbox.runway.horizonTotal", "inbox.paidTotal", "status.rate (7 d) ÷ 1440", "status.runway.byRateDays"])
     assert.ok(text.includes(label), label);
   assert.match(html, /status\.<wbr\/>runway\.<wbr\/>firstShortfallDays/);
-  assert.match(html, />0\.047<\/td>/);
-  assert.match(html, />0\.003<\/td>/);
-  assert.match(html, />≈ 0\.00000029<\/td>/);
-  assert.match(html, />109 d<\/td>/);
+  assert.match(html, />0\.047<\/span><\/td>/, "a live figure sits in its rolling wrapper");
+  assert.match(html, />0\.003<\/span><\/td>/);
+  assert.match(html, />≈ 0\.00000029<\/span><\/td>/);
+  assert.match(html, />109 d<\/span><\/td>/);
   assert.match(html, /the service gave no figure: inbox\.runway\.horizonTotal, status\.runway\.firstShortfallDays/);
-  assert.doesNotMatch(html.slice(0, html.indexOf("Records ")), />0<\/td>/, "no fake zero in the top table");
+  assert.doesNotMatch(html.slice(0, html.indexOf("Records ")), />0<\/span><\/td>/, "no fake zero in the top table");
   assert.match(html, /0xcf57c48b69104c89a462cdb68ddc3f4f0933e2e1/, "the Agent view names the address");
   assert.match(html, /as of 06:42:05/);
 });

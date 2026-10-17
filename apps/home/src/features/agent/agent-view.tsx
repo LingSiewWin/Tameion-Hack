@@ -4,10 +4,11 @@
 // symbolon through the /api proxy every 30 s; each figure is labelled by the field it comes from and the page computes no
 // money. A read that fails keeps the last answer on screen, marked with its time; what the service said sits behind a
 // disclosure.
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useSkeleton } from "../../components/skeleton.tsx";
 import { AgentSkeleton } from "../../components/skeletons.tsx";
 import { fetchInbox, fetchStatus, fetchSymbolon } from "../../lib/api.ts";
+import { shared } from "../../tokens.ts";
 import type { Inbox, Status, Symbolon } from "../../lib/types.ts";
 import { copy, SOURCES } from "./copy.ts";
 import { clock, money, perMinute } from "./format.ts";
@@ -169,7 +170,7 @@ export function Top({ status, inbox }: { status: Status | null; inbox: Inbox | n
               </th>
               {cols.map((c) => (
                 <td key={c.head} className="whitespace-nowrap pt-(--space-1) pr-(--space-5) text-right">
-                  {c.value ?? copy.none}
+                  <Figure value={c.value ?? copy.none} />
                 </td>
               ))}
             </tr>
@@ -180,3 +181,22 @@ export function Top({ status, inbox }: { status: Status | null; inbox: Inbox | n
     </section>
   );
 }
+
+/** A live figure (DESIGN Motion): when the service's answer changes it rolls in over --roll (160 ms); the first paint and
+ *  reduced motion swap it still. Motion on the wrapper; the figure itself is unchanged text. */
+function Figure({ value }: { value: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const shown = useRef(value);
+  useEffect(() => {
+    if (shown.current === value) return;
+    shown.current = value;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    ref.current?.animate([{ transform: "translateY(40%)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: parseFloat(shared.roll), easing: "ease-out" });
+  }, [value]);
+  return (
+    <span ref={ref} className="inline-block">
+      {value}
+    </span>
+  );
+}
+
