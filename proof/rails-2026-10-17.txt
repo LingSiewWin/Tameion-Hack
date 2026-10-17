@@ -1,0 +1,152 @@
+# Settlement rails: measured finality on two testnets (docs/117 §7, docs/121). Seat S28, branch seat/S28.
+# Written 2026-10-17 23:48:41 +0800. Every number below is a command's output; the commands are named.
+# Code: crates/arc/src/rail.rs (SettlementRail: ArcNativeUsdc, Erc20Usdc, EurcStableFx), run by crates/arc/examples/rails.rs.
+# Times are unix milliseconds on this Mac's clock: sent_at = the send call began (nonce, gas, chain id are read first),
+# included_at = the receipt was in hand, confirmed_at = eth_getBlockByNumber("finalized") first reached the block (polled, cap 600 s).
+
+## 0. The Arc RPC host moved (found before the run)
+$ dig @1.1.1.1 rpc.testnet.arc.network  -> status: NXDOMAIN (authority arc.network SOA leonidas.ns.cloudflare.com)
+$ cast chain-id --rpc-url https://rpc.testnet.arc.io  -> 5042002   (docs.arc.network 301 -> docs.arc.io, which lists rpc.testnet.arc.io first)
+  fixed in commit 325843a (crates/arc/src/lib.rs ARC_TESTNET_RPC).
+
+## 1. The run: TAMEION_RELAYER_KEY="$(cat ~/.tameion/treasury.key)" target/debug/examples/rails runtime/seats/S28/app/rails
+# started 2026-10-17 23:26:54 +0800 (1792250814)
+relayer 0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25
+before: Arc native 0.013297 USDC; Arbitrum Sepolia USDC 24.314000 USDC, ETH wei 87021609025293338
+arc-native-usdc:
+  tx            https://explorer.testnet.arc.io/tx/0xbd8ab6e7c7ce64f8c4292eadbe010a526b61d17322b689503501f8e86b35502c
+  block         67690453
+  sent_at       1792250817083 ms
+  included_at   1792250818327 ms  (+1244 ms)
+  confirmed_at  1792250818623 ms  (+1540 ms)
+  finality      finalized-tag
+  finalized tag last seen at block Some(67690453)
+arbitrum-sepolia-usdc:
+  tx            https://sepolia.arbiscan.io/tx/0xfad4cf5ec5b5a366177eef54fbe8b86172b69cbce40461e5255d72334a3d57af
+  block         320115852
+  sent_at       1792250817230 ms
+  included_at   1792250819223 ms  (+1993 ms)
+  confirmed_at  none within 600 s
+  finality      confirmations(2325)
+  finalized tag last seen at block Some(320114569)
+after: Arc native 0.001285 USDC; Arbitrum Sepolia USDC 24.314000 USDC, ETH wei 86806083462059393
+# exit 0 at 2026-10-17 23:37:04 +0800 (1792251424)
+
+## 2. What the rail wrote (served by GET /api/level1/status as rails[])
+--- runtime/seats/S28/app/rails/arc-native-usdc.json
+{
+  "block": 67690453,
+  "capSecs": 600,
+  "chainId": 5042002,
+  "confirmedAt": 1792250818623,
+  "currency": "USDC",
+  "explorer": "https://explorer.testnet.arc.io/tx/0xbd8ab6e7c7ce64f8c4292eadbe010a526b61d17322b689503501f8e86b35502c",
+  "finality": "finalized-tag",
+  "finalitySecs": 1.54,
+  "finalizedSeen": 67690453,
+  "id": "arc-native-usdc",
+  "includedAt": 1792250818327,
+  "includedSecs": 1.244,
+  "sentAt": 1792250817083,
+  "tx": "0xbd8ab6e7c7ce64f8c4292eadbe010a526b61d17322b689503501f8e86b35502c"
+}
+--- runtime/seats/S28/app/rails/arbitrum-sepolia-usdc.json
+{
+  "block": 320115852,
+  "capSecs": 600,
+  "chainId": 421614,
+  "confirmedAt": null,
+  "currency": "USDC",
+  "explorer": "https://sepolia.arbiscan.io/tx/0xfad4cf5ec5b5a366177eef54fbe8b86172b69cbce40461e5255d72334a3d57af",
+  "finality": "confirmations(2325)",
+  "finalitySecs": null,
+  "finalizedSeen": 320114569,
+  "id": "arbitrum-sepolia-usdc",
+  "includedAt": 1792250819223,
+  "includedSecs": 1.993,
+  "sentAt": 1792250817230,
+  "tx": "0xfad4cf5ec5b5a366177eef54fbe8b86172b69cbce40461e5255d72334a3d57af"
+}
+
+## 3. Arbitrum Sepolia past the cap: the same finalized-tag poll with cast, every ~11 s, until it covered block 320115852
+# poll finalized >= 320115852 on Arbitrum Sepolia, started 2026-10-17 23:38:25 +0800 (1792251506079 ms)
+waiting: finalized=320114569 at 1792251507854 ms
+waiting: finalized=320114569 at 1792251575606 ms
+waiting: finalized=320114569 at 1792251641424 ms
+waiting: finalized=320114569 at 1792251707009 ms
+reached: finalized=320116231 at 1792251773072 ms (23:42:53 +0800)
+# end 2026-10-17 23:42:53 +0800
+=> confirmed by the chain's finalized tag at 1792251773072 ms; sent_at 1792250817230 ms: 955.842 s (15 min 56 s), +/- one poll (~11 s).
+   The tag jumped from 320114569 to 320116231 in one step: a batch posted to Sepolia reaching Sepolia's finalized block.
+
+## 4. Second witnesses (not the node the rail used)
+$ cast receipt 0xbd8ab6e7c7ce64f8c4292eadbe010a526b61d17322b689503501f8e86b35502c --rpc-url https://explorer.testnet.arc.io/api/eth-rpc
+blockNumber          67690453
+effectiveGasPrice    572000000000
+from                 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+gasUsed              21000
+status               1 (success)
+to                   0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+$ curl https://explorer.testnet.arc.io/api/v2/transactions/0xbd8ab6e7c7ce64f8c4292eadbe010a526b61d17322b689503501f8e86b35502c (Blockscout)
+{'result': 'success', 'block_number': 67690453, 'timestamp': '2026-10-17T15:26:58.000000Z', 'value': '1000000000000', 'fee': {'type': 'actual', 'value': '12012000000000000'}}
+$ cast block 67690453 --field timestamp (rpc.testnet.arc.io)
+1792250818
+$ cast receipt 0xfad4cf5ec5b5a366177eef54fbe8b86172b69cbce40461e5255d72334a3d57af --rpc-url https://arbitrum-sepolia-rpc.publicnode.com
+blockNumber          320115852
+effectiveGasPrice    20048001
+from                 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+gasUsed              37435
+status               1 (success)
+to                   0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d
+gasUsedForL1         0
+$ cast tx 0xfad4cf5ec5b5a366177eef54fbe8b86172b69cbce40461e5255d72334a3d57af input   (transfer(relayer, 1): 0.000001 USDC to itself)
+0xa9059cbb0000000000000000000000006c1ce01bfe3f834a5fbfa0a9081d5d976b819a250000000000000000000000000000000000000000000000000000000000000001
+$ cast block 320115852 --field timestamp
+1792250817
+$ cast block finalized --field number --rpc-url https://arbitrum-sepolia-rpc.publicnode.com   (23:49:06 +0800)
+320117774
+
+## 5. Cost, and one surprise
+Arc: the self-transfer's fee is 21000 gas x 572 gwei = 0.012012 USDC (Blockscout fee 12012000000000000 wei); the relayer's Arc
+balance went 0.013297 -> 0.001285 USDC, exactly that fee. The send path (ArcClient::with_signer, alloy gas estimation) set
+maxPriorityFeePerGas 552 gwei over a 20 gwei base fee:
+maxFeePerGas         592000000000
+maxPriorityFeePerGas 552000000000
+$ cast rpc eth_maxPriorityFeePerGas --rpc-url https://rpc.testnet.arc.io
+"0x12a05f200"
+(0x12a05f200 = 5 gwei; the node's own suggestion. Filed as a problem in the S28 report; not changed here.)
+Arbitrum Sepolia: 37435 gas x 20048001 wei = 750497117435 wei ETH. The relayer's ETH moved more than that over the 10 minutes:
+the running service shares the relayer key, so the before/after ETH delta is not this transfer's alone.
+
+## 6. The status route serves the measurement (seat binary on :7928, app dir runtime/seats/S28/app, then stopped by PID)
+$ curl -s http://127.0.0.1:7928/api/level1/status  (rails[] only; the same curl first ran 2026-10-17 23:48:25 +0800, this copy re-run at 2026-10-17 23:49 +0800)
+{
+ "ok": true,
+ "contractVersion": "2026-10-17.1",
+ "rails": [
+  {
+   "currency": "USDC",
+   "finality": "finalized-tag",
+   "finalitySecs": 1.54,
+   "id": "arc-native-usdc",
+   "includedSecs": 1.244,
+   "measuredAt": 1792250817
+  },
+  {
+   "currency": "USDC",
+   "finality": "confirmations(2325)",
+   "finalitySecs": null,
+   "id": "arbitrum-sepolia-usdc",
+   "includedSecs": 1.993,
+   "measuredAt": 1792250817
+  },
+  {
+   "currency": "EURC",
+   "finality": "not available",
+   "finalitySecs": null,
+   "id": "eurc-stablefx",
+   "includedSecs": null,
+   "measuredAt": null
+  }
+ ]
+}

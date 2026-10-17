@@ -1,0 +1,134 @@
+# Index price table: fetched, pinned by hash, recorded under an anchored root, recomputed independently (docs/117 §7, docs/121). Seat S28.
+# Written 2026-10-18 00:16:41 +0800. Code: crates/operator/src/price.rs, the pass in crates/operator/src/level1.rs (staged on the wave-6 scaffold,
+# EventBody::PriceTable tag 11), scripts/price_hash.py. Every number below is a command's output.
+
+## 1. Both public tables fetched and normalised (TAMEION_PRICES=live target/debug/examples/price_table runtime/seats/S28/price-proof, 2026-10-17 23:42:13 +0800, 6.96 s)
+{
+  "fetchedAt": 1792251735,
+  "hash": "0x99f6acf0a634f3fc3d54706c13b511f1e5ab65d5337d2c1e7cd90d3bbd304885",
+  "rows": {
+    "claude-opus-5": {
+      "cache_read": "0.0000005",
+      "cache_write": "0.00000625",
+      "tok_in": "0.000005",
+      "tok_out": "0.000025"
+    },
+    "claude-sonnet-5-5": {
+      "cache_read": "0.0000001",
+      "cache_write": "0.0000025",
+      "tok_in": "0.000002",
+      "tok_out": "0.00001"
+    }
+  },
+  "source": "litellm+openrouter"
+}
+per source (cached, refetched at most hourly):
+  litellm fetchedAt 1792251735 {"claude-opus-5": {"cache_read": "0.0000005", "cache_write": "0.00000625", "tok_in": "0.000005", "tok_out": "0.000025"}, "claude-sonnet-5-5": {"cache_read": "0.0000001", "cache_write": "0.0000025", "tok_in": "0.000002", "tok_out": "0.00001"}}
+  openrouter fetchedAt 1792251735 {"claude-opus-5": {"cache_read": "0.0000005", "cache_write": "0.00000625", "tok_in": "0.000005", "tok_out": "0.000025"}, "claude-sonnet-5-5": {"cache_read": "0.0000001", "cache_write": "0.0000025", "tok_in": "0.000002", "tok_out": "0.00001"}}
+
+## 2. The hash recomputed outside the service
+$ python3 -I scripts/price_hash.py runtime/seats/S28/price-proof/price/0x99f6…4885.json   (pure-Python Keccak-256)
+PASS  runtime/seats/S28/price-proof/price/0x99f6acf0a634f3fc3d54706c13b511f1e5ab65d5337d2c1e7cd90d3bbd304885.json: recomputed 0x99f6acf0a634f3fc3d54706c13b511f1e5ab65d5337d2c1e7cd90d3bbd304885; file says 0x99f6acf0a634f3fc3d54706c13b511f1e5ab65d5337d2c1e7cd90d3bbd304885; 2 rows from litellm+openrouter fetched 1792251735
+$ cast keccak '<rows as canonical JSON>'
+0x99f6acf0a634f3fc3d54706c13b511f1e5ab65d5337d2c1e7cd90d3bbd304885
+(the pure-Python Keccak equals cast keccak on random inputs of 0, 1, 135, 136, 137, 272 and 500 bytes: checked 2026-10-17 23:40)
+
+## 3. A pass on a fresh Arbitrum Sepolia account records the table under its anchored root
+service: the staged binary on :7928, TAMEION_PRICES=live, rule-based reasoner, app dir runtime/seats/S28/app-proof; stopped by PID after.
+$ POST /api/level1/deploy {chain: arbitrum-sepolia, name: s28-price-proof, caps 0.01/0.05/0}  (2026-10-18 00:04:47 +0800, 11 s)
+  policy 0x2c155c43b5279fb3454a27033c8f45690fd452a7
+  policy_tx 0x86a94c5bf594df855c32a8c3bd85922c5c4d59aafac1ca9b566d5364997991a3
+  owner 0x3648c477afd36117e8e5d944828a3d10da510e56
+  owner_tx 0x37aae83d616476f1ddfb9a6e3286573ae7b98a948bace743c1b0d0df6174b628
+  agent 0x1e2a9b1d8b988647469945e2d425cd20ce75b8a2
+  agent_gas_tx 0xa90cd61351cbf1728f879fca6bcbf20c40cb099c6dc0e5483113982115b71a6c
+  chain arbitrum-sepolia
+  mode 1
+$ POST /api/level1/run {policy}  (00:05:18 +0800) -> job 6ad39cbe-0000, status done:
+  {'root': '0x610dec1712f6c64411790ea220a86179bfa3387e10bb4c185afd44c92b19ebe6', 'anchorTx': '0xac13a432ddf619591ef5cb41d8a3f36f488c8b9dab2777fd79b5fd8652e1fa07', 'reasoner': 'rule-based', 'mode': 'Propose', 'transfers': 0, 'obligations': 0}
+$ cat runtime/seats/S28/app-proof/tenants/0x2c155c43b5279fb3454a27033c8f45690fd452a7/log/anchors.jsonl
+{"agent":"0x1e2a9b1d8b988647469945e2d425cd20ce75b8a2","anchor":"0xe7c381aafa077cc99359e8b297d2125efd76b8f5","anchorTx":"0xac13a432ddf619591ef5cb41d8a3f36f488c8b9dab2777fd79b5fd8652e1fa07","at":1792253119,"events":2,"file":"0x610dec1712f6c64411790ea220a86179bfa3387e10bb4c185afd44c92b19ebe6.events.jsonl","root":"0x610dec1712f6c64411790ea220a86179bfa3387e10bb4c185afd44c92b19ebe6"}
+{"agent":"0x1e2a9b1d8b988647469945e2d425cd20ce75b8a2","anchor":"0xe7c381aafa077cc99359e8b297d2125efd76b8f5","anchorTx":"0x60cd68ed60f1ca70b12a5e1a37ed1e301a4b35923c5cc9caf91d0062df937d54","at":1792253748,"events":1,"file":"0x17f453be9a7e3b0c8610212c690913d9f77f108105a2f1f7255ce47bdee814b8.events.jsonl","root":"0x17f453be9a7e3b0c8610212c690913d9f77f108105a2f1f7255ce47bdee814b8"}
+$ the record behind the first root (kind, note, canonical bytes):
+  0 PRICETABLE | Prices pinned from litellm+openrouter for 2 models: claude-opus-5 in 0.000005 / out 0.000025 USD per token; claude-sonnet-5-5 in 0.000002 / out 0.00001 USD per token. Reservations are priced at this table until it changes.
+    canonical 0x000000000000000c6169722d6c6f672f76302e310000000000000000000000006ad39cbf0b00000000000000126c6974656c6c6d2b6f70656e726f75746572000000006ad39cbf0000000000000042307839396636616366306136333466336663336435343730366331336235313166316535616236356435333337643263316537636439306433626264333034383835000000000000000200000000000000de5072696365732070696e6e65642066726f6d206c6974656c6c6d2b6f70656e726f7574657220666f722032206d6f64656c733a20636c617564652d6f7075732d3520696e20302e303030303035202f206f757420302e303030303235205553442070657220746f6b656e3b20636c617564652d736f6e6e65742d352d3520696e20302e303030303032202f206f757420302e3030303031205553442070657220746f6b656e2e205265736572766174696f6e7320617265207072696365642061742074686973207461626c6520756e74696c206974206368616e6765732e
+  1 OBSERVATION | Holding 0.000000 USDC. Read 0 transfers (0 of them my own payments, which are not evidence) and recovered 0 recurring obligations, of which 0 fall due within 30.0 days totalling 0.000000 USDC; 0 within 3.0 days (or a tenth of their interval), which is when I pay. Policy mode is Propose: the contract refuses my payments, so each one below is prepared for the owner's passkey instead of sent.
+    canonical 0x000000000000000c6169722d6c6f672f76302e310000000000000001000000006ad39cbf0100000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000010000000000000188486f6c64696e6720302e30303030303020555344432e20526561642030207472616e7366657273202830206f66207468656d206d79206f776e207061796d656e74732c20776869636820617265206e6f742065766964656e63652920616e64207265636f7665726564203020726563757272696e67206f626c69676174696f6e732c206f6620776869636820302066616c6c206475652077697468696e2033302e30206461797320746f74616c6c696e6720302e30303030303020555344433b20302077697468696e20332e30206461797320286f7220612074656e7468206f6620746865697220696e74657276616c292c207768696368206973207768656e2049207061792e20506f6c696379206d6f64652069732050726f706f73653a2074686520636f6e74726163742072656675736573206d79207061796d656e74732c20736f2065616368206f6e652062656c6f7720697320707265706172656420666f7220746865206f776e6572277320706173736b657920696e7374656164206f662073656e742e
+$ cat runtime/seats/S28/app-proof/tenants/0x2c155c43b5279fb3454a27033c8f45690fd452a7.price   (the hash last recorded under an anchored root for this account)
+0x99f6acf0a634f3fc3d54706c13b511f1e5ab65d5337d2c1e7cd90d3bbd304885
+
+## 4. The same hash, recomputed from the saved table, is the one inside the anchored event
+$ python3 -I scripts/price_hash.py runtime/seats/S28/app-proof/price/0x99f6…4885.json --events runtime/seats/S28/app-proof/tenants/0x2c155c43b5279fb3454a27033c8f45690fd452a7/log/0x610d…ebe6.events.jsonl
+PASS  runtime/seats/S28/app-proof/price/0x99f6acf0a634f3fc3d54706c13b511f1e5ab65d5337d2c1e7cd90d3bbd304885.json: recomputed 0x99f6acf0a634f3fc3d54706c13b511f1e5ab65d5337d2c1e7cd90d3bbd304885; file says 0x99f6acf0a634f3fc3d54706c13b511f1e5ab65d5337d2c1e7cd90d3bbd304885; 2 rows from litellm+openrouter fetched 1792253119
+PASS  the record's PRICETABLE event(s) [0] carry this hash
+
+## 5. The root is on chain: scripts/verify_tenant.sh http://127.0.0.1:7928 0x2c155c43b5279fb3454a27033c8f45690fd452a7  (00:15:32 +0800)
+policy  0x2c155c43b5279fb3454a27033c8f45690fd452a7
+root    0x610dec1712f6c64411790ea220a86179bfa3387e10bb4c185afd44c92b19ebe6  (anchored in 0xac13a432ddf619591ef5cb41d8a3f36f488c8b9dab2777fd79b5fd8652e1fa07)
+events  2 lines downloaded
+checked from the events themselves
+chain   arbitrum-sepolia
+-- against https://sepolia-rollup.arbitrum.io/rpc (block 320126920)
+# audit /var/folders/g4/1m9xkbrd2cv9js0zzsrn5gfh0000gn/T/tmp.A3kCKMS1xG/0x610dec1712f6c64411790ea220a86179bfa3387e10bb4c185afd44c92b19ebe6.events.jsonl
+[0000] PRICETABLE  Prices pinned from litellm+openrouter for 2 models: claude-opus-5 in 0.000005 / out 0.000025 USD per token; claude-sonnet-5-5 in 0.000002 / out 0.00001 USD per token. Reservations are priced at this table until it changes.
+[0001] OBSERVATION Holding 0.000000 USDC. Read 0 transfers (0 of them my own payments, which are not evidence) and recovered 0 recurring obligations, of which 0 fall due within 30.0 days totalling 0.000000 USDC; 0 within 3.0 days (or a tenth of their interval), which is when I pay. Policy mode is Propose: the contract refuses my payments, so each one below is prepared for the owner's passkey instead of sent.
+events          : 2
+recomputed root : 0x610dec1712f6c64411790ea220a86179bfa3387e10bb4c185afd44c92b19ebe6
+file name       : 0x610dec1712f6c64411790ea220a86179bfa3387e10bb4c185afd44c92b19ebe6   MATCH
+chain rootOf    : 0x610dec1712f6c64411790ea220a86179bfa3387e10bb4c185afd44c92b19ebe6   (anchor 0xe7c381aafa077cc99359e8b297d2125efd76b8f5, agent 0x1e2a9b1d8b988647469945e2d425cd20ce75b8a2)   MATCH
+RESULT          : PASS
+-- against https://arbitrum-sepolia-rpc.publicnode.com (block 320126937)
+# audit /var/folders/g4/1m9xkbrd2cv9js0zzsrn5gfh0000gn/T/tmp.A3kCKMS1xG/0x610dec1712f6c64411790ea220a86179bfa3387e10bb4c185afd44c92b19ebe6.events.jsonl
+[0000] PRICETABLE  Prices pinned from litellm+openrouter for 2 models: claude-opus-5 in 0.000005 / out 0.000025 USD per token; claude-sonnet-5-5 in 0.000002 / out 0.00001 USD per token. Reservations are priced at this table until it changes.
+[0001] OBSERVATION Holding 0.000000 USDC. Read 0 transfers (0 of them my own payments, which are not evidence) and recovered 0 recurring obligations, of which 0 fall due within 30.0 days totalling 0.000000 USDC; 0 within 3.0 days (or a tenth of their interval), which is when I pay. Policy mode is Propose: the contract refuses my payments, so each one below is prepared for the owner's passkey instead of sent.
+events          : 2
+recomputed root : 0x610dec1712f6c64411790ea220a86179bfa3387e10bb4c185afd44c92b19ebe6
+file name       : 0x610dec1712f6c64411790ea220a86179bfa3387e10bb4c185afd44c92b19ebe6   MATCH
+chain rootOf    : 0x610dec1712f6c64411790ea220a86179bfa3387e10bb4c185afd44c92b19ebe6   (anchor 0xe7c381aafa077cc99359e8b297d2125efd76b8f5, agent 0x1e2a9b1d8b988647469945e2d425cd20ce75b8a2)   MATCH
+RESULT          : PASS
+verify_tenant: MATCH on both RPCs, checked from the events themselves
+
+## 6. The next pass, same prices: no second PRICETABLE (00:15:47 +0800, job 6ad39f33-0001)
+{"agent":"0x1e2a9b1d8b988647469945e2d425cd20ce75b8a2","anchor":"0xe7c381aafa077cc99359e8b297d2125efd76b8f5","anchorTx":"0x60cd68ed60f1ca70b12a5e1a37ed1e301a4b35923c5cc9caf91d0062df937d54","at":1792253748,"events":1,"file":"0x17f453be9a7e3b0c8610212c690913d9f77f108105a2f1f7255ce47bdee814b8.events.jsonl","root":"0x17f453be9a7e3b0c8610212c690913d9f77f108105a2f1f7255ce47bdee814b8"}
+  0 OBSERVATION
+$ cast receipt 0xac13a432…fa07 --rpc-url https://arbitrum-sepolia-rpc.publicnode.com
+blockNumber          320124647
+from                 0x1E2A9b1d8b988647469945E2d425cd20CE75B8A2
+status               1 (success)
+to                   0xe7C381AAFA077CC99359E8b297D2125efD76B8F5
+
+## 7. After the rebase on main's scaffold (seat/S28 74194bf = main 72a0ddf + 9): the final binary, TAMEION_PRICES=fixture
+A different table (the offline fixture) means a different hash, so the next pass records it; the earlier record still audits.
+$ POST /api/level1/run {policy}  (2026-10-18 00:34:27 +0800) -> job 6ad3a393-0000
+{"agent":"0x1e2a9b1d8b988647469945e2d425cd20ce75b8a2","anchor":"0xe7c381aafa077cc99359e8b297d2125efd76b8f5","anchorTx":"0xd0cda232fd21216e2d4e0772645c518ec9071998a3809ca69090908f1f3f1cc0","at":1792254868,"events":2,"file":"0x832d73da72e63baf96f99be710af439521de63d3f03917a6f472e4001c7c31d0.events.jsonl","root":"0x832d73da72e63baf96f99be710af439521de63d3f03917a6f472e4001c7c31d0"}
+$ cat tenants/0x2c15…d452a7.price  -> 0x73a6e3924487807e9a17b6b0842ae31acc6d058e0f7a37701ec36b5c3a7947d1
+$ python3 -I -c (kinds in the third record)
+  0 PRICETABLE | Prices pinned from fixture for 2 models: claude-opus-5 in 0.00001 / out 0.00005 USD per token; claude-sonnet-5-5 in 0.000003 / out 0.000015 USD per to
+  1 OBSERVATION | Holding 0.000000 USDC. Read 0 transfers (0 of them my own payments, which are not evidence) and recovered 0 recurring obligations, of which 0 fall due
+$ python3 -I scripts/price_hash.py app-proof/price/0x73a6…47d1.json --events /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/seats/S28/app-proof/tenants/0x2c155c43b5279fb3454a27033c8f45690fd452a7/log/0x832d…31d0.events.jsonl
+PASS  /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/seats/S28/app-proof/price/0x73a6e3924487807e9a17b6b0842ae31acc6d058e0f7a37701ec36b5c3a7947d1.json: recomputed 0x73a6e3924487807e9a17b6b0842ae31acc6d058e0f7a37701ec36b5c3a7947d1; file says 0x73a6e3924487807e9a17b6b0842ae31acc6d058e0f7a37701ec36b5c3a7947d1; 2 rows from fixture fetched 0
+PASS  the record's PRICETABLE event(s) [0] carry this hash
+$ scripts/verify_tenant.sh http://127.0.0.1:7928 0x2c155c43b5279fb3454a27033c8f45690fd452a7   (00:34:48 +0800)
+policy  0x2c155c43b5279fb3454a27033c8f45690fd452a7
+root    0x832d73da72e63baf96f99be710af439521de63d3f03917a6f472e4001c7c31d0  (anchored in 0xd0cda232fd21216e2d4e0772645c518ec9071998a3809ca69090908f1f3f1cc0)
+events  2 lines downloaded
+chain   arbitrum-sepolia
+-- against https://sepolia-rollup.arbitrum.io/rpc (block 320131259)
+events          : 2
+recomputed root : 0x832d73da72e63baf96f99be710af439521de63d3f03917a6f472e4001c7c31d0
+chain rootOf    : 0x832d73da72e63baf96f99be710af439521de63d3f03917a6f472e4001c7c31d0   (anchor 0xe7c381aafa077cc99359e8b297d2125efd76b8f5, agent 0x1e2a9b1d8b988647469945e2d425cd20ce75b8a2)   MATCH
+RESULT          : PASS
+-- against https://arbitrum-sepolia-rpc.publicnode.com (block 320131286)
+events          : 2
+recomputed root : 0x832d73da72e63baf96f99be710af439521de63d3f03917a6f472e4001c7c31d0
+chain rootOf    : 0x832d73da72e63baf96f99be710af439521de63d3f03917a6f472e4001c7c31d0   (anchor 0xe7c381aafa077cc99359e8b297d2125efd76b8f5, agent 0x1e2a9b1d8b988647469945e2d425cd20ce75b8a2)   MATCH
+RESULT          : PASS
+verify_tenant: MATCH on both RPCs, checked from the events themselves
+$ target/debug/examples/audit (built from seat/S28 74194bf) on the first record, written by the staged binary  (00:35:17 +0800)
+[0000] PRICETABLE  Prices pinned from litellm+openrouter for 2 models: claude-opus-5 in 0.000005 / out 0.000025 USD per token; claude-sonnet-5-5 in 0.000002 / out 0.00001 USD per token. Reservations are priced at this table until it changes.
+[0001] OBSERVATION Holding 0.000000 USDC. Read 0 transfers (0 of them my own payments, which are not evidence) and recovered 0 recurring obligations, of which 0 fall due within 30.0 days totalling 0.000000 USDC; 0 within 3.0 days (or a tenth of their interval), which is when I pay. Policy mode is Propose: the contract refuses my payments, so each one below is prepared for the owner's passkey instead of sent.
+recomputed root : 0x610dec1712f6c64411790ea220a86179bfa3387e10bb4c185afd44c92b19ebe6
+file name       : 0x610dec1712f6c64411790ea220a86179bfa3387e10bb4c185afd44c92b19ebe6   MATCH
+chain rootOf    : 0x832d73da72e63baf96f99be710af439521de63d3f03917a6f472e4001c7c31d0   (anchor 0xe7c381aafa077cc99359e8b297d2125efd76b8f5, agent 0x1e2a9b1d8b988647469945e2d425cd20ce75b8a2)   LATER ROOT ON CHAIN — this root was anchored in 0xac13a432ddf619591ef5cb41d8a3f36f488c8b9dab2777fd79b5fd8652e1fa07: checked on chain (sent by the agent to the anchor, succeeded, the root in its calldata)
+RESULT          : PASS
+(service stopped by PID after; the account is a throwaway test account, so the fixture table in its record is labelled "from fixture".)
