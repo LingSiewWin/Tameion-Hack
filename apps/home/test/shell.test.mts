@@ -10,7 +10,7 @@ const { Shell } = await import("../src/components/shell.tsx");
 test("the shell renders the header around the page", () => {
   const html = renderToStaticMarkup(createElement(Shell, null, createElement("p", null, "the page")));
   assert.match(html, /<header[^>]*>/);
-  assert.match(html, /<span class="row-title[^"]*">Tameion<\/span>/, "no account: the name reads Tameion");
+  assert.match(html, /<span class="row-title[^"]*"[^>]*>Tameion<\/span>/, "no account: the name reads Tameion");
   assert.match(html, /<span class="pill meta[^"]*">Testnet<\/span>/, "the network word, in words and a hollow pill");
   assert.match(html, /role="group" aria-label="View"/);
   assert.match(html, /aria-pressed="true"[^>]*>Owner<\/button>/, "Owner is the view until the device remembers another");
