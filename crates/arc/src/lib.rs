@@ -26,6 +26,7 @@
 
 #[cfg(feature = "dev-anvil")]
 pub mod dev;
+pub mod rail;
 
 use alloy::primitives::{Address, B256, U256};
 use alloy::providers::{DynProvider, Provider, ProviderBuilder};
