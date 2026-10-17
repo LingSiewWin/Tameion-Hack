@@ -1,6 +1,7 @@
 // The Owner home in words (DESIGN §Copy, Rules 1 and 3). Every figure is the service's string shown as it is, trimmed
-// to the shortest exact form; two figures are combined here, and only where the brief names the combination (allowance
-// left today = caps.daily − caps.spent24h; paid this week = paid[] of the last 7 days). No hash ever leaves this file.
+// to the shortest exact form; figures are combined here only where a ruling names the combination (allowance left today
+// = min(caps.daily − caps.spent24h, balance − caps.floor); paid this week = paid[] of the last 7 days). No hash ever
+// leaves this file.
 import type { Inbox, Paid, SymbolonRecord } from "../../lib/types.ts";
 
 const UNIT = 1_000_000n;
@@ -121,10 +122,15 @@ export const asOf = (ms: number) => `as of ${hhmm(new Date(ms))}`;
 export type Fact = { label: string; figure?: string; unit?: string; words?: string; attention?: boolean };
 
 /** The four facts at rest (DESIGN §Page grammar). `byRateDays` is status.runway.byRateDays. */
-export function facts(inbox: Pick<Inbox, "caps" | "waitingCount" | "paid">, byRateDays: number | null | undefined, nowSecs: number): Fact[] {
+export function facts(inbox: Pick<Inbox, "caps" | "waitingCount" | "paid" | "balance">, byRateDays: number | null | undefined, nowSecs: number): Fact[] {
+  // What the agents can still spend today from money the account holds (ruled 2026-10-18 after H4's finding: 100 USDC
+  // read on an account holding 0.05). Not caps.leftNow: that one is capped by the per-payment limit.
   const day = minor(inbox.caps.daily);
   const spent = minor(inbox.caps.spent24h ?? "0") ?? 0n;
-  const left = day === null ? null : day - spent > 0n ? day - spent : 0n;
+  const held = minor(inbox.balance);
+  const floor = minor(inbox.caps.floor) ?? 0n;
+  const min = (a: bigint, b: bigint) => (a < b ? a : b);
+  const left = day === null || held === null ? null : min(day - spent, held - floor) > 0n ? min(day - spent, held - floor) : 0n;
   const days = byRateDays == null ? null : Math.floor(byRateDays);
   const week = (inbox.paid ?? []).filter((p) => (p.at ?? 0) >= nowSecs - 7 * DAY).reduce((s, p) => s + (minor(p.amount) ?? 0n), 0n);
   const waiting = inbox.waitingCount ?? 0;
@@ -236,6 +242,13 @@ export function plainWhy(inbox: Pick<Inbox, "parties" | "payees">, why?: string 
 
 /** Whether a check's reasons say the payment is over the per-payment cap (then the one action is "Raise the cap"). */
 export const overCap = (why?: string | null) => /per-action-cap/.test(why ?? "");
+
+/** Where "Open in Agent view" lands: the agent check's own time, from the settlement record matched by transaction (a
+ *  payment's chain time runs seconds after it); the payment's time only when the service shows no record. Never a hash. */
+export const agentAnchor = (l: Pick<Line, "at" | "halves">): string | null => {
+  const at = l.halves?.at ?? l.at;
+  return at ? `pass-${at}` : null;
+};
 
 /** The disclosure's proof in words: which halves of the record are present (DESIGN §States, sealed). */
 export function halvesWords(h: Halves | undefined, payee: string): string {

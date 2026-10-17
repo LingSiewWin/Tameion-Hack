@@ -4,11 +4,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { calls, challengeFor, checkSettle, hex, invoiceDecideChallenge, keccak256, raiseCap } from "../src/features/owner/owner-call.ts";
-import { amount, authority, dateWords, facts, halvesByPayment, halvesWords, lines, minor, money, needs, payeesWords, pendingWords, plain } from "../src/features/owner/words.ts";
+import { agentAnchor, amount, authority, dateWords, facts, halvesByPayment, halvesWords, lines, minor, money, needs, payeesWords, pendingWords, plain } from "../src/features/owner/words.ts";
 import type { Inbox, Status } from "../src/lib/types.ts";
 
 process.env.TZ = "Asia/Kuala_Lumpur";
 const inbox = JSON.parse(readFileSync(new URL("./fixtures/owner-inbox.json", import.meta.url), "utf8")) as Inbox;
+const fresh = JSON.parse(readFileSync(new URL("./fixtures/owner-inbox-fresh.json", import.meta.url), "utf8")) as Inbox;
 const status = JSON.parse(readFileSync(new URL("./fixtures/owner-status.json", import.meta.url), "utf8")) as Status;
 const POLICY = "0x907a9f4fe960017ee9c31550d2f1956e07e2df4f";
 const VENDOR = "0xe5e2d8dcc2038fd0a010a6e7845378b646e33854";
@@ -51,7 +52,12 @@ test("the four facts read the service; only the two named combinations are compu
   const now = 1792276548;
   const f = facts(inbox, status.runway?.byRateDays, now);
   assert.deepEqual(f.map((x) => x.label), ["Allowance left today", "Runway at this burn", "Needs you", "Paid this week"]);
-  assert.deepEqual(f[0], { label: "Allowance left today", figure: "0.032", unit: "USDC" }); // 0.05 daily − 0.018 spent (contract)
+  // min(0.05 daily − 0.018 spent, 0.034 held − 0 floor) = 0.032: the day's cap binds here
+  assert.deepEqual(f[0], { label: "Allowance left today", figure: "0.032", unit: "USDC" });
+  // the freshly opened account: 100 USDC a day, 0.05 held — the money binds (H4's finding: it read 100)
+  assert.deepEqual(facts(fresh, null, now)[0], { label: "Allowance left today", figure: "0.05", unit: "USDC" });
+  assert.deepEqual(facts({ ...inbox, balance: "0.010000 USDC", caps: { ...inbox.caps, floor: "0.004000 USDC" } }, null, now)[0], { label: "Allowance left today", figure: "0.006", unit: "USDC" }, "the floor the owner keeps is not spendable");
+  assert.deepEqual(facts({ ...inbox, balance: "0.001000 USDC", caps: { ...inbox.caps, floor: "0.004000 USDC" } }, null, now)[0], { label: "Allowance left today", figure: "0", unit: "USDC" }, "never below zero");
   assert.deepEqual(f[1], { label: "Runway at this burn", figure: "12", unit: "days" });
   assert.deepEqual(f[2], { label: "Needs you", figure: "0", attention: false });
   assert.deepEqual(f[3], { label: "Paid this week", figure: "0.016", unit: "USDC" }); // eight 0.002 payments in paid[]
@@ -80,7 +86,12 @@ test("rows name the payee, never an address, and say the state in words", () => 
 test("sealed only when all three halves verify on the settlement's record; the sheet says which are there", () => {
   const p = inbox.paid[0];
   const slot = { alg: "secp256k1", keyId: "k", verified: true };
-  const record = { root: "r", seq: 2, leaf: "l", kind: "SETTLEMENT", at: p.at, tx: p.tx!.toUpperCase(), agent: slot, counterpartySlot: slot, witness: slot };
+  // the record carries the agent check's own time, seconds before the payment's chain time (H3's finding)
+  const record = { root: "r", seq: 2, leaf: "l", kind: "SETTLEMENT", at: p.at! - 9, tx: p.tx!.toUpperCase(), agent: slot, counterpartySlot: slot, witness: slot };
+  const line = lines(inbox, 1792276548, halvesByPayment([record]))[0];
+  assert.notEqual(line.at, record.at);
+  assert.equal(agentAnchor(line), `pass-${record.at}`, "Open in Agent view lands on the record's time, not the payment's");
+  assert.equal(agentAnchor(lines(inbox, 1792276548)[0]), `pass-${p.at}`, "no record shown: the payment's own time");
   assert.equal(lines(inbox, 1792276548, halvesByPayment([record]))[0].state, "Paid and sealed");
   assert.equal(lines(inbox, 1792276548, halvesByPayment([{ ...record, witness: null }]))[0].sealed, false, "two of three: not sealed");
   assert.equal(lines(inbox, 1792276548, halvesByPayment([record, { ...record, seq: 3, counterpartySlot: null }]))[0].sealed, false, "every record naming it must have all three");

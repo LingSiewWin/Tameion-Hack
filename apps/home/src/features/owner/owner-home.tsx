@@ -11,7 +11,7 @@ import type { Inbox, Status } from "../../lib/types.ts";
 import { setView } from "../../lib/view.ts";
 import { calls, checkSettle, decideInvoice, keyIndexOf, ownerCall, prepare, raiseCap, Refused, savedPub, units, type Account } from "./owner-call.ts";
 import { OwnerView, type Outcome, type Phase } from "./owner-view.tsx";
-import { COPY, halvesByPayment, money, payeeName, type Halves, type Line, type Need } from "./words.ts";
+import { agentAnchor, COPY, halvesByPayment, money, payeeName, type Halves, type Line, type Need } from "./words.ts";
 
 type Read = { inbox: Inbox; status: Status; halves: Map<string, Halves>; at: number };
 type DevState = "skeleton" | "empty" | "error" | "offline" | null;
@@ -195,7 +195,8 @@ export function OwnerHome({ name }: { name: string }) {
   /** "Open in Agent view": the anchor names the agent's check by its time, never a hash (ruled 06:32); the Agent view
    *  marks each record `pass-<at>` and scrolls to the location's anchor once its records are read. */
   const onAgentView = (l: Line) => {
-    if (l.at) history.replaceState(null, "", `#pass-${l.at}`);
+    const anchor = agentAnchor(l);
+    if (anchor) history.replaceState(null, "", `#${anchor}`);
     setOpenKey(null);
     setView("agent");
   };
