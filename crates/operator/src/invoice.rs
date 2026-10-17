@@ -41,11 +41,14 @@ pub const ALG_REQUIRED_FROM: u64 = 1_794_700_800;
 pub const DEPRECATED: &str = "alg is required from 2026-11-15";
 
 /// Why an invoice or a key binding was refused: the code an agent reads
-/// (docs/115 §2) and the sentence a person reads.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// (docs/115 §2), the sentence a person reads, and (when the catalogue's
+/// would mislead) the meaning and next step for this refusal.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Refused {
     pub code: &'static str,
     pub words: String,
+    pub meaning: String,
+    pub next_step: String,
 }
 
 impl From<String> for Refused {
@@ -53,6 +56,7 @@ impl From<String> for Refused {
         Refused {
             code: "invalid_body",
             words,
+            ..Default::default()
         }
     }
 }
@@ -68,6 +72,7 @@ impl From<SigRefusal> for Refused {
         Refused {
             code: e.code(),
             words: e.to_string(),
+            ..Default::default()
         }
     }
 }
@@ -528,6 +533,8 @@ pub fn floor(inv: &Invoice, binding: Option<&KeyBinding>) -> Result<(), Refused>
                 "this payee bound an ML-DSA-65 key on this account: its invoices carry version 3, alg {} and that key's signature",
                 b.alg
             ),
+            meaning: "This payee bound an ML-DSA-65 key on this account, so only that key's signature bills: a version 1, 2 or secp256k1 invoice from it is a downgrade.".into(),
+            next_step: "Sign the invoice as version 3 with alg ml-dsa-65 and the bound key (publicKey), and send it again.".into(),
         }),
         (None, Some(Alg::MlDsa65)) => Err(
             "no ML-DSA-65 key is bound for this payee on this account: POST /api/level1/key-binding first, signed by the payee's address key"
@@ -588,6 +595,7 @@ pub fn bind(
             _ => Err(Refused {
                 code: "state_conflict",
                 words: "this payee already bound another ML-DSA-65 key on this account; its address key alone cannot replace it".into(),
+                ..Default::default()
             }),
         };
     }
@@ -595,6 +603,7 @@ pub fn bind(
         return Err(Refused {
             code: "rate_limited",
             words: format!("this account holds {MAX_BINDINGS} key bindings, the most it keeps"),
+            ..Default::default()
         });
     }
     let mut line = binding_json(&b, &sig);

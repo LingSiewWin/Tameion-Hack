@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 
 /// The date-stamped version of this contract; a client warns once when it
 /// changes.
-pub const CONTRACT_VERSION: &str = "2026-10-17.1";
+pub const CONTRACT_VERSION: &str = "2026-10-18.1";
 
 /// One refusal code of the catalogue.
 pub struct Code {
@@ -470,6 +470,7 @@ pub fn agent_route(method: &str, path: &str) -> bool {
                 | ("POST", "/api/level1/identity")
                 | ("POST", "/api/level1/wallets")
                 | ("POST", "/api/level1/invoice")
+                | ("POST", "/api/level1/key-binding")
                 | ("POST", "/api/watch")
         )
         || (method == "GET" && path.starts_with("/api/watch/"))
@@ -648,7 +649,7 @@ mod tests {
         );
         assert_eq!(
             r,
-            json!({ "ok": false, "contractVersion": "2026-10-17.1",
+            json!({ "ok": false, "contractVersion": "2026-10-18.1",
                 "error": { "code": "payee_not_approved", "by": "payee", "executed": "no", "audience": "user",
                     "meaning": "0x6a86…c8EE is not on the account's payee list.",
                     "nextStep": "Ask the owner to approve the payee; the ask is in Needs you.",
@@ -734,6 +735,7 @@ mod tests {
             ("POST", "/api/level1/prepare-renew"),
             ("GET", "/api/level1/purchases.jsonl"),
             ("POST", "/api/level1/invoice"),
+            ("POST", "/api/level1/key-binding"),
             ("GET", "/api/level1/records"),
             ("GET", "/api/level1/record"),
             ("GET", "/api/level1/recall"),

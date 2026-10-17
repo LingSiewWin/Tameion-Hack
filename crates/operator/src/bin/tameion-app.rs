@@ -566,8 +566,8 @@ fn invoice_refused(e: operator::invoice::Refused) -> Vec<u8> {
         operator::refusal::refuse(
             e.code,
             operator::refusal::Executed::No,
-            "",
-            "",
+            e.meaning,
+            e.next_step,
             e.words,
             None,
         ),
