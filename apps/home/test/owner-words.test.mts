@@ -69,6 +69,12 @@ test("rows name the payee, never an address, and say the state in words", () => 
   const unnamed = { ...inbox, parties: {} };
   assert.equal(lines(unnamed, 1792276548)[0].payee, "a payee you approved");
   assert.equal(plain(unnamed, `paid ${VENDOR} tx 0x${"9".repeat(64)}`), "Paid ••3854 tx a reference");
+  // the agent's own words, as the lane service gave them for a refusal at 07:39
+  assert.equal(
+    plain(inbox, "Paying 0.006 USDC to 0xe5e2d8…e33854 would leave the balance unable to cover bills ahead, so I am not paying it.[evt:1]"),
+    "Paying 0.006 USDC to Demo Vendor would leave the balance unable to cover bills ahead, so I am not paying it.",
+  );
+  assert.equal(plain(unnamed, "to 0xe5e2d8...e33854 now"), "To ••3854 now");
 });
 
 test("sealed only when all three halves verify on the settlement's record; the sheet says which are there", () => {

@@ -39,9 +39,19 @@ export function payeeName(inbox: Pick<Inbox, "parties" | "payees">, address: str
   return approved ? "a payee you approved" : "a payee you have not approved";
 }
 
-/** A service sentence for the Owner view: amounts trimmed, every address named (or its last four), no other hash. */
+/** A shortened address in a service sentence ("0xe5e2d8…e33854"), as the party it names, else its last four. */
+function shortAddress(inbox: Pick<Inbox, "parties" | "payees">, head: string, tail: string): string {
+  const hit = Object.keys(inbox.parties ?? {}).find((a) => a.startsWith(`0x${head.toLowerCase()}`) && a.endsWith(tail.toLowerCase()));
+  const name = hit ? payeeName(inbox, hit) : "";
+  return name && !name.startsWith("a payee") ? name : `••${tail.slice(-4).toUpperCase()}`;
+}
+
+/** A service sentence for the Owner view: amounts trimmed, every address named (or its last four), no other hash, and
+ *  no machine markers (the agent's "[evt:1]" citations). */
 export function plain(inbox: Pick<Inbox, "parties" | "payees">, text?: string | null): string {
   const t = String(text ?? "")
+    .replace(/\s*\[evt:\d+\]/g, "")
+    .replace(/0x([0-9a-fA-F]{4,})(?:…|\.\.\.)([0-9a-fA-F]{4,})/g, (_m, head: string, tail: string) => shortAddress(inbox, head, tail))
     .replace(/(\d+\.\d{6}) USDC/g, (_m, v: string) => money(v))
     .replace(HASH, (h) => {
       if (!isAddress(h)) return "a reference";
