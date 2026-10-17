@@ -17,6 +17,7 @@ import {
   type Status,
   type Bought,
   type PaymentMade,
+  type Recall,
 } from "./client.js";
 
 export interface Io {
@@ -30,8 +31,9 @@ export interface Io {
   now: () => number;
 }
 
-const COMMANDS = ["status", "inbox", "bills", "pay", "buy", "help"] as const;
-const VALUE_FLAGS = new Set(["--policy", "--url", "--token-file", "--why", "--max", "--op", "--method"]);
+const COMMANDS = ["status", "inbox", "bills", "pay", "buy", "recall", "help"] as const;
+const VALUE_FLAGS = new Set(["--policy", "--url", "--token-file", "--why", "--max", "--op", "--method", "--root"]);
+const EVENT_ID = /^evt:(0|[1-9]\d*)$/;
 const BOOL_FLAGS = new Set(["--json", "--help"]);
 const USDC = /^\d+(\.\d{1,6})?$/;
 
@@ -44,6 +46,9 @@ const USAGE = `tameion — a Tameion account from the terminal
                                          pay an approved payee now, inside the mandate (Autopilot only)
   tameion buy <url> --max <usdc> --why <text> [--op <operationId>] [--method GET]
                                          buy one call of a paid API (x402) inside the mandate
+  tameion recall <evt:N> [<evt:N>…] [--root <0x…>]
+                                         check remembered events against the anchored record and the
+                                         chain (latest record unless --root); exit 0 only if all verified
 
   --policy <0x…>     the account (or TAMEION_POLICY)
   --url <base>       the service (or TAMEION_URL; default http://127.0.0.1:7880; https unless localhost)
@@ -148,6 +153,21 @@ function statusLines(d: Status): string[] {
   return lines;
 }
 
+function recallLines(d: Recall): string[] {
+  const how = (d.chainRead as { how?: string } | null)?.how;
+  const lines = [
+    `record ${short(d.record.root)} (${d.record.latest ? "latest" : "earlier"}, ${d.record.events} events) · chain read: ${how ?? "none"} on ${d.chain}`,
+  ];
+  for (const r of d.results) {
+    const e = r.event;
+    const what = e ? ` ${e.kind}${e.amount ? ` ${e.amount}` : ""}${e.payee ? ` to ${short(e.payee)}` : ""}${e.note ? ` — ${e.note}` : ""}` : "";
+    const tag = r.status === "verified" ? "verified" : `${r.status} (${[r.code, r.by && `by ${r.by}`].filter(Boolean).join(", ")})`;
+    lines.push(`  ${r.id} ${tag}${what}${r.status === "verified" ? "" : `: ${r.words}`}`);
+  }
+  lines.push(`verified ${d.verified} · unverified ${d.unverified} · unknown ${d.unknown}`);
+  return lines;
+}
+
 function boughtLines(d: Bought, replayed: boolean, operationId?: string): string[] {
   const p = d.purchase;
   const lines = d.paid && p
@@ -226,6 +246,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
 
     let reply: Reply<unknown>;
     let render: () => string[] = () => [];
+    let allVerified = true;
     if (cmd === "status") {
       const r = await client.status(policy || undefined);
       reply = r;
@@ -234,6 +255,19 @@ export async function run(argv: string[], io: Io): Promise<number> {
       const r = await client.inbox(policy);
       reply = r;
       if (r.ok) render = () => (cmd === "inbox" ? inboxLines(r.data) : billLines(r.data));
+    } else if (cmd === "recall") {
+      const ids = pos.slice(1).flatMap((p) => p.split(",")).map((p) => p.trim()).filter(Boolean);
+      if (!ids.length || ids.length > 32) throw new Usage("usage: tameion recall <evt:N> [<evt:N>…] [--root <0x…>] (1 to 32 ids)");
+      if (!ids.every((i) => EVENT_ID.test(i))) throw new Usage("event ids are evt:<digits>, as record_events numbers them (seq)");
+      const root = flags.get("--root");
+      if (root !== undefined && (typeof root !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(root))) throw new Usage("--root is a 0x… 32-byte root from records");
+      const r = await client.recall(policy, ids, typeof root === "string" ? root : undefined);
+      reply = r;
+      // Delivered is not verified: the exit says whether every id verified.
+      if (r.ok) {
+        render = () => recallLines(r.data);
+        allVerified = r.data.verified === ids.length;
+      }
     } else if (cmd === "pay") {
       const [, payee, amount] = pos;
       const why = flags.get("--why");
@@ -266,7 +300,7 @@ export async function run(argv: string[], io: Io): Promise<number> {
     } else {
       for (const l of refusalLines(reply.error, reply.status, reply.operationId)) err(l);
     }
-    return reply.ok ? 0 : 1;
+    return reply.ok && allVerified ? 0 : 1;
   } catch (e) {
     if (e instanceof Usage) {
       err(e.message);

@@ -375,3 +375,64 @@ test("cli pay: prose, replay, --op, refusals, usage", async () => {
   assert.equal(await run(["py"], f.io), 2);
   assert.equal(f.err.join("\n"), "unknown command; did you mean `tameion pay`?");
 });
+
+// ---- recall (docs/117 §8) ----
+
+const ROOT = `0x${"ab".repeat(32)}`;
+type Result = { id: string; status: string; words: string; [k: string]: unknown };
+const recalled = (results: Result[]) =>
+  json(200, {
+    ok: true,
+    contractVersion: EXPECTED_CONTRACT_VERSION,
+    policy: POLICY,
+    chain: "arc-testnet",
+    record: { root: ROOT, latest: true, events: 3, anchorTx: `0x${"cd".repeat(32)}`, at: 1 },
+    chainRead: { how: "rootOf", chain: "arc-testnet" },
+    results,
+    verified: results.filter((r) => r.status === "verified").length,
+    unverified: results.filter((r) => r.status === "unverified").length,
+    unknown: results.filter((r) => r.status === "unknown").length,
+  });
+const settled: Result = {
+  id: "evt:1",
+  status: "verified",
+  words: "the event's bytes hash into the root the chain holds",
+  root: ROOT,
+  event: { kind: "SETTLEMENT", seq: 1, at: 1, payee: PAYEE, amount: "0.050000 USDC", note: "Paid the hosting bill." },
+};
+
+test("recall: one GET with escaped ids and the root; a read is never resent", async () => {
+  const { c, calls } = client([recalled([settled])]);
+  const r = await c.recall(POLICY, ["evt:1", " evt:2"], ROOT);
+  assert.ok(r.ok);
+  assert.equal(r.data.results[0]!.event?.kind, "SETTLEMENT");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]!.method, "GET");
+  assert.equal(calls[0]!.url, `http://127.0.0.1:7880/api/level1/recall?policy=${POLICY}&ids=evt%3A1,evt%3A2&root=${ROOT}`);
+  const { c: c2, calls: calls2 } = client([recalled([settled])]);
+  await c2.recall(POLICY, ["evt:1"]);
+  assert.ok(!calls2[0]!.url.includes("root="), "no root: the latest record");
+});
+
+test("cli recall: exit 0 only when every id verified; ids checked before sending", async () => {
+  const a = io([recalled([settled])]);
+  assert.equal(await run(["recall", "evt:1"], a.io), 0);
+  assert.match(a.out.join("\n"), /record 0xabab…abab \(latest, 3 events\) · chain read: rootOf on arc-testnet/);
+  assert.match(a.out.join("\n"), /evt:1 verified SETTLEMENT 0\.050000 USDC to 0x.*— Paid the hosting bill\./);
+
+  const b = io([recalled([settled, { id: "evt:9", status: "unknown", by: "record", code: "recall_unknown", words: "the record holds 3 events; evt:9 is not one of them" }])]);
+  assert.equal(await run(["recall", "evt:1,evt:9"], b.io), 1, "delivered is not verified");
+  assert.match(b.out.join("\n"), /evt:9 unknown \(recall_unknown, by record\): the record holds 3 events/);
+  assert.match(b.out.join("\n"), /verified 1 · unverified 0 · unknown 1/);
+
+  const c = io([recalled([settled])]);
+  assert.equal(await run(["recall", "evt:1", "--json"], c.io), 0);
+  assert.equal(JSON.parse(c.out.join("\n")).results[0].status, "verified");
+
+  const d = io([]);
+  assert.equal(await run(["recall"], d.io), 2);
+  assert.equal(await run(["recall", "evt:01"], d.io), 2);
+  assert.equal(await run(["recall", "3"], d.io), 2);
+  assert.equal(await run(["recall", "evt:1", "--root", "0x12"], d.io), 2);
+  assert.equal(d.calls.length, 0);
+});

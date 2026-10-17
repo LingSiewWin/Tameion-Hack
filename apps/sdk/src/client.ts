@@ -206,6 +206,47 @@ export interface PaymentMade {
   [field: string]: unknown;
 }
 
+/** One cited event, checked against the anchored record and the chain (docs/117 §8). */
+export interface RecallResult {
+  id: string;
+  /** verified: its bytes hash into the root the chain holds. unverified: the record changed after it was anchored, or its root is not on chain. unknown: no such event (code recall_unknown) or no chain to ask (by rpc). */
+  status: "verified" | "unverified" | "unknown";
+  by?: string;
+  code?: string;
+  words: string;
+  leaf?: string;
+  path?: { sibling: string; left: boolean }[];
+  /** The root the chain holds, when verified. */
+  root?: string;
+  /** Verified, with read access: the event as its hashed bytes say it. */
+  event?: {
+    kind: string;
+    seq: number;
+    at: number;
+    payee?: string;
+    amount?: string;
+    minor?: string;
+    decision?: string;
+    tx?: string;
+    reason?: string;
+    balance?: string;
+    note?: string;
+    [field: string]: unknown;
+  } | null;
+}
+export interface Recall {
+  policy: string;
+  chain: string;
+  record: { root: string; latest: boolean; events: number; anchorTx?: unknown; at?: unknown };
+  /** How the root was read: how (rootOf | anchorTx), chain, anchor, agent, rootOf, tx, error. */
+  chainRead: unknown;
+  results: RecallResult[];
+  verified: number;
+  unverified: number;
+  unknown: number;
+  [field: string]: unknown;
+}
+
 /** A spend as it was saved before it was sent. */
 export interface SavedOperation {
   operationId: string;
@@ -319,6 +360,15 @@ export class TameionClient {
   pay(input: PayInput): Promise<Reply<PaymentMade>> {
     const { operationId, policy, payee, amount, why } = input;
     return this.spend<PaymentMade>("/api/level1/pay", { policy, payee, amount, why }, operationId);
+  }
+
+  /**
+   * Check events you remember against the anchored record and the chain before relying on them (docs/117 §8).
+   * `ids` are `evt:N` (the event's seq), read in the latest anchored record unless `root` names an earlier one.
+   */
+  recall(policy: string, ids: string[], root?: string): Promise<Reply<Recall>> {
+    const q = `policy=${encodeURIComponent(policy)}&ids=${ids.map((i) => encodeURIComponent(i.trim())).join(",")}`;
+    return this.read<Recall>(`/api/level1/recall?${q}${root ? `&root=${encodeURIComponent(root)}` : ""}`);
   }
 
   /** The spend saved under this id, if this client sent it. */
