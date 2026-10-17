@@ -284,3 +284,54 @@ export function needs(inbox: Pick<Inbox, "sellersToApprove" | "invoices" | "need
   return out;
 }
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** Every sentence the Owner home's components show that is not generated above (DESIGN: no hard-coded strings in
+ *  components). One word per thing through the whole flow: the account, the agent, a payee by its name. */
+export const COPY = {
+  stop: "Stop the agent",
+  start: "Start the agent",
+  stopAsk: "Stop the agent now? Payments wait for your tap until you start it again.",
+  startAsk: "Start the agent again? It asks before each payment, once the wait has passed.",
+  keepRunning: "Keep it running",
+  keepStopped: "Keep it stopped",
+  stopped: "Stopped",
+  started: (at: string) => `Started. It asks before each payment from ${at}.`,
+  factsLabel: "The account at rest",
+  paidTitle: "What the agent paid, and why",
+  paidColumns: ["Date", "Who", "Amount", "Why", "State"],
+  paidEmptyApproved: "Nothing paid yet. The agent pays your approved payees when their bills fall due.",
+  paidEmptyNoPayee: "Nothing paid yet. Approve a payee under Needs you and the agent can pay it.",
+  needsTitle: "Needs you",
+  needsEmpty: "Nothing needs you.",
+  refusedSheet: (when: string) => `Refused ${when.toLowerCase()}. Nothing was sent.`,
+  paidSheet: (state: string, by: string, when: string) => `${state} by ${by}. ${when}.`,
+  agentView: "Open in Agent view",
+  stale: (asOf: string) => `The service did not answer. The figures below are ${asOf}.`,
+  tryAgain: "Try again",
+  noFigures: "The service did not answer, so there are no figures to show yet. Nothing was sent or changed.",
+  noAccount: "No account has this name on this service.",
+  serviceSilent: "The service did not answer.",
+  whereUnknown: "This page could not read where the account lives.",
+  promptClosed: "The passkey prompt was closed. Nothing was sent.",
+  nothingSent: "Nothing was sent.",
+  lostAnswer: "It was sent and the answer was lost. Still checking: it will not be sent twice.",
+  stillChecking: "Still checking. It will not be sent twice.",
+  whatHappened: "What the service said",
+  notReady: "The account is not ready to pay this yet; try again after the agent's next check.",
+  notThisAccount: "Not signing: the payment goes to a contract that is not this account's.",
+  approved: (who: string) => `Approved. The agent may pay ${who} once the wait has passed.`,
+  capAsked: (amt: string) => `Asked. One payment may be up to ${amt} once the wait has passed; anyone can see it coming.`,
+  paidTo: (amt: string, who: string) => `Paid ${amt} to ${who}.`,
+  accepted: (who: string, amt: string) => `Accepted. The agent pays ${who} ${amt} when it falls due.`,
+  demoVendor: "Demo Vendor",
+  demoVendorNote: "the demo's vendor",
+  phase: { signing: "Signing", sent: "Sent", confirmed: "Confirmed" },
+} as const;
+
+/** A control in flight names its phase; after 3 s it counts the seconds, and a lost answer reads "still checking"
+ *  after 15 s (DESIGN §States, waits). */
+export function phaseText(p: { label: string; since: number }, nowMs: number): string {
+  const s = Math.max(0, Math.floor((nowMs - p.since) / 1000));
+  if (p.label === COPY.phase.sent && s >= 15) return COPY.stillChecking;
+  return s >= 3 ? `${p.label} ${s} s` : p.label;
+}

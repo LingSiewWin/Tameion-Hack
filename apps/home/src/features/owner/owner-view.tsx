@@ -1,25 +1,28 @@
 "use client";
 // The Owner home, drawn from what the service said (DESIGN §Page grammar): the authority sentence and Stop, four facts,
 // what the agent paid and why, then Needs you. Pure: the container (owner-home.tsx) reads and acts; this only draws,
-// so the zero-hash test can render it from a captured inbox (DESIGN Rule 1).
+// so the zero-hash test can render it from a captured inbox. Depth is one step of fill; rules only between table rows.
 import { Sheet } from "../../components/sheet.tsx";
 import type { Inbox } from "../../lib/types.ts";
-import { asOf, authority, facts, halvesWords, lines, needs, pendingWords, type Halves, type Line, type Need } from "./words.ts";
+import { asOf, authority, COPY, facts, halvesWords, lines, needs, pendingWords, phaseText, type Halves, type Line, type Need } from "./words.ts";
 
-/** A control in flight names its phase and never looks disabled (DESIGN §Money lifecycle). */
-export type Phase = { label: string } | null;
-export type Outcome = { key: string; text: string; failed: boolean } | null;
+/** A control in flight: its phase and since when (DESIGN §Money lifecycle); it never looks disabled. */
+export type Phase = { label: string; since: number } | null;
+/** What a tap ended in: `detail` is the service's own words, behind a disclosure (DESIGN §States, error). */
+export type Outcome = { key: string; text: string; failed: boolean; detail?: string } | null;
 
 export type OwnerViewProps = {
   inbox: Inbox;
   /** status.runway.byRateDays */
   byRateDays: number | null | undefined;
-  /** which halves of each payment's record are present (H3's projection); empty when the service has none */
+  /** which halves of each payment's record are present (H3's projection), by transaction; empty when there is none */
   halves: ReadonlyMap<string, Halves>;
   nowSecs: number;
+  /** the clock for phases in flight (ms) */
+  clockMs?: number;
   /** ms of the read these figures come from, when the latest read failed (offline / stale) */
   staleAt?: number | null;
-  /** the public guest view: reads only, no Stop, no actions */
+  /** a reader without one of the account's owner keys on this device: reads only, no Stop, no actions */
   guest?: boolean;
   openKey?: string | null;
   onOpen?: (key: string | null) => void;
@@ -36,10 +39,11 @@ export type OwnerViewProps = {
   outcome?: Outcome;
 };
 
-const plate = "rounded-(--radius-plate) border border-(--rule) bg-(--plate)";
-const cta = "flex min-h-(--cta) w-full items-center justify-center rounded-(--radius-plate) px-(--space-4) row-title";
+const plate = "rounded-(--radius-plate) bg-(--plate)";
+const button = "inline-flex min-h-(--button) items-center justify-center rounded-(--radius-button) px-(--space-5) row-title";
+const compact = "inline-flex min-h-(--touch) shrink-0 items-center justify-center rounded-(--radius-button) bg-(--plate-2) px-(--space-4) row-title text-(--ink)";
 
-/** The symbolon mark (DESIGN §Direction): two halves that fit, the witness as the dot between. Drawn only when sealed. */
+/** The symbolon mark (DESIGN §Direction): two halves that fit, the witness the dot between; drawn in ink, only when sealed. */
 function SealMark() {
   return (
     <svg width="16" height="12" viewBox="0 0 16 12" aria-hidden className="shrink-0 text-(--ink)">
@@ -50,32 +54,48 @@ function SealMark() {
   );
 }
 
+function Result({ o }: { o: NonNullable<Outcome> }) {
+  return (
+    <div className="flex flex-col gap-(--space-1)">
+      <p role={o.failed ? "alert" : "status"} className={`row m-0 ${o.failed ? "text-(--attention)" : ""}`}>
+        {o.text}
+      </p>
+      {o.detail && (
+        <details className="meta">
+          <summary className="cursor-pointer">{COPY.whatHappened}</summary>
+          <p className="m-0 pt-(--space-1)">{o.detail}</p>
+        </details>
+      )}
+    </div>
+  );
+}
+
 function Hero(p: OwnerViewProps) {
   const stopped = p.inbox.mode === "Watch";
-  const verb = stopped ? "Start the agent" : "Stop the agent";
+  const verb = stopped ? COPY.start : COPY.stop;
   // A start already asked waits out its delay (the line above says when): no second ask. Stop is always there.
   const control = !p.guest && !(stopped && (p.inbox.pending?.kinds ?? 0) & 2);
+  const pending = pendingWords(p.inbox);
+  const label = (ph: Phase | undefined, rest: string) => (ph ? phaseText(ph, p.clockMs ?? ph.since) : rest);
   return (
     <section aria-labelledby="authority" className="flex flex-col gap-(--space-5)">
-      <h1 id="authority" className="statement-line">
+      <h1 id="authority" className="authority m-0 max-w-[68ch]">
         {authority(p.inbox)}
       </h1>
-      {pendingWords(p.inbox) && <p className="row m-0">{pendingWords(p.inbox)}</p>}
+      {pending && <p className="row m-0">{pending}</p>}
       {control &&
         (p.asking ? (
-          <div className={`${plate} flex flex-col gap-(--space-3) p-(--space-4)`} role="group" aria-labelledby="stop-q">
-            <p id="stop-q" className="row-title">
-              {stopped
-                ? "Start the agent again? It asks before each payment, once the wait has passed."
-                : "Stop the agent now? Payments wait for your tap until you start it again."}
+          <div className={`${plate} flex flex-col gap-(--space-4) p-(--space-5)`} role="group" aria-labelledby="stop-q">
+            <p id="stop-q" className="row-title m-0">
+              {stopped ? COPY.startAsk : COPY.stopAsk}
             </p>
-            <div className="flex flex-col gap-(--space-2) sm:flex-row">
-              <button type="button" onClick={p.onStop} className={`${cta} ${stopped ? "bg-(--ink) text-(--paper)" : "bg-(--red) text-(--plate)"}`}>
-                {p.stopPhase?.label ?? verb}
+            <div className="flex flex-col gap-(--space-3) md:flex-row">
+              <button type="button" onClick={p.onStop} className={`${button} ${stopped ? "bg-(--ink) text-(--paper)" : "bg-(--attention) text-(--plate)"}`}>
+                {label(p.stopPhase, verb)}
               </button>
               {!p.stopPhase && (
-                <button type="button" onClick={p.onStopCancel} className={`${cta} border border-(--rule) bg-(--plate) text-(--ink)`}>
-                  {stopped ? "Keep it stopped" : "Keep it running"}
+                <button type="button" onClick={p.onStopCancel} className={`${button} bg-(--plate-2) text-(--ink)`}>
+                  {stopped ? COPY.keepStopped : COPY.keepRunning}
                 </button>
               )}
             </div>
@@ -84,7 +104,7 @@ function Hero(p: OwnerViewProps) {
           <button
             type="button"
             onClick={p.onStopAsk}
-            className={`${cta} ${stopped ? "border border-(--ink) bg-(--plate) text-(--ink)" : "border border-(--red) bg-(--plate) text-(--red)"}`}
+            className={`${button} w-full md:w-auto md:self-start ${stopped ? "bg-(--ink) text-(--paper)" : "bg-(--plate) text-(--attention)"}`}
           >
             {verb}
           </button>
@@ -94,22 +114,14 @@ function Hero(p: OwnerViewProps) {
   );
 }
 
-function Result({ o }: { o: NonNullable<Outcome> }) {
-  return (
-    <p role={o.failed ? "alert" : "status"} className={`row ${o.failed ? "text-(--red)" : ""}`}>
-      {o.text}
-    </p>
-  );
-}
-
 function Facts(p: OwnerViewProps) {
   return (
-    <dl className="grid grid-cols-2 gap-(--space-3)" aria-label="The account at rest">
+    <dl className="m-0 grid grid-cols-2 gap-(--space-3) md:grid-cols-4" aria-label={COPY.factsLabel}>
       {facts(p.inbox, p.byRateDays, p.nowSecs).map((f) => (
-        <div key={f.label} className={`${plate} flex min-w-0 flex-col gap-(--space-2) p-(--space-4)`}>
+        <div key={f.label} className={`${plate} flex min-w-0 flex-col gap-(--space-2) p-(--space-5)`}>
           <dt className="meta">{f.label}</dt>
-          <dd className={`m-0 flex min-w-0 flex-wrap items-baseline gap-x-(--space-2) [overflow-wrap:anywhere] ${f.attention ? "text-(--red)" : ""}`}>
-            {f.figure !== undefined ? <span className="balance">{f.figure}</span> : <span className="row-title">{f.words}</span>}
+          <dd className={`m-0 flex min-w-0 flex-wrap items-baseline gap-x-(--space-2) [overflow-wrap:anywhere] ${f.attention ? "text-(--attention)" : ""}`}>
+            {f.figure !== undefined ? <span className="balance money">{f.figure}</span> : <span className="row-title">{f.words}</span>}
             {f.unit && <span className="row">{f.unit}</span>}
           </dd>
           {p.staleAt && <dd className="meta m-0">{asOf(p.staleAt)}</dd>}
@@ -119,40 +131,44 @@ function Facts(p: OwnerViewProps) {
   );
 }
 
+/** One payment as a ledger line: stacked on a phone; the book's columns (date, who, amount, why, state) from 768 px. */
+const LINE = "grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-(--space-4) gap-y-(--space-1) md:grid-cols-[7rem_minmax(8rem,12rem)_7rem_minmax(0,1fr)_9rem] md:items-baseline";
+
 function Paid(p: OwnerViewProps & { rows: Line[] }) {
   return (
     <section aria-labelledby="paid-title" className="flex flex-col gap-(--space-3)">
-      <h2 id="paid-title" className="row-title">
-        What the agent paid, and why
+      <h2 id="paid-title" className="row-title m-0">
+        {COPY.paidTitle}
       </h2>
       {p.rows.length ? (
-        <ul className={`${plate} m-0 list-none p-0`}>
-          {p.rows.map((r) => (
-            <li key={r.key} className="border-b border-(--rule) last:border-b-0">
-              <button
-                type="button"
-                onClick={() => p.onOpen?.(r.key)}
-                className="grid min-h-(--touch) w-full grid-cols-[minmax(0,1fr)_auto] gap-x-(--space-3) gap-y-(--space-1) bg-transparent px-(--space-4) py-(--space-3) text-left text-(--ink)"
-              >
-                <span className="row-title min-w-0">{r.payee}</span>
-                <span className="row-title money text-right">{r.amount}</span>
-                <span className="row col-span-2">{r.why}</span>
-                <span className="meta">{r.when}</span>
-                <span className={`meta flex items-center justify-end gap-(--space-1) ${r.state === "Refused" ? "text-(--red)" : ""}`}>
-                  {r.sealed && <SealMark />}
-                  {r.state}
-                </span>
-                {p.staleAt && <span className="meta col-span-2">{asOf(p.staleAt)}</span>}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className={`${plate} px-(--space-5)`}>
+          <div aria-hidden className={`${LINE} meta hidden border-b border-(--rule) py-(--space-3) md:grid`}>
+            <span>{COPY.paidColumns[0]}</span>
+            <span>{COPY.paidColumns[1]}</span>
+            <span className="text-right">{COPY.paidColumns[2]}</span>
+            <span>{COPY.paidColumns[3]}</span>
+            <span className="text-right">{COPY.paidColumns[4]}</span>
+          </div>
+          <ul className="m-0 list-none p-0">
+            {p.rows.map((r) => (
+              <li key={r.key} className="border-b border-(--rule) last:border-b-0">
+                <button type="button" onClick={() => p.onOpen?.(r.key)} className={`${LINE} min-h-(--touch) bg-transparent py-(--space-4) text-left text-(--ink)`}>
+                  <span className="meta order-5 md:order-1">{r.when}</span>
+                  <span className="row-title order-1 min-w-0 md:order-2">{r.payee}</span>
+                  <span className="row-title money order-2 text-right md:order-3">{r.amount}</span>
+                  <span className="row order-3 col-span-2 md:order-4 md:col-span-1">{r.why}</span>
+                  <span className={`meta order-6 flex items-center justify-end gap-(--space-1) md:order-5 ${r.state === "Refused" ? "text-(--attention)" : ""}`}>
+                    {r.sealed && <SealMark />}
+                    {r.state}
+                  </span>
+                  {p.staleAt && <span className="meta order-7 col-span-2 md:col-span-5">{asOf(p.staleAt)}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : (
-        <p className={`${plate} row p-(--space-4)`}>
-          {p.inbox.payees?.length
-            ? "Nothing paid yet. The agent pays your approved payees when their bills fall due."
-            : "Nothing paid yet. Approve a payee under Needs you and the agent can pay it."}
-        </p>
+        <p className={`${plate} row m-0 p-(--space-5)`}>{p.inbox.payees?.length ? COPY.paidEmptyApproved : COPY.paidEmptyNoPayee}</p>
       )}
     </section>
   );
@@ -161,29 +177,28 @@ function Paid(p: OwnerViewProps & { rows: Line[] }) {
 function Needs(p: OwnerViewProps & { items: Need[] }) {
   return (
     <section aria-labelledby="needs-title" className="flex flex-col gap-(--space-3)">
-      <h2 id="needs-title" className={`row-title ${p.items.length ? "text-(--red)" : ""}`}>
-        Needs you
+      <h2 id="needs-title" className={`row-title m-0 ${p.items.length ? "text-(--attention)" : ""}`}>
+        {COPY.needsTitle}
       </h2>
       {p.items.length ? (
-        <ul className={`${plate} m-0 list-none p-0`}>
-          {p.items.map((n) => (
-            <li key={n.key} className="flex flex-col gap-(--space-3) border-b border-(--rule) px-(--space-4) py-(--space-3) last:border-b-0 sm:flex-row sm:items-center">
-              <p className="row-title m-0 min-w-0 flex-1">{n.sentence}</p>
-              {!p.guest && (
-                <button
-                  type="button"
-                  onClick={() => p.onNeed?.(n)}
-                  className="min-h-(--touch) shrink-0 rounded-(--radius-plate) border border-(--ink) bg-(--plate) px-(--space-4) row-title text-(--ink)"
-                >
-                  {p.needPhase?.[n.key]?.label ?? n.action}
-                </button>
-              )}
-              {p.outcome?.key === n.key && <Result o={p.outcome} />}
-            </li>
-          ))}
+        <ul className={`${plate} m-0 list-none px-(--space-5) py-0`}>
+          {p.items.map((n) => {
+            const ph = p.needPhase?.[n.key];
+            return (
+              <li key={n.key} className="flex flex-col gap-(--space-3) border-b border-(--rule) py-(--space-4) last:border-b-0 md:flex-row md:items-center">
+                <p className="row-title m-0 min-w-0 flex-1">{n.sentence}</p>
+                {!p.guest && (
+                  <button type="button" onClick={() => p.onNeed?.(n)} className={compact}>
+                    {ph ? phaseText(ph, p.clockMs ?? ph.since) : n.action}
+                  </button>
+                )}
+                {p.outcome?.key === n.key && <Result o={p.outcome} />}
+              </li>
+            );
+          })}
         </ul>
       ) : (
-        <p className={`${plate} row p-(--space-4)`}>Nothing needs you.</p>
+        <p className={`${plate} row m-0 p-(--space-5)`}>{COPY.needsEmpty}</p>
       )}
     </section>
   );
@@ -195,14 +210,12 @@ function Disclosure(p: OwnerViewProps & { line?: Line }) {
     <Sheet open={!!l} onClose={() => p.onOpen?.(null)} title={l ? `${l.amount} to ${l.payee}` : ""}>
       {l && (
         <div className="flex flex-col gap-(--space-4)">
-          <p className="row m-0">
-            {l.state === "Refused" ? `Refused ${l.when.toLowerCase()}. Nothing was sent.` : `${l.state} by ${l.by}. ${l.when}.`}
-          </p>
+          <p className="row m-0">{l.state === "Refused" ? COPY.refusedSheet(l.when) : COPY.paidSheet(l.state, l.by, l.when)}</p>
           <p className="row m-0">{l.why}</p>
           {l.state !== "Refused" && <p className="row m-0">{halvesWords(l.halves, l.payee)}</p>}
           {l.state !== "Refused" && (
-            <button type="button" onClick={() => p.onAgentView?.(l)} className="row self-start bg-transparent p-0 text-(--accent) underline underline-offset-4">
-              Open in Agent view
+            <button type="button" onClick={() => p.onAgentView?.(l)} className="row self-start bg-transparent p-0 text-(--ink) underline underline-offset-4">
+              {COPY.agentView}
             </button>
           )}
         </div>
@@ -217,14 +230,14 @@ export function OwnerView(p: OwnerViewProps) {
   return (
     <div className="flex flex-col gap-(--space-6)">
       {p.staleAt && (
-        <p role="status" className={`${plate} row flex flex-wrap items-center gap-x-(--space-3) gap-y-(--space-2) p-(--space-4)`}>
-          <span className="min-w-0 flex-1">The service did not answer. The figures below are {asOf(p.staleAt)}.</span>
+        <div role="status" className={`${plate} flex flex-wrap items-center gap-x-(--space-4) gap-y-(--space-2) p-(--space-5)`}>
+          <p className="row m-0 min-w-0 flex-1">{COPY.stale(asOf(p.staleAt))}</p>
           {p.onRetry && (
-            <button type="button" onClick={p.onRetry} className="min-h-(--touch) rounded-(--radius-plate) border border-(--ink) bg-(--plate) px-(--space-4) row-title text-(--ink)">
-              Try again
+            <button type="button" onClick={p.onRetry} className={compact}>
+              {COPY.tryAgain}
             </button>
           )}
-        </p>
+        </div>
       )}
       <Hero {...p} />
       <Facts {...p} />

@@ -11,7 +11,7 @@ import type { Inbox, Status } from "../../lib/types.ts";
 import { setView } from "../../lib/view.ts";
 import { calls, checkSettle, decideInvoice, keyIndexOf, ownerCall, prepare, savedPub, units, type Account } from "./owner-call.ts";
 import { OwnerView, type Outcome, type Phase } from "./owner-view.tsx";
-import { amount, halvesByPayment, minor, money, payeeName, type Halves, type Line, type Need } from "./words.ts";
+import { amount, COPY, halvesByPayment, minor, money, payeeName, type Halves, type Line, type Need } from "./words.ts";
 
 type Read = { inbox: Inbox; status: Status; halves: Map<string, Halves>; at: number };
 type DevState = "skeleton" | "empty" | "error" | "offline" | null;
@@ -29,7 +29,7 @@ const withDemoVendor = (inbox: Inbox, vendor?: string): Inbox => {
   const k = vendor?.toLowerCase();
   const p = k ? inbox.parties?.[k] : undefined;
   if (!k || !p || p.kind !== "new") return inbox;
-  return { ...inbox, parties: { ...inbox.parties, [k]: { ...p, label: "Demo Vendor", kind: "tameion", verified: true, note: "the demo's vendor" } } };
+  return { ...inbox, parties: { ...inbox.parties, [k]: { ...p, label: COPY.demoVendor, kind: "tameion", verified: true, note: COPY.demoVendorNote } } };
 };
 
 async function read(name: string): Promise<Read> {
@@ -57,6 +57,7 @@ export function OwnerHome({ name }: { name: string }) {
   const [needPhase, setNeedPhase] = useState<Record<string, Phase>>({});
   const [outcome, setOutcome] = useState<Outcome>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [clockMs, setClockMs] = useState(0);
   const busy = useRef(false);
   const acctRef = useRef<Account | null>(null);
 
@@ -70,7 +71,7 @@ export function OwnerHome({ name }: { name: string }) {
         },
         (e: unknown) => {
           if (e instanceof ApiError && e.status === 404) setMissing(true);
-          setFailed({ at: Date.now(), words: e instanceof ApiError ? e.message : "The service did not answer." });
+          setFailed({ at: Date.now(), words: e instanceof ApiError ? e.message : COPY.serviceSilent });
         },
       ),
     [name],
@@ -86,6 +87,14 @@ export function OwnerHome({ name }: { name: string }) {
   // The skeleton, once shown, stays at least 300 ms (DESIGN §States).
   const loading = useSkeleton(!data && !failed);
 
+  // While a tap is in flight its control counts the seconds (DESIGN §States, waits).
+  const inFlight = !!stopPhase || Object.values(needPhase).some(Boolean);
+  useEffect(() => {
+    if (!inFlight) return;
+    const t = setInterval(() => setClockMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [inFlight]);
+
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 4000);
@@ -97,7 +106,7 @@ export function OwnerHome({ name }: { name: string }) {
     if (acctRef.current) return acctRef.current;
     const [found, tenant] = await Promise.all([resolveAccount(name), fetchTenant(name)]);
     const chainId = found?.chains.find((c) => c.key === tenant.chain)?.chainId;
-    if (!found || !chainId) throw new Error("This page could not read where the account lives.");
+    if (!found || !chainId) throw new Error(COPY.whereUnknown);
     acctRef.current = { policy: found.policy, owner: tenant.owner, chain: tenant.chain, chainId };
     return acctRef.current;
   };
@@ -107,23 +116,25 @@ export function OwnerHome({ name }: { name: string }) {
     if (busy.current) return;
     busy.current = true;
     setOutcome(null);
+    setClockMs(Date.now());
     let sent = false;
     const phase = (label: string) => {
-      if (label === "Sent") sent = true;
-      setPhase({ label });
+      if (label === COPY.phase.sent) sent = true;
+      setPhase({ label, since: Date.now() });
     };
     try {
       const done = await act(phase);
-      setPhase({ label: "Confirmed" });
+      setPhase({ label: COPY.phase.confirmed, since: Date.now() });
       await refresh();
       if (key === "stop") setToast(done);
       else setOutcome({ key, text: done, failed: false });
     } catch (e) {
-      const why = (e as Error).name === "NotAllowedError" ? "The passkey prompt was closed." : (e as Error).message;
+      const closed = (e as Error).name === "NotAllowedError" || (e as Error).name === "AbortError";
       setOutcome({
         key,
         failed: true,
-        text: sent ? `${why} It was sent and the answer was lost: still checking. The page reads the account again and never sends it twice.` : `${why} Nothing was sent.`,
+        text: closed ? COPY.promptClosed : sent ? COPY.lostAnswer : COPY.nothingSent,
+        detail: closed ? undefined : (e as Error).message,
       });
       void refresh();
     } finally {
@@ -137,13 +148,13 @@ export function OwnerHome({ name }: { name: string }) {
     run("stop", setStopPhase, async (phase) => {
       const inbox = data!.inbox;
       const mode = inbox.mode === "Watch" ? 1 : 0;
-      phase("Signing");
+      phase(COPY.phase.signing);
       const acct = await account();
       const prepared = await prepare(acct, "prepare-mode", { mode });
       await ownerCall(acct, calls.setMode(mode), { prepared, keyIndex: keyIndexOf(inbox.owners?.keys), phase });
-      if (mode === 0) return "Stopped";
+      if (mode === 0) return COPY.stopped;
       const delay = Number((await fetchTenant(name).catch(() => null))?.delay_secs ?? 0);
-      return `Started. It asks before each payment from ${clock(Math.floor(Date.now() / 1000) + delay)}.`;
+      return COPY.started(clock(Math.floor(Date.now() / 1000) + delay));
     });
 
   const onNeed = (n: Need) =>
@@ -151,12 +162,12 @@ export function OwnerHome({ name }: { name: string }) {
       const inbox = data!.inbox;
       const keyIndex = keyIndexOf(inbox.owners?.keys);
       const who = payeeName(inbox, n.counterparty);
-      phase("Signing");
+      phase(COPY.phase.signing);
       const acct = await account();
       if (n.kind === "seller" || (n.kind === "invoice" && n.invoice?.everyDays && !n.invoice.approvedPayee)) {
         const prepared = await prepare(acct, "prepare-payees", { payees: [n.counterparty] });
         await ownerCall(acct, calls.setPayees([n.counterparty], true), { prepared, keyIndex, phase });
-        if (n.kind === "seller") return `Approved. The agent may pay ${who} once the wait has passed.`;
+        if (n.kind === "seller") return COPY.approved(who);
       }
       if (n.kind === "bill" && n.action === "Raise the cap") {
         const want = units(n.amount);
@@ -166,18 +177,18 @@ export function OwnerHome({ name }: { name: string }) {
         const plainAmount = (u: bigint) => amount(u).replace(/,/g, "");
         const prepared = await prepare(acct, "prepare-limits", { perAction: plainAmount(want), daily: plainAmount(newDaily), floor: plainAmount(floor) });
         await ownerCall(acct, calls.setLimits(want, newDaily, floor), { prepared, keyIndex, phase });
-        return `Asked. One payment may be up to ${money(n.amount)} once the wait has passed; anyone can see it coming.`;
+        return COPY.capAsked(money(n.amount));
       }
       if (n.kind === "bill" || (n.kind === "invoice" && !n.invoice?.everyDays)) {
-        if (!n.call) throw new Error("The account is not ready to pay this yet; try again after the agent's next check.");
-        if (n.call.to.toLowerCase() !== acct.policy.toLowerCase()) throw new Error("Not signing: the payment goes to a contract that is not this account's.");
+        if (!n.call) throw new Error(COPY.notReady);
+        if (n.call.to.toLowerCase() !== acct.policy.toLowerCase()) throw new Error(COPY.notThisAccount);
         checkSettle(n.call.data, n.counterparty, units(n.amount));
         await ownerCall(acct, n.call.data, { prepared: n.call, keyIndex, phase });
-        if (n.kind === "bill") return `Paid ${money(n.amount)} to ${who}.`;
+        if (n.kind === "bill") return COPY.paidTo(money(n.amount), who);
       }
       // An invoice: the owner's passkey accepts it (after approving its payee, or paying a one-off, above).
       await decideInvoice(acct, n.invoice!.id, true);
-      return n.invoice?.everyDays ? `Accepted. The agent pays ${who} ${money(n.amount)} when it falls due.` : `Paid ${money(n.amount)} to ${who}.`;
+      return n.invoice?.everyDays ? COPY.accepted(who, money(n.amount)) : COPY.paidTo(money(n.amount), who);
     });
 
   /** "Open in Agent view": the anchor names the agent's check by its time, never a hash (ruled 06:32); the Agent view
@@ -191,13 +202,11 @@ export function OwnerHome({ name }: { name: string }) {
   if (dev === "skeleton" || (loading && dev !== "error")) return <OwnerSkeleton />;
   if (dev === "error" || (!data && failed))
     return (
-      <div role="alert" className="flex flex-col gap-(--space-4) rounded-(--radius-plate) border border-(--rule) bg-(--plate) p-(--space-4)">
-        <p className="row-title m-0">
-          {missing ? "No account has this name on this service." : "The service did not answer, so there are no figures to show yet. Nothing was sent or changed."}
-        </p>
+      <div role="alert" className="flex flex-col gap-(--space-4) rounded-(--radius-plate) bg-(--plate) p-(--space-5)">
+        <p className="row-title m-0">{missing ? COPY.noAccount : COPY.noFigures}</p>
         {!missing && (
-          <button type="button" onClick={() => void refresh()} className="min-h-(--cta) rounded-(--radius-plate) border border-(--ink) bg-(--plate) row-title text-(--ink)">
-            Try again
+          <button type="button" onClick={() => void refresh()} className="inline-flex min-h-(--button) items-center justify-center self-start rounded-(--radius-button) bg-(--ink) px-(--space-5) row-title text-(--paper)">
+            {COPY.tryAgain}
           </button>
         )}
       </div>
@@ -215,6 +224,7 @@ export function OwnerHome({ name }: { name: string }) {
         byRateDays={shown.status.runway?.byRateDays}
         halves={shown.halves}
         nowSecs={now || Math.floor(shown.at / 1000)}
+        clockMs={clockMs}
         staleAt={dev === "offline" ? shown.at - 6 * 60_000 : failed ? shown.at : null}
         guest={!owns}
         openKey={openKey}
@@ -231,7 +241,7 @@ export function OwnerHome({ name }: { name: string }) {
         outcome={outcome}
       />
       <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-(--space-5) flex justify-center px-(--space-4)">
-        {toast && <p className="row-title m-0 rounded-(--radius-plate) bg-(--ink) px-(--space-5) py-(--space-3) text-(--paper)">{toast}</p>}
+        {toast && <p className="row-title m-0 rounded-(--radius-button) bg-(--ink) px-(--space-5) py-(--space-3) text-(--paper)">{toast}</p>}
       </div>
     </>
   );
