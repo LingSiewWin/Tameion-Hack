@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { calls, challengeFor, checkSettle, hex, invoiceDecideChallenge, keccak256 } from "../src/features/owner/owner-call.ts";
-import { amount, authority, dateWords, facts, halvesWords, lines, minor, money, needs, payeesWords, pendingWords, plain } from "../src/features/owner/words.ts";
+import { amount, authority, dateWords, facts, halvesByPayment, halvesWords, lines, minor, money, needs, payeesWords, pendingWords, plain } from "../src/features/owner/words.ts";
 import type { Inbox, Status } from "../src/lib/types.ts";
 
 process.env.TZ = "Asia/Kuala_Lumpur";
@@ -71,12 +71,15 @@ test("rows name the payee, never an address, and say the state in words", () => 
   assert.equal(plain(unnamed, `paid ${VENDOR} tx 0x${"9".repeat(64)}`), "Paid ••3854 tx a reference");
 });
 
-test("sealed only when all three halves verify; the sheet says which are there", () => {
+test("sealed only when all three halves verify on the settlement's record; the sheet says which are there", () => {
   const p = inbox.paid[0];
-  const k = `${p.at}|${p.counterparty}|${minor(p.amount)}`;
-  const h = { agent: true, payee: true, witness: true, root: "r", seq: 2 };
-  assert.equal(lines(inbox, 1792276548, new Map([[k, h]]))[0].state, "Paid and sealed");
-  assert.equal(lines(inbox, 1792276548, new Map([[k, { ...h, witness: false }]]))[0].sealed, false);
+  const slot = { alg: "secp256k1", keyId: "k", verified: true };
+  const record = { root: "r", seq: 2, leaf: "l", kind: "SETTLEMENT", at: p.at, tx: p.tx!.toUpperCase(), agent: slot, counterparty_slot: slot, witness: slot };
+  assert.equal(lines(inbox, 1792276548, halvesByPayment([record]))[0].state, "Paid and sealed");
+  assert.equal(lines(inbox, 1792276548, halvesByPayment([{ ...record, witness: null }]))[0].sealed, false, "two of three: not sealed");
+  assert.equal(lines(inbox, 1792276548, halvesByPayment([record, { ...record, seq: 3, counterparty_slot: null }]))[0].sealed, false, "every record naming it must have all three");
+  assert.equal(lines(inbox, 1792276548, halvesByPayment([{ ...record, tx: undefined }]))[0].sealed, false, "no transaction named: never guessed");
+  const h = { agent: true, payee: true, witness: true };
   assert.equal(halvesWords({ ...h, payee: false, witness: false }, "Demo Vendor"), "Signed by the agent. Not yet signed by Demo Vendor or the witness.");
   assert.equal(halvesWords(h, "Demo Vendor"), "Sealed: the agent, Demo Vendor and the witness each signed this record.");
 });

@@ -11,7 +11,7 @@ import type { Inbox, Status } from "../src/lib/types.ts";
 
 process.env.TZ = "Asia/Kuala_Lumpur";
 const { OwnerView } = await import("../src/features/owner/owner-view.tsx");
-const { lines, minor } = await import("../src/features/owner/words.ts");
+const { lines, halvesByPayment } = await import("../src/features/owner/words.ts");
 
 const read = <T,>(f: string) => JSON.parse(readFileSync(new URL(`./fixtures/${f}`, import.meta.url), "utf8")) as T;
 const inbox = read<Inbox>("owner-inbox.json");
@@ -23,9 +23,11 @@ const HASH = /0x[0-9a-fA-F]{8,}/;
 const render = (over: Record<string, unknown> = {}) =>
   renderToStaticMarkup(createElement(OwnerView, { inbox, byRateDays: status.runway?.byRateDays, halves: new Map(), nowSecs: NOW, ...over }));
 
+// A settlement record as H3's route gives it, all three slots verified (real accounts have at most two today).
 const sealedHalves = () => {
   const p = inbox.paid[0];
-  return new Map([[`${p.at}|${p.counterparty}|${minor(p.amount)}`, { agent: true, payee: true, witness: true, root: p.tx!, seq: 2 }]]);
+  const slot = { alg: "secp256k1", keyId: "0x" + "ab".repeat(20), verified: true };
+  return halvesByPayment([{ root: "0x" + "cd".repeat(32), seq: 2, leaf: "0x" + "ef".repeat(32), kind: "SETTLEMENT", at: p.at, tx: p.tx, agent: slot, counterparty_slot: slot, witness: slot }]);
 };
 
 const cases: [string, string][] = [

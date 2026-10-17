@@ -6,12 +6,12 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useSkeleton } from "../../components/skeleton.tsx";
 import { OwnerSkeleton } from "../../components/skeletons.tsx";
-import { ApiError, fetchDemo, fetchInbox, fetchStatus, fetchTenant, resolveAccount } from "../../lib/api.ts";
+import { ApiError, fetchDemo, fetchInbox, fetchStatus, fetchSymbolon, fetchTenant, resolveAccount } from "../../lib/api.ts";
 import type { Inbox, Status } from "../../lib/types.ts";
 import { setView } from "../../lib/view.ts";
 import { calls, checkSettle, decideInvoice, keyIndexOf, ownerCall, prepare, savedPub, units, type Account } from "./owner-call.ts";
 import { OwnerView, type Outcome, type Phase } from "./owner-view.tsx";
-import { amount, halvesByPayment, minor, money, payeeName, type Halves, type Line, type Need, type SymbolonRecord } from "./words.ts";
+import { amount, halvesByPayment, minor, money, payeeName, type Halves, type Line, type Need } from "./words.ts";
 
 type Read = { inbox: Inbox; status: Status; halves: Map<string, Halves>; at: number };
 type DevState = "skeleton" | "empty" | "error" | "offline" | null;
@@ -22,13 +22,6 @@ const devState = (): DevState => {
   return s === "skeleton" || s === "empty" || s === "error" || s === "offline" ? s : null;
 };
 const noSubscribe = () => () => {};
-
-/** H3's projection, where this service has it (a 404 means it does not: then nothing is sealed). */
-async function symbolon(name: string): Promise<SymbolonRecord[] | null> {
-  const r = await fetch(`/api/level1/symbolon?policy=${encodeURIComponent(name)}`, { cache: "no-store" });
-  if (!r.ok) return null;
-  return ((await r.json().catch(() => null)) as { records?: SymbolonRecord[] } | null)?.records ?? null;
-}
 
 /** The demo's vendor has a name on every host (`GET /api/level1/demo` names its address; apps/console calls it
  *  "Demo Vendor"): a reader without the owner's device still reads it by name. Other payees keep the owner's names. */
@@ -43,7 +36,8 @@ async function read(name: string): Promise<Read> {
   const [inbox, status, records, demo] = await Promise.all([
     fetchInbox(name),
     fetchStatus(name),
-    symbolon(name).catch(() => null),
+    // H3's projection, where this service has it; without it (a 404, an older service) nothing is sealed.
+    fetchSymbolon(name).then((r) => r.records, () => null),
     fetchDemo().catch(() => null),
   ]);
   return { inbox: withDemoVendor(inbox, demo?.vendor), status, halves: halvesByPayment(records), at: Date.now() };

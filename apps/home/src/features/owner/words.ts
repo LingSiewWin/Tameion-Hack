@@ -1,7 +1,7 @@
 // The Owner home in words (DESIGN §Copy, Rules 1 and 3). Every figure is the service's string shown as it is, trimmed
 // to the shortest exact form; two figures are combined here, and only where the brief names the combination (allowance
 // left today = caps.daily − caps.spent24h; paid this week = paid[] of the last 7 days). No hash ever leaves this file.
-import type { Inbox, Paid } from "../../lib/types.ts";
+import type { Inbox, Paid, SymbolonRecord } from "../../lib/types.ts";
 
 const UNIT = 1_000_000n;
 
@@ -145,32 +145,15 @@ export type Line = {
   by: "the agent" | "you";
 };
 
-/** H3's per-record projection (`GET /api/level1/symbolon?policy=`, DESIGN §Data): one slot per half. */
-export type Slot = { alg: string; keyId: string; verified: boolean };
-export type SymbolonRecord = {
-  root: string;
-  seq: number;
-  kind: string;
-  at: number;
-  counterparty?: string;
-  amount?: string;
-  agent: Slot | null;
-  counterparty_slot: Slot | null;
-  witness: Slot | null;
-};
-
-/** A payment as both reads name it: the pass's time, the payee, the exact amount. */
-export const sealKey = (at: number | undefined, counterparty: string | undefined, amt: string | undefined) =>
-  `${at ?? 0}|${(counterparty ?? "").toLowerCase()}|${minor(amt) ?? ""}`;
-
-/** Which halves of a payment's record are present, from H3's projection (records naming the same payment AND-ed). */
-export type Halves = { agent: boolean; payee: boolean; witness: boolean; root: string; seq: number };
+/** Which halves of a payment's record are present, from H3's projection (`GET /api/level1/symbolon`): the settlement
+ *  record that names the payment's transaction. Two records naming one transaction are AND-ed; none, and nothing is shown. */
+export type Halves = { agent: boolean; payee: boolean; witness: boolean; at?: number };
 export function halvesByPayment(records: readonly SymbolonRecord[] | null | undefined): Map<string, Halves> {
   const out = new Map<string, Halves>();
   for (const r of records ?? []) {
-    if (!r.counterparty || !r.amount) continue;
-    const k = sealKey(r.at, r.counterparty, r.amount);
-    const h = { agent: !!r.agent?.verified, payee: !!r.counterparty_slot?.verified, witness: !!r.witness?.verified, root: r.root, seq: r.seq };
+    if (!r.tx) continue;
+    const k = r.tx.toLowerCase();
+    const h = { agent: !!r.agent?.verified, payee: !!r.counterparty_slot?.verified, witness: !!r.witness?.verified, at: r.at };
     const was = out.get(k);
     out.set(k, was ? { ...was, agent: was.agent && h.agent, payee: was.payee && h.payee, witness: was.witness && h.witness } : h);
   }
@@ -191,7 +174,7 @@ export function lines(inbox: Pick<Inbox, "paid" | "refused" | "parties" | "payee
     by: "the agent",
   }));
   const paid: Line[] = (inbox.paid ?? []).map((p: Paid, i) => {
-    const h = halves.get(sealKey(p.at, p.counterparty, p.amount));
+    const h = p.tx ? halves.get(p.tx.toLowerCase()) : undefined;
     const isSealed = sealedOf(h);
     return {
       key: p.tx ?? `paid-${i}`,
