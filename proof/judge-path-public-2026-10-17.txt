@@ -1,0 +1,105 @@
+The judge's five minutes on the PUBLIC host (seat S20, docs/115 §3) — written 2026-10-17 21:50 +0800
+
+Where: https://tameion-agents-production-064a.up.railway.app (Railway, Singapore edge sin1; tameion-app in demo mode, Arbitrum Sepolia).
+The page and the service are the host's own (every API reply checked for Railway's x-railway-request-id header in the rerun). No code
+changed, nothing restarted, nothing committed.
+Browser: the Playwright MCP's Chromium at 390 x 844 (phone width; 375 px content beside the scrollbar), a CDP virtual passkey
+(WebAuthn.enable + addVirtualAuthenticator: ctap2, internal, resident key, user verification on). The invite came from the link
+(/?invite=…), opened through a one-shot local redirect so the word was never typed or printed; it is not written here. No key, token or
+passkey material printed.
+Chain: Arbitrum Sepolia. Spend: 0.05 test USDC from the relayer (run 1's funding) plus gas; the rerun opened nothing and spent nothing.
+
+RESULT: NOT DONE. Steps 1 and 2 ran on the public host (run 1); steps 3, 4 and 5 were never reached. Run 1's step 2 read a stale mock left
+in the Playwright page by an earlier localhost session (the demo vendor came back as 0x1111…1111 instead of the host's 0xe5e2…3854), so
+the account was abandoned for the one allowed rerun; the rerun was refused by the host: the demo paused itself because run 1's funding
+took the relayer under its floor (19.95 < 20.00 USDC). The demo on the public host stays closed to every judge until the relayer is topped
+up or the floor changes.
+
+======================================================================================================================================
+Run 1 (21:39–21:43)
+
+Account: acme-agents-1539 · policy 0x51aa7a53b96ab4379d92af5cd625cf671da7485e · owner 0x8a3bddd9945f1098a983f18803c47a7ebe59c867 ·
+agent 0xa6e9aad7ea48d9a4c1480b63ee9c7580ac6e800e · operator (relayer) 0x5f3f40daa525230289af8d40746dd12d10a151d6 · delay 30 s · mode 1 ·
+per payment 50.00, a day 100.00 USDC · created block 320091074.
+
+Home        21:39:26 the card "Try it in 5 minutes": benefit numbers (To type 0 · A raise waits 30 s · A bill 0.002), the becoming line "Run your
+            agents the way a finance team runs its payables.", the suggested name, no invite field (#invite count 0: the link carried it).
+            390: scrollWidth 375 = clientWidth 375. One console error: GET /api/level1/name/acme-agents-1539 404 (the name check; 404 = free).
+1 Open — PASS (one tap; nothing typed: the name was suggested, the invite came from the link)
+            ≈21:39:47 tap "Try it in 5 minutes" → one passkey tap → POST /api/level1/deploy {demo: true, lazy: true, invite from the link} 200,
+            reply 21:40:05 (server Date header; tenant created 21:39:55) → account page, strip "Step 2 of 5 · Bill",
+            "Funded: 0.05 USDC, by the demo, no wallet needed. Receipt" by 21:40:06 (the page's own "0:11 since you opened it" at 21:40:17).
+            About 19 s from tap to Funded (the tap's exact second went to a request log this seat lost, see the findings; bounded by the shell
+            clock 21:39:46 just before the tap and tenant.created 21:39:55).
+            Owner deploy tx   0x19e9541c6f5ea10efe6825ab5d75d268e2c3f1e7f4b9b29b7f4262410ce68bad  status 1, block 320091087
+            Policy deploy tx  0xcda3520a67ea60f2c57b9bb2bcf46c2f372351c86171154193748e0095a21f14  status 1, block 320091097
+            Agent's gas tx    0x30f348d5fc470fa89a71a677f57d221987480e793947f90401f8509ccc23ca26  status 1, block 320091108
+            Funding tx        0xe174d3ba7ac83fe8722b7e53417f8d2eef45407d39d23b5656533dac5f504c14  status 1, block 320091116
+                              (relayer 0x5f3f…51d6 → USDC 0x75faf114…AA4d transfer; the policy's balance read 21:48:36: 50000 = 0.05 USDC)
+2 Bill — page PASS, run INVALID (the vendor came from a leftover Playwright mock, not from the host)
+            21:42:11 tap "Let the agent pay Demo Vendor 0.002 USDC every 2 minutes" (one passkey tap):
+              POST /api/level1/bills {check: true} 200 21:42:11 ("you may tell the agent about bills on this account; nothing was saved")
+              POST /api/level1/prepare-payees 200 21:42:12 ("payable 30 seconds after it is signed …")
+              POST /api/level1/challenge 200 21:42:13 (1 s after prepare: P-287 does not apply to this step)
+              POST /api/level1/execute 200 21:42:16 → approve-payee tx 0xd2ddab9a960d8ff14b16015e7657020c133435b915dab5d2225b0c1909aac8c2
+                (status 1, block 320091620, 2 logs; payee 0x1111111111111111111111111111111111111111)
+              POST /api/level1/bills 200 21:42:17 → saved {payee 0x1111…1111, amount 0.002, every_secs 120, next_due 1792244656 = 21:44:16}
+              POST /api/level1/contacts 200 21:42:17 → "Demo Vendor" at 0x1111…1111
+            21:42:19 strip "Step 3 of 5 · Autopilot": "Demo Vendor approved; the bill saved: 0.002 USDC every 2 minutes. Receipt",
+            "Turn Autopilot on", and the keys line "1 of 3 keys set: on a real account, add two guardians …". 8 s from tap to saved.
+            Why invalid: the page's GET /api/level1/demo was answered by a route left on the Playwright page (page._routes: one entry,
+            '**/api/level1/demo'; reply headers only content-type and content-length, no Railway headers; body
+            {"enabled":true,"vendor":"0x1111111111111111111111111111111111111111","bill":{"usdc":"0.002","everySecs":120},"delaySecs":30}).
+            The host itself answered, by curl at 21:43:54 and to the clean page at 21:45:09:
+            {"bill":{"cycles":15,"everySecs":120,"usdc":"0.002"},"delaySecs":30,"enabled":true,"vendor":"0xe5e2d8dcc2038fd0a010a6e7845378b646e33854"}.
+            The service pays any approved payee's bill the same way (demo::vendor is read only by the demo config), but the proof must show
+            the host's own vendor, so the account was left and the one rerun started.
+3, 4, 5    not run on this account. The seat closed the Playwright page to drop the mock; closing the page also deleted the virtual
+            authenticator, so acme-agents-1539's passkey is gone and the account cannot sign again.
+
+======================================================================================================================================
+Rerun (21:44–21:48) — a new page, no routes (page and context: 0), the origin's storage cleared (Storage.clearDataForOrigin), a new
+virtual authenticator.
+
+Home        21:45:09 the card; GET /api/level1/demo 200 from the host (Railway header present; vendor 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854,
+            bill 0.002 every 120 s, 15 cycles, delay 30 s); suggested name acme-agents-6596; no invite field; scrollWidth 375 = clientWidth 375.
+1 Open — FAIL (the host refused; nothing opened, nothing spent)
+            21:45:23 tap "Try it in 5 minutes" → the passkey was created on the device (1 credential in the authenticator) → POST
+            /api/level1/deploy {chain arbitrum-sepolia, name acme-agents-6596, keyless false, days 90, lazy true, demo true, invite from the link}
+            → 503 at 21:45:23:
+              {"code":"service_paused","contractVersion":"2026-10-17.1","error":"the demo is paused: the relayer holds 19.950000 USDC, under its
+               floor of 20.000000 USDC; nothing was opened","ok":false}
+            The page showed that sentence verbatim under the button (role=alert) and stayed on the home card; it waited 150 s for
+            "Funded" and nothing else happened. Screenshot: proof/judge-path-public-1-rerun-paused.png.
+            On chain at 21:48:36: relayer 0x5f3f…51d6 holds 19950000 (19.95 USDC) and 0.4998 ETH. The floor is demo.rs RELAYER_FLOOR_MINOR =
+            20_000_000; run 1's 0.05 took the relayer from 20.00 to 19.95, so run 1 was the last account this host could fund.
+            GET /api/level1/demo at 21:49:19 still answers "enabled": true, so the home card keeps offering the button while every open is refused.
+2–5         not reached.
+
+======================================================================================================================================
+What was checked against the chain
+  Every tx above: eth_getTransactionReceipt on https://sepolia-rollup.arbitrum.io/rpc (cast receipt), status 1 each. sepolia.arbiscan.io/tx/<hash>
+  answered 200 with "Success" for the funding tx and the approve-payee tx (curl).
+
+Not validated on the public host (nothing below ran here)
+  Step 3 Autopilot (setMode, the 30 s wait, apply); step 4 the agent paying by itself (two cycles, rows, why, book lines); step 5 the raise's
+  30 s wait, the cancel tx, the instant cut; the finish card ("Done in …", "N of N bills paid with no human"); the passkey wait on the raise
+  (P-287); the cancelled raise lingering in the inbox (P-286). The localhost proof of all five steps stays proof/judge-path-page-2026-10-17.txt
+  ("On :7880", 17:45, Done in 7 min 50 s).
+
+Findings for the judge's eyes
+  1. Once the relayer is under its floor, a judge taps "Try it in 5 minutes", makes a passkey for an account that never opens, and reads
+     "the demo is paused: the relayer holds 19.950000 USDC, under its floor of 20.000000 USDC; nothing was opened": internal words
+     ("relayer", "floor"), no time to come back (the service's refusal carries retry_after 3600; the page does not show it), and the
+     card still offered the button (GET /api/level1/demo says enabled: true while paused).
+  2. The page never asked the judge to type anything: the name was suggested, the invite came from the link (both runs).
+  3. No 5xx in run 1. The rerun's only error was the 503 above; the name check's 404 shows as a console error (harmless, the name is free).
+  4. Passkey waits: the virtual authenticator answers at once; step 1 tap → deploy in the same second (rerun), step 2 prepare → challenge 1 s.
+     The raise (P-287's 26–29 s) was not reached.
+
+Screenshots (390 wide): proof/judge-path-public-home.png (rerun home card), proof/judge-path-public-1-open.png (run 1: Funded, step 2 of 5),
+proof/judge-path-public-1-rerun-paused.png (rerun: the 503 sentence under the button).
+Left: acme-agents-1539 (0x51aa…485e) holds 0.05 test USDC in mode 1 (asks before paying) with an approved payee 0x1111…1111 and a 120 s bill
+that ends after 15 cycles; nothing can move without its passkey, and that passkey no longer exists (the Playwright page that held it was
+closed). acme-agents-6596 was never opened. The relayer holds 19.95 USDC: the public demo is closed until it is topped up by at least
+0.05 USDC (or the floor is lowered and the service redeployed).
