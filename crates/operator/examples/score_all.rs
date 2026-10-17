@@ -1,162 +1,83 @@
 //! Score every account in an app directory with `pistis` (docs/117 §13,
-//! step a): read each account's records, fill a slot only from what verifies,
-//! and print one row per account and a histogram of the scores.
+//! step a) and print one row per account and a histogram of the scores.
 //!
 //! ```text
 //! cargo run -p operator --example score_all -- [app dir, default runtime/app]
 //! ```
 //!
-//! Read-only: files and chain reads, nothing written, nothing signed. The
-//! slots, until `ledger::symbolon::project` lands:
-//! - witness: a settlement's payment read back from its chain (receipt status
-//!   1 and exactly one matching `Paid`, `ArcClient::confirm_paid`); a decision
-//!   or an escalation by the transaction that anchored its record's root
-//!   (`ArcClient::anchored_in`);
-//! - counterparty: an invoice the payee signed (`invoice::verify`), on the
-//!   invoice and on the settlement that paid it (the invoice id as settlement
-//!   key, or the same payee and amount after it was issued);
-//! - agent: none. No existing record carries the agent's signature over the
-//!   record itself.
+//! Read-only: files and chain reads; nothing written, nothing signed, no key
+//! read. The records and their slots are `ledger::symbolon::project`'s, filled
+//! the way `symbolon_count` fills them, plus a settlement's own receipt:
+//! - witness: a settlement's payment read back (receipt status 1 and exactly
+//!   one matching `Paid`, `ArcClient::confirm_paid`), else the anchoring of
+//!   its record's root read back (`ArcClient::anchored_in`), which also
+//!   witnesses each decision;
+//! - counterparty: the payee-signed invoice (`invoice::verify`) of the bill
+//!   cycle a settlement paid; every such invoice is also a claim record;
+//! - agent: none; no existing record carries the agent's signature over it.
 //!
-//! Money that came in (`<policy>.history.json`) carries no slot: it only shows
-//! whether a counterparty's money came back.
+//! Escalations are refusals, counted unsigned (`project` leaves them out).
+//! Money in (`<policy>.history.json`) carries no slot: it only shows whether
+//! a counterparty's money came back. RPCs are the chain presets'
+//! (`TAMEION_RPC_ARC`, `TAMEION_RPC_ARBITRUM_SEPOLIA` override them).
 
 use alloy::primitives::{Address, B256};
-use ledger::{Currency, Money};
+use ledger::symbolon::{Extras, SlotSig, Symbolon, SymbolonKind, project, record_hash};
+use ledger::{Currency, Decision, Event, EventBody, Money};
 use operator::{audit, invoice, statement, watch};
-use pistis::{Flow, Params, Record, SlotSig, Symbolon, SymbolonKind};
+use pistis::{Flow, Params, Record};
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::str::FromStr;
 
-// ponytail: a third reader of the event layout (statement.rs and the
-// service's recall have their own); one decoder in `ledger::log` when the
-// scaffold settles.
-struct Reader<'a>(&'a [u8]);
+/// A payee-signed invoice: payee, first due time, interval in seconds
+/// (0 = one-off), and the slot it fills.
+type Signed = (String, u64, u64, SlotSig);
 
-impl<'a> Reader<'a> {
-    fn take(&mut self, n: usize) -> Option<&'a [u8]> {
-        (self.0.len() >= n).then(|| {
-            let (head, tail) = self.0.split_at(n);
-            self.0 = tail;
-            head
+/// The invoice whose bill cycle `cycle_key` (`<payee>@<due>`) is; the rule
+/// `symbolon_count` uses.
+fn invoice_paid<'a>(invoices: &'a [Signed], cycle_key: &str) -> Option<&'a SlotSig> {
+    let (payee, due) = cycle_key.split_once('@')?;
+    let due: u64 = due.parse().ok()?;
+    invoices
+        .iter()
+        // `is_multiple_of(0)` holds only for 0: a one-off has one cycle.
+        .find(|(p, first, every, _)| {
+            p == payee && due >= *first && (due - first).is_multiple_of(*every)
         })
-    }
-    fn u8(&mut self) -> Option<u8> {
-        self.take(1).map(|b| b[0])
-    }
-    fn u64(&mut self) -> Option<u64> {
-        Some(u64::from_be_bytes(self.take(8)?.try_into().ok()?))
-    }
-    fn bytes(&mut self) -> Option<&'a [u8]> {
-        let n = self.u64()?;
-        self.take(usize::try_from(n).ok()?)
-    }
-    fn str(&mut self) -> Option<String> {
-        String::from_utf8(self.bytes()?.to_vec()).ok()
-    }
-    /// USDC minor units; another currency or a negative amount is `None`.
-    fn usdc(&mut self) -> Option<u128> {
-        let minor = i128::from_be_bytes(self.take(16)?.try_into().ok()?);
-        (self.u8()? == 1).then_some(())?;
-        u128::try_from(minor).ok()
+        .map(|(_, _, _, s)| s)
+}
+
+fn unsigned(record_hash: [u8; 32], kind: SymbolonKind) -> Symbolon {
+    Symbolon {
+        record_hash,
+        kind,
+        agent: None,
+        counterparty: None,
+        witness: None,
     }
 }
 
-enum Decoded {
-    Decision {
-        cp: String,
-        minor: u128,
-        block: bool,
-    },
-    Settlement {
-        cp: String,
-        minor: u128,
-        tx: String,
-        key: [u8; 32],
-    },
-    Escalation {
-        cp: String,
-        minor: u128,
-    },
-}
-
-/// A decision, settlement or escalation from its canonical bytes
-/// (`ledger::log::Event::canonical`, tags 2, 3, 4); `None` for anything else.
-fn decode(canonical: &[u8]) -> Option<(i64, Decoded)> {
-    let mut r = Reader(canonical);
-    if r.str()? != "air-log/v0.1" {
-        return None;
-    }
-    r.u64()?;
-    let at = i64::try_from(r.u64()?).ok()?;
-    let d = match r.u8()? {
-        2 => {
-            let cp = r.str()?;
-            let minor = r.usdc()?;
-            Decoded::Decision {
-                cp,
-                minor,
-                block: r.u8()? == 3,
-            }
-        }
-        3 => {
-            let cp = r.str()?;
-            r.str()?;
-            let minor = r.usdc()?;
-            let tx = r.str()?;
-            r.bytes()?;
-            let key = r.bytes()?.try_into().ok()?;
-            Decoded::Settlement { cp, minor, tx, key }
-        }
-        4 => {
-            let cp = r.str()?;
-            Decoded::Escalation {
-                cp,
-                minor: r.usdc()?,
-            }
-        }
-        _ => return None,
-    };
-    Some((at, d))
-}
-
-fn record(
-    hash: [u8; 32],
-    kind: SymbolonKind,
-    at: i64,
-    cp: &str,
-    amount: u128,
-    flow: Flow,
-) -> Record {
-    Record {
-        sym: Symbolon {
-            record_hash: hash,
-            kind,
-            agent: None,
-            counterparty: None,
-            witness: None,
-        },
-        at,
-        counterparty: cp.to_ascii_lowercase(),
-        amount,
-        flow,
-    }
+fn usdc(m: Money) -> Option<u128> {
+    (m.currency() == Currency::Usdc)
+        .then(|| u128::try_from(m.to_minor()).ok())
+        .flatten()
 }
 
 fn read_json(path: &Path) -> Option<Value> {
     serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()
 }
 
-/// One account's records with their slots filled, and how many read-backs
-/// were tried and how many held.
+/// One account's records with their slots filled, and how many chain
+/// read-backs were tried and how many held.
 async fn records_of(tenants: &Path, policy: &str) -> Result<(Vec<Record>, usize, usize), String> {
     let account = read_json(&tenants.join(format!("{policy}.json"))).ok_or("no account file")?;
     let chain = account["chain"].as_str().unwrap_or("arc-testnet");
     let preset = watch::chain(chain).ok_or_else(|| format!("unknown chain {chain}"))?;
     let client = watch::client_for(preset).map_err(|e| e.to_string())?;
     let policy_addr = Address::from_str(policy).map_err(|e| e.to_string())?;
-    let witness = |tx: B256, at: i64| SlotSig {
+    let read_back = |tx: B256, at: i64| SlotSig {
         alg: "chain-receipt".into(),
         key_id: format!("chain:{}", preset.chain_id),
         sig: tx.to_vec(),
@@ -164,7 +85,45 @@ async fn records_of(tenants: &Path, policy: &str) -> Result<(Vec<Record>, usize,
     };
     let (mut tried, mut held) = (0, 0);
     let mut records = Vec::new();
-    let mut paid_keys = Vec::new();
+
+    // Invoices the payee signed, checked as of their issue date: claims.
+    let mut invoices: Vec<Signed> = Vec::new();
+    let text = std::fs::read_to_string(tenants.join(format!("{policy}.invoices.jsonl")))
+        .unwrap_or_default();
+    for v in text
+        .lines()
+        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+    {
+        let issued = v["issuedAt"].as_u64().unwrap_or_default();
+        let (Ok(inv), Some(sig)) = (
+            invoice::verify(preset.chain_id, policy_addr, &v, issued),
+            v["signature"]
+                .as_str()
+                .and_then(|s| alloy::hex::decode(s).ok()),
+        ) else {
+            continue;
+        };
+        let payee = format!("{:#x}", inv.payee);
+        let slot = SlotSig {
+            alg: "secp256k1-eip712".into(),
+            key_id: payee.clone(),
+            sig,
+            at: issued as i64,
+        };
+        let mut claim = unsigned(
+            invoice::id(inv.payee, inv.reference).0,
+            SymbolonKind::Invoice,
+        );
+        claim.counterparty = Some(slot.clone());
+        records.push(Record {
+            sym: claim,
+            at: issued as i64,
+            counterparty: payee.clone(),
+            amount: inv.amount,
+            flow: Flow::Claimed,
+        });
+        invoices.push((payee, inv.due_at, u64::from(inv.every_days) * 86_400, slot));
+    }
 
     let log = tenants.join(policy).join("log");
     let anchors = audit::anchors(&log).unwrap_or_default();
@@ -177,12 +136,14 @@ async fn records_of(tenants: &Path, policy: &str) -> Result<(Vec<Record>, usize,
             continue;
         };
         let lines = audit::load(&path).map_err(|e| e.to_string())?;
-        let (leaves, recomputed) = audit::recompute(&lines);
-        if recomputed != root {
+        if audit::recompute(&lines).1 != root {
             return Err(format!("{}: the file is not its root", path.display()));
         }
-        // The record's root, read back from the transaction that anchored it.
-        let mut anchored = None;
+        let events: Vec<Event> = lines
+            .iter()
+            .filter_map(|l| Event::decode(&l.canonical))
+            .collect();
+        let mut extras = Extras::default();
         if let Some(a) = anchors
             .iter()
             .find(|a| a["root"].as_str() == Some(&root.to_hex()) && !a["anchorTx"].is_null())
@@ -199,93 +160,90 @@ async fn records_of(tenants: &Path, policy: &str) -> Result<(Vec<Record>, usize,
                     .await
                 {
                     held += 1;
-                    anchored = Some(witness(tx, a["at"].as_i64().unwrap_or_default()));
+                    extras.anchored = Some(read_back(tx, a["at"].as_i64().unwrap_or_default()));
                 }
             }
         }
-        for (line, leaf) in lines.iter().zip(&leaves) {
-            let Some((at, decoded)) = decode(&line.canonical) else {
+        for e in &events {
+            let EventBody::Settlement {
+                counterparty,
+                cycle_key,
+                amount,
+                tx_hash,
+                settlement_key,
+                ..
+            } = &e.body
+            else {
                 continue;
             };
-            let hash = *leaf.as_bytes();
-            let mut r = match &decoded {
-                Decoded::Decision { cp, minor, block } => {
-                    let flow = if *block { Flow::Refused } else { Flow::Other };
-                    record(hash, SymbolonKind::Decision, at, cp, *minor, flow)
+            let h = record_hash(e);
+            if let Some(s) = invoice_paid(&invoices, cycle_key) {
+                extras.counterparty.insert(h, s.clone());
+            }
+            if let (Ok(tx), Ok(to)) = (
+                B256::from_str(tx_hash),
+                Address::from_str(counterparty.as_str()),
+            ) {
+                tried += 1;
+                let key = B256::from(*settlement_key.as_bytes());
+                if client
+                    .confirm_paid(tx, policy_addr, to, *amount, key)
+                    .await
+                    .is_ok()
+                {
+                    held += 1;
+                    extras.witness.insert(h, read_back(tx, e.at.as_unix()));
                 }
-                Decoded::Escalation { cp, minor } => {
-                    record(hash, SymbolonKind::Decision, at, cp, *minor, Flow::Refused)
+            }
+        }
+        let mut projected: BTreeMap<[u8; 32], Symbolon> = project(&events, &extras)
+            .into_iter()
+            .map(|s| (s.record_hash, s))
+            .collect();
+        for e in &events {
+            let h = record_hash(e);
+            let (sym, cp, amount, flow) = match &e.body {
+                EventBody::Settlement {
+                    counterparty,
+                    amount,
+                    ..
+                } => (projected.remove(&h), counterparty, *amount, Flow::Paid),
+                EventBody::Decision {
+                    counterparty,
+                    amount,
+                    decision,
+                    ..
+                } => {
+                    let flow = if *decision == Decision::Block {
+                        Flow::Refused
+                    } else {
+                        Flow::Other
+                    };
+                    (projected.remove(&h), counterparty, *amount, flow)
                 }
-                Decoded::Settlement { cp, minor, .. } => {
-                    record(hash, SymbolonKind::Settlement, at, cp, *minor, Flow::Paid)
-                }
+                EventBody::Escalation {
+                    counterparty,
+                    amount,
+                    ..
+                } => (
+                    Some(unsigned(h, SymbolonKind::Decision)),
+                    counterparty,
+                    *amount,
+                    Flow::Refused,
+                ),
+                _ => continue,
             };
-            if let Decoded::Settlement { cp, minor, tx, key } = decoded {
-                // The payment itself, not the record of it: the witness of a
-                // settlement is its receipt.
-                if let (Ok(txh), Ok(to)) = (B256::from_str(&tx), Address::from_str(&cp)) {
-                    tried += 1;
-                    let amount = Money::minor(minor as i128, Currency::Usdc);
-                    if client
-                        .confirm_paid(txh, policy_addr, to, amount, B256::from(key))
-                        .await
-                        .is_ok()
-                    {
-                        held += 1;
-                        r.sym.witness = Some(witness(txh, at));
-                    }
-                }
-                paid_keys.push((records.len(), key));
-            } else {
-                r.sym.witness = anchored.clone();
-            }
-            records.push(r);
+            let (Some(sym), Some(amount)) = (sym, usdc(amount)) else {
+                continue;
+            };
+            records.push(Record {
+                sym,
+                at: e.at.as_unix(),
+                counterparty: cp.as_str().to_string(),
+                amount,
+                flow,
+            });
         }
-    }
-
-    // Invoices the payee signed: the claim, and the settlement that paid it.
-    let invoices = std::fs::read_to_string(tenants.join(format!("{policy}.invoices.jsonl")))
-        .unwrap_or_default();
-    for v in invoices
-        .lines()
-        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
-    {
-        let issued = v["issuedAt"].as_u64().unwrap_or_default();
-        let Ok(inv) = invoice::verify(preset.chain_id, policy_addr, &v, issued) else {
-            continue;
-        };
-        let Some(sig) = v["signature"]
-            .as_str()
-            .and_then(|s| alloy::hex::decode(s).ok())
-        else {
-            continue;
-        };
-        let id = invoice::id(inv.payee, inv.reference);
-        let payee = format!("{:#x}", inv.payee);
-        let signed = SlotSig {
-            alg: "secp256k1-eip712".into(),
-            key_id: payee.clone(),
-            sig,
-            at: issued as i64,
-        };
-        for (i, key) in &paid_keys {
-            let s = &mut records[*i];
-            if *key == id.0
-                || (s.counterparty == payee && s.amount == inv.amount && s.at >= issued as i64)
-            {
-                s.sym.counterparty = Some(signed.clone());
-            }
-        }
-        let mut claim = record(
-            id.0,
-            SymbolonKind::Invoice,
-            issued as i64,
-            &payee,
-            inv.amount,
-            Flow::Claimed,
-        );
-        claim.sym.counterparty = Some(signed);
-        records.push(claim);
     }
 
     // Money in, from the chain history the service read: no slot, only
@@ -295,7 +253,7 @@ async fn records_of(tenants: &Path, policy: &str) -> Result<(Vec<Record>, usize,
             if t["out"].as_bool() != Some(false) {
                 continue;
             }
-            let (Some(cp), Some(minor), Some(at)) = (
+            let (Some(cp), Some(amount), Some(at)) = (
                 t["cp"].as_str(),
                 t["minor"].as_str().and_then(|m| m.parse().ok()),
                 t["at"].as_i64(),
@@ -306,14 +264,13 @@ async fn records_of(tenants: &Path, policy: &str) -> Result<(Vec<Record>, usize,
                 .as_str()
                 .and_then(|x| B256::from_str(x).ok())
                 .unwrap_or_default();
-            records.push(record(
-                hash.0,
-                SymbolonKind::Settlement,
+            records.push(Record {
+                sym: unsigned(hash.0, SymbolonKind::Settlement),
                 at,
-                cp,
-                minor,
-                Flow::Received,
-            ));
+                counterparty: cp.to_ascii_lowercase(),
+                amount,
+                flow: Flow::Received,
+            });
         }
     }
     Ok((records, tried, held))
@@ -337,18 +294,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     accounts.sort();
 
     println!(
-        "pistis over {} at {} ({}): score = survival x independence x recency, loop window {} d, half-life {} d",
+        "pistis over {} at {} ({now}): score = survival x independence x recency, loop window {} d, half-life {} d",
         tenants.display(),
         statement::iso8601(now),
-        now,
         p.loop_window_days,
         p.half_life_days
     );
     println!(
-        "{:<13} {:<16} {:>5} {:>6} {:>6} {:>6} {:>8} {:>8} {:>8} {:>5}  read-backs held/tried",
+        "{:<13} {:<16} {:>5} {:>8} {:>6} {:>6} {:>6} {:>8} {:>8} {:>8} {:>5}  read-backs held/tried",
         "account",
         "chain",
         "recs",
+        "unsigned",
         "single",
         "double",
         "triple",
@@ -358,7 +315,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "bps"
     );
     let mut buckets = [0usize; 10];
-    let (mut all, mut n1, mut n2, mut n3, mut tried, mut held) = (0, 0, 0, 0, 0, 0);
+    let mut total = [0usize; 4];
+    let (mut tried, mut held, mut scored) = (0, 0, 0);
     for policy in &accounts {
         let chain = read_json(&tenants.join(format!("{policy}.json")))
             .and_then(|v| v["chain"].as_str().map(str::to_string))
@@ -367,9 +325,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         match records_of(&tenants, policy).await {
             Ok((records, t, h)) => {
                 let s = pistis::score(&records, now, &p);
+                let counts = [s.n_unsigned, s.n_single, s.n_double, s.n_triple];
                 println!(
-                    "{short:<13} {chain:<16} {:>5} {:>6} {:>6} {:>6} {:>8.3} {:>8.3} {:>8.3} {:>5}  {h}/{t}",
-                    records.len(),
+                    "{short:<13} {chain:<16} {:>5} {:>8} {:>6} {:>6} {:>6} {:>8.3} {:>8.3} {:>8.3} {:>5}  {h}/{t}",
+                    counts.iter().sum::<usize>(),
+                    s.n_unsigned,
                     s.n_single,
                     s.n_double,
                     s.n_triple,
@@ -379,19 +339,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     s.bps
                 );
                 buckets[usize::from(s.bps / 1000).min(9)] += 1;
-                all += records.len();
-                (n1, n2, n3) = (n1 + s.n_single, n2 + s.n_double, n3 + s.n_triple);
-                (tried, held) = (tried + t, held + h);
+                for (t, c) in total.iter_mut().zip(counts) {
+                    *t += c;
+                }
+                (tried, held, scored) = (tried + t, held + h, scored + 1);
             }
             Err(e) => println!("{short:<13} {chain:<16} not scored: {e}"),
         }
     }
     println!(
-        "\ntotal: {} accounts, {all} records: {n1} single, {n2} double, {n3} triple-signed, {} with no verified slot; read-backs {held}/{tried} held",
+        "\ntotal: {scored} of {} accounts scored, {} records (each once): {} unsigned, {} single, {} double, {} triple-signed; chain read-backs {held}/{tried} held",
         accounts.len(),
-        all - n1 - n2 - n3
+        total.iter().sum::<usize>(),
+        total[0],
+        total[1],
+        total[2],
+        total[3]
     );
-    println!("\nbps histogram ({} accounts):", accounts.len());
+    println!("\nbps histogram ({scored} accounts):");
     for (i, n) in buckets.iter().enumerate() {
         let hi = if i == 9 {
             "10000]".to_string()
