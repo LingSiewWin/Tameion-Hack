@@ -8,8 +8,13 @@
 recovery_file*.dat
 secrets/
 
-# Runtime state
-runtime/
+# Runtime state. The two chain anchor addresses are public contract addresses the image copies (Dockerfile):
+# tracked so an uploader that honours this file (railway up) still ships them.
+runtime/*
+!runtime/arc_anchor.addr
+!runtime/arbitrum-sepolia_anchor.addr
+# Railway's project link (scripts/deploy_railway.sh); ids only, but local state.
+.railway/
 .venv/
 __pycache__/
 *.pyc
