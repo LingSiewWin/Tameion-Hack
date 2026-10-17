@@ -13,14 +13,19 @@
 //! A record persisted again in a later file counts once, with its best slots.
 //! A failed chain read is counted apart, never as "not witnessed".
 //!
-//!   cargo run -q -p operator --example symbolon_count -- [app dir]   (default runtime/app)
+//!   cargo run -q -p operator --example symbolon_count -- [app dir] [--show <seq|leaf>]
+//!
+//! The app dir defaults to runtime/app. `--show` also prints the three slots
+//! of each record with that event seq (one per account) or that leaf (hex):
+//! slot, alg, key id, and whether its check passed in this run. A slot is
+//! filled only after its check passed, so filled means verified.
 //!
 //! Reads no key. RPCs are the chain presets' (`TAMEION_RPC_ARC`,
 //! `TAMEION_RPC_ARBITRUM_SEPOLIA` override the public endpoints).
 
 use alloy::primitives::{Address, B256};
 use arc::ArcClient;
-use ledger::symbolon::{Extras, Signedness, SlotSig, project, record_hash};
+use ledger::symbolon::{Extras, Signedness, SlotSig, Symbolon, project, record_hash};
 use ledger::{Event, EventBody};
 use operator::sig::{self, Alg, KeyRef};
 use operator::{audit, invoice, level1, watch};
@@ -74,6 +79,25 @@ fn signed_invoices(app: &Path, policy: Address, chain_id: u64) -> Vec<Signed> {
         .collect()
 }
 
+/// One slot of `--show`: hashes are fine on this surface (an operator's terminal).
+fn print_slot(name: &str, s: Option<&SlotSig>) {
+    let Some(s) = s else {
+        println!("  {name:<12} none                verified no");
+        return;
+    };
+    // A 32-byte artefact is the anchoring tx: printed whole. A signature: its head.
+    let sig = if s.sig.len() == 32 {
+        format!("tx 0x{}", alloy::hex::encode(&s.sig))
+    } else {
+        let head = alloy::hex::encode(&s.sig[..s.sig.len().min(8)]);
+        format!("sig 0x{head}… ({} bytes)", s.sig.len())
+    };
+    println!(
+        "  {name:<12} {:<19} verified yes  key {}  {sig}  at {}",
+        s.alg, s.key_id, s.at
+    );
+}
+
 /// The invoice whose bill cycle `cycle_key` (`<payee>@<due>`) is.
 fn invoice_paid<'a>(invoices: &'a [Signed], cycle_key: &str) -> Option<&'a SlotSig> {
     let (payee, due) = cycle_key.split_once('@')?;
@@ -89,11 +113,19 @@ fn invoice_paid<'a>(invoices: &'a [Signed], cycle_key: &str) -> Option<&'a SlotS
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let app = PathBuf::from(
-        std::env::args()
-            .nth(1)
-            .unwrap_or_else(|| "runtime/app".into()),
-    );
+    let (mut app, mut show) = (PathBuf::from("runtime/app"), None::<String>);
+    let mut args = std::env::args().skip(1);
+    while let Some(a) = args.next() {
+        if a == "--show" {
+            show = args
+                .next()
+                .map(|w| w.trim_start_matches("0x").to_lowercase());
+        } else {
+            app = PathBuf::from(a);
+        }
+    }
+    // `--show`: per account and record, the occurrence with the most slots.
+    let mut shown: BTreeMap<(String, [u8; 32]), (u64, Symbolon)> = BTreeMap::new();
     let mut dirs: Vec<PathBuf> = std::fs::read_dir(level1::tenants_dir(&app))?
         .filter_map(|e| e.ok().map(|e| e.path()))
         .filter(|p| p.join("log").is_dir())
@@ -200,9 +232,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     extras.counterparty.insert(record_hash(e), s.clone());
                 }
             }
+            let seqs: BTreeMap<[u8; 32], u64> =
+                events.iter().map(|e| (record_hash(e), e.seq)).collect();
             for s in project(&events, &extras) {
                 let b = best.entry(s.record_hash).or_insert(Signedness::Unsigned);
                 *b = (*b).max(s.signedness());
+                let seq = seqs.get(&s.record_hash).copied().unwrap_or_default();
+                let wanted = show.as_deref().is_some_and(|w| {
+                    w == seq.to_string() || w == alloy::hex::encode(s.record_hash)
+                });
+                let key = (name.clone(), s.record_hash);
+                if wanted
+                    && shown
+                        .get(&key)
+                        .is_none_or(|(_, o)| o.signedness() < s.signedness())
+                {
+                    shown.insert(key, (seq, s));
+                }
             }
         }
         let mut counts = [0usize; 4];
@@ -237,5 +283,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "payee-signed invoices that verify {invoices_signed}; settlement lines of their bill cycles {invoices_paid}"
     );
+    if let Some(w) = &show {
+        if shown.is_empty() {
+            println!("--show {w}: no projected record has that seq or leaf");
+        }
+        for ((account, h), (seq, s)) in &shown {
+            println!(
+                "record 0x{} · {:?} · seq {seq} · account {account} · {:?}",
+                alloy::hex::encode(h),
+                s.kind,
+                s.signedness()
+            );
+            print_slot("agent", s.agent.as_ref());
+            print_slot("counterparty", s.counterparty.as_ref());
+            print_slot("witness", s.witness.as_ref());
+        }
+    }
     Ok(())
 }
