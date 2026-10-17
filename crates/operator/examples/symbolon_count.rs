@@ -89,6 +89,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut clients: BTreeMap<&'static str, ArcClient> = BTreeMap::new();
     let mut total = [0usize; 4];
     let (mut files_seen, mut not_witnessed, mut read_failed, mut undecodable) = (0, 0, 0, 0);
+    let (mut invoices_signed, mut invoices_paid) = (0, 0);
     println!(
         "{:<42} {:>7} {:>8} {:>6} {:>6} {:>6}  chain",
         "account", "records", "unsigned", "single", "double", "triple"
@@ -111,6 +112,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Entry::Vacant(e) => e.insert(ArcClient::read_only(&watch::rpc_for(chain))?),
         };
         let invoices = signed_invoices(&app, policy, chain.chain_id);
+        invoices_signed += invoices.len();
         let log = dir.join("log");
         let anchors = audit::anchors(&log)?;
         let mut files: Vec<PathBuf> = std::fs::read_dir(&log)?
@@ -181,6 +183,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let EventBody::Settlement { cycle_key, .. } = &e.body
                     && let Some(s) = invoice_paid(&invoices, cycle_key)
                 {
+                    invoices_paid += 1;
                     extras.counterparty.insert(record_hash(e), s.clone());
                 }
             }
@@ -217,6 +220,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!(
         "events files {files_seen}: not witnessed {not_witnessed}, chain read failed {read_failed}; lines not decodable {undecodable}"
+    );
+    println!(
+        "payee-signed invoices that verify {invoices_signed}; settlement lines of their bill cycles {invoices_paid}"
     );
     Ok(())
 }
