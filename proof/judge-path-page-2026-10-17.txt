@@ -76,3 +76,49 @@ signed save (P-226) of a seconds bill on an account with agent keys (billsChalle
 Gates: tsc 0 errors; eslint src test 0 problems; node --test test/*.mts pass 59 fail 0; judge logic check (scratch test, 5 cases) pass 5 fail 0.
 Left: acme-agents-8812 holds 0.048 test USDC, Autopilot, one payee, the bill (Needs you keeps asking each cycle); its passkey lives only in
 the Playwright context.
+
+======================================================================================================================================
+Re-run 17:14 (written 2026-10-17 17:14 +0800) — S17a's fixes on :7917 (restarted 17:00:36, PID 63517); one fresh demo account, the only one opened.
+Same set-up (next dev :3003 from the clone, TAMEION_SERVICE=:7917, a fresh Playwright context with a CDP virtual passkey). Page changes since
+the first run: the guardians confirm skipped on demo accounts (PM ruling; a warning line stays), long hashes wrap in the payments list, the
+account menu narrower on phones (P-269), each line's anchored record looked up in /api/level1/records.
+
+Account: acme-agents-4695 · policy 0x3dfac6123ea67a2b22d875aabf2459d2e008a53a · owner 0xed447f2191ab678efc398452a25a642c1d12be45 · delay 30 s
+
+1 Open      17:03:22 tap → deploy 200 17:03:37 → strip on step 2 17:03:40 (18 s). Funding tx 0x8057276048b008215fe353737b272c404d6b511f4a5d5fe9e374329e1f0de15d.
+2 Bill      17:03:42 one passkey tap → PayeeSet tx 0x6621ee47e2b38fd5454cb92a35d8bd681c89688e87d2ca2612b03d2db0a56e20 → bills 200 17:03:50 →
+            strip on step 3 17:04:11 (29 s). The done line now carries the approval's Receipt.
+3 Autopilot 17:04:13 tap, NO confirm dialog (checked: no alertdialog within 4 s) → setMode tx 0x6080d280c81e16f4b1daf890fd3f28cba2d3795a25af5bb10ea57c50d5690ab1
+            17:04:19 → "Autopilot applies in 0:23 unless you cancel." with Cancel, and the line "1 of 3 keys set: on a real account, add two
+            guardians before turning Autopilot on or raising a limit, so a lost device does not lose the account." → applied; step 4 at 17:05:08.
+4 Watch it pay — PAID BY ITSELF: YES
+            17:05:09 "The bill is due in 0:39" … 17:05:50 "Now" · Live: "Check running" → 17:06:35 "Check done: paid 1, needs you 0, recorded on chain 0xab9b48…d36e".
+            Cycle 1: due 1792227948, paid 1792227953 by the agent, tx 0x8747a5ad9788e4837306e996ad32eff8fb09dac532afe1f1b3884115f5be1413 (row on the page 17:06:45).
+            Cycle 2: due 1792228068, paid 1792228073 by the agent, tx 0x12d97833c081c6c61cdb29bd92045e58f5d8babc86b5f0a3b2412451c6173f03 (row 17:08:28).
+            (Cycles 3 and 4 also by the agent: 0x1cebe145817fe864ef64701829c1b42c543cd911dcbe04aa7ec671dd694c600b, 0x1dffb85366ccbdde7b3a9c83db2987daf1e82605591382518e22efd4194e1df1.)
+            Each row, verbatim from the page (cycle 2):
+              "0.002 USDC to Demo Vendor · by the agent · 40 s ago · Receipt"
+              "Why, as recorded: paid by the agent: a bill the owner typed: 0.002000 USDC"
+              "In the book: paid 0.002 USDC — Paid 0.002000 USDC to 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854, settled in
+               0x12d97833c081c6c61cdb29bd92045e58f5d8babc86b5f0a3b2412451c6173f03. Read back from the receipt: the policy's Paid event matches.;
+               line 2 of record 0x33c1…1b20 · on chain ↗"   (cycle 1: record 0x7512…48b5 · on chain ↗)
+            The why is the reason the service records with the payment (inbox paid[].reason); the model's own sentence is in S17a's proof.
+5 Raise and cut — CANCEL THE RAISE: SUCCEEDED
+            17:12:31 "Raise one payment to 100.00 USDC" (from 50.00), NO confirm dialog → ChangeProposed tx 0x66e8a8f5f54eb3d3c097b9159f88475ddca0facf29f0421e67135bd3795a3813
+            (execute 200 17:13:04; the 29 s between prepare and challenge coincided with the dev page recompiling after a sync) → 17:13:10 "The higher
+            cap, 100.00 USDC a payment, applies in 0:22. It waits on chain where anyone can see it coming. The raise ↗ [Cancel the raise]".
+            17:13:12 Cancel → cancelPending tx 0xcd057c8fd4b0993817bef7f8937f6d1f6d155c0ca691764062e9f61e73066944 (execute 200 17:13:18) →
+            "Cancelled at once: the cap stays where it was. Receipt" and "You cancelled the raise: it never applied. Now cut: a cut never waits."
+            17:13:25 "Cut one payment to 0.002 USDC" → setLimits tx 0x39cb4d63e93f9bb313d5734134c01638faf3ba197cbe3b7251d1200f81086c20 (execute 200
+            17:13:32, 7 s; raiseCancelled null: nothing was waiting any more). Inbox after: perAction 0.002, daily 100, pending null.
+Finish      17:13:32 "Done in 9 min 55 s. Your agent paid its bills by itself; you made the trust decisions."
+            Agents can spend now 0.042 (USDC in one payment; 0.042 of 100.00 left today) · Paid by the agent 0.008 (4 payments) · Paid with no
+            human 4 (of 4 bills paid, 0.002 USDC each; 0 by your tap) · "The raise waited 30 s where anyone could see it, and you cancelled it ↗;
+            the cut applied at once ↗." · the mandate sentence · the keys line.
+            (9:55, not 5:00: the run waited for a second cycle and two more before step 5, as asked.)
+Widths: 390 = 375 content beside the desktop scrollbar; scrollWidth = clientWidth = 375 at steps 5 and the finish. Before the fixes the payments
+list reached 520 px (unbroken hashes) and the top bar 378 px (P-269).
+Screenshots: proof/judge-path-page-rerun-{1-open,2-bill,3-autopilot,4-countdown,4-paid-1,4-paid-2,5-raise,5-wait,5-cancelled,6-finish}-{1280,390}.png
+Gates after the re-run: tsc 0 errors; eslint src test 0 problems; node --test test/*.mts 64 pass 0 fail; check-types 15 types, 0 drifts.
+Left: acme-agents-4695 holds 0.042 test USDC on Autopilot (the demo bill ends after 15 cycles, demo.rs CYCLES); its passkey lives only in the
+Playwright context. Dev server :3003 (PID 69016) stopped.
