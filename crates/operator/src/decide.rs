@@ -645,7 +645,7 @@ pub async fn decide_or_rule<D: Decider + Sync>(
             // becomes the owner's question, with the model's own why.
             if d.by == ActorKind::Model
                 && d.action == Action::Refuse
-                && d.basis != Basis::LookAlike
+                && !(d.basis == Basis::LookAlike && case.lookalike_of.is_some())
                 && case.kind == Some(CaseKind::Invoice)
             {
                 d.action = Action::Ask;
@@ -1750,6 +1750,45 @@ mod tests {
             model(Action::Refuse, Basis::Usual, "y"),
         );
         assert_eq!((got.action, got.by), (Action::Ask, ActorKind::Rule));
+    }
+
+    #[tokio::test]
+    async fn a_model_look_alike_counts_only_when_the_case_found_one() {
+        // docs/60 P-223 (W3-4): "look-alike" is the case's fact, not the model's word.
+        struct ClaimsLookAlike;
+        impl Decider for ClaimsLookAlike {
+            async fn decide(&self, _c: &Case) -> Result<Decision, ReasonerError> {
+                Ok(model(
+                    Action::Refuse,
+                    Basis::LookAlike,
+                    "It imitates a payee you know.",
+                ))
+            }
+            fn name(&self) -> &str {
+                "claims"
+            }
+            fn kind(&self) -> ActorKind {
+                ActorKind::Model
+            }
+        }
+        let mut c = case();
+        c.kind = Some(CaseKind::Invoice);
+        c.allowed = vec![Action::Ask, Action::Refuse];
+        c.lookalike_of = None;
+        let (d, note) = decide_or_rule(&ClaimsLookAlike, &c).await;
+        assert_eq!(
+            d.action,
+            Action::Ask,
+            "no look-alike in the facts: the owner is asked"
+        );
+        assert!(note.is_some_and(|n| n.contains("only a look-alike")));
+        c.lookalike_of = Some("0x555555…aa5555".into());
+        let (d, _) = decide_or_rule(&ClaimsLookAlike, &c).await;
+        assert_eq!(
+            d.action,
+            Action::Refuse,
+            "a look-alike the code found: the refusal stands"
+        );
     }
 
     #[tokio::test]
