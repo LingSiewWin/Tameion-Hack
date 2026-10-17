@@ -1,0 +1,72 @@
+# S6c review: the money path of UAT fix wave 2, and the double-payment re-run — written 2026-10-17 13:02:08 +0800
+Reviewer seat S6c (did not build any of it). Committed code read with git (HEAD 05877ff; the commits under review 1227bff, cbc53fd,
+434a379, 3da2a84, 321dbad; the decider 603acb7, d0dcbbc, 84b98b2). Chain: Arbitrum Sepolia (https://sepolia-rollup.arbitrum.io/rpc),
+Arc testnet through https://explorer.testnet.arc.io/api/eth-rpc (rpc.testnet.arc.network answered NXDOMAIN on 10-17).
+Service :7880 = the 23:00 build (pid 75999) for the 10-16 reads, the 00:57 build (pid 16285, the decider) for the 10-17 reads.
+Ids only; no key printed; no product code changed.
+
+## A. uat-u2-fin after the P-175 fix (policy 0x48274c7904edb23f75ea607c932d5c441c1a80e3, Propose, typed bill 0.05 USDC / 30 d to 0x179dca89f69faef5765d2e7445aa5452b8159520, typed next_due 1792156029)
+2026-10-16 23:52:30 +0800 GET /api/level1/inbox (23:00 build): needsYou 1 row — 0.050000 USDC to 0x179d…9520, cycleKey 0x179d…9520@1792156029,
+  actionHash 0x8e14ca725749f09ad6fad8e5c2a128373f82a1e526a2dfa810e3f3cab1d789eb (the 22:20 pass, pre-fix code),
+  settlementKey 0xf39a6156a544af2b1965d16d1ce40bfb73b73ad47f192f60c2db0649d38f256f; the row's call is
+  settleAsPrincipalIf(0x179d…9520, 50000, 0xf39a…256f, terms, deadline) (selector 0xad118e8b) — bound to the settlement key, as the fix intends.
+  lastPass 6ad2328f-0011 at 1792160399 (22:20, before the fix).
+2026-10-16 23:54:03 +0800 chain: executed(0xf39a…256f)=false, executed(0x85dc…1969)=true, executed(0xd160…44f7)=true; payee balance 100000 (0.10 USDC).
+  eth_call of the inbox's call from the owner contract 0xf12f47e643d3aadc42c70430f26dd58ef0dd228a: returns 0x (succeeds) => a tap pays a THIRD time.
+2026-10-16 23:54:52 +0800 POST /api/level1/run -> job 6ad248cc-0004: status failed, error:
+  "the chain records 0x179dca89f69faef5765d2e7445aa5452b8159520@1797340029 as settled, which is further ahead than any pass could have paid it: the settlement record and this obligation's schedule disagree"
+  (1797340029 = 1792156029 + 2 x 2592000: owner_paid_cycle settled cycle 1 with tx 0x06a3… and cycle 2 with tx 0x20f5…; step_past_settled's bound
+  (elapsed/interval + 2 = 2) ends there and returns SettledAhead, which fails the whole pass — crates/operator/src/lib.rs:372-381, 1340-1397.)
+2026-10-16 23:57:35 +0800 inbox again: the same ask, bound to 0xf39a…256f; lastPass still 6ad2328f-0011; nothing on the page says the check failed.
+2026-10-17 12:50:51 +0800 POST /api/level1/run on the 00:57 build -> job 6ad2feab-0000: status failed, the same error.
+2026-10-17 12:53:45 +0800 inbox: the same ask (data keyed 0xf39a…256f, boundUntil 1792213427); lastPass 6ad2328f-0011.
+2026-10-17 12:54:14 +0800 block 319971686: eth_call of that call from the owner contract: 0x (succeeds; balanceUsdc 200000, executed(0xf39a…)=false).
+  The same call with the spent key 0x85dc…1969 in place of 0xf39a…: execution reverted, data
+  0xd1d36dcd85dcc14b8c469d30b6e7edd45f28d92267583487c27c38111089a41008861969 = AlreadyExecuted(0x85dc…1969).
+  => The CONTRACT refuses a second settlement under the same action hash; it cannot see that 0xf39a… is the same bill-cycle as 0x85dc…/0xd160….
+Result: the third ask is NOT gone after a pass (two passes, two builds). Not tapped. U2's Playwright context was no longer open (the shared browser
+  held 4 contexts, none with a page on :7880), so the check was done through the service and the chain.
+
+## B. Drills 1 and 2 on a fresh account: NOT RUN
+2026-10-17 00:10:13 +0800 (the tenant file's created time) own Playwright context (UA tag S6C-OWN, CDP virtual authenticator ctap2/internal/UV) on http://localhost:7880/:
+  name s6c-dbl-0006 -> "Open the account with my passkey" -> reserved: policy 0x5d2ca40555419d82b5c83e773ff7cfd72b6bb952,
+  owner 0x1334a1aef828edc6f6c64f939d953d3cc8036b32, Arbitrum Sepolia, not deployed (GET /api/level1/name/s6c-dbl-0006).
+  The funding transfer (0.4 USDC from the relayer, as earlier proofs did) was refused by this session's permission system ("Real-World
+  Transactions"). Without money the account never deploys, so the owner's pay, the two passes, the direct resend and the two-context
+  concurrent settle were not run. The context was closed on 10-17 shortly before 13:00 (its virtual authenticator and credential are gone); the reserved,
+  unfunded tenant file remains in runtime/app/tenants/.
+  What stands in for them: A (the same-hash refusal by eth_call on the real chain) and the code reading in docs/103 "Wave 2 money path (S6c)".
+
+## C. Drill 3: every payment out of every deployed account :7880 runs (runtime/app), grouped by payee and bill-cycle — run 2026-10-17 12:57 +0800
+Method: eth_getLogs Paid / SettledByPrincipal / PaidDue on each deployed policy from its created block to head; each payment named by the
+pass records (pendingSignature actionHash/settlementKey -> cycleKey; settled tx -> payee@dueAt), purchases.jsonl (x402 digest), PaidDue
+(schedule id + due date), else "unattributed". Script: scratchpad s6c/sweep.py (stdlib, read-only).
+  arbitrum-sepolia: 17 deployed accounts, blocks 319119834-319972438; 18 payments on 8 accounts (4 Paid by the agent or a purchase, 14 SettledByPrincipal); attributed: {"pass settled": 1, "unattributed": 7, "pass ask": 7, "x402 purchase": 3}
+  arc-testnet: 7 deployed accounts, blocks 67128297-67615911; 13 payments on 4 accounts (5 Paid by the agent or a purchase, 8 SettledByPrincipal); attributed: {"pass ask": 8, "pass settled": 1, "x402 purchase": 3, "unattributed": 1}
+  Duplicate bill-cycles (two or more payments for one payee and cycle): 1
+    arbitrum-sepolia policy 0x48274c7904edb23f75ea607c932d5c441c1a80e3 payee 0x179dca89f69faef5765d2e7445aa5452b8159520 cycle 0x179dca89f69faef5765d2e7445aa5452b8159520@1792156029:
+      owner 50000 minor, actionHash 0x85dcc14b8c469d30b6e7edd45f28d92267583487c27c38111089a41008861969, tx 0x06a344a58ef817491949a6ab49638a204f8414aad4322ba46d587e926d41067c, at 1792156166
+      owner 50000 minor, actionHash 0xd160efeaea984549ffaa3620f39f0aa0d3f9243a754ccab50bf7b87e7ed444f7, tx 0x20f53fac615b6b15007c5d7e8a9a65507cbeeaf43cb0fd4d94dd99f1e74f1e84, at 1792156665
+  Same payee + same amount within 25 days among payments no pass names: 0
+  Purchases from one seller for one amount within 120 s: 0
+  Payments no pass record names (8); every one differs in payee or amount from the others:
+    0xf1c78d0b940ee10a683e3ba899c5a829890004a8 -> 0x87b1dd75d498997c4ea7e726be4ec0e5f6a3d6d8 10000 minor by owner, tx 0x5cb1d03e976f3dc6ba3dff2d0ab645debe07f3907c3845981c865b80dbf52cb6
+    0xf1c78d0b940ee10a683e3ba899c5a829890004a8 -> 0x87b1dd75d498997c4ea7e726be4ec0e5f6a3d6d8 12000 minor by owner, tx 0x8937f3c056badce6aa7dceeb71149990060820b60f5071aef4549ffbd3166607
+    0x818e56c043e052f1c7d8dc8c0f239ad6a1b9e58c -> 0x1da9623aba16749de76ab57d2f68b5daa28ca6f3 5000 minor by owner, tx 0x1bd2dce6be975b5210fee30f87cbddbf160c3ef28bf6b840dd4e3d50b46eb834 (an invoice id)
+    0x818e56c043e052f1c7d8dc8c0f239ad6a1b9e58c -> 0x1da9623aba16749de76ab57d2f68b5daa28ca6f3 4000 minor by owner, tx 0x5141f33828894946191e850dfe77aff107b659614ff9bc6712d458254216fd90
+    0x818e56c043e052f1c7d8dc8c0f239ad6a1b9e58c -> 0x1da9623aba16749de76ab57d2f68b5daa28ca6f3 3000 minor by owner, tx 0x4236213b41ec46eb25ed57138814bcf38008c3ce44132f4bbe913f552c90c7f1
+    0x35a2e2701d4d72be257bf7708c67d1433c60342f -> 0xe6379d56501826cddb242bbf9e9a1afb2f34665f 8000 minor by owner, tx 0x78a1ca8b63cc3c5b630c9109cae5e379aa0655721bc7008d8cc0a88da6e48e0d (an invoice id)
+    0x35a2e2701d4d72be257bf7708c67d1433c60342f -> 0xae0c76958fcf8cd6c08eeb2a900ea4d8a7eec0bd 1000 minor by owner, tx 0x823445d213a48906852e1753aaa7347067ed6b72e6cb3ce5fd6c56d77ee1945b (an invoice id)
+    0xf799a85496580af9a63c35223443688f8693635d -> 0x805a6d4e58bb7e33ce58d54ab06c33fcfcb54dad 1960 minor by agent, tx 0x4910091b42c816f90f6243107d14ca74fd6477876f2eebff13b128dca85c085f
+Result: one duplicate — uat-u2-fin's known P-175 pair. No other bill-cycle paid twice; no repeated purchase.
+
+## D. Evidence for the standing-order path (no transaction)
+inbox of uat-u2-fin (12:53): standingOrderCandidates = [{payee 0x179d…9520, amount "0.05 USDC", everySecs 2592000, nextDue 1792156029,
+  basis "you imported this bill"}] — nextDue is the typed date of the cycle already paid twice; typedBills nextDue 1792156029 (never advanced).
+  The console's "Make it standing" sends firstDue: c.nextDue (apps/console/src/components/account/agent.tsx:298); the pass pays a due order
+  with payDue "in Propose too" (crates/operator/src/lib.rs:1788-1819), under scheduleActionHash(id, dueAt), a key no bill payment carries.
+
+## E. P-176a on a keyed account (uat-u1-acme 0x42463b314d392fe34abe1854b925f0f6e55fa555), no key, 2026-10-17 13:00:30 +0800
+statement 401, inbox 401, records 200 (3 roots); GET /api/level1/record per root 200. The events disclose: the balance ("Holding 0.998000
+USDC"), the seller address 0xe7d8…2990, purchase URLs with their query (x402:http://127.0.0.1:7941/v1/mid?coin=ETH), the purpose sentence
+("ETH price for the weekly research report"), the refusal and its reason. No token, webhook URL or payee name found in them.
