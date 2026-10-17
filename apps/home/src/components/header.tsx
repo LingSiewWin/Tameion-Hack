@@ -43,11 +43,13 @@ export function Header() {
 
   return (
     <header className="border-b border-(--rule)">
-      <div className="surface flex min-h-16 items-center gap-(--space-3) py-(--space-2)">
+      <div className="surface flex min-h-16 items-center gap-(--space-2) py-(--space-2) md:gap-(--space-3)">
         {reading ? (
           <span className="skeleton block h-[22px] w-32" aria-hidden />
         ) : (
-          <span className="row-title min-w-0 truncate">{title}</span>
+          <span className="row-title min-w-0 truncate" title={title}>
+            {title}
+          </span>
         )}
         <span className="pill meta ml-auto">Testnet</span>
         <div className="capsule" role="group" aria-label="View">
