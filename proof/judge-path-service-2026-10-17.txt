@@ -1,0 +1,122 @@
+The judge's five minutes, service side (docs/115 §3, seat S17a): a fresh account opened in demo mode is funded by the relayer without a
+human, the owner's one tap's worth of calls approves the demo vendor and saves a bill of 0.002 USDC every 120 s, Autopilot applies after
+the 30 s delay, and at each due time the agent pays by itself — twice. Written 2026-10-17 16:44:21 +0800. No key or token is printed below.
+
+WHERE
+  service   :7917, binary built from branch seat/S17a (worktree runtime/wt/S17a), run by runtime/seats/S17a/run.sh from the main tree:
+            PORT=7917 TAMEION_APP_DIR=runtime/seats/S17a/app TAMEION_DEMO=1 TAMEION_DEMO_VENDOR=0xE5E2d8dCC2038fd0A010A6e7845378b646e33854
+            TAMEION_LEVEL1_INVITE=<from ~/.tameion/test-keys/s17a-invite.txt> TAMEION_LEVEL1_WATCH_SECS=20
+            TAMEION_REASONER=cloud-redacted ANTHROPIC_API_KEY=<from ~/.tameion/anthropic.key>  (the model decides, as a judge would see it)
+  chain     Arbitrum Sepolia (421614), USDC 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d, public RPC
+  driver    a stdlib Python script calling the routes in the page's order; the passkey is a software P-256 key made for this run
+            (~/.tameion/test-keys/s17a_owner2.pem, mode 600) signing through ~/.tameion/test-keys/soft_passkey.py
+  demo vendor 0xE5E2d8dCC2038fd0A010A6e7845378b646e33854 (a new EOA; key ~/.tameion/test-keys/s17a-demo-vendor.key, mode 600; only the address is in config)
+
+GET /api/level1/demo (16:32:15)
+  {"bill": {"everySecs": 120, "usdc": "0.002"}, "delaySecs": 30, "enabled": true, "vendor": "0xe5e2d8dcc2038fd0a010a6e7845378b646e33854"}
+  (since 16:42 also "cycles": 15 in bill: a demo bill ends after 15 cycles, docs/60 P-264)
+
+BEAT 2 — PASS. Account uat3-judge-1633: policy 0x8f79d71c09447b129257614beb653ee3f79b593f, owner 0x0a8ed98164415f3a87f40bddf6cb1dba76530711,
+agent 0x7765cc4ee832b9baae090ec8880c471cbbb8fcc1, delay 30 s (every transaction below read back: status 0x1)
+  1 OPEN     16:32:15 POST /api/level1/deploy {chain, qx, qy, name, invite, lazy: true, demo: true} -> 200 in 15.1 s
+             owner     https://sepolia.arbiscan.io/tx/0xd33b851fba4b3464d2e6e0dbaeccedca7567eff9a4f864282886be63b87c0b15
+             policy    https://sepolia.arbiscan.io/tx/0x3a2140a785efedeb05f6bbdd137eeafae2a83623eff2ba3bf0c6b495ebb81b43
+             agent gas https://sepolia.arbiscan.io/tx/0x1b8613df2f29b5d7603a5b41596d87be909fde4a61c2107ec15dd1924a903703
+             FUNDED BY ITSELF: 0.05 USDC relayer -> policy, block 320021154 at 16:32:29
+                       https://sepolia.arbiscan.io/tx/0x77906f4544f7332ae990c65cc633fbc57f64fabe839fbf644e6ed027619624be
+             reply "demo": {"usdc": "0.05", "tx": "0x77906f45…", "agentGasTx": "0x1b8613df…", "at": 1792225950}; logged in
+             runtime/seats/S17a/app/demo-funding.jsonl and on stdout ("demo: funded 0x8f79… with "0.05" in 0x77906f45…")
+  2 BILL     16:32:31 POST /api/level1/prepare-payees {payees: [vendor]} -> 200 in 1.2 s; passkey -> execute 16:33:13
+                       https://sepolia.arbiscan.io/tx/0x5675219130c25093061228ce4f19245ab635827a6aee0d4703275b55d546cffb (payee approved)
+             16:33:14 POST /api/level1/bills {bills: [{payee: vendor, amount: "0.002", everySecs: 120}]} -> 200 in 1.3 s
+                       kept: every_secs 120, next_due 1792226113 (16:35:13, one cadence after the save), refused []
+  3 AUTOPILOT 16:33:15 POST /api/level1/prepare-mode {mode: 2} -> "applies: 30 seconds after it is signed, and the owner can cancel it until then"
+             passkey -> execute 16:33:51 https://sepolia.arbiscan.io/tx/0xa8bdaaea74179745c74c28826a73692f88f08c92c3ef4988ccbf97ea24becf88
+             applied by the watcher at 16:34:35 (block 320021630; eta 16:34:21)
+                       https://sepolia.arbiscan.io/tx/0x2313039fbcffa91f56c4aa30321468bea416db99aea1efbf53e3113d575be022
+  4 WATCH IT PAY
+     cycle 1 due 16:35:13 -> the watcher's due pass created 16:35:18 (due + 5 s), mode Autopilot, decider claude-sonnet-5-5
+             PAID BY ITSELF 0.002 USDC to the vendor, from the agent 0x7765…fcc1, block 320021820 at 16:35:27
+                       https://sepolia.arbiscan.io/tx/0x349c8930c0b66b3e155926a134cfcdea539ff91954510a7d06c1f9bec8fb2343
+             why (verbatim): "The owner typed this 0.002 USDC bill for an approved payee, it is within the caps and due now, so it is paid as instructed."
+             decision {"action": "pay", "basis": "due_now", "by": "model"}; anchor https://sepolia.arbiscan.io/tx/0x2a46c5a996c4219dbcea60d52fe147e4d7e7ce0573fe6253ff93b21fe733b8b2
+     cycle 2 due 16:37:13 -> due pass created 16:37:18 (due + 5 s), mode Autopilot
+             PAID BY ITSELF 0.002 USDC to the vendor, from the agent, block 320022262 at 16:37:29
+                       https://sepolia.arbiscan.io/tx/0x9811cde1910c19b6beea379ae24d1a6fa70bfbe9911bf169bd910340eafc2a3e
+             why (verbatim): "The owner typed this 0.002 USDC bill to 0xe5e2d8…e33854, it is due now and within the caps, so it is the owner's own instruction."
+             decision {"action": "pay", "basis": "usual", "by": "model"}; anchor https://sepolia.arbiscan.io/tx/0x4e3f12ebaf6cfbd454798b4d40533c88d47b40353138d65077012352cbc99316
+  read back after: policy USDC balanceOf = 46000 (0.05 - 2 x 0.002); both payments status 0x1, from the agent key, to the policy contract.
+
+BEAT 1 — FAIL at step 4 (16:17–16:24, account uat3-judge-1619, policy 0xc7d2fc9d7404ee5026e78a23f4d59bb816ca2930, software key s17a_owner.pem)
+  steps 1–3 held: funded by itself https://sepolia.arbiscan.io/tx/0x9ba7491246cca6eaeede253c95b45530c3d815cf9e2264f57a2b98260fb62e08 (16:17:52),
+  payee approved 0x881e4ebe…a06a, bill saved (due 16:20:34), Autopilot applied 0x69c683e0…7339; the due pass ran at 16:20:40 (due + 6 s,
+  the P-260 scheduling held) but the model ASKED: "0xe5e2d8…e33854 was approved moments ago and has never been paid, so you should see this
+  0.002 USDC bill before it goes out." (basis new_payee). Cause and fix: docs/60 P-261 (the case could not say the owner typed the bill);
+  the cycle-2 pass at 16:22:39 asked again and from then the verifier's cycles-behind check holds pay back (docs/60 P-263).
+
+RELAYER SPEND (USDC): 24.62 at 16:05 -> 24.47 at 16:38: three demo fundings of 0.05 (beat 1, beat 2, and one account S17b opened on :7917,
+0x5a78fa92…9ddb at 16:23 tx 0x724da434…7e55).
+
+STEP 5 — scripts/demo_seed_history.sh, proved once (2026-10-17 16:47:45 +0800): the found-bill row appears (docs/60 P-228)
+  DEMO_WALLET_KEY=~/.tameion/test-keys/s17a-demo-wallet.key scripts/demo_seed_history.sh 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854
+  demo wallet 0x68A8f3a1Da61082d4Dd370FD92D79EAA0d4afecb (new key, mode 600)
+  16:43:26 gas for the wallet https://sepolia.arbiscan.io/tx/0x00db4ea285e33530fde0b8583c8670bfb41267c2b2ece5429425adcdc384c8c5
+  16:43:31 USDC for the wallet (0.006) https://sepolia.arbiscan.io/tx/0xbe94854ddca068016df0355fea90c51f995959d8ff57c256427f6a912ad2b2a3
+  16:43:34 payment 1: 0.002 to the vendor https://sepolia.arbiscan.io/tx/0x81efc05cffb93856ca08b1d9a3178b56c492fc49e32c9d5914a8d8fffe0b785e
+  16:45:07 payment 2: 0.002 https://sepolia.arbiscan.io/tx/0x1b98fbd5fbdf5b44e37b0f3214934c5e5aeb19c4e7c7264eed9e487e065f6c1e
+  16:46:41 payment 3: 0.002 https://sepolia.arbiscan.io/tx/0x9b7ab0536dcd5a1756655dce4d70ad202dfd5a2317eb46f865c4b64b7e8d1392
+  16:47:02 a fresh account uat3-found-1647 (policy 0x9867f43b8c471d035462275220bda7b82e2f8b9f, lazy) connects the wallet (200) and asks for a pass
+  16:47:22 the pass: obligation {"amount": "0.002000 USDC", "confidence": 0.6182, "intervalSecs": 93, "nextDue": 1792226896, "provenance": "history", "samples": 3}
+  16:47:28 GET /api/level1/inbox -> sellersToApprove row: askedBy "Your agent", host "a bill it found", bill {everySecs 93, nextDue 1792226896 (16:48:16), samples 3},
+           reason (verbatim) "it found this bill in your history: 0.002000 USDC every 1 minutes, paid 3 times; next due at unix 1792226896. Approve it
+           before then and the agent pays that cycle itself, once the payee's 60-second waiting time has passed", with its bound approve call.
+  Limits seen: three payments give confidence 0.62 — above the Propose floor (0.60), under the Autopilot floor (0.75), so after the approve tap the
+  agent would still ask before paying that bill; five payments would be needed for the agent to pay it alone. "every 1 minutes" is the
+  found-bill sentence's grammar (tameion-app.rs found_bill_reason), not this script's. Also: a wallet connected BEFORE its payments gets no
+  fresh pass for ten minutes (the run cache), so connect after the last payment, as the script says (seen 16:43, account 0x4b9660e4…562f).
+
+BEAT 3 — the late judge (Autopilot turned on after cycle 1's due time), (2026-10-17 17:25:04 +0800). Account uat3-judge-1701: policy 0x90c28ef7b7ce4696e6c6ebd1b104f5db44ad4770,
+owner 0x2bfb7ce17570492f0afa06c91c88fb738230b116, agent 0x8c1ca0651160726087d5a5f538c207d53b640f3b, software key s17a_owner5.pem. Binary of 17:00:37
+(P-261, P-264, P-265, P-267). Every transaction read back: status 0x1.
+  1 OPEN      17:01:13 deploy (demo) -> 200 in 14.6 s; FUNDED BY ITSELF 0.05 USDC, block 320027672
+                       https://sepolia.arbiscan.io/tx/0x08eb306b821a1cf37e61022e97a5dee59e9e0f304ae8717ad1f28f2976bfca64
+              owner 0x394e5bdb…2e8f, policy 0x39986c22…4b76, agent gas 0x6e023e59…043f
+  2 BILL      payee approved 17:01:34 https://sepolia.arbiscan.io/tx/0x3b8a80b6e22289874d4c1b96baf1738b8ed25f7132d6b46b13bde7bdd9297df9
+              bill saved 17:01:35 (every_secs 120, next_due 1792227814 = 17:03:34); reply now carries "ok": true, "contractVersion" (S13's envelope)
+  (wait)      the due pass at 17:03:39 ran on Propose: asked ("…approved 0 days ago and has never been paid, so I'm putting this 0.002 USDC bill in front of you first.")
+  3 AUTOPILOT signed 17:04:04 https://sepolia.arbiscan.io/tx/0x978ce5c25ee53e42eafd1b822d85bf6adae77acdbf2da33e28c583f3c77a0fed (eta 17:04:34)
+              FAIL: the watcher's apply reverted TooEarly(1792227874) — the chain's clock behind ours — and the change was forgotten; passes 17:05:40 …
+              17:11:39 stayed on Propose and asked; the P-267 step held (each asked a NEW cycle, @1792227934 … @1792228294: no cycles-behind). docs/60 P-285.
+              17:15 restart with the P-285 fix (commit 1244029, now 31bd8d1), one inbox read (as the open page does):
+              applied 17:15:25 https://sepolia.arbiscan.io/tx/0x1a26560af75e2003b928c5e16c22f687bb660028bd22b60dc3d9ed0faf71d4cd
+  4 WATCH IT PAY — six cycles had gone by unpaid; the agent pays the current one, not the oldest (P-267)
+     cycle due 1792228534 (17:15:34) -> due pass 17:15:39, Autopilot: PAID BY ITSELF, block 320030942
+                       https://sepolia.arbiscan.io/tx/0xe980b06ab796b17e34d9c6d8b47ea5df1050891ef301b07429ccd4f2b86ee8c7
+              why (verbatim): "The owner typed this 0.002 USDC bill to an approved payee, it is within the caps and due now, so it is paid."
+              allowed [pay, ask, refuse]; anchor 0x84d23c9768e850f0e92d57dd31e0762d94ddebb9ec5377b801336eb700991ad1
+     cycle due 1792228654 (17:17:34) -> due pass 17:17:39: PAID BY ITSELF, block 320031396
+                       https://sepolia.arbiscan.io/tx/0xef54bcf2494fb1590d2d1e219ba3d2dc9cfeccde6a5e7c149ff19dbfd09e1e1b
+              why (verbatim): "The owner typed this 0.002 USDC bill to 0xe5e2d8…e33854, an approved payee, it is within the caps and due now, so it is paid."
+              anchor 0xb4c0dc65978694cf4917f9bdfd38f15754769281788b1a6d3f056f67d25b6699
+
+S17b's page run on this :7917 (their proof/judge-path-page-2026-10-17.txt): acme-agents-4695 (0x3dfac6123ea67a2b22d875aabf2459d2e008a53a), opened 17:03:37
+(funding 0x80572760…d15e), paid by itself every cycle from the 17:05:53 pass: 0x8747a5ad…, 0x12d97833…, 0x1cebe145…, 0x1dffb853…, 0xced412ac…, 0x45776caa…,
+0xe818f644…, 0x47a65330… (job reports in runtime/seats/S17a/app/jobs).
+
+P-265 — A CUT WHILE A RAISE WAITS (uat3-judge-1701, 17:18–17:20)
+  17:18:43 caps 50 / 100 USDC (perActionCap / dailyCap, read from the contract)
+  17:18:46 prepare-limits 60/100/0: "30 seconds after it is signed, and the owner can cancel it until then"; passkey -> execute
+                       https://sepolia.arbiscan.io/tx/0x0597ac28eb31f46bc56217854279f99f93e216ed55a508149e04566058765b06
+  17:18:53 pending() = 60000000, 100000000, 0, 0, eta 1792228762 (17:19:22), kinds 1
+  17:18:55 prepare-limits 50/90/0: "at once when signed: it only lowers what the agent may spend"; passkey -> execute
+                       https://sepolia.arbiscan.io/tx/0x5f2bb9eac172f867dc938da35390b18bfe532d8252bab8aef20c8788cc6d1582
+           reply "raiseCancelled": https://sepolia.arbiscan.io/tx/0x17f3a4c4c27891fa9b7f1bc29b21adf3d939f63308e9537822cfb6ba82b91282 (the operator's cancelPending)
+  17:19:30 pending() all zero; 17:20:00 (after the raise's eta) caps 50 / 90 — the cut held.
+
+REBASED BUILD: seat/S17a rebased on main 04e81f6 (S15's guard, S14's openapi, S17b's console); cargo test -p operator 208 + 18 + 1 + 18 + 4 + 3 + 4 + 2
+passed, clippy -D warnings clean, fmt clean, check-types 0 drifts; :7917 restarted 17:24:29 on it (GET /api/level1/codes lists service_paused).
+
+RELAYER SPEND (USDC), final: 24.62 at 16:05 -> 24.364 at 17:21 = 0.256: five demo fundings of 0.05 (beats 1–3; S17b's acme-agents-8812 and acme-agents-4695)
+and 0.006 for the seed script. Under the 0.3 cap; no more demo accounts opened.
+  and on the rebased binary: uat3-judge-1701's cycle due 1792229134 (17:25:34), due pass 17:25:39, PAID BY ITSELF (0x1 from 0x8c1ca0651160726087d5a5f538c207d53b640f3b block 320033212)
+                       https://sepolia.arbiscan.io/tx/0x03b7f9c204d1deec3f9cb17ed287020785ae5e5b904e5588ee64ad14f488bca6
