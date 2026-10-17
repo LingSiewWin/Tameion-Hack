@@ -63,12 +63,11 @@ button:active {
    and set in 600, so the choice is never colour alone. No border, no shadow. */
 .capsule {
   display: inline-flex;
-  padding: var(--space-1);
   border-radius: var(--radius-capsule);
   background: var(--plate);
 }
 .capsule > button {
-  min-height: calc(var(--touch) - 2 * var(--space-1));
+  min-height: var(--touch);
   min-width: var(--touch);
   padding: 0 var(--space-4);
   border: 0;
@@ -81,7 +80,7 @@ button:active {
 @media (max-width: 639.98px) {
   /* room for the account's name at 390 px: the pill and the segments take the smaller steps of the scale */
   .pill { padding: var(--space-1) var(--space-2); }
-  .capsule > button { padding: 0 var(--space-3); }
+  .capsule > button { padding: 0 var(--space-2); }
 }
 .capsule > button[aria-pressed="true"] {
   background: var(--plate-2);
