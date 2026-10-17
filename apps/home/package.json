@@ -8,11 +8,13 @@
   },
   "scripts": {
     "dev": "next dev -p 3010",
-    "prebuild": "node scripts/contrast.mjs",
+    "prebuild": "node scripts/contrast.mjs && node scripts/tokens-lint.mjs && 21st review src",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test test/*.test.mts"
+    "test": "node --test test/*.test.mts",
+    "lint:tokens": "node scripts/tokens-lint.mjs",
+    "review": "21st review src"
   },
   "dependencies": {
     "next": "16.4.0",
@@ -20,6 +22,7 @@
     "react-dom": "19.3.0"
   },
   "devDependencies": {
+    "@21st-dev/cli": "1.18.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
