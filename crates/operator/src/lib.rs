@@ -54,6 +54,7 @@ pub mod local;
 pub mod mcp;
 pub mod parties;
 pub mod pay;
+pub mod price;
 pub mod push;
 pub mod reasoner;
 pub mod refusal;
