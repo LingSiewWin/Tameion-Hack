@@ -3374,7 +3374,7 @@
     },
     "/api/level1/status": {
       "get": {
-        "summary": "The service as it stands: contractVersion, recentUpdates [{date, note}], and the kill switches (paused, stoppedTokens, halt).",
+        "summary": "The service as it stands: contractVersion, recentUpdates [{date, note}], the kill switches (paused, stoppedTokens, halt), and with ?policy= the burn rate (rate, windowDays), runway {byRateDays, firstShortfallDays} and the last ten forces.",
         "responses": {
           "200": {
             "description": "ok",
@@ -4422,12 +4422,49 @@
                 "finalitySecs"
               ]
             }
+          },
+          "rate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Money"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "with ?policy=: USDC a day over windowDays (null when the chain read failed)"
+          },
+          "windowDays": {
+            "type": "integer"
+          },
+          "runway": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MomentumRunway"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "forces": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Force"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
           "recentUpdates"
         ],
-        "description": "the service as it stands: the contract version, what changed, and with ?policy= the kill switches"
+        "description": "the service as it stands: the contract version, what changed, and with ?policy= the kill switches and the account's burn rate and runway"
       },
       "Call": {
         "type": "object",
@@ -6328,6 +6365,9 @@
               "$ref": "#/components/schemas/Payment"
             },
             "description": "the agent's direct payments, newest first, at most 20"
+          },
+          "momentum": {
+            "$ref": "#/components/schemas/Momentum"
           }
         },
         "required": [
@@ -6382,7 +6422,8 @@
           "waitingCount",
           "waiting",
           "agentAsks",
-          "parties"
+          "parties",
+          "momentum"
         ],
         "description": "GET /api/level1/inbox. Every field is present on every reply (null when it does not apply) except payees (deployed accounts, read from the contract) and autopilotAsk (when an agent asked for Autopilot)."
       },
@@ -7077,6 +7118,88 @@
           "paid",
           "payment"
         ]
+      },
+      "MomentumRunway": {
+        "type": "object",
+        "properties": {
+          "byRateDays": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "days until the balance reaches the floor at the current burn; null while nothing was spent in the window"
+          },
+          "firstShortfallDays": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "days until the first bill, at its schedule, that the money above the floor cannot cover; null when it covers every bill in the next 90 days"
+          }
+        },
+        "required": [
+          "byRateDays",
+          "firstShortfallDays"
+        ],
+        "description": "the account's two runways, from one fold (docs/117 §1)"
+      },
+      "Force": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "bill_added",
+              "bill_removed",
+              "mode_changed",
+              "cap_changed",
+              "refused"
+            ]
+          },
+          "counterparty": {
+            "type": "string"
+          },
+          "deltaPerDay": {
+            "$ref": "#/components/schemas/Money"
+          }
+        },
+        "required": [
+          "at",
+          "kind",
+          "counterparty",
+          "deltaPerDay"
+        ],
+        "description": "an event that moved the burn rate, and by how much a day"
+      },
+      "Momentum": {
+        "type": "object",
+        "properties": {
+          "rate": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "windowDays": {
+            "type": "integer"
+          },
+          "runway": {
+            "$ref": "#/components/schemas/MomentumRunway"
+          },
+          "forces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Force"
+            }
+          }
+        },
+        "required": [
+          "rate",
+          "windowDays",
+          "runway",
+          "forces"
+        ],
+        "description": "burn rate (USDC a day over windowDays, from settled payments in the anchored record), both runways, the last ten forces"
       }
     }
   }

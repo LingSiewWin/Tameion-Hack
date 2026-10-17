@@ -457,8 +457,7 @@ fn preview_of(r: &Value, usdc: &str, ms: u64) -> Value {
 /// overdue one counts once, now) to now + 30 days.
 fn bills_next_30(report: &Value, now: u64) -> Option<i128> {
     let list = report["obligationsList"].as_array()?;
-    let end = now + 30 * 86_400;
-    let mut total = 0i128;
+    let mut bills = Vec::new();
     for o in list {
         let amount = ledger::Money::parse(
             o["amount"].as_str()?.trim_end_matches(" USDC").trim(),
@@ -469,26 +468,26 @@ fn bills_next_30(report: &Value, now: u64) -> Option<i128> {
         // A bill without a cadence or a date counts nothing; it does not
         // void the total for every other bill (review 2026-10-15).
         let (Some(every), Some(next)) = (
-            o["intervalSecs"].as_u64().filter(|s| *s > 0),
-            o["nextDue"].as_u64(),
+            o["intervalSecs"].as_i64().filter(|s| *s > 0),
+            o["nextDue"].as_i64(),
         ) else {
             continue;
         };
-        // A full interval or more overdue: it may have ended, so once, as
-        // `watch::due_within` and the Runway count it (docs/60 P-58).
-        if now.saturating_sub(next) >= every {
-            total += amount;
-            continue;
-        }
-        // From its own due date, not from now: a weekly bill six days late is
-        // due now and then a day later, as `watch::due_within` counts it.
-        let mut due = next;
-        while due <= end {
-            total += amount;
-            due += every;
-        }
+        bills.push(ledger::momentum::Bill {
+            next_due: next,
+            every_secs: every,
+            amount_minor: amount,
+        });
     }
-    Some(total)
+    // The one bill walk's dates (`ledger::momentum::due_dates`): from each
+    // bill's own due date, at its cadence; a full interval or more overdue
+    // counts once (docs/60 P-58).
+    Some(
+        ledger::momentum::due_dates(&bills, now as i64, 30 * 86_400)
+            .iter()
+            .map(|d| d.1)
+            .sum(),
+    )
 }
 
 /// Every passkey that owns `owner` (the primary first, then co-owners), and
@@ -603,9 +602,109 @@ async fn invoice_settled(
     Ok(settles(&paid, id, payee, units))
 }
 
-/// One bill in the Runway projection: payee, minor units, interval (s),
-/// next due (unix), and whether it may have ended (counted once).
-type RunwayBill = (String, i128, i64, i64, bool);
+/// The bills the runway walks (docs/117 §1), named by payee: every bill of
+/// the last pass (`obligationsList`) and each active standing order the owner
+/// set (PLAN 5.25: the contract pays them on their day whoever triggers), one
+/// per payee, the order winning over the inferred bill. `None` when there is
+/// neither: no runway to state yet. The inbox and `GET /api/level1/status`
+/// both walk exactly these.
+fn runway_bills(
+    report: Option<&Value>,
+    orders: &Value,
+) -> Option<Vec<(String, ledger::momentum::Bill)>> {
+    use ledger::momentum::Bill;
+    let usdc = |s: &str| {
+        ledger::Money::parse(s.trim_end_matches(" USDC").trim(), ledger::Currency::Usdc)
+            .ok()
+            .map(|m| m.to_minor())
+    };
+    let inferred: Option<Vec<(String, Bill)>> =
+        report.filter(|r| r["obligationsList"].is_array()).map(|r| {
+            r["obligationsList"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|o| {
+                    Some((
+                        o["counterparty"].as_str()?.to_string(),
+                        Bill {
+                            next_due: o["nextDue"].as_i64()?,
+                            every_secs: o["intervalSecs"].as_i64()?,
+                            amount_minor: usdc(o["amount"].as_str()?)?,
+                        },
+                    ))
+                })
+                .collect()
+        });
+    let active: Vec<&Value> = orders
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|o| o["active"].as_bool().unwrap_or(false))
+        .collect();
+    if inferred.is_none() && active.is_empty() {
+        return None;
+    }
+    let mut bills = inferred.unwrap_or_default();
+    for o in active {
+        let (Some(who), Some(amount), Some(every), Some(next)) = (
+            o["payee"].as_str(),
+            o["amount"].as_str().and_then(usdc),
+            o["everySecs"].as_i64(),
+            o["nextDue"].as_i64(),
+        ) else {
+            continue;
+        };
+        let who = who.to_lowercase();
+        bills.retain(|b| b.0.to_lowercase() != who);
+        bills.push((
+            who,
+            Bill {
+                next_due: next,
+                every_secs: every,
+                amount_minor: amount,
+            },
+        ));
+    }
+    Some(bills)
+}
+
+/// The account's momentum (docs/117 §1) as the API serves it: the burn rate
+/// from the settlements of the account's anchored record, the runway at that
+/// rate and the first bill the money above the floor cannot cover (the one
+/// fold, `ledger::momentum::fold`), and the last ten forces.
+fn momentum_json(
+    dir: &std::path::Path,
+    policy: &str,
+    bills: &[ledger::momentum::Bill],
+    balance: i128,
+    floor: i128,
+    now: i64,
+) -> Value {
+    let usdc = |m: i128| ledger::Money::minor(m, ledger::Currency::Usdc);
+    let book = operator::audit::book(
+        &level1::tenants_dir(dir)
+            .join(policy.to_lowercase())
+            .join("log"),
+    );
+    let m = ledger::momentum::fold(
+        &book,
+        bills,
+        usdc(balance),
+        usdc(floor),
+        now,
+        level1::burn_window_days(),
+    );
+    let skip = m.forces.len().saturating_sub(10);
+    json!({
+        "rate": m.rate_per_day.to_string(),
+        "windowDays": m.window_days,
+        "runway": { "byRateDays": m.runway_by_rate_days, "firstShortfallDays": m.first_shortfall_days },
+        "forces": m.forces[skip..].iter().map(|f| json!({
+            "at": f.at, "kind": f.kind.as_str(), "counterparty": f.counterparty, "deltaPerDay": f.delta_rate_per_day.to_string(),
+        })).collect::<Vec<_>>(),
+    })
+}
 
 /// When the owner last sent a trust-shrinking call (cancel, pause, revoke) for
 /// each account (lowercase policy → unix), for `shrink_blocks_apply` (docs/60
@@ -1502,9 +1601,13 @@ fn shaped(reply: Vec<u8>, method: &str, path: &str, raw: &str) -> Vec<u8> {
 /// `GET /api/level1/status[?policy=0x…]` (docs/115 §2): the contract's date,
 /// what changed, and with a policy the kill switches as they stand — `paused`
 /// (the contract on Watch, read from the chain; null when that read fails)
-/// and `halt` (a read-back mismatch only a human clears). Open: the mode is
-/// on chain and the HALT file says nothing about money.
-async fn agent_status(dir: &std::path::Path, query: &str) -> Vec<u8> {
+/// and `halt` (a read-back mismatch only a human clears) — and the account's
+/// momentum (docs/117 §1): `rate` (USDC a day over `windowDays`), `runway`
+/// (`byRateDays`, `firstShortfallDays`) and the last ten `forces`, the same
+/// fold the account page reads; null when the chain read fails. Open: the
+/// mode is on chain and the HALT file says nothing about money.
+async fn agent_status(app: &App, query: &str) -> Vec<u8> {
+    let dir = app.dir.as_path();
     let mut v = json!({ "recentUpdates": operator::refusal::recent_updates(), "codes": "/api/level1/codes", "rails": rails(dir) });
     if let Some(p) = query.split('&').find_map(|kv| kv.strip_prefix("policy=")) {
         let Some((a, t)) = Address::from_str(p.trim())
@@ -1516,10 +1619,8 @@ async fn agent_status(dir: &std::path::Path, query: &str) -> Vec<u8> {
                 json!({ "error": "no such account on this service" }),
             );
         };
-        let mode = level1::mode_action(&t, "status")
-            .await
-            .ok()
-            .map(|s| s["mode"].clone());
+        let st = level1::mode_action(&t, "status").await.ok();
+        let mode = st.as_ref().map(|s| s["mode"].clone());
         let halt = dir
             .join("tenants")
             .join(format!("{a:#x}"))
@@ -1531,6 +1632,43 @@ async fn agent_status(dir: &std::path::Path, query: &str) -> Vec<u8> {
         v["halt"] = json!(halt.exists());
         // docs/60 P-251: agent keys the owner's device stopped (no chain involved).
         v["stoppedTokens"] = json!(operator::guard::stopped_tokens(&t.policy));
+        let (mut rate, mut runway, mut forces) = (Value::Null, Value::Null, Value::Null);
+        if let Some(st) = &st {
+            let minor = |x: &Value| {
+                ledger::Money::parse(
+                    x.as_str().unwrap_or("0").trim_end_matches(" USDC").trim(),
+                    ledger::Currency::Usdc,
+                )
+                .map(|m| m.to_minor())
+                .unwrap_or(0)
+            };
+            // The standing orders as the inbox reads them; a failed read is none.
+            let orders = match operator::watch::chain(&t.chain).and_then(|c| level1::quick_client(c).ok()) {
+                Some(client) => client.schedules(a).await.map(|list| {
+                    json!(list.iter().map(|s| json!({ "payee": format!("{:#x}", s.payee), "amount": s.amount.to_string(), "everySecs": s.every_secs, "nextDue": s.next_due, "active": s.active })).collect::<Vec<_>>())
+                }).unwrap_or(Value::Null),
+                None => Value::Null,
+            };
+            let report = app.last_done_pass(&t.policy).await.map(|(_, r)| r);
+            let bills: Vec<ledger::momentum::Bill> = runway_bills(report.as_ref(), &orders)
+                .into_iter()
+                .flatten()
+                .map(|b| b.1)
+                .collect();
+            let m = momentum_json(
+                dir,
+                &t.policy,
+                &bills,
+                minor(&st["balance"]),
+                minor(&st["caps"]["floor"]),
+                now_secs() as i64,
+            );
+            v["windowDays"] = m["windowDays"].clone();
+            (rate, runway, forces) = (m["rate"].clone(), m["runway"].clone(), m["forces"].clone());
+        }
+        v["rate"] = rate;
+        v["runway"] = runway;
+        v["forces"] = forces;
     }
     json_reply("200 OK", operator::refusal::ok(v))
 }
@@ -3941,96 +4079,37 @@ impl App {
         // The fifth field: the bill may have ended (a full interval or more
         // overdue and unpaid) — counted once, as `watch::due_within` does,
         // not at its cadence (docs/70 C8: 15,084.40 "needed" for 0.35 of bills).
-        let report_bills: Option<Vec<RunwayBill>> = last
-            .and_then(|j| j.report.as_ref())
-            .filter(|r| r["obligationsList"].is_array())
-            .map(|r| {
-                r["obligationsList"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|o| {
-                        let amount = money(o["amount"].as_str()?);
-                        let every = o["intervalSecs"].as_i64()?.max(60);
-                        let next = o["nextDue"].as_i64()?;
-                        let ended = now_secs() as i64 - next >= every;
-                        Some((
-                            o["counterparty"].as_str()?.to_string(),
-                            amount,
-                            every,
-                            next,
-                            ended,
-                        ))
-                    })
-                    .collect()
-            });
-        let has_orders = standing_orders
-            .as_array()
-            .is_some_and(|a| a.iter().any(|o| o["active"].as_bool().unwrap_or(false)));
-        let runway = if report_bills.is_none() && !has_orders {
-            None
-        } else {
-            let mut bills: Vec<RunwayBill> = report_bills.unwrap_or_default();
-            // Standing orders the owner set are bills too (PLAN 5.25): the
-            // contract pays them on their day whoever triggers; one entry per
-            // payee, the order winning over the inferred bill.
-            if let Some(orders) = standing_orders.as_array() {
-                for o in orders
-                    .iter()
-                    .filter(|o| o["active"].as_bool().unwrap_or(false))
-                {
-                    let (Some(who), Some(amount), Some(every), Some(next)) = (
-                        o["payee"].as_str(),
-                        o["amount"].as_str(),
-                        o["everySecs"].as_i64(),
-                        o["nextDue"].as_i64(),
-                    ) else {
-                        continue;
-                    };
-                    let who = who.to_lowercase();
-                    bills.retain(|b| b.0.to_lowercase() != who);
-                    bills.push((who, money(amount), every.max(60), next, false));
-                }
-            }
-            let horizon_days: i64 = 90;
+        let bills = runway_bills(last.and_then(|j| j.report.as_ref()), &standing_orders);
+        // docs/117 §1: the burn rate and both runways, from the one fold
+        // `GET /api/level1/status` and `tameion-mcp top` read too.
+        let momentum = momentum_json(
+            &self.dir,
+            &tenant.policy,
+            &bills.iter().flatten().map(|b| b.1).collect::<Vec<_>>(),
+            balance,
+            floor,
+            now_secs() as i64,
+        );
+        let runway = if let Some(bills) = bills {
+            let horizon_days: i64 = ledger::momentum::HORIZON_DAYS;
             let now = now_secs() as i64;
-            let end = now + horizon_days * 86_400;
-            let mut left = balance - floor;
-            let mut spent_total: i128 = 0;
-            let mut first_at_risk: Option<Value> = None;
-            // Walk every due date inside the horizon in time order.
-            let mut events: Vec<(i64, usize)> = Vec::new();
-            for (i, b) in bills.iter_mut().enumerate() {
-                // From the bill's own due date (a late bill is due now, then on
-                // its cadence), as `bills_next_30` and `watch::due_within` count.
-                let mut t = b.3;
-                if b.4 {
-                    events.push((t, i));
-                    continue;
-                }
-                while t <= end {
-                    events.push((t, i));
-                    t += b.2;
-                }
-            }
-            events.sort();
-            let mut days_ok = horizon_days;
+            // Every due date inside the horizon in time order, walked by the
+            // one implementation the pass's decider uses (`ledger::momentum`).
+            let plain: Vec<ledger::momentum::Bill> = bills.iter().map(|b| b.1).collect();
+            let dated = ledger::momentum::due_dates(&plain, now, horizon_days * 86_400);
+            let first = ledger::momentum::first_shortfall(&dated, balance - floor, now);
             // Every bill in the horizon, covered or not: what it would take to
             // cover all of them (docs/62 §3.4 — the owner's problem is timing,
             // so say exactly how much is missing and offer the tap that adds it).
-            let horizon_total: i128 = events.iter().map(|(_, i)| bills[*i].1).sum();
-            for (t, i) in events {
-                let (who, amount, _, _, _) = &bills[i];
-                if left < *amount {
-                    days_ok = ((t - now) / 86_400).max(0);
-                    first_at_risk = Some(
-                        json!({ "counterparty": who, "amount": ledger::Money::minor(*amount, ledger::Currency::Usdc).to_string(), "onUnix": t, "inHours": ((t - now) / 3_600).max(0) }),
-                    );
-                    break;
-                }
-                left -= amount;
-                spent_total += amount;
-            }
+            let horizon_total: i128 = dated.iter().map(|d| d.1).sum();
+            let covered = first.map_or(dated.len(), |(_, pos)| pos);
+            let spent_total: i128 = dated[..covered].iter().map(|d| d.1).sum();
+            let left = balance - floor - spent_total;
+            let days_ok = first.map_or(horizon_days, |(d, _)| d);
+            let first_at_risk = first.map(|(_, pos)| {
+                let (t, amount, i) = dated[pos];
+                json!({ "counterparty": bills[i].0, "amount": ledger::Money::minor(amount, ledger::Currency::Usdc).to_string(), "onUnix": t, "inHours": ((t - now) / 3_600).max(0) })
+            });
             let shortfall = (horizon_total - (balance - floor).max(0)).max(0);
             // PLAN 5.36 (docs/62 §4.6): the part of what the policy holds
             // that no bill in the horizon needs — a number, not a product.
@@ -4064,6 +4143,8 @@ impl App {
                 "shortfall": ledger::Money::minor(shortfall, ledger::Currency::Usdc).to_string(),
                 "basis": "your bills and standing orders, repeated on their schedule, paid from what the account can spend above the reserve you keep; prices do not move it (it holds only USDC)",
             }))
+        } else {
+            None
         };
         tm("runway");
         // PLAN 5.49: what the bill wallet holds outside dollars, what a 30%
@@ -4404,6 +4485,7 @@ impl App {
             "suggestedLimit": suggest,
             "approvedByYou": approved,
             "runway": runway,
+            "momentum": momentum,
             "protection": protection,
             "holdingsElsewhere": elsewhere,
             "recommendAutopilot": recommend_autopilot,
@@ -8722,7 +8804,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ("GET", "/api/level1/codes") => {
                         json_reply("200 OK", operator::refusal::catalogue())
                     }
-                    ("GET", "/api/level1/status") => agent_status(&app.dir, query).await,
+                    ("GET", "/api/level1/status") => agent_status(&app, query).await,
                     ("GET", "/api/openapi.json") => respond(
                         "200 OK",
                         "application/json",
@@ -9524,7 +9606,9 @@ mod settle_key_tests {
     /// the last pass gets a pass for its first cycle.
     #[test]
     fn the_next_cycle_gets_its_pass_after_the_one_that_paid() {
-        let (due1, every) = (1_792_230_000u64, 120u64);
+        // From the wall clock: `due_pass_at` drops a typed bill whose demo
+        // cycles are over by now, so a fixed date failed hours later.
+        let (due1, every) = (operator::demo::now(), 120u64);
         let ran = due1 + 5;
         let report = json!({ "obligationsList": [
             { "nextDue": due1, "intervalSecs": every, "provenance": "imported" },
