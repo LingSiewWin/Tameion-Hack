@@ -21,7 +21,7 @@ at the foot._
 
 ## Try it in 5 minutes
 
-**Live:** `TAMEION_PUBLIC_URL` (testnet; the invite word is in the submission form). No install, no wallet, no seed phrase, no address to type.
+**Live:** https://tameion-agents-production-064a.up.railway.app (testnet; the invite word is in the submission form). No install, no wallet, no seed phrase, no address to type.
 
 1. **Open.** Tap "Try it in 5 minutes", name the account, one passkey tap. It arrives funded with 0.05 test USDC.
 2. **Bill.** One tap: "Let the agent pay Demo Vendor 0.002 USDC every 2 minutes" — that approves the payee and saves the bill.
@@ -115,7 +115,7 @@ Each row ran against a real chain; the file in `proof/` holds the requests, answ
 - **Open:** as of the last user test the signed mandate sentence does not name the cap on one payment; a finance lead cannot yet hold a read-only seat once the
   operator mints an agent key (the records are open, a viewer seat is not built); the passkey can withdraw everything at once, by design
   (a withdrawal delay is not built); no mainnet; the contracts are unaudited; no person has yet signed with real Touch ID on this build
-  (the tests used a virtual authenticator); the public copy (`scripts/deploy_railway.sh` + `railway.json`, or `fly.toml` + `scripts/deploy_fly.sh`; same image) is prepared but not deployed yet, so the pages run on the operator's own machine.
+  (the tests used a virtual authenticator); the public copy runs on Railway (https://tameion-agents-production-064a.up.railway.app, `scripts/deploy_railway.sh`; `fly.toml` + `scripts/deploy_fly.sh` build the same image elsewhere) and holds only demo accounts on testnet.
 - **x402 compatibility is narrow.** The account pays by x402's ERC-7710 method so that the cap stays on chain. The only seller it has paid is our own test seller
   (`scripts/x402_seller.py`); no third-party seller has been paid. None of the 1,401 payment options in the first 600 Bazaar listings names ERC-7710 (they name EIP-3009 or Permit2: `proof/x402-bazaar-payment-methods-2026-10-17.txt`), so
   whether an outside seller's facilitator accepts our method is untested — and is the first thing an outside operator's agent will meet.
