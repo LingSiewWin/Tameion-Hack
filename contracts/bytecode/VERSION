@@ -1,6 +1,6 @@
-PasskeyPrincipal: 10521 bytes, solc 0.8.28+commit.7893614a, optimizer {'enabled': True, 'runs': 200}, viaIR True
+PasskeyPrincipal: 14210 bytes, solc 0.8.28+commit.7893614a, optimizer {'enabled': True, 'runs': 200}, viaIR True
 BudgetPolicy: 9984 bytes, solc 0.8.28+commit.7893614a, optimizer {'enabled': True, 'runs': 200}, viaIR True
 BudgetPolicyPull: 11039 bytes, solc 0.8.28+commit.7893614a, optimizer {'enabled': True, 'runs': 200}, viaIR True
 BudgetPolicyToken: 10436 bytes, solc 0.8.28+commit.7893614a, optimizer {'enabled': True, 'runs': 200}, viaIR True
 TameionDelegate: 9923 bytes, solc 0.8.28+commit.7893614a, optimizer {'enabled': True, 'runs': 200}, viaIR True
-snapshot written to contracts/bytecode/ (2026-10-14T14:47:12Z)
+snapshot written to contracts/bytecode/ (2026-10-17T21:07:12Z)
