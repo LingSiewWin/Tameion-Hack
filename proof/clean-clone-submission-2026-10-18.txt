@@ -1,0 +1,504 @@
+Clean-clone check of the submission tag submission-2026-10-18 (seat E5, a check independent of the authors). Written 2026-10-18 06:51 +0800.
+
+What this is: a fresh clone of the tag in a scratch directory outside the working tree, then only what the README names, each run once,
+exit codes recorded. No code was changed. The seat read nothing in the working tree; this file is the only thing written there.
+Every output block below is copied from the run logs (colour codes stripped; the inherited PATH line left out, see section 10).
+Scope: a replay of the offline gate and of three tests on a throwaway local chain (anvil). It is not a live testnet run, and the tx hashes
+it prints come from that local chain.
+
+<clone> = a fresh directory named e5-clone in the session scratch area, outside the working tree
+
+== 0. Result ==
+
+commit under test .......... 2d35e384513bc81ca66fec7a5b0bfea4449b4477   (annotated tag object a2cd3220cb773b575b0c4be6a07a009a75ec37a4)
+
+step 1  git clone of the tag ................................ exit 0
+step 1  git submodule update --init --recursive ............. exit 0
+step 2  scripts/test_all.sh, run 1, README as written ....... exit 1   RED, and the README's command is what is wrong, not a test:
+                                                                       no test failed; two steps stop with "run: (cd apps/console && npm ci)"
+                                                                       and "run: (cd apps/sdk && npm ci)". The README never says npm ci.
+step 2  (cd apps/console && npm ci) ......................... exit 0
+step 2  (cd apps/sdk && npm ci) ............................. exit 0
+step 2  scripts/test_all.sh, run 2, after the two npm ci .... exit 0   "all suites passed"
+step 3  cargo test --locked -p operator --test organiser ..... exit 0   3 passed, 0 failed, no "skipped" line (so none of the three ran vacuously)
+extra   README "Check it yourself" audit (first fenced block)  exit 0   RESULT : PASS, two MATCH lines
+extra   cargo build --locked -p operator --bin tameion-mcp ... exit 0   (README "Run it")
+
+In one line: the gate and the three named tests are green on a clean clone of the tag, but only after npm ci in two directories that the
+README does not mention; read as written, the README's gate command exits 1. Steps the README did not say: section 9.
+
+== 1. Clone (step 1) ==
+
+$ git clone --depth 1 --branch submission-2026-10-18 https://github.com/LingSiewWin/Tameion-Hack <clone>
+exit 0.  git printed: warning: refs/tags/submission-2026-10-18 a2cd3220cb773b575b0c4be6a07a009a75ec37a4 is not a commit!
+                      Note: switching to '2d35e384513bc81ca66fec7a5b0bfea4449b4477'.
+(The tag is an annotated tag object, hence "not a commit"; it peels to the commit below and the clone is complete.)
+Note: a first identical clone was deleted and redone because its exit code was lost to a shell typo (PIPESTATUS in zsh); the second is the one recorded.
+
+$ git -C <clone> rev-parse HEAD                               2d35e384513bc81ca66fec7a5b0bfea4449b4477
+$ git -C <clone> cat-file -t submission-2026-10-18            tag
+$ git -C <clone> rev-parse 'submission-2026-10-18^{commit}'   2d35e384513bc81ca66fec7a5b0bfea4449b4477
+$ git -C <clone> log -1 --format='%H %ad %s' --date=iso
+2d35e384513bc81ca66fec7a5b0bfea4449b4477 2026-10-18 06:08:40 +0800 docs(proof): video preflight: every beat run once on the merged build, the page with zero hashes
+
+$ git -C <clone> submodule update --init --recursive
+exit 0.
+$ git -C <clone> submodule status --recursive
+ f9a1995482ce5b2894c0f6d426b400ec1acd01e7 contracts/lib/arc-agent-kit (heads/main)
+ 3e577a156f3ef021749e37be48a9804702a80b6e contracts/lib/forge-std (v1.16.2-23-g3e577a1)
+ cab19933c33c2ad1d4c7a84864a3601dddfd16f3 contracts/lib/openzeppelin-contracts (v4.8.0-1217-gcab19933)
+ 232ff9ba8194e406967f52ecc5cb52ed764209e9 contracts/lib/openzeppelin-contracts/lib/erc4626-tests (v0.1.1)
+ 1801b0541f4fda118a10798fd3486bb7051c5dd6 contracts/lib/openzeppelin-contracts/lib/forge-std (v1.14.0)
+ 7328abe100445fc53885c21d0e713b95293cf14c contracts/lib/openzeppelin-contracts/lib/halmos-cheatcodes (7328abe)
+
+== 2. What the README names, in the order it names it (README.md of the tag) ==
+
+ line   6-8   the three tests wrong_vendor, phantom_invoice, double_pay_on_retry, with a proof file and tx hashes. NO command to run them.
+ line  41     (Try it in 5 minutes) cargo build --locked -p operator --bin tameion-mcp && claude mcp add tameion -e TAMEION_URL=<the public link> -e TAMEION_TOKEN=<the agent key> -- $PWD/target/debug/tameion-mcp
+              -> placeholders, not runnable as written.
+ line 161     (Check it yourself) git clone --recurse-submodules https://github.com/LingSiewWin/Tameion-Hack && cd Tameion-Hack
+ line 162-165 the audit: R=0xb30e...6b70 AUDIT_EVENTS=... TAMEION_LOG_DIR=... AGENT=... RPC_URL=... cargo run --locked -q -p operator --example audit
+ line 172     `scripts/test_all.sh` (in prose, not in a code block; no PATH prefix) "runs every offline suite (forge, Rust with clippy and fmt, Python, Node, ERC-7730, the console)"
+ line 173     `scripts/acceptance.sh` (prose; "94 end-to-end checks")
+ line 179-180 (Run it) scripts/dev.sh, scripts/dev.sh status, scripts/dev.sh stop
+ line 189-190 cargo build --locked -p operator --bin tameion-mcp ; claude mcp add tameion -- $PWD/target/debug/tameion-mcp
+
+Which one is "the first runnable command" is ambiguous (the first fenced block is the audit; the first mention of the gate is prose), so the seat ran:
+ - the gate scripts/test_all.sh (the command the E5 brief names; the README names it at line 172),
+ - the audit (the README's first fenced block that runs after the clone),
+ - the one self-contained build line in "Run it" (line 189),
+ - and the cargo test line of step 3, which the README does NOT contain (it is only in proof/organiser-sentences-2026-10-17.txt:32).
+Not run: scripts/dev.sh (needs the relayer key under ~/.tameion/, which this seat must not touch), scripts/acceptance.sh, scripts/verify_tenant.sh,
+scripts/max_loss.sh, the claude mcp add lines (placeholders / need a running service). Outside this seat's brief.
+
+== 3. Step 2, gate run 1: the README's command as written, nothing installed ==
+
+$ cd <clone>
+$ export PATH=/opt/homebrew/bin:$HOME/.cargo/bin:$HOME/.foundry/bin:$HOME/.local/bin:$PATH
+$ export CARGO_TARGET_DIR=<clone>/target
+$ scripts/test_all.sh
+start/end (from the log):
+START 2026-10-18 06:28:37 +0800
+END   2026-10-18 06:37:53 +0800
+exit code: 1
+
+step by step:
+  ok      contracts: forge test
+  ok      contracts: forge fmt --check
+  ok      contracts: forge lint (no findings)
+  ok      rust: cargo test --locked
+  ok      rust: clippy, warnings are errors
+  ok      rust: formatting
+  ok      evidence desk: python unittest
+  ok      lender verifier: python unittest (offline)
+  ok      audit pack: python unittest (offline)
+  ok      audit pack: bean-check on the fixture's ledger
+  ok      passkey page: node --test
+  ok      chip bridge: python unittest
+  ok      key roles: python unittest
+  ok      key roles: one role per key (advisory until the key is split)
+  ok      clear-signing descriptors: ERC-7730
+  FAILED  console: tsc, eslint, node --test
+  ok      console: types.ts against openapi.json
+  FAILED  sdk: tsc, node --test
+
+last 20 lines:
+calldata-TameionDelegate.json: ok (20 formats, 1 deployments, schema valid)
+calldata-TameionExecutor.json: ok (11 formats, 1 deployments, schema valid)
+  ok
+
+== console: tsc, eslint, node --test ==
+  run: (cd apps/console && npm ci)
+  FAILED
+
+== console: types.ts against openapi.json ==
+  types.ts vs openapi.json: 16 types, 0 drifts
+  ok
+
+== sdk: tsc, node --test ==
+  run: (cd apps/sdk && npm ci)
+  FAILED
+
+failed: console: tsc, eslint, node --test
+failed: sdk: tsc, node --test
+GATE_EXIT=1
+END   2026-10-18 06:37:53 +0800
+
+Reading: 16 of 18 steps passed and 2 failed. The two that failed did not run any test: the script finds no node_modules and prints
+the command to run. That is the README's command being incomplete, not a test being red. The build started from an empty <clone>/target
+(6.0 GiB when run 1 ended) and took 9 min 16 s end to end; the cargo crate cache and the solc 0.8.28 download were already on this Mac
+(no file under ~/.cargo/registry or ~/Library/Application Support/svm changed after the run started), so crate and compiler download time is
+not measured. The tracked tree was unchanged afterwards (git status --short: empty).
+
+== 4. npm ci, the one install this seat allowed itself ==
+
+$ (cd apps/console && npm ci)      exit 0   (34 s; npm printed a warn that unrs-resolver@1.12.2 has an install script not covered by allowScripts)
+$ (cd apps/sdk && npm ci)          exit 0   (under 1 s; "added 3 packages, and audited 4 packages in 563ms ... found 0 vulnerabilities")
+
+== 5. Step 2, gate run 2: the same command after the two npm ci ==
+
+$ cd <clone>   (same PATH and CARGO_TARGET_DIR as run 1)
+$ scripts/test_all.sh
+start/end (from the log):
+START 2026-10-18 06:38:58 +0800
+END   2026-10-18 06:42:16 +0800
+exit code: 0
+
+step by step:
+  ok      contracts: forge test
+  ok      contracts: forge fmt --check
+  ok      contracts: forge lint (no findings)
+  ok      rust: cargo test --locked
+  ok      rust: clippy, warnings are errors
+  ok      rust: formatting
+  ok      evidence desk: python unittest
+  ok      lender verifier: python unittest (offline)
+  ok      audit pack: python unittest (offline)
+  ok      audit pack: bean-check on the fixture's ledger
+  ok      passkey page: node --test
+  ok      chip bridge: python unittest
+  ok      key roles: python unittest
+  ok      key roles: one role per key (advisory until the key is split)
+  ok      clear-signing descriptors: ERC-7730
+  ok      console: tsc, eslint, node --test
+  ok      console: types.ts against openapi.json
+  ok      sdk: tsc, node --test
+
+last 20 lines:
+calldata-TameionExecutor.json: ok (11 formats, 1 deployments, schema valid)
+  ok
+
+== console: tsc, eslint, node --test ==
+ℹ pass 64
+ℹ fail 0
+  ok
+
+== console: types.ts against openapi.json ==
+  types.ts vs openapi.json: 16 types, 0 drifts
+  ok
+
+== sdk: tsc, node --test ==
+ℹ pass 24
+ℹ fail 0
+  ok
+
+all suites passed
+GATE_EXIT=0
+END   2026-10-18 06:42:16 +0800
+
+decisive counts, copied from the same log (full log in appendix B):
+  Ran 23 test suites in 140.22s (678.96s CPU time): 228 tests passed, 0 failed, 0 skipped (228 total tests)
+    591 passed, 0 failed
+    bean-check Beancount 3.2.3: exit 0
+  ℹ pass 15
+  ℹ fail 0
+  calldata-BudgetPolicy.json: ok (19 formats, 5 deployments, schema valid)
+  calldata-BudgetPolicyPull.json: ok (19 formats, 1 deployments, schema valid)
+  calldata-MemoryAnchor.json: ok (2 formats, 1 deployments, schema valid)
+  calldata-PasskeyPrincipal.json: ok (14 formats, 2 deployments, schema valid)
+  calldata-TameionDelegate.json: ok (20 formats, 1 deployments, schema valid)
+  calldata-TameionExecutor.json: ok (11 formats, 1 deployments, schema valid)
+  ℹ pass 64
+  ℹ fail 0
+    types.ts vs openapi.json: 16 types, 0 drifts
+  ℹ pass 24
+  ℹ fail 0
+
+18 of 18 steps passed, 0 failed. git status --short afterwards: empty.
+
+== 6. Step 3: the three named tests ==
+
+$ cd <clone>   (same PATH and CARGO_TARGET_DIR)
+$ cargo test --locked -p operator --test organiser -- --nocapture --test-threads=1
+exit code: 0   (06:42:40 to 06:43:13 +0800; 27 s of that was recompiling before the tests ran)
+
+the lines naming the three tests (and the result line):
+running 3 tests
+test double_pay_on_retry ... double_pay_on_retry: operation op_organiser-retry-0001, action hash 0xde25aa571cac4ab65d3b03cb4fcdb177e8d2ca16e146a6c8777c6761f5d16270: first send abandoned; retry 200 replayed after 0 x 409 idempotency_pending; again 200 replayed; second service 200 replayed from executed(); Paid events for it: 1; tx 0x13f95835fb5f8b071463f9a3903546ac06deeb40d85306c846b5d758fb68656d; executed: true
+test phantom_invoice ... phantom_invoice: real invoice 201; phantom 422 "not signed by the payee: the signature is 0xfbe934eefea3ddef928ea734a46a2e842045fa4c's, the money would go to 0xb3ac9e7bc3dc6f0f5af53b50f5d2d6cc0659267d"; invoices.jsonl lines 1; pass root 0x5657fc418d07bc11c6829c07c0e4e6a5976a3bdb719de6f02c59985201d1e65f anchored by tx 0xea984f0935e9cdc935deeea70cb1f844f722e033d87a4d9d932e9a85247e3979 at 0x5fbdb2315678afecb367f032d93f642f64180aa3; record lines 2, phantom in it: no
+test wrong_vendor ... wrong_vendor: approved payee paid 0.10 USDC, tx 0xf01e18cab444d92ee70a7eb7a580e2df7cd265ed8d6d55d447a6801e6debfd29; unapproved 0x41785be1896e10502a6337948f70a6ef049fbb0d refused "payee_not_approved" (executed: "no"); Paid events on policy 0x8c26a6c714f0d50fe4bec40e12584cab998f4446: 1; unapproved balance 0 wei
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.01s
+
+grep -c skipped on the whole output: 0
+(0 means none of the three took the silent-skip path: tests/organiser.rs lines 118, 338 and 363 make each test print "skipped: ..." and PASS
+ when anvil or forge is not on PATH or contracts/lib/arc-agent-kit is not checked out.)
+
+Observation: the tx hashes in README lines 6-8 (0x3aadc9a0..., 0x400816fa..., 0x846fb8fa...) are in proof/organiser-sentences-2026-10-17.txt (one hit each
+in the clone). This run prints other hashes (wrong_vendor 0xf01e18ca..., phantom_invoice anchor 0xea984f09..., double_pay_on_retry 0x13f95835...).
+Expected for a throwaway anvil chain; the cause was not investigated, and the README does not say the hashes will not reproduce.
+
+== 7. Extra: the README's first fenced block that runs after the clone (the audit) ==
+
+$ cd <clone>   (same PATH and CARGO_TARGET_DIR)
+$ R=0xb30efdbd0171ecbbd9daeac83d5ddd090a096440c2a6df47dadf402b0d986b70
+$ AUDIT_EVENTS=proof/arc-log-2026-10-13/$R.events.jsonl TAMEION_LOG_DIR=proof/arc-log-2026-10-13 \
+  AGENT=0x80c195BE650FBfD55a9ffe059f397Db39f2fe881 RPC_URL=https://explorer.testnet.arc.io/api/eth-rpc \
+    cargo run --locked -q -p operator --example audit
+exit code: 0   (06:43:32 to 06:43:37 +0800; explorer.testnet.arc.io answered). The decisive lines, copied:
+# audit proof/arc-log-2026-10-13/0xb30efdbd0171ecbbd9daeac83d5ddd090a096440c2a6df47dadf402b0d986b70.events.jsonl
+events          : 4
+recomputed root : 0xb30efdbd0171ecbbd9daeac83d5ddd090a096440c2a6df47dadf402b0d986b70
+file name       : 0xb30efdbd0171ecbbd9daeac83d5ddd090a096440c2a6df47dadf402b0d986b70   MATCH
+chain rootOf    : 0xb30efdbd0171ecbbd9daeac83d5ddd090a096440c2a6df47dadf402b0d986b70   (anchor 0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB, agent 0x80c195BE650FBfD55a9ffe059f397Db39f2fe881)   MATCH
+RESULT          : PASS
+(The four per-event lines between the header and "events" are left out of this file.)
+
+== 8. Extra: README "Run it", the build line ==
+
+$ cargo build --locked -p operator --bin tameion-mcp
+exit code: 0   (0.61 s: already built by the workspace test; target/debug/tameion-mcp is 21,035,344 bytes)
+
+== 9. Steps the README did not say (each is a finding; none was fixed) ==
+
+ G1  RED CAUSE. npm ci in apps/console and in apps/sdk before scripts/test_all.sh. Without it the gate exits 1 (section 3). The script prints the fix;
+     the README does not mention it. Needs the npm registry.
+ G2  The README's only prerequisite is "Rust installed" (line 158). The gate also needs: Foundry (forge for its first three steps; anvil for the three
+     organiser tests), Node and npm, python3 with unittest, a python that can import jsonschema, and bean-check (beancount). Rust needs clippy and rustfmt.
+     - jsonschema: python3 on this Mac is 3.15.0 and cannot import it; the ERC-7730 step passed only because python3.14 (jsonschema 4.26.0) is also installed.
+       With no such python the step fails with "no python with jsonschema (pip install jsonschema)" (scripts/test_all.sh). Not exercised here.
+     - bean-check: scripts/test_all.sh line 38 prints "skipped: bean-check not installed" in red and the step still passes. README row 5 says the audit pack
+       is "checked with bean-check" and gives no install line. Not exercised here (it was installed at ~/.local/bin).
+     - anvil / forge / the arc-agent-kit submodule: the three organiser tests print "skipped" and pass (organiser.rs:118, 338, 363). Not exercised here.
+ G3  README lines 6-8 name the three tests and give no command to run them. The command is only in proof/organiser-sentences-2026-10-17.txt, line 32,
+     and it needs anvil on PATH to do anything.
+ G4  The first command cannot work for a stranger today: LingSiewWin/Tameion-Hack has visibility PRIVATE (gh repo view, 2026-10-18 06:51 +0800).
+     It also takes main, not the tag: main is a4d53d6da65e74cf7f364693d9fd0e142204a3e8 (GitHub compare, tag to main: ahead, ahead_by 2, behind_by 0, 6 files changed).
+     Commits on main past the tag: 4181e8f docs(proof): the live link runs the tagged build | a4d53d6 docs(proof): the judge path passes on the host redeployed from the tag: done in 5 min 32 s. The README never names the tag. The submodule LingSiewWin/arc-agent-kit is PUBLIC.
+     (Those commits and files were not opened by this seat.)
+ G5  scripts/test_all.sh is named only in prose (line 172), with no code block and no PATH. The export used here came from the E5 brief
+     (/opt/homebrew/bin, ~/.cargo/bin, ~/.foundry/bin, ~/.local/bin first). Whether the gate runs without it was not tested.
+ G6  Stale numbers: line 173 says "forge 187, Rust 420, acceptance 94 of 94 (gate 2026-10-16 20:23 ...)". This tag's gate prints forge 228 tests, Rust 591.
+     Line 9 of the same README already says "the forge suite's 228 tests", so lines 9 and 173 disagree.
+ G7  Tx hashes in lines 6-8 belong to the recorded run and do not reproduce (section 6).
+
+ Observations, not README gaps:
+ O1  The gate prints a red CROSS-ROLE advisory (one key, 0x6c1c...9a25, in five roles: HALT clearer, Hyperliquid master, bill wallet, guardian, relayer) and stays
+     green by design (scripts/test_all.sh comment: advisory until the founder splits the key). A judge sees a red line inside a green run.
+ O2  The Rust step prints only totals ("591 passed, 0 failed"); the awk filter in scripts/test_all.sh hides test names, so a test that skipped itself is invisible there.
+ O3  The inherited $PATH contains this repository's own .venv/bin and other tool directories. None of the commands the gate uses resolved there
+     (command -v: forge, anvil, cargo, cargo-clippy, rustfmt, rustc, python3, python3.14, bean-check, node, npm, npx, git, cc, clang; and from bash:
+     grep, tail, head, cat, rm, mktemp, awk, sed).
+
+== 10. Environment ==
+
+date: 2026-10-18 06:51 +0800
+host: Darwin 25.6.0 arm64; cpus 8; memory 17179869184 bytes
+cargo: cargo 1.99.1 (5f94df478 2026-08-27) (Homebrew)
+rustc: rustc 1.99.1 (58cf8f9c3 2026-10-13) (Homebrew)
+clippy: clippy 0.1.99   rustfmt: rustfmt 1.10.0
+forge: forge Version: 1.5.1-stable
+anvil: anvil Version: 1.5.1-stable
+node: v26.12.0   npm: 11.20.0
+python3: Python 3.15.0   python3.14: Python 3.14.8 (jsonschema 4.26.0)
+bean-check: Beancount 3.2.3
+PATH used: /opt/homebrew/bin:$HOME/.cargo/bin:$HOME/.foundry/bin:$HOME/.local/bin:$PATH   (inherited remainder not reproduced)
+CARGO_TARGET_DIR: <clone>/target   CARGO_HOME: default (~/.cargo)
+Network used by the runs: github.com (clone, submodules), the npm registry (npm ci), explorer.testnet.arc.io (audit).
+Nothing under ~/.tameion was read or written. No key was printed.
+
+== Appendix A. gate run 1, full output ==
+
+START 2026-10-18 06:28:37 +0800
+CMD   scripts/test_all.sh   (cwd=<clone>  CARGO_TARGET_DIR=<clone>/target)
+
+== contracts: forge test ==
+Ran 23 test suites in 101.74s (330.35s CPU time): 228 tests passed, 0 failed, 0 skipped (228 total tests)
+  ok
+
+== contracts: forge fmt --check ==
+  ok
+
+== contracts: forge lint (no findings) ==
+  ok
+
+== rust: cargo test --locked ==
+  591 passed, 0 failed
+  ok
+
+== rust: clippy, warnings are errors ==
+  ok
+
+== rust: formatting ==
+  ok
+
+== evidence desk: python unittest ==
+Ran 20 tests in 0.002s
+
+OK
+  ok
+
+== lender verifier: python unittest (offline) ==
+Ran 4 tests in 0.220s
+
+OK
+  ok
+
+== audit pack: python unittest (offline) ==
+Ran 2 tests in 1.156s
+
+OK
+  ok
+
+== audit pack: bean-check on the fixture's ledger ==
+  bean-check Beancount 3.2.3: exit 0
+  ok
+
+== passkey page: node --test ==
+ℹ pass 15
+ℹ fail 0
+  ok
+
+== chip bridge: python unittest ==
+Ran 4 tests in 0.177s
+
+OK
+  ok
+
+== key roles: python unittest ==
+Ran 3 tests in 0.007s
+
+OK
+  ok
+
+== key roles: one role per key (advisory until the key is split) ==
+key-roles: 2 keys, 0 accounts read from runtime/app
+  keys per role: HALT clearer 1, Hyperliquid master 1, bill wallet 1, guardian 1, relayer 1, statement signer 1
+CROSS-ROLE 0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25: HALT clearer, Hyperliquid master, bill wallet, guardian, relayer
+    ~/.tameion/treasury.key is the default HALT clearer key (crates/hedge/examples/unhalt.rs)
+    ~/.tameion/treasury.key is the default Hyperliquid master key (crates/hedge/examples/approve_agent.rs)
+    ~/.tameion/treasury.key is the default bill wallet key (scripts/gateway_fund.sh)
+    ~/.tameion/treasury.key is the default guardian key (scripts/guardian_approve.sh)
+    ~/.tameion/treasury.key is the default relayer key (crates/operator/src/level1.rs)
+1 key(s) sign in more than one role: give each role its own key
+  advisory: the key-role monitor found a key in more than one role (see above); the gate stays green until the founder splits it
+  ok
+
+== clear-signing descriptors: ERC-7730 ==
+calldata-BudgetPolicy.json: ok (19 formats, 5 deployments, schema valid)
+calldata-BudgetPolicyPull.json: ok (19 formats, 1 deployments, schema valid)
+calldata-MemoryAnchor.json: ok (2 formats, 1 deployments, schema valid)
+calldata-PasskeyPrincipal.json: ok (14 formats, 2 deployments, schema valid)
+calldata-TameionDelegate.json: ok (20 formats, 1 deployments, schema valid)
+calldata-TameionExecutor.json: ok (11 formats, 1 deployments, schema valid)
+  ok
+
+== console: tsc, eslint, node --test ==
+  run: (cd apps/console && npm ci)
+  FAILED
+
+== console: types.ts against openapi.json ==
+  types.ts vs openapi.json: 16 types, 0 drifts
+  ok
+
+== sdk: tsc, node --test ==
+  run: (cd apps/sdk && npm ci)
+  FAILED
+
+failed: console: tsc, eslint, node --test
+failed: sdk: tsc, node --test
+GATE_EXIT=1
+END   2026-10-18 06:37:53 +0800
+
+== Appendix B. gate run 2, full output ==
+
+START 2026-10-18 06:38:58 +0800
+CMD   scripts/test_all.sh   (cwd=<clone>  CARGO_TARGET_DIR=<clone>/target)
+
+== contracts: forge test ==
+Ran 23 test suites in 140.22s (678.96s CPU time): 228 tests passed, 0 failed, 0 skipped (228 total tests)
+  ok
+
+== contracts: forge fmt --check ==
+  ok
+
+== contracts: forge lint (no findings) ==
+  ok
+
+== rust: cargo test --locked ==
+  591 passed, 0 failed
+  ok
+
+== rust: clippy, warnings are errors ==
+  ok
+
+== rust: formatting ==
+  ok
+
+== evidence desk: python unittest ==
+Ran 20 tests in 0.001s
+
+OK
+  ok
+
+== lender verifier: python unittest (offline) ==
+Ran 4 tests in 0.763s
+
+OK
+  ok
+
+== audit pack: python unittest (offline) ==
+Ran 2 tests in 0.842s
+
+OK
+  ok
+
+== audit pack: bean-check on the fixture's ledger ==
+  bean-check Beancount 3.2.3: exit 0
+  ok
+
+== passkey page: node --test ==
+ℹ pass 15
+ℹ fail 0
+  ok
+
+== chip bridge: python unittest ==
+Ran 4 tests in 0.141s
+
+OK
+  ok
+
+== key roles: python unittest ==
+Ran 3 tests in 0.005s
+
+OK
+  ok
+
+== key roles: one role per key (advisory until the key is split) ==
+key-roles: 2 keys, 0 accounts read from runtime/app
+  keys per role: HALT clearer 1, Hyperliquid master 1, bill wallet 1, guardian 1, relayer 1, statement signer 1
+CROSS-ROLE 0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25: HALT clearer, Hyperliquid master, bill wallet, guardian, relayer
+    ~/.tameion/treasury.key is the default HALT clearer key (crates/hedge/examples/unhalt.rs)
+    ~/.tameion/treasury.key is the default Hyperliquid master key (crates/hedge/examples/approve_agent.rs)
+    ~/.tameion/treasury.key is the default bill wallet key (scripts/gateway_fund.sh)
+    ~/.tameion/treasury.key is the default guardian key (scripts/guardian_approve.sh)
+    ~/.tameion/treasury.key is the default relayer key (crates/operator/src/level1.rs)
+1 key(s) sign in more than one role: give each role its own key
+  advisory: the key-role monitor found a key in more than one role (see above); the gate stays green until the founder splits it
+  ok
+
+== clear-signing descriptors: ERC-7730 ==
+calldata-BudgetPolicy.json: ok (19 formats, 5 deployments, schema valid)
+calldata-BudgetPolicyPull.json: ok (19 formats, 1 deployments, schema valid)
+calldata-MemoryAnchor.json: ok (2 formats, 1 deployments, schema valid)
+calldata-PasskeyPrincipal.json: ok (14 formats, 2 deployments, schema valid)
+calldata-TameionDelegate.json: ok (20 formats, 1 deployments, schema valid)
+calldata-TameionExecutor.json: ok (11 formats, 1 deployments, schema valid)
+  ok
+
+== console: tsc, eslint, node --test ==
+ℹ pass 64
+ℹ fail 0
+  ok
+
+== console: types.ts against openapi.json ==
+  types.ts vs openapi.json: 16 types, 0 drifts
+  ok
+
+== sdk: tsc, node --test ==
+ℹ pass 24
+ℹ fail 0
+  ok
+
+all suites passed
+GATE_EXIT=0
+END   2026-10-18 06:42:16 +0800
