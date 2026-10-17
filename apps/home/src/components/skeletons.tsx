@@ -72,14 +72,19 @@ export function StepperSkeleton() {
   );
 }
 
-/** Add money: one plate per way (the card is not built, so it has no plate). */
+/** Add money: the balance, then the address plate, the faucet plate and the move plate (the card is not built, so it has none). */
 export function AddMoneySkeleton() {
   return (
     <Loading label="Loading">
-      <div className="flex flex-col gap-(--space-4)">
-        <Skeleton className="h-12 w-2/3" />
-        <Skeleton className="h-40 w-full" />
-        <Skeleton className="h-40 w-full" />
+      <div className="flex flex-col gap-(--space-5)">
+        <div className="flex flex-col gap-(--space-2)">
+          <Skeleton className="h-[22px] w-28" />
+          <Skeleton className="h-10 w-40" />
+          <Skeleton className="h-[18px] w-56" />
+        </div>
+        <Skeleton className="h-44 w-full" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-72 w-full" />
       </div>
     </Loading>
   );
