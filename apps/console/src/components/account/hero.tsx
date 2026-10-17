@@ -112,6 +112,7 @@ export function Hero() {
           {found > 0 && !reserved ? `The agent found ${found} recurring bill${found === 1 ? "" : "s"}. ` : ""}
           {sentence}
         </p>
+        <BurnLine />
         {/* Where the key is not, before what the agent does (CLAUDE.md); the
             Mandate above already says what it does. */}
         <ul className="space-y-1.5 text-sm text-muted-foreground">
@@ -140,6 +141,29 @@ export function Hero() {
         </Stats>
       </div>
     </section>
+  );
+}
+
+/** docs/117 §1: how long the money above the floor lasts at the current burn, from the
+ *  service's one fold over the settled payments (never computed on the page). */
+function BurnLine() {
+  const { inbox } = useAccount();
+  const m = inbox?.momentum;
+  if (!m) return null;
+  const d = m.runway.byRateDays;
+  return (
+    <p className="text-sm text-muted-foreground">
+      {d == null ? (
+        `No burn yet: nothing was paid in the last ${m.windowDays} days.`
+      ) : (
+        <>
+          <span className="font-medium text-foreground">
+            At this burn, the floor is {d} day{d === 1 ? "" : "s"} away
+          </span>
+          {` · ${usd(m.rate)} USDC a day over the last ${m.windowDays} days`}
+        </>
+      )}
+    </p>
   );
 }
 

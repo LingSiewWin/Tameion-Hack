@@ -109,6 +109,14 @@ export type Runway = {
   firstAtRisk?: { amount: string; counterparty: string; onUnix: number; inHours?: number } | null;
 };
 
+/** The account's momentum (docs/117 §1): burn rate over the window from settled payments, both runways, what moved the rate. */
+export type Momentum = {
+  rate: string;
+  windowDays: number;
+  runway: { byRateDays: number | null; firstShortfallDays: number | null };
+  forces: { at: number; kind: string; counterparty: string; deltaPerDay: string }[];
+};
+
 export type Preview = {
   status: "reading" | "done" | "failed";
   days?: number;
@@ -188,6 +196,7 @@ export type Inbox = {
   run?: (Call & { count: number; total: string }) | null;
   refused?: { counterparty: string; amount: string; why?: string }[];
   runway?: Runway | null;
+  momentum?: Momentum | null;
   preview?: Preview | null;
   pull?: {
     allowance: string;

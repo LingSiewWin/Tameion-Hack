@@ -15,7 +15,7 @@ const SCHEMAS = doc.components.schemas;
 // types.ts name -> openapi.json name, for every type checked. The inbox and what it holds at least.
 const CHECKED = {
   Inbox: "Inbox", Paid: "Paid", NeedRow: "NeedRow", Invoice: "Invoice", Seller: "Seller", Purchase: "Purchase",
-  Runway: "Runway", Preview: "Preview", Party: "Party", Call: "Call",
+  Runway: "Runway", Momentum: "Momentum", Preview: "Preview", Party: "Party", Call: "Call",
   WatchJob: "Run", WatchReport: "Report", DeskBook: "DeskBook", DeskDeal: "DeskDeal", DeskMilestone: "DeskMilestone",
 };
 // Fields the page sets itself, never the service.
