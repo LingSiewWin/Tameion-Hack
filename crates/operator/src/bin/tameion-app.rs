@@ -640,13 +640,10 @@ async fn block_times(client: &arc::ArcClient, chain: &str, blocks: Vec<u64>) -> 
 /// `since` (when that pass ran) and at or before `now`: a bill that fell due
 /// after the pass, so the pass is no answer for it (docs/60 P-229). A bill an
 /// x402 receipt suggests is never paid by a pass and does not count.
-fn due_after(report: &Value, since: u64, now: u64) -> Option<u64> {
-    report["obligationsList"]
-        .as_array()?
-        .iter()
-        .filter(|o| o["provenance"] != "x402 receipt")
-        .filter_map(|o| o["nextDue"].as_u64())
-        .filter(|d| *d > since && *d <= now)
+fn due_after(report: &Value, bills: &[level1::SeededBill], since: u64, now: u64) -> Option<u64> {
+    dues_after(report, bills, since)
+        .into_iter()
+        .filter(|d| *d <= now)
         .min()
 }
 
@@ -654,15 +651,41 @@ fn due_after(report: &Value, since: u64, now: u64) -> Option<u64> {
 /// (docs/60 P-229): a few seconds after the earliest due time the last pass
 /// knew that is still ahead of it, and never within a minute of that pass.
 /// `None` when no bill falls due after it.
-fn due_pass_at(report: &Value, last_pass: u64) -> Option<u64> {
-    report["obligationsList"]
-        .as_array()?
-        .iter()
-        .filter(|o| o["provenance"] != "x402 receipt")
-        .filter_map(|o| o["nextDue"].as_u64())
-        .filter(|d| *d > last_pass)
+fn due_pass_at(report: &Value, bills: &[level1::SeededBill], last_pass: u64) -> Option<u64> {
+    dues_after(report, bills, last_pass)
+        .into_iter()
         .min()
         .map(|d| (d + 5).max(last_pass + 60))
+}
+
+/// Each bill's first due time after `after`, from the pass's report and the typed
+/// bills (docs/60 P-260): the pass that pays a cycle reports that cycle's due time,
+/// which is behind it, so a due time at or before `after` steps on by the bill's
+/// interval; a bill typed after the pass is not in its report at all.
+fn dues_after(report: &Value, bills: &[level1::SeededBill], after: u64) -> Vec<u64> {
+    let known = report["obligationsList"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|o| o["provenance"] != "x402 receipt")
+        .filter_map(|o| {
+            Some((
+                o["nextDue"].as_u64()?,
+                o["intervalSecs"].as_u64().unwrap_or(0),
+            ))
+        });
+    let typed = bills
+        .iter()
+        .filter(|b| !operator::demo::ended(b, operator::demo::now()))
+        .map(|b| (b.next_due, b.interval_secs()));
+    known
+        .chain(typed)
+        .filter_map(|(due, every)| match due {
+            d if d > after => Some(d),
+            _ if every == 0 => None,
+            d => Some(d + ((after - d) / every + 1) * every),
+        })
+        .collect()
 }
 
 /// The bills a pass found in the history (not typed, not an x402 receipt),
@@ -1043,17 +1066,7 @@ fn reserved_bill_problem(b: &level1::SeededBill) -> Option<&'static str> {
     if !ledger::Money::parse(&b.amount, ledger::Currency::Usdc).is_ok_and(|m| m.to_minor() > 0) {
         return Some("amount is not a USDC amount");
     }
-    if b.every_days == 0 || b.every_days > 366 {
-        return Some("every_days must be 1..=366");
-    }
-    if b.discount_bps > operator::MAX_DISCOUNT_BPS
-        || (b.discount_bps > 0 && (b.early_days == 0 || b.early_days >= b.every_days))
-    {
-        return Some(
-            "early-payment terms must be at most 10% off, and the early window shorter than the billing interval",
-        );
-    }
-    None
+    b.cadence_problem()
 }
 
 fn respond(status: &str, ctype: &str, body: &[u8]) -> Vec<u8> {
@@ -1859,6 +1872,14 @@ impl App {
                 json!({ "error": "chain must be one of the keys from GET /api/chains" }),
             );
         };
+        // docs/115 §3: a demo account (demo mode, the invite word) waits 30 s and the relayer funds it.
+        let demo = v["demo"] == true;
+        if demo
+            && let Err((status, refusal)) =
+                operator::demo::may_open(preset, self.invite.as_deref()).await
+        {
+            return json_reply(status, refusal);
+        }
         let b256 = |k: &str| {
             v[k].as_str()
                 .and_then(|x| x.parse::<alloy::primitives::B256>().ok())
@@ -1982,6 +2003,7 @@ impl App {
             keyless: v["keyless"].as_bool().unwrap_or(false),
             // PLAN 5.28: the bill wallet itself becomes the account (EIP-7702).
             wallet: v["wallet7702"].as_bool().unwrap_or(false),
+            delay_secs: demo.then_some(operator::demo::DELAY_SECS),
         };
         // docs/79 §6a #1: a name is the first passkey's. The same passkey
         // asking again on the same chain gets its account back; anyone else 409.
@@ -2005,10 +2027,12 @@ impl App {
             // name on another chain would let anyone who read the record open
             // it there with their own spare key, so that is refused too.
             if let Some(t) = held.iter().find(|t| t.chain == preset.key && mine(t)) {
-                return json_reply(
-                    "200 OK",
-                    json!({ "tenant": t.public(), "explorer": preset.explorer, "reserveToken": null }),
-                );
+                let mut reply = json!({ "tenant": t.public(), "explorer": preset.explorer, "reserveToken": null });
+                // A demo account whose funding failed is funded when it is opened again.
+                if demo {
+                    reply["demo"] = operator::demo::fund_once(&self.dir, t).await;
+                }
+                return json_reply("200 OK", reply);
             }
             if !held.is_empty() {
                 return json_reply(
@@ -2022,7 +2046,9 @@ impl App {
         let lazy = v["lazy"].as_bool().unwrap_or(false);
         // A new reserve comes with its reserve token (docs/60 P-87); a deployed
         // account needs none (its token gate takes over).
-        let outcome = if lazy {
+        let outcome = if demo {
+            operator::demo::open(&self.dir, req).await
+        } else if lazy {
             level1::reserve(&self.dir, req).await
         } else {
             level1::deploy(&self.dir, req).await.map(|t| (t, None))
@@ -2044,11 +2070,12 @@ impl App {
         };
         match outcome {
             Ok((t, tok)) => {
-                let reply = json_reply(
-                    "200 OK",
-                    // Shown once; the record keeps only its sha256.
-                    json!({ "tenant": t.public(), "explorer": preset.explorer, "reserveToken": tok }),
-                );
+                // Shown once; the record keeps only its sha256.
+                let mut v = json!({ "tenant": t.public(), "explorer": preset.explorer, "reserveToken": tok });
+                if demo {
+                    v["demo"] = operator::demo::fund_once(&self.dir, &t).await;
+                }
+                let reply = json_reply("200 OK", v);
                 // Shown once, above; scrubbed from every later line and reply (docs/60 P-250).
                 if let Some(tok) = &tok {
                     operator::guard::remember(tok);
@@ -3705,7 +3732,7 @@ impl App {
                     let imported: Vec<Value> = tenant
                         .bills
                         .iter()
-                        .map(|b| json!({ "counterparty": b.payee, "amount": format!("{} USDC", b.amount), "intervalSecs": b.every_days.saturating_mul(86_400), "nextDue": b.next_due, "confidence": 1.0, "samples": 0 }))
+                        .map(|b| json!({ "counterparty": b.payee, "amount": format!("{} USDC", b.amount), "intervalSecs": b.interval_secs(), "nextDue": b.next_due, "confidence": 1.0, "samples": 0 }))
                         .collect();
                     let mut seen: std::collections::BTreeSet<String> =
                         std::collections::BTreeSet::new();
@@ -4232,7 +4259,7 @@ impl App {
             "typedBills": tenant.bills.iter().map(|b| json!({
                 "payee": b.payee,
                 "amount": if b.amount.ends_with("USDC") { b.amount.clone() } else { format!("{} USDC", b.amount) },
-                "everySecs": u64::from(b.every_days) * 86_400,
+                "everySecs": b.interval_secs(),
                 "nextDue": b.next_due,
             })).collect::<Vec<_>>(),
         });
@@ -6705,8 +6732,20 @@ impl App {
                     .map(String::from)
                     .or_else(|| b["amount"].as_f64().map(|f| f.to_string()))
                     .unwrap_or_default(),
-                every_days: b["everyDays"].as_u64().unwrap_or(30).min(u32::MAX as u64) as u32,
-                next_due: b["nextDue"].as_u64().unwrap_or_else(now_secs),
+                // docs/115 §3: a cadence in seconds (demo mode only, refused below);
+                // its first cycle falls due one cadence from now unless named.
+                every_days: b["everyDays"]
+                    .as_u64()
+                    .unwrap_or(if b["everySecs"].as_u64().is_some() {
+                        0
+                    } else {
+                        30
+                    })
+                    .min(u32::MAX as u64) as u32,
+                every_secs: b["everySecs"].as_u64().unwrap_or(0),
+                next_due: b["nextDue"]
+                    .as_u64()
+                    .unwrap_or_else(|| now_secs() + b["everySecs"].as_u64().unwrap_or(0)),
                 // PLAN 5.56: "2% if paid 10 days early" = discountPercent 2,
                 // earlyDays 10. Out-of-range terms are refused by set_bills.
                 discount_bps: b["discountPercent"]
@@ -6722,6 +6761,12 @@ impl App {
                 early_days: b["earlyDays"].as_u64().unwrap_or(0).min(u32::MAX as u64) as u32,
             })
             .collect();
+        if bills.iter().any(|b| b.every_secs > 0) && !operator::demo::enabled() {
+            return json_reply(
+                "400 Bad Request",
+                json!({ "error": "a bill repeats every 1 to 366 days (everyDays); everySecs is for demo mode" }),
+            );
+        }
         // docs/60 P-226: on an account with agent keys, an import only the owner's
         // device opened (no `import` agent key) carries the owner's passkey
         // signature over exactly these bills: a device token alone could make or
@@ -6772,7 +6817,7 @@ impl App {
                 Some((
                     b.payee.to_lowercase(),
                     old.next_due,
-                    u64::from(old.every_days) * 86_400,
+                    old.interval_secs(),
                     b.next_due,
                 ))
             })
@@ -7482,7 +7527,7 @@ impl App {
                     .report
                     .as_ref()
                     .filter(|_| j.status == "done")
-                    .and_then(|r| due_after(r, j.created, now_secs()))
+                    .and_then(|r| due_after(r, &tenant.bills, j.created, now_secs()))
                 {
                     Some(_) if now_secs() >= j.created + 60 => {}
                     Some(d) => {
@@ -8012,10 +8057,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // not only when USDC moves — through the same job path a button
                 // uses (it keeps the minute between passes).
                 for t in level1::list(&app.dir).into_iter().filter(|t| t.deployed) {
-                    let Some((ran, report)) = app.last_done_pass(&t.policy).await else {
-                        continue;
-                    };
-                    let Some(at) = due_pass_at(&report, ran) else {
+                    // No pass yet: its typed bills still get theirs (docs/60 P-260).
+                    let (ran, report) = app
+                        .last_done_pass(&t.policy)
+                        .await
+                        .unwrap_or((t.created, Value::Null));
+                    let Some(at) = due_pass_at(&report, &t.bills, ran) else {
                         continue;
                     };
                     if at > now_secs() + watch_every || due_set.get(&t.policy) == Some(&at) {
@@ -8402,6 +8449,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             // PLAN 5.33: where a browser wallet can deposit into Circle Gateway from.
                             "gatewaySources": operator::watch::gateway_sources(true),
                         }),
+                    ),
+                    // docs/115 §3: what the judge's path offers on this host.
+                    ("GET", "/api/level1/demo") => json_reply(
+                        "200 OK",
+                        operator::demo::config(app.invite.as_ref().is_some_and(|w| !w.is_empty())),
                     ),
                     ("POST", "/api/level1/deploy") => app.level1_deploy(&body, query).await,
                     ("POST", "/api/level1/challenge") => app.level1_challenge(&body).await,
@@ -8985,6 +9037,7 @@ mod invoice_settled_tests {
             next_due: 0,
             discount_bps: 0,
             early_days: 0,
+            every_secs: 0,
         };
         assert_eq!(reserved_bill_problem(&ok), None);
         let bad = |f: fn(&mut level1::SeededBill)| {
@@ -9125,22 +9178,62 @@ mod settle_key_tests {
             { "nextDue": due - 100, "provenance": "x402 receipt" },
         ]});
         assert_eq!(
-            due_after(&report, ran, due - 1),
+            due_after(&report, &[], ran, due - 1),
             None,
             "not due yet: the pass answers"
         );
         assert_eq!(
-            due_after(&report, ran, due + 2),
+            due_after(&report, &[], ran, due + 2),
             Some(due),
             "fell due after the pass: run again"
         );
         assert_eq!(
-            due_pass_at(&report, ran),
+            due_pass_at(&report, &[], ran),
             Some(ran + 60),
             "a minute after the last pass"
         );
-        assert_eq!(due_pass_at(&report, ran - 300), Some(due + 5), "due + 5 s");
-        assert_eq!(due_pass_at(&json!({ "obligationsList": [] }), ran), None);
+        assert_eq!(
+            due_pass_at(&report, &[], ran - 300),
+            Some(due + 5),
+            "due + 5 s"
+        );
+        assert_eq!(
+            due_pass_at(&json!({ "obligationsList": [] }), &[], ran),
+            None
+        );
+    }
+
+    /// docs/60 P-260, the judge's bill (0.002 every 120 s): the pass that paid cycle 1
+    /// at due + 5 s reports cycle 1's due time; the next pass is still set for cycle 2,
+    /// a check after cycle 2 falls due is not served from it, and a bill typed after
+    /// the last pass gets a pass for its first cycle.
+    #[test]
+    fn the_next_cycle_gets_its_pass_after_the_one_that_paid() {
+        let (due1, every) = (1_792_230_000u64, 120u64);
+        let ran = due1 + 5;
+        let report = json!({ "obligationsList": [
+            { "nextDue": due1, "intervalSecs": every, "provenance": "imported" },
+        ]});
+        assert_eq!(due_pass_at(&report, &[], ran), Some(due1 + every + 5));
+        assert_eq!(due_after(&report, &[], ran, due1 + every - 1), None);
+        assert_eq!(
+            due_after(&report, &[], ran, due1 + every + 5),
+            Some(due1 + every)
+        );
+        let typed = level1::SeededBill {
+            payee: "0x1111111111111111111111111111111111111111".into(),
+            amount: "0.002".into(),
+            every_days: 0,
+            next_due: due1 + 600,
+            discount_bps: 0,
+            early_days: 0,
+            every_secs: every,
+        };
+        assert_eq!(
+            due_pass_at(&Value::Null, std::slice::from_ref(&typed), due1),
+            Some(due1 + 605),
+            "typed after the last pass"
+        );
     }
 
     /// docs/60 P-228, U1's re-check: the bill found in the history (5 payments,

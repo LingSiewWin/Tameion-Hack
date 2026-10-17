@@ -42,6 +42,7 @@ pub mod agent_api;
 pub mod audit;
 pub mod claude;
 pub mod decide;
+pub mod demo;
 pub mod desk;
 pub mod desk_invite;
 pub mod desk_live;
@@ -2320,6 +2321,7 @@ impl<R: Reasoner> Operator<R> {
                 ),
                 kind: Some(decide::CaseKind::Bill),
                 cap_minor: u128::try_from(authority.per_action_cap.to_minor()).ok(),
+                typed: obligation.sample_count == 0 && self.is_seeded(&obligation),
             };
             let (decided, decided_note) = decide::decide_or_rule(decider, &case).await;
             let (decided, decided_note) =

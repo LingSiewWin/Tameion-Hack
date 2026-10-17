@@ -433,6 +433,8 @@ pub fn invoice_decide_challenge(
 /// keccak256("tameion.bills.v1" ‖ chainId u64 ‖ policy ‖ for each bill: payee ‖
 /// amount in USDC minor units u256 ‖ everyDays u32 ‖ nextDue u64 ‖ discountBps u16 ‖
 /// earlyDays u32 ‖ issued u64), as `lib/guard.ts` `billsChallenge` packs it.
+/// A list with a demo bill in seconds (docs/115 §3) is tagged "tameion.bills.v2" and
+/// each bill carries everySecs u64 after earlyDays, so the cadence is signed too.
 /// `None` when a payee is not an address or an amount is not USDC.
 pub fn bills_challenge(
     chain_id: u64,
@@ -440,7 +442,12 @@ pub fn bills_challenge(
     bills: &[SeededBill],
     issued: u64,
 ) -> Option<B256> {
-    let mut m = b"tameion.bills.v1".to_vec();
+    let v2 = bills.iter().any(|b| b.every_secs > 0);
+    let mut m = if v2 {
+        b"tameion.bills.v2".to_vec()
+    } else {
+        b"tameion.bills.v1".to_vec()
+    };
     m.extend_from_slice(&chain_id.to_be_bytes());
     m.extend_from_slice(policy.as_slice());
     for b in bills {
@@ -454,6 +461,9 @@ pub fn bills_challenge(
         m.extend_from_slice(&b.next_due.to_be_bytes());
         m.extend_from_slice(&b.discount_bps.to_be_bytes());
         m.extend_from_slice(&b.early_days.to_be_bytes());
+        if v2 {
+            m.extend_from_slice(&b.every_secs.to_be_bytes());
+        }
     }
     m.extend_from_slice(&issued.to_be_bytes());
     Some(alloy::primitives::keccak256(m))
@@ -525,6 +535,46 @@ pub struct SeededBill {
     pub discount_bps: u16,
     #[serde(default)]
     pub early_days: u32,
+    /// A cadence in seconds, which only demo mode accepts (docs/115 §3: a bill every
+    /// two minutes); 0 = the bill repeats every `every_days`.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub every_secs: u64,
+}
+
+fn is_zero(n: &u64) -> bool {
+    *n == 0
+}
+
+impl SeededBill {
+    /// How often the bill repeats, in seconds.
+    pub fn interval_secs(&self) -> u64 {
+        if self.every_secs > 0 {
+            self.every_secs
+        } else {
+            u64::from(self.every_days) * 86_400
+        }
+    }
+
+    /// What is wrong with the bill's cadence and early-payment window, if anything.
+    pub fn cadence_problem(&self) -> Option<&'static str> {
+        if self.every_secs > 0 {
+            if self.every_secs < crate::demo::MIN_EVERY_SECS || self.every_secs > 366 * 86_400 {
+                return Some("everySecs must be 60 seconds to 366 days");
+            }
+        } else if self.every_days == 0 || self.every_days > 366 {
+            return Some("every_days must be 1..=366");
+        }
+        if self.discount_bps > crate::MAX_DISCOUNT_BPS
+            || (self.discount_bps > 0
+                && (self.early_days == 0
+                    || u64::from(self.early_days) * 86_400 >= self.interval_secs()))
+        {
+            return Some(
+                "early-payment terms must be at most 10% off, and the early window shorter than the billing interval",
+            );
+        }
+        None
+    }
 }
 
 /// The early-payment terms among imported bills, for the pass (PLAN 5.56).
@@ -609,6 +659,9 @@ pub struct DeployRequest {
     /// the policy's address is `watched` itself; the wallet signs one
     /// authorization to [`delegate_address`] and initialises itself.
     pub wallet: bool,
+    /// The delay on trust-expanding changes when not the service's
+    /// [`delay_secs`]: a demo account's 30 s (docs/115 §3).
+    pub delay_secs: Option<u64>,
 }
 
 /// The agent of a keyless account (PLAN 5.38, docs/62 F3b): an address no
@@ -1074,7 +1127,7 @@ pub async fn reserve(app_dir: &Path, r: DeployRequest) -> Result<(Tenant, Option
         .map_err(|e| e.to_string())?;
     let operator = relayer_address()?;
     let head = client.block_number().await.map_err(|e| e.to_string())?;
-    let delay = delay_secs();
+    let delay = r.delay_secs.unwrap_or_else(delay_secs);
     let factory = arc::EIP7997_FACTORY
         .parse::<Address>()
         .expect("factory address");
@@ -2137,7 +2190,11 @@ pub fn seeds(bills: &[SeededBill]) -> Vec<ledger::Obligation> {
         .iter()
         .filter_map(|b| {
             let amount = Money::parse(&b.amount, Currency::Usdc).ok()?;
-            let interval = Seconds::days(i64::from(b.every_days.max(1)))?;
+            let interval = if b.every_secs > 0 {
+                Seconds::new(i64::try_from(b.every_secs).ok()?)
+            } else {
+                Seconds::days(i64::from(b.every_days.max(1)))?
+            };
             let next_due = Timestamp::from_unix(b.next_due as i64);
             Some(ledger::Obligation {
                 counterparty: ledger::Counterparty::new(&b.payee),
@@ -2180,14 +2237,8 @@ pub async fn set_bills(
             refused.push(json!({ "bill": b, "why": "amount is not a USDC amount" }));
             continue;
         }
-        if b.every_days == 0 || b.every_days > 366 {
-            refused.push(json!({ "bill": b, "why": "every_days must be 1..=366" }));
-            continue;
-        }
-        if b.discount_bps > crate::MAX_DISCOUNT_BPS
-            || (b.discount_bps > 0 && (b.early_days == 0 || b.early_days >= b.every_days))
-        {
-            refused.push(json!({ "bill": b, "why": "early-payment terms must be at most 10% off, and the early window shorter than the billing interval" }));
+        if let Some(why) = b.cadence_problem() {
+            refused.push(json!({ "bill": b, "why": why }));
             continue;
         }
         let attested = client
@@ -2513,8 +2564,16 @@ fn pass_config(
     config.policy_from_block = Some(t.created_block);
     config.horizon = Seconds::days(30).expect("30 days");
     config.detection.dust_line = Money::parse(c.dust, Currency::Usdc).ok();
-    config.seeded = seeds(&t.bills);
-    config.early = early_terms(&t.bills);
+    // docs/115 §3: a demo bill ends after `demo::CYCLES` cycles (an account left open
+    // must not pass and anchor every two minutes for ever).
+    let bills: Vec<SeededBill> = t
+        .bills
+        .iter()
+        .filter(|b| !crate::demo::ended(b, crate::demo::now()))
+        .cloned()
+        .collect();
+    config.seeded = seeds(&bills);
+    config.early = early_terms(&bills);
     config.audit_dir = Some(
         tenants_dir(app_dir)
             .join(format!("{policy:#x}"))
@@ -3840,6 +3899,7 @@ mod bills_challenge_tests {
             next_due: 1_792_156_029,
             discount_bps: 0,
             early_days: 0,
+            every_secs: 0,
         };
         let policy = Address::from_str("0x42463b314d392fe34abe1854b925f0f6e55fa555").unwrap();
         let ch =
@@ -4136,6 +4196,7 @@ mod account_name_tests {
             next_due: 0,
             discount_bps: 0,
             early_days: 0,
+            every_secs: 0,
         });
         refresh_provisional_caps(&dir, &mut t);
         assert_eq!(caps(&t), (usdc("60"), usdc("60")));
@@ -4238,6 +4299,7 @@ mod second_chain_tests {
             caps_provisional: false,
             keyless: false,
             wallet: true,
+            delay_secs: None,
         };
         let dir = std::env::temp_dir().join(format!("tameion-2chain-{}", std::process::id()));
         let e = reserve(&dir, r).await.unwrap_err();

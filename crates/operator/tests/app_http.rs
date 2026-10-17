@@ -1674,6 +1674,7 @@ fn a_device_bill_import_needs_the_owners_passkey_over_the_bills() {
         next_due: now,
         discount_bps: 0,
         early_days: 0,
+        every_secs: 0,
     };
     let chain_id = operator::watch::chain("arc-testnet").unwrap().chain_id;
     let body = |key: Option<&p256::ecdsa::SigningKey>| {

@@ -546,6 +546,7 @@ pub fn to_bill(line: &Value) -> Result<SeededBill, String> {
         next_due: line["dueAt"].as_u64().unwrap_or(0),
         discount_bps: line["discountBps"].as_u64().unwrap_or(0) as u16,
         early_days: line["earlyDays"].as_u64().unwrap_or(0) as u32,
+        every_secs: 0,
     })
 }
 
@@ -735,6 +736,7 @@ mod tests {
                 next_due: NOW + 10 * 86_400,
                 discount_bps: 200,
                 early_days: 10,
+                every_secs: 0,
             }
         );
         let _ = std::fs::remove_dir_all(&dir);

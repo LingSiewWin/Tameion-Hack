@@ -161,6 +161,10 @@ pub struct Case {
     /// whatever `allowed` says, and the rule never chooses them (P-195).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cap_minor: Option<u128>,
+    /// A bill the owner typed, with no payments behind it yet: the owner's own
+    /// instruction, its payee approved by the owner (docs/60 P-261).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub typed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -808,6 +812,7 @@ pub fn invoice_case(
         confidence,
         kind: Some(CaseKind::Invoice),
         cap_minor,
+        typed: false,
     })
 }
 
@@ -926,7 +931,9 @@ or when the cash is needed for a bill that comes first; and takes an early-payme
 when the runway still covers what comes after. A payee paid many times before is not new because \
 its approval for the agent is recent. A purchase from a seller the owner approved, inside the \
 caps, is the normal way this account buys, even the first time: the owner decided when approving \
-the seller and setting the caps, and asking would add a tap that decides nothing. When the facts \
+the seller and setting the caps, and asking would add a tap that decides nothing. A bill the owner \
+typed (typed_by_owner true) is the owner's own instruction, to a payee the owner approved for it: \
+inside the caps and on its due date, pay it even the first time, for the same reason. When the facts \
 give no reason to depart from the usual, say so.
 
 Fields: kind is bill, invoice or purchase (null: not said). due_in_days below zero means overdue. \
@@ -999,6 +1006,7 @@ fn payload(c: &Case, r: &mut Redactor) -> String {
             "saves": money(saving(c)),
         })),
         "payee_approved_days_ago": c.payee_age_days,
+        "typed_by_owner": c.typed,
         "imitates_known_payee": known,
         // The fact, not the cap: the model never learns the limit itself.
         "over_per_payment_cap": c.cap_minor.map(|_| over_cap(c)),
@@ -1138,6 +1146,7 @@ mod tests {
             allowed: vec![Action::Pay, Action::Ask, Action::Refuse],
             kind: Some(CaseKind::Bill),
             cap_minor: Some(50_000_000),
+            typed: false,
         }
     }
 
@@ -1455,6 +1464,29 @@ mod tests {
         .unwrap();
         assert_eq!(c.allowed, vec![Action::Refuse]);
         assert_eq!(rule(&c), (Action::Refuse, Basis::LookAlike));
+    }
+
+    /// docs/60 P-261: the model is told a bill is the owner's own, and a case that is not
+    /// typed serializes as before, so the decisions it remembers keep their keys.
+    #[test]
+    fn a_typed_bill_reaches_the_model_as_the_owners_instruction() {
+        let plain = case();
+        assert!(!serde_json::to_string(&plain).unwrap().contains("typed"));
+        let typed = Case {
+            typed: true,
+            samples: 0,
+            usual_minor: None,
+            payee_age_days: Some(0),
+            ..case()
+        };
+        let v: Value = serde_json::from_str(&payload(&typed, &mut Redactor::default())).unwrap();
+        assert_eq!(v["typed_by_owner"], true);
+        assert!(SYSTEM.contains("typed_by_owner true"));
+        assert_eq!(
+            RuleBased::decision(&typed).action,
+            Action::Pay,
+            "the rule already pays it"
+        );
     }
 
     #[test]
