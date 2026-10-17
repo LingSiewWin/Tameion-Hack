@@ -1416,3 +1416,77 @@ fn the_owners_device_prepares_and_anyone_reads_the_records() {
     let (st, _) = stream_head(p, &format!("/api/level1/events?policy={a}"), "");
     assert_eq!(st, 401);
 }
+
+/// docs/60 P-212: on a locked account an outsider's record is each event's
+/// `seq` and leaf hash, not the event — and the root rebuilt from those leaves
+/// is the anchored root, so "Check it yourself" still matches. The owner's
+/// device and a read key get the events.
+#[test]
+fn a_locked_accounts_record_shows_outsiders_leaves_not_events() {
+    use ledger::log::{leaf_from_canonical, root_from_leaves};
+    let srv = start_with(15, &[("TAMEION_RPC_ARC", "http://127.0.0.1:9")]);
+    let p = srv.port;
+    let dir = std::env::temp_dir().join(format!("tameion-app-test-{}-15", std::process::id()));
+    let a = "0x00000000000000000000000000000000000000e1";
+    let log = dir.join("tenants").join(a).join("log");
+    std::fs::create_dir_all(&log).unwrap();
+    let (read, dev) = (
+        operator::level1::token_hash("k-read"),
+        operator::level1::token_hash("dev-a"),
+    );
+    std::fs::write(
+        dir.join("tenants").join(format!("{a}.json")),
+        format!(
+            r#"{{"chain":"arc-testnet","owner":"0x0000000000000000000000000000000000000001","policy":"{a}","agent":"0x0000000000000000000000000000000000000003","operator":"0x0000000000000000000000000000000000000004","watched":"0x0000000000000000000000000000000000000005","recovery":"0x0000000000000000000000000000000000000000","per_action":"1","daily":"1","floor":"0","delay_secs":60,"mode":1,"created_block":0,"history_from_block":0,"created":0,"deployed":true,"reserve_token_hash":"{dev}","agent_tokens":[{{"id":"r1","label":"reader","scopes":["read"],"expires":4102444800,"issued":0,"hash":"{read}"}}]}}"#
+        ),
+    )
+    .unwrap();
+    let events: [&[u8]; 3] = [
+        b"Holding 0.998000 USDC",
+        b"bought x402:http://seller/v1?coin=ETH",
+        b"ETH price for the weekly report",
+    ];
+    let leaves: Vec<_> = events.iter().map(|c| leaf_from_canonical(c)).collect();
+    let root = root_from_leaves(&leaves).to_hex();
+    let file: String = events
+        .iter()
+        .enumerate()
+        .map(|(i, c)| {
+            format!(
+                "{}\n",
+                serde_json::json!({ "seq": i, "at": 1, "kind": "observation", "note": "a secret note", "canonical": format!("0x{}", c.iter().map(|b| format!("{b:02x}")).collect::<String>()) })
+            )
+        })
+        .collect();
+    std::fs::write(log.join(format!("{root}.events.jsonl")), file).unwrap();
+    let path = format!("/api/level1/record?policy={a}&root={root}");
+    let (st, _, body) = http_with(p, "GET", &path, "", "");
+    assert_eq!(st, 200, "{body}");
+    assert!(
+        !body.contains("canonical") && !body.contains("secret") && !body.contains("observation"),
+        "{body}"
+    );
+    let got: Vec<ledger::log::Hash32> = body
+        .lines()
+        .map(|l| {
+            let v: serde_json::Value = serde_json::from_str(l).unwrap();
+            ledger::log::Hash32::from_hex(v["leaf"].as_str().unwrap()).unwrap()
+        })
+        .collect();
+    assert_eq!(
+        root_from_leaves(&got).to_hex(),
+        root,
+        "the leaves rebuild the anchored root"
+    );
+    for who in [
+        "x-tameion-device: dev-a\r\n",
+        "Authorization: Bearer k-read\r\n",
+    ] {
+        let (st, _, body) = http_with(p, "GET", &path, "", who);
+        assert_eq!(st, 200);
+        assert!(
+            body.contains("canonical") && body.contains("secret"),
+            "{who}: {body}"
+        );
+    }
+}
