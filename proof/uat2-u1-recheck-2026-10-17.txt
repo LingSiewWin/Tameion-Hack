@@ -1,0 +1,75 @@
+UAT U1 re-check (10-17 afternoon) — P-203 on a keyed account, steps 7 and 8, and whether the deciding agent pays a due bill by itself
+Written 2026-10-17 15:13:38 +0800. Asked by the PM after :7880 was restarted at 14:34 with P-225, the console export rebuilt, and the model decider on.
+Environment: http://localhost:7880/ only (service PID 24232, started 14:34:27), Arbitrum Sepolia, a fresh headless Chromium with a CDP virtual passkey
+(scratchpad driver PID 31072, stopped 15:12 by PID), widths 1280 and 390. No product code changed; no key printed: the agent key went into
+~/.tameion/test-keys/uat2-u1-rc-buy.token (mode 600, redacted on screen); bill wallet and invoicer keys ~/.tameion/test-keys/uat2-u1-rc-{billwallet,invoicer}.key (mode 600).
+Relayer transfers were not refused by the permission system.
+
+ACCOUNT  uat2-u1-rc · policy 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 · owner 0x66ab402079bf1a4fd228b6fb6e297534bad571ce · agent 0x5342886f08fb99f6a571dca291fc32ab92f0b210
+  opened 14:39:07 (one tap, 2.9 s); funded 0.1 USDC 14:39:22 tx 0xbc0816f4e2a04717ea211387319aaf7132c88bc63466338d2102b74f1d27deaa; deployed 14:40:35
+  owner_tx 0xd9fa0fedf125ae5fd59685e8fa8918a662b3d45b1bc3705059b6e61a4c9510e9 · policy_tx 0xe85ca2b0375de5ae21a991ee63963bfc423b4c45cd441b4d74b60b1f4d41bc65
+  agent key research-bot (read, run, buy) minted 14:40:52 — every check below ran with that key on the account
+  bill wallet 0x3c559E1152B109323eb70ad0Fcf6D4E7AA9210F5 (gas 0.0003 ETH tx 0x4546ec7729dcb5663cfcba4a13107bd67c9a4f22c3f22fa1eea70b32039cf93b,
+    0.01 USDC tx 0x4a0314e2bac02611e6a94031bf1849492f24aae641927da75b505dcdd74cb513) · vendor 0xf4D08Abf297f57acD381f000a25442186d860e43
+  invoicer 0x1AaC044400Fc736def9BF9cD6d24A34115b3CA63 · typed-bill payee 0xee80b9f69D80A04D4b2e803C426715AA8c1BB1f3
+
+P-203 ON A KEYED ACCOUNT
+  Check now   14:41:03 POST /api/level1/run 200 (device header, cached: "can check again in about 10 min"); 14:50:02 after an owner change 202 (a fresh
+              pass, root 0x244e74dd…, anchor 0xbe82f5a2…). No 401 anywhere.                                                   PASS
+  Save bill   14:41:17 0.001 USDC every 30 days to 0xee80…b1f3: POST bills (check) 200 in 4 ms with the device header -> one passkey tap
+              (prepare-payees 200, challenge 200, execute 200; PayeeSet tx 0xf1b19f111633e6bf5636385aee4481fc8766c326b0dc488b255b1a36dbeadfbc)
+              -> POST bills (save) 200 after 57,882 ms -> "Added 0.001 USDC every 30 days." No wasted tap, no paste; the save took a minute.  PASS
+  Invoice     14:43:06 invoice 0.003 USDC one-off (sign_invoice, id 0xe5725877d212151cfe651dd8c674993ef5745038269da699755625126e5b3d70) -> Needs you
+              "Invoice from Payee ••CA63: 0.003 USDC, due Oct 24, once [Decline] [Pay]".
+              14:43:32 Pay: passkey -> execute 200 = SettledByPrincipal 0.003 to the invoicer, tx 0xdffa283a9e8f83ac19c1d9e02f10ff35bb54b976a21ae4f4ef2f5f4a1e465116
+              (action = invoice id) -> POST /api/level1/invoice-decide 401 {"error":"accepting or declining an invoice needs the owner's passkey"}.
+              The row stays in Needs you with that sentence and its Pay button (paid on chain; invoicer holds 0.003).
+              14:47:09 second invoice 0.004 (id 0x2dc142f234b77ddec60756a70f75a62059c9c24224cbc6381c0e930caf496ebd): Decline -> the same 401 at once,
+              no passkey asked; the owner cannot decline.                                                              FAIL
+              Cause: apps/console/src/components/account/needs.tsx:331-341 signs the decision only if (!inbox?.agentTokens?.length).
+
+STEP 7  raise per payment 50 -> 60 (14:51:00): prepare 0.5 s, challenge 1.2 s, execute 27,820 ms; banner "A higher limit applies in about 49 s unless
+        you cancel" (the limit and value still unnamed) + "Cancel the change" 8.1 s later; the raise applied at eta (ChangeProposed tx
+        0x87aa0125c2bdd31836037aa86ffb7e81a513257869cc838441474b42af323bf2, LimitsChanged tx 0xe9d857943b7b96254ae0bd4f38e41045c365d33da288d850f9df8f9bb4000011;
+        my own cancel came too late — my tooling, not the product). Lower to 0.01 / 0.05 (14:54:02): "Lowered, at once." in 6.6 s, tx
+        0xf7620d545aaadf8d2b8764a43e8f9c29f5f84f79bca7b18a5ac660c6812de41c; chain 10000 / 50000 at once. Two later cuts: 7 s each.        PASS
+        (Autopilot on the way: ask 5.6 s tx 0x29a1e513f3ddbef3e31388d25dc6fcf47110edde434689576dba2099290b315e, page apply 14:49:40 tx
+        0x7c44c97f8821a4a7319c778c7bda69ee63e6530a1ee856c2746631b2118a982f; the countdown read "about 51 s" from 14:48:45 to 14:49:46 — P-201 still.)
+
+STEP 8  Settings -> Owners: "1 of 3 keys set — add two guardians before raising a limit. If you lose your passkey today, nobody can replace it." The
+        account page says nothing about keys, the raise above showed no warning, the "spare key" block is still separate.               PARTIAL (unchanged)
+
+THE DECIDING AGENT AND A DUE BILL (history: the bill wallet paid the vendor 0.002 five times, 243 s apart)
+  14:38:55 round 1: 0.002 USDC to 0xf4D08Abf297f57acD381f000a25442186d860e43 tx 0xe0bbfe08c9cc6212c3c180f23ca9a06966ce7d6c1345ae2c0c9bc236b80884cf 0x1 319995462
+  14:42:58 round 2: 0.002 USDC to 0xf4D08Abf297f57acD381f000a25442186d860e43 tx 0x51f86dc1cad3653f0c060ff72d39dc54899bb2a239daf21a23644c2d05e0f5c9 0x1 319996352
+  14:47:01 round 3: 0.002 USDC to 0xf4D08Abf297f57acD381f000a25442186d860e43 tx 0x4d15e8d848a553e74b3898cd581081cf72bde84ade8aa882ec5f3422615f8ee9 0x1 319997272
+  14:51:05 round 4: 0.002 USDC to 0xf4D08Abf297f57acD381f000a25442186d860e43 tx 0x4d6b514bde41a53db985f432ec7b22c435c9f63109cd9766818007252f5b4200 0x1 319998199
+  14:55:08 round 5: 0.002 USDC to 0xf4D08Abf297f57acD381f000a25442186d860e43 tx 0x4191e51111c87a5a6c9db8be1bc67c91bd43bdd9daece32a1d6667340b3672e6 0x1 319999127
+  14:47:48 "Connect a wallet that pays your bills today" -> "1 recurring bill found: 0.002 Payee ••0E43 every 4 minutes … Once money lands the agent
+           asks you to approve each payee, then pays them when due." No approve button; the account already held money.
+  14:50:02 pass: the bill not yet due (due 14:51:0x, paid by the wallet itself) -> nothing asked.
+  14:59:15 pass at the due time (after an instant cut so the check is not served from the 10-minute cache): the model ASKED —
+           "0xf4d08a…860e43 matches its usual 0.002 USDC amount from 5 earlier payments, but is not approved for the agent, so you should decide.
+           Not one of your approved payees yet. "Approve & pay" approves it and pays." Only offer: "Approve & pay".
+  15:00:26 "Approve & pay": two passkey signatures — approve (PayeeSet tx 0x3846a14d58be7f7a10023b550083926ab20db25f39cf7c1cd41662b37283b5b8) and,
+           after a 40,306 ms challenge, pay (SettledByPrincipal 0.002 tx 0x6dd582b6143e8d82a28b974eec47d80f62b60fce4dd4b31c02b856ab2465d062), 50 s in all.
+           So the first found cycle is paid by the owner.
+  15:02:40 a watcher pass (after the payment) 34 s before the next due (15:03:14): nothing to decide yet. 15:03:16 my check after another instant cut
+           (tx 0xadebb889da48923fc99044e8d90deae2dc610c7f537e4e38d3853f15e602ca2d) was served from cache: passes are at least 60 s apart.
+  15:10:08 the next fresh pass (root 0x39285d6eaa1f…, anchor 0x60ed46e98e9a…): the model ASKED again — "has been paid 6 times and 0.002 USDC is the
+           usual amount, but the schedule is only 0.6 confident, so please confirm. Nobody has paid this bill for a while: it may have ended. If it has,
+           tap "Bill ended"." (raw: "cycles-behind: 1 more cycle … fell due after this one and nobody paid it"; "confidence 0.60 below floor 0.75")
+  RESULT: the agent did not pay a due bill by itself. The reasons are on the page each time. Why not: the found bill's payee can only be approved by
+  "Approve & pay" when the bill falls due, so that cycle is the owner's; the next cycle's due pass was blocked by the 60 s rule after a watcher pass,
+  and the pass after that came a cycle late (confidence 0.60). With a 4-minute test cadence the agent never gets a fresh, approved, on-time cycle.
+                                                                                                                    FAIL (not shown)
+
+ALSO SEEN: each typed-bill and found-bill ask still names the payee by a hex fragment beside its page name, and says "the owner"; the account page's
+  "Agents can spend now" and "Pay all 2 — one approval for every bill below. A bill already paid is skipped, never paid twice." (new, not tested).
+
+SCREENSHOTS: proof/uat2-u1-recheck-{01…08,10,11 (1280 and 390),12,14,15}-*.png. SPEND: 0.1 USDC to the account + 0.01 USDC to the bill wallet = 0.11 USDC from the relayer
+  (cap 0.3), 0.0003 ETH gas. The account paid 0.003 (invoice) + 0.002 (vendor); balance 0.095.
+RE-CHECKED: 3 of 6 pass (Check now, Save bill, step 7); step 8 partial; invoice accept/decline and the agent paying a due bill by itself fail.
+  With step 7 now passing, the U1 checklist stands at 10 of 11 (step 8 partial).
+CLEAN-UP LEFT: uat2-u1-rc's owner passkey lived in the stopped headless browser (no guardians): its 0.095 test USDC, the research-bot key
+  (read, run, buy; caps 0.01 / 0.048) and the two invoices in Needs you (the 0.003 one already paid) stay as they are.
