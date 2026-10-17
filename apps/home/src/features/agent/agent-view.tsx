@@ -62,13 +62,13 @@ export function AgentScreen({ reads, onRetry, now }: { reads: Reads; onRetry?: (
   const latest = Math.max(...Object.values(reads).map((s: Src<unknown>) => s.at ?? 0));
   return (
     <div className="mono flex flex-col gap-(--space-5)">
-      <p className="m-0 flex flex-wrap gap-x-(--space-5) gap-y-(--space-1)">
-        <span>tameion top</span>
+      <div className="flex flex-wrap gap-x-(--space-5) gap-y-(--space-1)">
+        <h1 className="mono m-0">tameion top</h1>
         {policy && <span className="break-all">{policy}</span>}
         {symbolon.value?.chain && <span>{symbolon.value.chain}</span>}
         {inbox.value?.mode && <span>mode {inbox.value.mode}</span>}
         {latest > 0 && <span className="meta">as of {clock(latest)}</span>}
-      </p>
+      </div>
       {failed.length > 0 && (
         <div role="alert" className="flex flex-wrap items-center gap-x-(--space-4) gap-y-(--space-2)">
           <p className="m-0">
