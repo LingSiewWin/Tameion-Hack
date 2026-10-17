@@ -51,8 +51,9 @@ pub enum Atomicity {
 pub enum FinalityKind {
     /// The chain reports no `finalized` block: the receipt is all there is.
     Receipt,
-    /// `finalized` had not reached the block when [`FINALITY_CAP`] ran out;
-    /// this many blocks had been built on top of it by then.
+    /// `finalized` had not reached the block when the wait ended (at
+    /// [`FINALITY_CAP`], or when the node stopped answering the tag); this
+    /// many blocks had been built on top of it by then.
     Confirmations(u64),
     /// The chain's `finalized` tag covers the block.
     ChainFinalTag,
