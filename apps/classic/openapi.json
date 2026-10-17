@@ -3929,7 +3929,8 @@
           "seller_pending",
           "service_error",
           "service_unavailable",
-          "state_conflict"
+          "state_conflict",
+          "service_paused"
         ],
         "description": "the catalogue `refusal::CODES`, served at GET /api/level1/codes"
       },
