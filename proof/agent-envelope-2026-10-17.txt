@@ -1,0 +1,212 @@
+Agent envelope proof — S13 seat, binary runtime/seats/S13/tameion-app (branch seat/S13), 2026-10-17 16:40:41 +0800
+Service :7913, TAMEION_APP_DIR=runtime/seats/S13/app, chain arbitrum-sepolia (public RPC), nothing sent on chain.
+
+$ 1. a wrong agent key: GET /api/level1/inbox?policy=0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1  (Authorization: Bearer not-a-key)
+HTTP/1.1 403 Forbidden
+{
+ "contractVersion": "2026-10-17.1",
+ "error": {
+  "audience": "agent",
+  "by": "auth",
+  "code": "token_invalid",
+  "executed": "no",
+  "meaning": "The agent key is not one this account issued: mistyped, revoked, or for another account.",
+  "nextStep": "Check the key you send; if the owner revoked it, ask them for a new one.",
+  "retryAfterSecs": 0,
+  "words": "unknown agent key"
+ },
+ "ok": false,
+ "scope": "read"
+}
+
+$ 1b. the same refusal to a page (Sec-Fetch-Mode: cors): error stays the sentence the console shows
+HTTP/1.1 403 Forbidden
+{"contractVersion":"2026-10-17.1","error":"unknown agent key","ok":false,"scope":"read"}
+$ 2. on chain before the buy: mode() and attestedPayee(0x179dca89f69faef5765d2e7445aa5452b8159520) of 0x48274c7904edb23f75ea607c932d5c441c1a80e3
+mode = 1   (0 Watch, 1 Propose, 2 Autopilot)
+attestedPayee = true
+
+$ 2. a buy on Propose: POST /api/level1/buy {policy:0x48274c7904edb23f75ea607c932d5c441c1a80e3, url: http://127.0.0.1:7993/v1/price (asks 0.001 USDC to 0x179dca89f69faef5765d2e7445aa5452b8159520, never settles), maxUsdc 0.01}  (Authorization: Bearer <S13-propose-buy key, read+buy>)
+HTTP/1.1 409 Conflict
+{
+ "contractVersion": "2026-10-17.1",
+ "error": {
+  "audience": "user",
+  "by": "mandate",
+  "code": "mode_propose",
+  "executed": "no",
+  "meaning": "The account is on Propose: the agent asks before every payment and pays nothing by itself.",
+  "nextStep": "Ask the owner to turn on Autopilot (prepare_mode with mode 2); the switch waits the account's delay and the owner can cancel it.",
+  "retryAfterSecs": 0,
+  "words": "the account refuses: the agent buys only on Autopilot: this account asks before paying, so the purchase was refused; turn Autopilot on to let it buy inside your limits"
+ },
+ "ok": false,
+ "purchase": {
+  "amount": "0.001000 USDC",
+  "at": 1792226444,
+  "host": "127.0.0.1",
+  "minor": "1000",
+  "network": "eip155:421614",
+  "policy": "0x48274c7904edb23f75ea607c932d5c441c1a80e3",
+  "reason": "S13 envelope proof: a buy on Propose is refused",
+  "seller": "0x179dca89f69faef5765d2e7445aa5452b8159520",
+  "status": "refused",
+  "url": "http://127.0.0.1:7993/v1/price",
+  "why": "the account refuses: the agent buys only on Autopilot: this account asks before paying, so the purchase was refused; turn Autopilot on to let it buy inside your limits"
+ }
+}
+
+$ 3. the same Idempotency-Key with another body: POST /api/level1/prepare-withdraw twice (key s13-proof-13292)
+HTTP/1.1 200 OK
+HTTP/1.1 422 Unprocessable Entity
+{
+ "contractVersion": "2026-10-17.1",
+ "error": {
+  "audience": "agent",
+  "by": "idempotency",
+  "code": "idempotency_conflict",
+  "executed": "no",
+  "meaning": "This Idempotency-Key was already used with a different body.",
+  "nextStep": "Use a new key for a new request; resend the first body to get the first answer.",
+  "retryAfterSecs": 0,
+  "words": "this Idempotency-Key was used with a different body"
+ },
+ "ok": false
+}
+
+$ 4. an answer: GET /api/level1/inbox?policy=0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1  (Authorization: Bearer <uat2-u1-rc-buy key>) — the envelope fields and a few of the route's own
+HTTP/1.1 200 OK
+{
+ "ok": true,
+ "contractVersion": "2026-10-17.1",
+ "paused": false,
+ "halt": false,
+ "recentUpdates": [
+  {
+   "date": "2026-10-17",
+   "note": "Contract 2026-10-17.1: every agent reply carries ok and contractVersion; a refusal is one error object with code, by, executed, audience, meaning, nextStep, retryAfterSecs and words (the old sentence). The codes are served at GET /api/level1/codes."
+  },
+  {
+   "date": "2026-10-17",
+   "note": "A paid-API purchase refused after its signature reached the seller says executed: yes or unknown from the chain; never resend it then."
+  },
+  {
+   "date": "2026-10-17",
+   "note": "treasury_inbox adds paused, halt and recentUpdates; MCP tool results carry structuredContent, and an error's text is the error object."
+  }
+ ],
+ "policy": "0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1",
+ "mode": "Autopilot",
+ "balance": "0.094000 USDC",
+ "waitingCount": 0,
+ "caps": {
+  "daily": "0.048000 USDC",
+  "floor": "0.000000 USDC",
+  "leftNow": "0.010000 USDC",
+  "perAction": "0.010000 USDC",
+  "spent24h": "0.001000 USDC"
+ },
+ "fieldsInReply": 56
+}
+
+$ 5. GET /api/level1/codes (no key)
+HTTP/1.1 200 OK
+{
+ "ok": true,
+ "contractVersion": "2026-10-17.1",
+ "by": [
+  "auth",
+  "input",
+  "mandate",
+  "budget",
+  "payee",
+  "idempotency",
+  "chain",
+  "upstream",
+  "service"
+ ],
+ "executed": [
+  "yes",
+  "no",
+  "unknown"
+ ],
+ "audience": [
+  "user",
+  "agent"
+ ],
+ "retry": "Never resend a payment when executed is \"yes\" or \"unknown\": keep the Idempotency-Key and read the account. Resend once, after retryAfterSecs (1 to 60 s), only on rate_limited or idempotency_pending with executed \"no\". Every other code needs the change nextStep names first."
+}
+codes: 37
+  token_missing | auth | agent | This account requires an agent key and the request carried none.
+  token_invalid | auth | agent | The agent key is not one this account issued: mistyped, revoked, or for another account.
+  token_expired | auth | user | The agent key has expired.
+  token_scope | auth | user | The agent key does not carry the scope this call needs (named in `scope`).
+  token_stopped | auth | user | The owner stopped this agent key.
+  needs_owner | auth | user | Only the owner can do this: their passkey, or the device that opened the account.
+  mode_watch | mandate | user | The account is on Watch (paused): the agent pays nothing by itself.
+  mode_propose | mandate | user | The account is on Propose: the agent asks before every payment and pays nothing by itself.
+  agent_lapsed | mandate | user | The agent's authority to pay has lapsed.
+  account_keyless | mandate | user | This account has no agent key, so its agent cannot pay or buy by itself.
+  account_not_deployed | chain | user | The account is not on chain yet.
+  price_out_of_band | mandate | user | The price is more than a quarter above what this seller usually charges, so the owner decides.
+  over_per_payment | budget | user | The amount is above the account's per-payment limit.
+  over_24h | budget | agent | The amount is above what is left of the trailing 24-hour limit.
+  below_floor | budget | user | Paying would take the balance under the floor the owner set.
+  insufficient_funds | budget | user | The account does not hold enough USDC for this payment.
+  over_max_price | budget | agent | The seller's price is above the most the caller allowed for this call (maxUsdc).
+  payee_not_approved | payee | user | The payee is not on the account's payee list.
+  payee_cooling_off | payee | agent | The payee was approved too recently; it can be paid once its waiting period ends.
+  payee_frozen | payee | user | The stablecoin issuer froze this payee: USDC refuses transfers to it.
+  idempotency_conflict | idempotency | agent | This Idempotency-Key was already used with a different body.
+  idempotency_pending | idempotency | agent | A request with this Idempotency-Key is still running.
+  seller_pending | idempotency | agent | An earlier purchase from this seller can still be collected; a second is never signed until it settles or expires.
+  already_paid | idempotency | agent | This payment was already made.
+  invalid_body | input | agent | The request is missing a field or carries one this route cannot use.
+  not_found | input | agent | No such account, job or record on this service.
+  body_too_large | input | agent | The request body is larger than this route takes.
+  state_conflict | input | agent | The request does not fit the account as it is now.
+  rate_limited | service | agent | Too many requests of this kind just now.
+  account_busy | service | agent | Another payment for this account was being signed; nothing was signed or paid.
+  service_unavailable | service | agent | This service could not do it just now; nothing was done.
+  service_error | service | agent | This service failed to do it.
+  chain_unavailable | chain | agent | The chain did not answer in time.
+  chain_refused | chain | agent | The account's contract refused the payment for a reason not in this catalogue (in words).
+  purchase_expired | chain | agent | The purchase expired before the seller collected it; nothing was paid.
+  upstream_unavailable | upstream | agent | A service this one depends on (a seller, Circle, a node) did not answer as expected.
+  x402_unsupported | upstream | agent | The seller does not take a payment this account can make (USDC, the exact scheme, this chain).
+
+$ 6. GET /api/level1/status?policy=0x48274c7904edb23f75ea607c932d5c441c1a80e3 (no key)
+HTTP/1.1 200 OK
+{
+ "codes": "/api/level1/codes",
+ "contractVersion": "2026-10-17.1",
+ "halt": false,
+ "mode": "Propose",
+ "ok": true,
+ "paused": false,
+ "policy": "0x48274c7904edb23f75ea607c932d5c441c1a80e3",
+ "recentUpdates": [
+  {
+   "date": "2026-10-17",
+   "note": "Contract 2026-10-17.1: every agent reply carries ok and contractVersion; a refusal is one error object with code, by, executed, audience, meaning, nextStep, retryAfterSecs and words (the old sentence). The codes are served at GET /api/level1/codes."
+  },
+  {
+   "date": "2026-10-17",
+   "note": "A paid-API purchase refused after its signature reached the seller says executed: yes or unknown from the chain; never resend it then."
+  },
+  {
+   "date": "2026-10-17",
+   "note": "treasury_inbox adds paused, halt and recentUpdates; MCP tool results carry structuredContent, and an error's text is the error object."
+  }
+ ]
+}
+
+$ seller log (did a signature reach it?)
+seller: GET /v1/x False
+seller: GET /v1/price False
+
+$ 7. MCP (runtime/seats/S13/tameion-mcp, TAMEION_URL=http://127.0.0.1:7913, TAMEION_TOKEN=not-a-key): initialize, then treasury_inbox on 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1
+serverInfo: {"name": "tameion", "version": "2026-10-17.1"}
+isError: True
+content[0].text: {"audience":"agent","by":"auth","code":"token_invalid","executed":"no","meaning":"The agent key is not one this account issued: mistyped, revoked, or for another account.","nextStep":"Check the key you send; if the owner revoked it, ask them for a new one.","retryAfterSecs":0,"words":"unknown agent key"}
+structuredContent.ok: False | structuredContent.scope: read
