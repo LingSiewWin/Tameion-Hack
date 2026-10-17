@@ -118,6 +118,10 @@ pub struct Line {
     pub kind: String,
     pub note: String,
     pub canonical: Vec<u8>,
+    /// The event's leaf hash, when only that was served: a locked account's
+    /// record as an outsider gets it (docs/60 P-212). `None` when the canonical
+    /// bytes are here; the leaf is then computed from them, never taken.
+    pub leaf: Option<Hash32>,
 }
 
 /// Read an events file. Refuses a line that is not JSON, lacks a field, or
@@ -143,26 +147,42 @@ pub fn load(path: &Path) -> io::Result<Vec<Line>> {
         if seq as usize != out.len() {
             return Err(bad(n, &format!("seq {seq} out of order")));
         }
-        let canonical = v["canonical"]
-            .as_str()
-            .and_then(unhex)
-            .ok_or_else(|| bad(n, "canonical missing or not hex"))?;
+        // A line with the canonical bytes is checked from them; a line with
+        // only a leaf hash (docs/60 P-220) is checked from the leaf.
+        let (canonical, leaf) = match v["canonical"].as_str() {
+            Some(c) => (unhex(c).ok_or_else(|| bad(n, "canonical not hex"))?, None),
+            None => (
+                Vec::new(),
+                Some(
+                    v["leaf"]
+                        .as_str()
+                        .and_then(Hash32::from_hex)
+                        .ok_or_else(|| bad(n, "neither canonical nor leaf"))?,
+                ),
+            ),
+        };
         out.push(Line {
             seq,
-            at: v["at"].as_i64().ok_or_else(|| bad(n, "at missing"))?,
+            at: match (v["at"].as_i64(), leaf) {
+                (Some(at), _) => at,
+                (None, Some(_)) => 0,
+                (None, None) => return Err(bad(n, "at missing")),
+            },
             kind: v["kind"].as_str().unwrap_or("").to_string(),
             note: v["note"].as_str().unwrap_or("").to_string(),
             canonical,
+            leaf,
         });
     }
     Ok(out)
 }
 
-/// Leaves and root recomputed from canonical bytes alone.
+/// Leaves and root recomputed from canonical bytes alone, or from the leaf
+/// hashes a locked account's public record serves instead (docs/60 P-220).
 pub fn recompute(lines: &[Line]) -> (Vec<Hash32>, Hash32) {
     let leaves: Vec<Hash32> = lines
         .iter()
-        .map(|l| leaf_from_canonical(&l.canonical))
+        .map(|l| l.leaf.unwrap_or_else(|| leaf_from_canonical(&l.canonical)))
         .collect();
     let root = root_from_leaves(&leaves);
     (leaves, root)
@@ -266,6 +286,48 @@ mod tests {
             );
         }
         log
+    }
+
+    /// docs/60 P-220: the public record of a locked account (each event's `seq`
+    /// and leaf hash) recomputes to the same root as the events; a line with
+    /// neither bytes nor a leaf is refused, and bytes win over a stated leaf.
+    #[test]
+    fn the_leaf_hashes_alone_recompute_the_same_root() {
+        let dir = std::env::temp_dir().join(format!("tameion-audit-leaves-{}", std::process::id()));
+        let log = sample_log();
+        let path = persist(&dir, &log).unwrap();
+        let full = load(&path).unwrap();
+        let public: String = full
+            .iter()
+            .map(|l| {
+                format!(
+                    "{{\"seq\":{},\"leaf\":\"{}\"}}\n",
+                    l.seq,
+                    leaf_from_canonical(&l.canonical).to_hex()
+                )
+            })
+            .collect();
+        let leaves_file = dir.join("public.events.jsonl");
+        fs::write(&leaves_file, &public).unwrap();
+        let lines = load(&leaves_file).unwrap();
+        assert!(
+            lines
+                .iter()
+                .all(|l| l.canonical.is_empty() && l.leaf.is_some())
+        );
+        assert_eq!(recompute(&lines).1, log.root());
+        fs::write(&leaves_file, "{\"seq\":0}\n").unwrap();
+        assert!(load(&leaves_file).is_err(), "neither bytes nor a leaf");
+        let lying = format!(
+            "{{\"seq\":0,\"at\":1,\"canonical\":\"0x00\",\"leaf\":\"{}\"}}\n",
+            log.root().to_hex()
+        );
+        fs::write(&leaves_file, lying).unwrap();
+        assert_eq!(
+            recompute(&load(&leaves_file).unwrap()).0,
+            vec![leaf_from_canonical(&[0])]
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

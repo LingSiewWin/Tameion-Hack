@@ -3,7 +3,12 @@
 #
 #   scripts/verify_tenant.sh https://tameion.example 0x<policy>        # latest pass
 #   scripts/verify_tenant.sh http://127.0.0.1:7880 0x<policy> 0x<root>  # one pass
-#   TAMEION_TOKEN=<agent key with read> scripts/verify_tenant.sh ...    # a locked account
+#   TAMEION_TOKEN=<agent key with read> scripts/verify_tenant.sh ...    # a locked account, its events
+#
+# A locked account (its owner minted agent keys) serves an outsider each
+# event's leaf hash, not the event (docs/60 P-212): without TAMEION_TOKEN the
+# root is checked from those leaves, and the script says so. The key is sent
+# in a header and never printed.
 #
 # Reads the tenant's anchored roots from the service, downloads the events
 # behind one of them, recomputes the root from those events and compares it
@@ -35,6 +40,12 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 curl -fsS ${AUTH[@]+"${AUTH[@]}"} "$HOST/api/level1/record?policy=$POLICY&root=$root" -o "$tmp/$root.events.jsonl"
 echo "events  $(wc -l < "$tmp/$root.events.jsonl" | tr -d ' ') lines downloaded"
+if grep -q '"canonical"' "$tmp/$root.events.jsonl"; then
+  how="from the events themselves"
+else
+  how="from the public leaf hashes only: this account is locked, and its events need TAMEION_TOKEN (a key with read)"
+fi
+echo "checked $how"
 # Two independent RPCs (PLAN 5.18, docs/59 §3.12): the root must match on
 # both, and both must be at the same height within a few blocks. A node that
 # lies alone is caught; a service that lies is caught by either.
@@ -57,5 +68,5 @@ for rpc in "$RPC_URL" "$RPC_URL_2"; do
   AUDIT_EVENTS="$tmp/$root.events.jsonl" AGENT="$agent" ANCHOR="$anchor" RPC_URL="$rpc" \
     cargo run --locked -q -p operator --example audit || { r=$?; [ $rc -eq 0 ] && rc=$r; }
 done
-if [ "$rc" -eq 0 ]; then echo "verify_tenant: MATCH on both RPCs"; else echo "verify_tenant: a source disagreed or failed (exit $rc)"; fi
+if [ "$rc" -eq 0 ]; then echo "verify_tenant: MATCH on both RPCs, checked $how"; else echo "verify_tenant: a source disagreed or failed (exit $rc)"; fi
 exit "$rc"
