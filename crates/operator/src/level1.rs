@@ -861,7 +861,7 @@ pub async fn issuer_frozen(t: &Tenant, who: &[Address]) -> Vec<String> {
     let Some(c) = crate::watch::chain(&t.chain) else {
         return Vec::new();
     };
-    match read_only_client(c) {
+    match quick_client(c) {
         Ok(client) => client.issuer_blocked_among(who).await.into_iter().collect(),
         Err(_) => Vec::new(),
     }
@@ -2149,7 +2149,8 @@ pub async fn set_bills(
 ) -> Result<Value, String> {
     let c = crate::watch::chain(&t.chain).ok_or("tenant chain unknown")?;
     let policy = Address::from_str(&t.policy).map_err(|e| e.to_string())?;
-    let client = read_only_client(c)?;
+    // A person waits on this save: reads that stall fail in seconds (docs/60 P-231).
+    let client = quick_client(c)?;
     let mut kept = Vec::new();
     let mut refused = Vec::new();
     for b in bills {
@@ -2584,6 +2585,46 @@ pub async fn cycle_paid(app_dir: &Path, t: &Tenant, cycle: &str) -> Result<bool,
         .collect();
     refs.push(key);
     Ok(!executed_hashes(t, &refs).await?.is_empty())
+}
+
+/// The first cycle of a typed bill to `payee` not yet paid, stepping from its
+/// typed date `typed` by `every` seconds while a cycle is paid by any path the
+/// service knows ([`cycle_paid`]): what an import may not schedule before
+/// (docs/60 P-227). A few reads, not a whole pass (P-231: the pass-shaped read
+/// took 4 s of every save).
+pub async fn next_unpaid_typed(
+    app_dir: &Path,
+    t: &Tenant,
+    payee: &str,
+    typed: u64,
+    every: u64,
+    now: u64,
+) -> Result<u64, String> {
+    let payee = payee.to_lowercase();
+    first_unpaid(typed, every, now, |due| {
+        let cycle = format!("{payee}@{due}");
+        async move { cycle_paid(app_dir, t, &cycle).await }
+    })
+    .await
+}
+
+/// The first due date from `typed`, `every` seconds apart, that `paid` does
+/// not report paid; at most the intervals elapsed by `now` plus two steps.
+async fn first_unpaid<F, Fut>(typed: u64, every: u64, now: u64, paid: F) -> Result<u64, String>
+where
+    F: Fn(u64) -> Fut,
+    Fut: std::future::Future<Output = Result<bool, String>>,
+{
+    let every = every.max(1);
+    let bound = now.saturating_sub(typed) / every + 2;
+    let mut due = typed;
+    for _ in 0..bound {
+        if !paid(due).await? {
+            return Ok(due);
+        }
+        due += every;
+    }
+    Ok(due)
 }
 
 /// Every reference this service's passes offered the owner for a bill-cycle,
@@ -3724,6 +3765,38 @@ mod tests {
         assert!(load(&dir, "../tenants/x").is_none());
         assert_eq!(list(&dir).len(), 1);
         let _ = fs::remove_dir_all(dir);
+    }
+}
+
+#[cfg(test)]
+mod first_unpaid_tests {
+    use super::*;
+
+    /// docs/60 P-227, P-231: the next unpaid cycle of a typed bill, read cycle by
+    /// cycle (a few reads) instead of a whole pass.
+    #[tokio::test]
+    async fn the_first_unpaid_cycle_of_a_typed_bill() {
+        let (d0, m) = (1_792_156_029u64, 2_592_000u64);
+        let paid = |set: Vec<u64>| {
+            move |d: u64| {
+                let hit = set.contains(&d);
+                async move { Ok::<bool, String>(hit) }
+            }
+        };
+        assert_eq!(
+            first_unpaid(d0, m, d0 + 100, paid(vec![d0])).await,
+            Ok(d0 + m)
+        );
+        assert_eq!(first_unpaid(d0, m, d0 + 100, paid(vec![])).await, Ok(d0));
+        assert_eq!(
+            first_unpaid(d0, m, d0 + 3 * m, paid(vec![d0, d0 + m])).await,
+            Ok(d0 + 2 * m)
+        );
+        let failing = |_d: u64| async { Err::<bool, String>("node down".into()) };
+        assert!(
+            first_unpaid(d0, m, d0, failing).await.is_err(),
+            "an unreadable chain is not 'unpaid'"
+        );
     }
 }
 
