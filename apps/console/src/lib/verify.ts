@@ -37,14 +37,16 @@ export function merkleRoot(leaves: Hex[]): Hex {
   return node(merkleRoot(leaves.slice(0, k)), merkleRoot(leaves.slice(k)));
 }
 
-/** The root of an events file as the service serves it (`/api/level1/record`, one JSON event per line). */
+/** The root of an events file as the service serves it (`/api/level1/record`, one JSON event per line). On an
+ *  account with agent keys an outsider gets each event's leaf hash instead of the event (docs/60 P-212); the root
+ *  rebuilt from those is the same root. */
 export function rootOfEvents(jsonl: string): { root: Hex; count: number } {
   const events = jsonl
     .split("\n")
     .filter((l) => l.trim())
-    .map((l) => JSON.parse(l) as { seq: string | number; canonical: Hex })
+    .map((l) => JSON.parse(l) as { seq: string | number; canonical?: Hex; leaf?: Hex })
     .sort((a, b) => Number(a.seq) - Number(b.seq));
-  return { root: merkleRoot(events.map((e) => leaf(e.canonical))), count: events.length };
+  return { root: merkleRoot(events.map((e) => e.leaf ?? leaf(e.canonical ?? "0x"))), count: events.length };
 }
 
 export type AnchoredRecord = {

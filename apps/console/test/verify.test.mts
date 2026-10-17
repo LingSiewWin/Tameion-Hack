@@ -31,3 +31,18 @@ test("RFC 6962 shape: empty, one leaf, uneven split", () => {
   const c = `0x${"33".repeat(32)}` as const;
   assert.notEqual(merkleRoot([a, b, c]), merkleRoot([a, b, c, c]));
 });
+
+// docs/60 P-212: on an account with agent keys an outsider is served each event's seq and leaf hash, not the
+// event; "Check it yourself" rebuilds the same root from those.
+test("the leaves alone rebuild the same root", async () => {
+  const { keccak256, concat } = await import("viem");
+  const leaves = jsonl
+    .trim()
+    .split("\n")
+    .map((l) => JSON.parse(l) as { seq: number; canonical: `0x${string}` })
+    .map((e) => JSON.stringify({ seq: e.seq, leaf: keccak256(concat(["0x00", e.canonical])) }))
+    .join("\n");
+  assert.ok(!leaves.includes("canonical"));
+  assert.equal(rootOfEvents(leaves).root, rootOfEvents(jsonl).root);
+  assert.equal(rootOfEvents(leaves).count, 5);
+});
