@@ -353,6 +353,8 @@ type AllowPhase = "idle" | "Signing" | "Sent" | "Confirmed";
 function AllowStep({ opened, inbox, pub, chain, demo, onDone }: { opened: Opened; inbox: Inbox; pub: Pub; chain: Chain; demo: Demo; onDone: (i: Inbox) => void }) {
   const [phase, setPhase] = useState<AllowPhase>("idle");
   const [failure, setFailure] = useState<{ title: string; words: string } | null>(null);
+  const [tappedAt, setTappedAt] = useState(0);
+  const now = useNow(phase !== "idle");
   const vendor = demo.vendor.toLowerCase();
   const every = spanWords(demo.bill.everySecs).replace(/^1 /, "");
   const label = `Let the agent pay Demo Vendor ${usdc(demo.bill.usdc)} every ${every}`;
@@ -361,6 +363,7 @@ function AllowStep({ opened, inbox, pub, chain, demo, onDone }: { opened: Opened
     if (phase !== "idle") return;
     setFailure(null);
     setPhase("Signing");
+    setTappedAt(Math.floor(Date.now() / 1000));
     const policy = opened.policy;
     let approved = (inbox.payees ?? []).some((p) => p.address.toLowerCase() === vendor);
     try {
@@ -424,6 +427,8 @@ function AllowStep({ opened, inbox, pub, chain, demo, onDone }: { opened: Opened
       <button type="button" className={CTA} onClick={tap} aria-busy={phase !== "idle"} aria-live="polite">
         {phase === "idle" ? label : phase}
       </button>
+      {/* The service can take a while (a check of the account may be running); the seconds say it is still going. */}
+      {phase !== "idle" && tappedAt > 0 && <p className="meta money">{Math.max(0, now - tappedAt)} s</p>}
       {failure && (
         <div role="alert" className={`${PLATE} flex flex-col gap-(--space-2)`}>
           <p className="row-title">{failure.title}</p>
