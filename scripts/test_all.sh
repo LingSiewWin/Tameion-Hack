@@ -40,6 +40,10 @@ step "clear-signing descriptors: ERC-7730" run 'py=$(for p in python3 python3.14
 # The console (CLAUDE.md: strict TypeScript, ESLint clean) and its own logic tests;
 # needs `npm ci` in apps/console once.
 step "console: tsc, eslint, node --test" run 'cd apps/console && { [ -d node_modules ] || { echo "  run: (cd apps/console && npm ci)"; exit 1; }; } && npx --no-install tsc --noEmit && npx --no-install eslint src test && node --test test/*.mts 2>&1 | grep -E "^ℹ (pass|fail)"'
+# The API contract, console side (docs/114 row 2): every field types.ts reads is in apps/classic/openapi.json, and every
+# field it counts on is promised there. The service side (replies against openapi.json) is scripts/acceptance.sh rule 17.
+step "console: types.ts against openapi.json" run 'node apps/console/scripts/check-types.mjs'
+step "sdk: tsc, node --test" run 'cd apps/sdk && { [ -d node_modules ] || { echo "  run: (cd apps/sdk && npm ci)"; exit 1; }; } && npm test --silent 2>&1 | grep -E "^ℹ (pass|fail)"'
 
 printf '\n'
 if [ ${#failed[@]} -eq 0 ]; then
