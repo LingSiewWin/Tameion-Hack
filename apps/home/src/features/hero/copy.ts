@@ -14,9 +14,6 @@ export const HERO = {
   columns: ["Date", "Who", "Amount", "Why", "State"],
   emptyBook: "The demo account has no payments yet.",
   unreadBook: "The demo account could not be read just now.",
-  unknownPayee: "a payee you approved",
-  paid: "paid",
-  refused: "refused",
   bookLabel: "The demo account, as its owner sees it",
   canvasLabel: "The Strait of Hormuz becomes a ledger page as you scroll",
 } as const;

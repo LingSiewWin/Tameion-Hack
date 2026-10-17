@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { BBOX, cellAt, fixAt, labelOf, otsu, pack, phases, placeholderScene, toPixel, typeWord, type Report } from "../src/features/hero/model.ts";
 
-const { rowsOf, day } = await import("../src/features/hero/hero.tsx");
+const { rowsOf } = await import("../src/features/hero/hero.tsx");
 
 test("every keyframe is whole at its p", () => {
   assert.equal(phases(0).quant, 0);
@@ -61,21 +61,24 @@ test("the placeholder frame maps the bbox corners to the image corners", () => {
   assert.ok(Math.abs(1024 / s.height - 1.049) < 0.01, "the export's aspect ratio in Web Mercator");
 });
 
-test("the book's rows name payees and never carry a hash", () => {
-  const payee = "0xE5E2d8dCC2038fd0A010A6e7845378b646e33854";
-  const rows = rowsOf({
-    paid: [
-      { counterparty: payee, amount: "0.002000 USDC", at: 1792277792, reason: "Demo Vendor bill", tx: "0x" + "ab".repeat(32) },
-      { counterparty: "0x" + "12".repeat(20), amount: "1.500000 USDC", at: 1792277000, reason: "0x" + "cd".repeat(32) },
-    ],
-    refused: [{ counterparty: payee, amount: "50 USDC", why: "over the daily cap" }],
-    parties: { [payee.toLowerCase()]: { label: "Demo Vendor" } },
-  } as never);
-  assert.equal(day(1792277792), new Date(1792277792e3).toLocaleDateString("en-GB", { day: "numeric", month: "short" }));
-  assert.deepEqual(rows[0], { date: day(1792277792), who: "Demo Vendor", amount: "0.002 USDC", why: "Demo Vendor bill", state: "paid" });
-  assert.equal(rows[1].who, "a payee you approved");
-  assert.equal(rows[1].why, "", "a why that is a hash is dropped");
-  assert.equal(rows[1].amount, "1.5 USDC");
-  assert.equal(rows[2].state, "refused");
+test("the book's rows are the Owner home's lines: payees by name, the demo vendor named, never a hash", () => {
+  const vendor = "0xE5E2d8dCC2038fd0A010A6e7845378b646e33854";
+  const other = "0x" + "12".repeat(20);
+  const rows = rowsOf(
+    {
+      paid: Array.from({ length: 8 }, (_, i) => ({ counterparty: i ? vendor : other, amount: "0.006000 USDC", at: 1792279953 - i * 120, reason: "paid by the agent: a bill the owner typed: 0.006000 USDC", tx: "0x" + "ab".repeat(32) })),
+      refused: [{ counterparty: vendor, amount: "0.006000 USDC", why: `Paying 0.006 USDC to ${vendor} would leave runway at 0 days` }],
+      parties: { [vendor.toLowerCase()]: { label: "Payee ••3854", kind: "new" } },
+      payees: [{ address: vendor, approvedAt: 1, payableFrom: 1, payableNow: true }],
+    } as never,
+    vendor,
+    1792280000,
+  );
+  assert.equal(rows.length, 6, "at most six rows on the stage");
+  assert.equal(rows[0].state, "Refused");
+  assert.equal(rows[0].who, "Demo Vendor", "the service's placeholder name gives way to the demo vendor's name");
+  assert.equal(rows[1].amount, "0.006 USDC");
+  assert.ok(rows.slice(1).every((r) => r.state === "Paid"));
+  assert.ok(rows.some((r) => r.who === "a payee you have not approved"), "an unnamed, unapproved payee reads in words");
   assert.doesNotMatch(JSON.stringify(rows), /0x[0-9a-fA-F]{8,}/);
 });

@@ -2,14 +2,19 @@
 // The hero on `/` (DESIGN §The hero): one scroll-bound stage. The plate on the left holds the words; the canvas holds the
 // strait becoming the book; the demo account's real records take the rows; the Owner home closes it. Never on /a/<name>.
 // The canvas starts after first paint (the plate's words are the LCP); reduced motion shows three stills instead.
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { OwnerSkeleton } from "../../components/skeletons.tsx";
-import { fetchInbox } from "../../lib/api.ts";
+import { fetchDemo, fetchInbox } from "../../lib/api.ts";
 import type { Inbox } from "../../lib/types.ts";
 import { useView } from "../../lib/view.ts";
+import { COPY as OWNER_WORDS, lines } from "../owner/words.ts";
 import { CAPTION, FIGURES, HERO } from "./copy.ts";
 import { clamp01, COLUMN, MODULE, phases, placeholderScene, seg, stillAt, STILLS, windowWords, type PortWatch, type Replay, type Scene } from "./model.ts";
 import { createStage, drawChart, drawPlaceholder, type Layout } from "./stage.ts";
+
+// H2's Owner home closes the hero; its code (passkey signing included) loads only once the hand-over begins
+const OwnerHome = dynamic(() => import("../owner/owner-home.tsx").then((m) => m.OwnerHome), { ssr: false, loading: () => <OwnerSkeleton /> });
 
 export type Treatment = "A" | "B" | "C";
 type Row = { date: string; who: string; amount: string; why: string; state: string };
@@ -18,21 +23,16 @@ type Props = { treatment: Treatment; scene: Scene | null; replayUrl: string | nu
 /** Columns of the book on the grid, in px (multiples of 8; the row module is 40): date, who, amount, why, state. */
 const COLS_WIDE = [80, 160, 120, 240, 80];
 const COLS_NARROW = [64, 112, 88, 0, 80];
-const HASH = /0x[0-9a-fA-F]{8,}/;
-
-const trimAmount = (a: string) => a.replace(/(\.\d*?[1-9])0+(?=\s|$)/, "$1").replace(/\.0+(?=\s|$)/, "");
-/** The reader's own day: the book is read by a person, in their time zone. */
-export const day = (secs?: number) => (secs ? new Date(secs * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "");
-
-/** The demo account's records as the book's rows: payees by name, never an address (DESIGN Rule 1). */
-export function rowsOf(inbox: Inbox): Row[] {
-  const who = (addr: string) => inbox.parties?.[addr.toLowerCase()]?.label ?? HERO.unknownPayee;
-  const clean = (s?: string) => (s && !HASH.test(s) ? s : "");
-  const paid = [...inbox.paid].sort((a, b) => (b.at ?? 0) - (a.at ?? 0)).map((r) => ({
-    date: day(r.at), who: who(r.counterparty), amount: trimAmount(r.amount), why: clean(r.reason ?? r.bought), state: HERO.paid,
-  }));
-  const refused = (inbox.refused ?? []).map((r) => ({ date: "", who: who(r.counterparty), amount: trimAmount(r.amount), why: clean(r.why), state: HERO.refused }));
-  return [...paid, ...refused].slice(0, 6);
+/** The demo account's records as the book's rows, in the Owner home's own words (H2's lines()), so the hand-over reads
+ *  exactly like the page it hands over to: payees by name, amounts trimmed, no hash (DESIGN Rule 1). */
+export function rowsOf(inbox: Inbox, vendor?: string, nowSecs = Date.now() / 1000): Row[] {
+  const k = vendor?.toLowerCase();
+  const p = k ? inbox.parties?.[k] : undefined;
+  // the demo's vendor reads "Demo Vendor" on every host, as the Owner home names it (owner-home.tsx withDemoVendor)
+  const named = k && p?.kind === "new" ? { ...inbox, parties: { ...inbox.parties, [k]: { ...p, label: OWNER_WORDS.demoVendor, kind: "tameion" as const } } } : inbox;
+  return lines(named, nowSecs)
+    .slice(0, 6)
+    .map((l) => ({ date: l.when, who: l.payee, amount: l.amount, why: l.why, state: l.state }));
 }
 
 const groupRange: [number, number][] = [[-1, 0.3], [0.3, 0.5], [0.5, 0.7], [0.7, 0.9], [0.9, 2]];
@@ -52,11 +52,13 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
   const table = useRef<HTMLTableElement>(null);
   const figs = useRef<HTMLDivElement>(null);
   const prows = useRef<HTMLDivElement>(null);
+  const captionEl = useRef<HTMLParagraphElement>(null);
   const [active, setActive] = useState(0);
   const [layout, setLayout] = useState<Layout | null>(null);
   const [replay, setReplay] = useState<Replay | null>(null);
   const [rows, setRows] = useState<Row[] | "error" | null>(null);
   const [reduced, setReduced] = useState(false);
+  const [bookOn, setBookOn] = useState(false);
   const scene = realScene ?? placeholderScene();
 
   useEffect(() => {
@@ -75,7 +77,11 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
         fetch(replayUrl)
           .then((r) => (r.ok ? (r.json() as Promise<Replay>) : null))
           .then((r) => live && setReplay(r), () => live && setReplay(null));
-      if (demo) fetchInbox(demo).then((i) => live && setRows(rowsOf(i)), () => live && setRows("error"));
+      if (demo)
+        Promise.all([fetchInbox(demo), fetchDemo().catch(() => null)]).then(
+          ([i, d]) => live && setRows(rowsOf(i, d?.vendor)),
+          () => live && setRows("error"),
+        );
       else setRows("error");
     };
     const id = window.requestIdleCallback ? window.requestIdleCallback(start, { timeout: 1200 }) : window.setTimeout(start, 300);
@@ -122,6 +128,7 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
       const set = (el: HTMLElement | null, o: number) => el && (el.style.opacity = String(o));
       set(table.current, seg(ph.hand, 0.5, 1));
       set(book.current, ph.book);
+      set(captionEl.current, 1 - ph.book); // the book names itself; the caption leaves with the strait
       set(figs.current, 1 - seg(p, 0.26, 0.34));
       set(prows.current, seg(p, 0.3, 0.38) * (1 - seg(ph.hand, 0, 0.5)));
       prows.current?.querySelectorAll<HTMLElement>("[data-shift]").forEach((r) => {
@@ -129,6 +136,7 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
       });
       groups.current.forEach((g, i) => set(g, groupOpacity(i, p)));
       setActive(groupRange.findIndex(([a, b]) => p >= a && p < b));
+      if (p >= 0.7) setBookOn(true);
       if (treatment !== "C") stage.draw(p, { treatment, scene, source, replay, view, monoFont: monoFamily });
       else stage.draw(p, { treatment: "B", scene, source: null, replay: null, view, monoFont: monoFamily, ruled: true });
       cv.style.opacity = String(1 - ph.book);
@@ -254,9 +262,10 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
           </div>
         ) : null}
 
-        <div ref={book} className="absolute inset-0 bg-(--paper) px-(--gutter-narrow) pt-(--space-6) sm:px-(--gutter-wide)" style={{ opacity: 0, pointerEvents: active === 4 ? "auto" : "none" }} inert={active !== 4} aria-label={HERO.bookLabel}>
+        <div ref={book} className="absolute inset-0 bg-(--paper) px-(--gutter-narrow) pt-(--space-6) sm:px-(--gutter-wide)" style={{ opacity: 0, pointerEvents: active === 4 ? "auto" : "none" }} inert={active !== 4}>
           <div className="mx-auto max-w-(--content-max)">
-            <OwnerSkeleton />
+            <p className="meta m-0 mb-(--space-4)">{HERO.bookLabel}</p>
+            {demo && bookOn ? <OwnerHome name={demo} /> : <OwnerSkeleton />}
           </div>
         </div>
 
@@ -288,7 +297,7 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
           ))}
         </div>
 
-        <p className="meta absolute left-(--gutter-narrow) right-(--gutter-narrow) top-(--space-3) m-0 rounded-(--radius-mark) bg-(--paper) px-(--space-2) py-(--space-1) sm:left-auto sm:bottom-(--space-4) sm:right-(--gutter-wide) sm:top-auto sm:max-w-[60ch]">{caption}</p>
+        <p ref={captionEl} className="meta absolute left-(--gutter-narrow) right-(--gutter-narrow) top-(--space-3) m-0 rounded-(--radius-mark) bg-(--paper) px-(--space-2) py-(--space-1) sm:left-auto sm:bottom-(--space-4) sm:right-(--gutter-wide) sm:top-auto sm:max-w-[60ch]">{caption}</p>
       </div>
     </section>
   );
