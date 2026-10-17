@@ -96,6 +96,7 @@
 .meta { font: 400 13px/18px var(--font-sans); color: var(--ink-2); }
 .mono-dense { font: 400 13px/20px var(--font-mono); }
 .mono-read { font: 400 15px/22px var(--font-mono); }
+.hero-figure { font: 500 61px/64px var(--font-sans); font-variant-numeric: tabular-nums lining-nums; }
 .money { font-variant-numeric: tabular-nums lining-nums; }
 /* legacy role names from the first draft (see the legacy block above) */
 .statement-line { font: 500 31px/38px var(--font-sans); }

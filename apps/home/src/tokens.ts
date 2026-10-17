@@ -101,6 +101,8 @@ export const typeRoles = {
   meta: { size: 13, line: 18, weight: 400 },
   monoDense: { size: 13, line: 20, weight: 400 },
   monoRead: { size: 15, line: 22, weight: 400 },
+  // the top of the scale: treatment C of the hero typesets the strait's day of transits at 61 px (DESIGN §Three treatments)
+  heroFigure: { size: 61, line: 64, weight: 500 },
 } as const;
 /** The CSS class of each role (src/tokens.css). */
 export const roleClass: Record<keyof typeof typeRoles, string> = {
@@ -113,6 +115,7 @@ export const roleClass: Record<keyof typeof typeRoles, string> = {
   meta: "meta",
   monoDense: "mono-dense",
   monoRead: "mono-read",
+  heroFigure: "hero-figure",
 };
 
 /** Under this width the hero statement steps down to its narrow size, and the gutter is the narrow one. */
