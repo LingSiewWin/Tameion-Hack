@@ -19,7 +19,7 @@ const read = (): View => parseView(document.documentElement.dataset.view);
 
 export const useView = (): View => useSyncExternalStore(subscribe, read, () => "owner");
 
-/** Switch the whole surface; the browser crossfades old and new (globals.css sets 200 ms). Remembered per device. */
+/** Switch the whole surface; the browser crossfades old and new in 200 ms (globals.css). Remembered per device. */
 export function setView(next: View) {
   try {
     localStorage.setItem(VIEW_KEY, next);
@@ -31,8 +31,9 @@ export function setView(next: View) {
       document.documentElement.dataset.view = next;
       listeners.forEach((l) => l());
     });
-  // ponytail: no fallback animation where View Transitions are missing; the switch is then instant
-  if (typeof document.startViewTransition === "function") document.startViewTransition(apply);
+  // Reduced motion swaps instantly (DESIGN §Motion); so does a browser without View Transitions.
+  const still = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!still && typeof document.startViewTransition === "function") document.startViewTransition(apply);
   else apply();
 }
 

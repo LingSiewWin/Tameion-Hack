@@ -1,92 +1,96 @@
 @import "tailwindcss";
 @import "../tokens.css";
 
-/* Tailwind is for layout only; colour, type, radius and space come from tokens.css. */
+/* Tailwind is for layout only; colour, type, radius, space and motion come from tokens.css. */
 
 body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font: 400 15px/22px var(--font-sans);
+  font: 400 16px/24px var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
-/* Capsule flip: the whole surface crossfades in 200 ms, no slide, no scale; reduced motion keeps only this. */
+/* Press: a button answers a tap, 100 ms in / 160 ms out, to 0.98. Motion on the wrapper, colour on what is inside. */
+button {
+  transition: transform var(--press-out) ease-out;
+}
+button:active {
+  transform: scale(var(--press-scale));
+  transition-duration: var(--press-in);
+}
+
+/* The capsule flip crossfades the whole surface in 200 ms; under reduced motion src/lib/view.ts swaps instantly. */
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation-duration: var(--crossfade);
 }
 
-/* Skeleton: a 1.2 s opacity pulse while loading; off under reduced motion. */
-@keyframes pulse-opacity {
-  50% { opacity: 0.45; }
-}
+/* Loading geometry: a still fill shaped like the layout; nothing moves that does not answer a tap. */
 .skeleton {
-  background: var(--rule);
-  border-radius: var(--radius-plate);
-  animation: pulse-opacity var(--pulse) ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .skeleton { animation: none; }
+  background: var(--skeleton);
+  border-radius: var(--radius-inner);
 }
 
-/* The surface: Owner content is 720 px wide and centred, the Agent view runs full width; gutters 16 / 24 px. */
+/* The surface: content up to 1120 px, left-aligned; gutters 20 / 32 px. */
 .surface {
   width: 100%;
-  max-width: var(--content-owner);
+  max-width: var(--content-max);
   margin-inline: auto;
   padding-inline: var(--gutter-narrow);
   box-sizing: border-box;
 }
-@media (min-width: 768px) {
+@media (min-width: 640px) {
   .surface { padding-inline: var(--gutter-wide); }
 }
-:root[data-view="agent"] .surface { max-width: none; }
 
-/* The network word: words and a shape (a hollow pill), never colour alone. */
+/* Testnet: a word and a shape (a dashed capsule), never a colour wash. */
 .pill {
   display: inline-flex;
   align-items: center;
   padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--ink);
+  border: 1px dashed var(--ink-2);
   border-radius: var(--radius-capsule);
   color: var(--ink);
 }
 
-/* The capsule Owner | Agent: the active segment carries the one accent. */
+/* The mode capsule Owner | Agent: a group on the page (plate); the chosen side one step of fill deeper (plate-2)
+   and set in 600, so the choice is never colour alone. No border, no shadow. */
 .capsule {
   display: inline-flex;
-  border: 1px solid var(--rule);
+  padding: var(--space-1);
   border-radius: var(--radius-capsule);
   background: var(--plate);
 }
 .capsule > button {
-  min-height: var(--touch);
+  min-height: calc(var(--touch) - 2 * var(--space-1));
   min-width: var(--touch);
   padding: 0 var(--space-4);
   border: 0;
   border-radius: var(--radius-capsule);
   background: transparent;
-  color: var(--ink);
+  color: var(--ink-2);
   font: inherit;
   cursor: pointer;
 }
-@media (max-width: 767.98px) {
+@media (max-width: 639.98px) {
   /* room for the account's name at 390 px: the pill and the segments take the smaller steps of the scale */
   .pill { padding: var(--space-1) var(--space-2); }
   .capsule > button { padding: 0 var(--space-3); }
 }
 .capsule > button[aria-pressed="true"] {
-  background: var(--accent);
-  color: var(--plate);
+  background: var(--plate-2);
+  color: var(--ink);
+  font-weight: 600;
 }
 
-/* The sheet: the only raised thing. Bottom sheet at content size on mobile; a right drawer from 1024 px. */
+/* The sheet: the only raised thing. Bottom sheet at content size on mobile, a 400 px right drawer from 1024 px;
+   320 ms in / 200 ms out on the sheet curve; still under reduced motion. */
 .sheet {
   box-sizing: border-box;
   margin: auto 0 0;
@@ -94,32 +98,55 @@ body {
   max-width: 100%;
   max-height: 90dvh;
   padding: 0;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-plate) var(--radius-plate) 0 0;
+  border: 0;
+  border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
   background: var(--plate);
   color: var(--ink);
   box-shadow: var(--sheet-shadow);
   overflow: auto;
+  transform: translateY(100%);
+  transition:
+    transform var(--sheet-out) var(--ease-sheet),
+    overlay var(--sheet-out) allow-discrete,
+    display var(--sheet-out) allow-discrete;
+}
+.sheet[open] {
+  transform: none;
+  transition-duration: var(--sheet-in);
+}
+@starting-style {
+  .sheet[open] { transform: translateY(100%); }
 }
 .sheet::backdrop {
-  background: color-mix(in srgb, var(--ink) 24%, transparent);
+  background: var(--scrim);
 }
 @media (min-width: 1024px) {
   .sheet {
     margin: 0 0 0 auto;
-    width: 420px;
+    width: var(--drawer-width);
     height: 100dvh;
     max-height: 100dvh;
-    border-radius: var(--radius-plate) 0 0 var(--radius-plate);
+    border-radius: var(--radius-sheet) 0 0 var(--radius-sheet);
+    transform: translateX(100%);
+  }
+  .sheet[open] { transform: none; }
+  @starting-style {
+    .sheet[open] { transform: translateX(100%); }
   }
 }
 .sheet-close {
   min-height: var(--touch);
   min-width: var(--touch);
   padding: 0 var(--space-3);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-plate);
-  background: transparent;
+  border: 0;
+  border-radius: var(--radius-button);
+  background: var(--plate-2);
   color: var(--ink);
   cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button,
+  .sheet { transition: none; }
+  button:active { transform: none; }
 }

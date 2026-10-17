@@ -42,7 +42,7 @@ export function Header() {
   const title = wanted && resolved?.wanted === wanted && resolved.name ? resolved.name : "Tameion";
 
   return (
-    <header className="border-b border-(--rule)">
+    <header>
       <div className="surface flex min-h-16 items-center gap-(--space-2) py-(--space-2) md:gap-(--space-3)">
         {reading ? (
           <span className="skeleton block h-[22px] w-32" aria-hidden />

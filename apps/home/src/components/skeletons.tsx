@@ -2,7 +2,7 @@
 // The feature seats render these while their reads are in flight, held at least SKELETON_MIN_MS once shown.
 import { Loading, Skeleton } from "./skeleton.tsx";
 
-const CTA = "h-(--cta) w-full";
+const CTA = "h-(--button) w-full";
 
 export function GuestSkeleton() {
   return (
@@ -92,8 +92,8 @@ export function ReceiveSkeleton() {
         <Skeleton className="size-60" />
         <Skeleton className="h-[22px] w-48" />
         <div className="flex w-full gap-(--space-3)">
-          <Skeleton className="h-(--cta) flex-1" />
-          <Skeleton className="h-(--cta) flex-1" />
+          <Skeleton className="h-(--button) flex-1" />
+          <Skeleton className="h-(--button) flex-1" />
         </div>
       </div>
     </Loading>

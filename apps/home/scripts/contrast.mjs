@@ -1,7 +1,8 @@
 // prebuild: every text/background pair in src/tokens.ts reaches WCAG 4.5:1 in both views, and src/tokens.css carries
-// exactly the values src/tokens.ts declares (DESIGN Rule 2, §Palette). Exits 1 otherwise. Node >= 22.18 (type stripping).
+// exactly the values src/tokens.ts declares (DESIGN: "a contrast script fails the build when any text pair drops under
+// 4.5:1 in either view"). Exits 1 otherwise. Node >= 22.18 (type stripping).
 import { readFileSync } from "node:fs";
-import { palette, shared, sheetShadow, textPairs, typeRoles, VIEWS } from "../src/tokens.ts";
+import { palette, roleClass, shared, sheetShadow, textPairs, typeRoles, VIEWS, warnPairs } from "../src/tokens.ts";
 
 const MIN = 4.5;
 const channel = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
@@ -22,31 +23,35 @@ for (const view of VIEWS) {
     console.log(`${ratio >= MIN ? "ok  " : "FAIL"} ${line}`);
     if (ratio < MIN) failures.push(line);
   }
+  for (const { text, on } of warnPairs) {
+    const ratio = contrast(palette[view][text], palette[view][on]);
+    if (ratio < MIN) console.log(`warn ${view.padEnd(5)} --${text} on --${on}: ${ratio.toFixed(2)}:1 (not a pair the pages use)`);
+  }
 }
 
-// tokens.css against tokens.ts: the variables of each block, and the type roles' font shorthands.
+// tokens.css against tokens.ts: the variables of each block, the type roles' font shorthands.
 const css = readFileSync(new URL("../src/tokens.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-const block = (selector) => {
-  const at = css.indexOf(`${selector} {`);
-  if (at < 0) return null;
-  const body = css.slice(css.indexOf("{", at) + 1, css.indexOf("}", at));
-  return Object.fromEntries([...body.matchAll(/--([\w-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+const vars = (selector) => {
+  const out = {};
+  for (let at = css.indexOf(`${selector} {`); at >= 0; at = css.indexOf(`${selector} {`, at + 1)) {
+    const body = css.slice(css.indexOf("{", at) + 1, css.indexOf("}", at));
+    for (const m of body.matchAll(/--([\w-]+):\s*([^;]+);/g)) out[m[1]] = m[2].trim();
+  }
+  return out;
 };
 const expect = (where, want, got) => {
-  if (!got) return failures.push(`tokens.css has no block ${where}`);
   for (const [name, value] of Object.entries(want)) {
     if ((got[name] ?? "").toLowerCase() !== value.toLowerCase()) failures.push(`${where} --${name}: tokens.css ${got[name] ?? "(missing)"}, tokens.ts ${value}`);
   }
 };
-expect(":root", shared, block(":root"));
-for (const view of VIEWS) expect(`[data-view="${view}"]`, { ...palette[view], "sheet-shadow": sheetShadow[view] }, block(`:root[data-view="${view}"]`));
-const roleClass = { statementLine: "statement-line", balance: "balance", rowTitle: "row-title", row: "row", meta: "meta", mono: "mono" };
+expect(":root", { ...shared, "sheet-shadow": sheetShadow }, vars(":root"));
+for (const view of VIEWS) expect(`[data-view="${view}"]`, palette[view], vars(`:root[data-view="${view}"]`));
 for (const [role, r] of Object.entries(typeRoles)) {
   const rule = new RegExp(`\\.${roleClass[role]} \\{ font: ${r.weight} ${r.size}px/${r.line}px `);
   if (!rule.test(css)) failures.push(`tokens.css .${roleClass[role]} is not ${r.weight} ${r.size}px/${r.line}px (tokens.ts ${role})`);
 }
-const narrow = typeRoles.statementLine.narrow;
-if (!css.includes(`.statement-line { font-size: ${narrow.size}px; line-height: ${narrow.line}px; }`)) failures.push("tokens.css narrow statement line differs from tokens.ts");
+const narrow = typeRoles.heroStatement.narrow;
+if (!css.includes(`.hero-statement { font-size: ${narrow.size}px; line-height: ${narrow.line}px; }`)) failures.push("tokens.css narrow hero statement differs from tokens.ts");
 
 if (failures.length) {
   console.error(`\ncontrast/tokens: ${failures.length} failure(s)\n${failures.join("\n")}`);
