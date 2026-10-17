@@ -97,10 +97,11 @@ pub struct Score {
     pub survival: f64,
     pub independence: f64,
     pub recency: f64,
-    /// Records, each counted once, with three, two and one slot filled.
+    /// Records, each counted once, with three, two, one and no slot filled.
     pub n_triple: usize,
     pub n_double: usize,
     pub n_single: usize,
+    pub n_unsigned: usize,
 }
 
 /// `a / b` with `a <= b`, and 0 when there is nothing to divide by.
@@ -196,6 +197,7 @@ pub fn score(records: &[Record], now: i64, p: &Params) -> Score {
         n_triple: count(3),
         n_double: count(2),
         n_single: count(1),
+        n_unsigned: count(0),
     }
 }
 
@@ -252,7 +254,10 @@ mod tests {
             (s.bps, s.survival, s.independence, s.recency),
             (0, 0.0, 1.0, 0.0)
         );
-        assert_eq!((s.n_single, s.n_double, s.n_triple), (1, 0, 0));
+        assert_eq!(
+            (s.n_unsigned, s.n_single, s.n_double, s.n_triple),
+            (0, 1, 0, 0)
+        );
     }
 
     #[test]
