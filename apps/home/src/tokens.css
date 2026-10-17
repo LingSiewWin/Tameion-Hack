@@ -1,0 +1,72 @@
+/* Every value DESIGN.md names, as CSS variables (DESIGN Rule 2). src/tokens.ts carries the same values typed;
+   scripts/contrast.mjs fails the build when the two files disagree. The view lives on <html data-view>. */
+
+:root {
+  --radius-plate: 8px;
+  --radius-capsule: 999px;
+  --radius-mark: 6px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --gutter-narrow: 16px;
+  --gutter-wide: 24px;
+  --content-owner: 720px;
+  --touch: 44px;
+  --cta: 56px;
+  --crossfade: 200ms;
+  --pulse: 1.2s;
+  /* next/font sets --font-plex-sans and --font-plex-mono on <html> (src/app/layout.tsx). */
+  --font-sans: var(--font-plex-sans), system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+}
+
+:root,
+:root[data-view="owner"] {
+  --paper: #EEF2EA;
+  --plate: #FFFFFF;
+  --ink: #101410;
+  --text-2: #5B625B;
+  --rule: #D5DCD2;
+  --red: #B3261E;
+  --accent: #1E5F46;
+  --up: #1E5F46;
+  --down: #7A4B1E;
+  --sheet-shadow: 0 -8px 24px rgba(16,20,16,.12);
+  color-scheme: light;
+}
+
+:root[data-view="agent"] {
+  --paper: #0F1511;
+  --plate: #161D18;
+  --ink: #E8EEE6;
+  --text-2: #9AA69C;
+  --rule: #2A332C;
+  --red: #E5534B;
+  --accent: #7FD1A8;
+  --up: #7FD1A8;
+  --down: #D9A06A;
+  --sheet-shadow: none;
+  color-scheme: dark;
+}
+
+/* Type roles (DESIGN §Typography roles). Sentence case everywhere; money is tabular, lining. */
+.statement-line { font: 500 44px/48px var(--font-sans); }
+@media (max-width: 389.98px) {
+  .statement-line { font-size: 32px; line-height: 36px; }
+}
+.balance { font: 500 36px/40px var(--font-sans); font-variant-numeric: tabular-nums lining-nums; }
+.row-title { font: 600 16px/22px var(--font-sans); }
+.row { font: 400 15px/22px var(--font-sans); }
+.meta { font: 400 13px/18px var(--font-sans); color: var(--text-2); }
+.mono { font: 400 13px/20px var(--font-mono); }
+.money { font-variant-numeric: tabular-nums lining-nums; }
+
+/* The Agent view is Plex Mono, 13 / 20, the whole surface: every role reads as mono there. */
+:root[data-view="agent"] body,
+:root[data-view="agent"] :is(.statement-line, .balance, .row-title, .row, .meta) {
+  font: 400 13px/20px var(--font-mono);
+}
