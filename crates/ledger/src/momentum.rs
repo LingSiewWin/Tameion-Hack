@@ -310,6 +310,16 @@ fn forces(events: &[Event], from: i64, now: i64, w: i64, ccy: Currency) -> Vec<F
     out
 }
 
+/// How much to move in from the reserve when, at this burn, the floor is
+/// nearer than `line_days`: what restores `line_days` of runway at the rate.
+/// `None` while the runway by rate holds the line, or nothing is spent.
+pub fn reserve_move(m: &Momentum, balance: Money, floor: Money, line_days: i64) -> Option<Money> {
+    let days = m.runway_by_rate_days?;
+    let above = (balance.to_minor() - floor.to_minor()).max(0);
+    let need = m.rate_per_day.to_minor() * i128::from(line_days) - above;
+    (days < line_days && need > 0).then(|| Money::minor(need, m.rate_per_day.currency()))
+}
+
 /// The flow check for `[period_start, period_end)`: the book's balance at the
 /// start (the last check's chain balance, or zero for an account's first
 /// check, which starts when the account was made), plus what came in (the
@@ -634,6 +644,22 @@ mod tests {
             (gone.forces[0].kind, gone.forces[0].delta_rate_per_day),
             (ForceKind::BillRemoved, usdc(-9_000_000 / 7))
         );
+    }
+
+    #[test]
+    fn the_reserve_move_restores_the_line() {
+        let now = 30 * DAY;
+        let events = [paid(now - DAY, "0xaa", 7_000_000)];
+        // 1 USDC a day; 5 above the floor: 5 days, under a 14-day line by 9.
+        let m = fold(&events, &[], usdc(6_000_000), usdc(1_000_000), now, 7);
+        assert_eq!(m.runway_by_rate_days, Some(5));
+        assert_eq!(
+            reserve_move(&m, usdc(6_000_000), usdc(1_000_000), 14),
+            Some(usdc(9_000_000))
+        );
+        assert_eq!(reserve_move(&m, usdc(6_000_000), usdc(1_000_000), 5), None);
+        let quiet = fold(&[], &[], usdc(1), usdc(0), now, 7);
+        assert_eq!(reserve_move(&quiet, usdc(1), usdc(0), 14), None);
     }
 
     #[test]
