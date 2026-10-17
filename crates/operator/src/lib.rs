@@ -199,6 +199,12 @@ pub struct Config {
     /// payees would have no payee control at all, the same way an agent that
     /// could raise its own cap would have no cap.
     pub attested_payees: BTreeMap<String, String>,
+    /// Every reference the service offered the owner for a bill-cycle, with
+    /// that cycle's key (`payee@due`): the proposal hashes and settlement keys
+    /// of the passes' Needs-you rows. An owner payment under one of them pays
+    /// exactly that cycle (docs/60 P-210); nothing else ties a hand payment to
+    /// a bill, so payee and amount alone never do (P-213).
+    pub offered: BTreeMap<B256, String>,
 }
 
 /// A configuration that would run but could not work.
@@ -274,6 +280,7 @@ impl Config {
             // Empty by default: nothing has changed yet, so there is nothing
             // to have vouched for.
             attested_payees: BTreeMap::new(),
+            offered: BTreeMap::new(),
             // Empty by default, and deliberately not accompanied by a
             // `ThreeWayMatch` in `required_preconditions` above: requiring a
             // match against stores nobody has filled refuses everything.
@@ -381,31 +388,66 @@ where
     })
 }
 
-/// Whether the owner paid this bill-cycle by hand under some other hash: a
-/// `SettledByPrincipal` of this amount to this payee, made at most one interval
-/// before the cycle's due date, not yet counted for another cycle. Each
-/// payment settles one cycle, oldest first (docs/60 P-175).
+/// Whether the owner paid this bill-cycle by hand under a reference the
+/// service offered for exactly this cycle (docs/60 P-175, P-210). `owner` is the
+/// owner's `SettledByPrincipal` action hashes, `offered` every reference a pass
+/// handed the owner, with its cycle. Matched by the bill's identity, never by
+/// payee and amount: an invoice of the same amount to the same payee is not
+/// this bill, and one cycle paid twice is still one cycle (P-213).
 fn owner_paid_cycle(
-    owner: &[(String, i128, i64, B256)],
-    used: &mut std::collections::BTreeSet<B256>,
-    payee: &str,
-    amount: i128,
-    due: i64,
-    interval: i64,
+    owner: &std::collections::BTreeSet<B256>,
+    offered: &BTreeMap<B256, String>,
+    cycle: &str,
 ) -> bool {
-    let hit = owner
-        .iter()
-        .find(|(p, a, t, h)| {
-            p == payee && *a == amount && *t > due.saturating_sub(interval) && !used.contains(h)
-        })
-        .map(|(.., h)| *h);
-    match hit {
-        Some(h) => {
-            used.insert(h);
-            true
+    owner.iter().any(|h| {
+        offered
+            .get(h)
+            .is_some_and(|c| c.eq_ignore_ascii_case(cycle))
+    })
+}
+
+/// Each stepped bill, kept, or set aside with why when its record runs ahead
+/// of its schedule: one bill's disagreement stops that bill, never the pass and
+/// the other bills (docs/60 P-210: one account's every check failed on it). Any
+/// other error still fails the pass.
+#[allow(clippy::type_complexity)]
+fn keep_stepped(
+    stepped: Vec<(Obligation, Result<(), OperatorError>)>,
+) -> Result<(Vec<Obligation>, Vec<(Obligation, String)>), OperatorError> {
+    let (mut kept, mut aside) = (Vec::new(), Vec::new());
+    for (o, r) in stepped {
+        match r {
+            Ok(()) => kept.push(o),
+            Err(e @ OperatorError::SettledAhead { .. }) => {
+                let why = format!(
+                    "not asked or paid this pass: {e}. The other bills are checked as usual; this one waits until its record and its schedule agree"
+                );
+                aside.push((o, why));
+            }
+            Err(e) => return Err(e),
         }
-        None => false,
     }
+    Ok((kept, aside))
+}
+
+/// Whether the pass may trigger this due date of a standing order, and why not
+/// (docs/60 P-211): only on Autopilot, and never for a bill-cycle some path
+/// already paid. `payDue` pays the order's oldest date under its own key, which
+/// no bill payment carries, so the contract refuses nothing here.
+fn order_due_step(propose_only: bool, paid: bool, id: u64, due_at: u64) -> Result<(), String> {
+    if propose_only {
+        return Err(format!(
+            "Standing order #{id} is due (unix {due_at}). The account asks before paying, so the agent does not trigger it: \
+             the owner pays it with one tap (Pay now), or the agent does on Autopilot."
+        ));
+    }
+    if paid {
+        return Err(format!(
+            "Standing order #{id}'s due date {due_at} is a bill-cycle already paid; payDue would pay it again, so it is not \
+             triggered. The order cannot skip a date on chain: end it, then make it standing again from the next unpaid cycle."
+        ));
+    }
+    Ok(())
 }
 
 /// What [`Operator::obligations_due`] found.
@@ -419,6 +461,10 @@ pub struct DuePlan {
     pub upcoming: Vec<Obligation>,
     /// Those within the pay lead: what a pass acts on.
     pub due: Vec<Obligation>,
+    /// Set aside this pass, with why ([`keep_stepped`]).
+    pub aside: Vec<(Obligation, String)>,
+    /// The owner's own payments' action hashes ([`owner_paid_cycle`]).
+    pub owner_paid: std::collections::BTreeSet<B256>,
 }
 
 /// The reasoner orders; it does not decide what exists.
@@ -649,70 +695,112 @@ mod stepping_tests {
         assert_eq!(o.next_due.as_unix(), start + 4 * WEEK);
     }
 
-    /// docs/60 P-175: the owner paid a 30-day bill by hand twice under hashes
-    /// that are not the bill's settlement key (the service bound each tap to
-    /// that pass's proposal hash). The next pass must see both cycles paid and
-    /// not ask again; a payment under the cycle's own key answers that cycle
-    /// only and is never counted again for the next one.
+    /// uat-u2-fin (docs/60 P-175, P-210): the owner paid one 30-day bill-cycle
+    /// twice by hand, each tap under the hash a pass offered for that cycle.
+    /// Matched by the bill's identity (the hashes offered for the cycle), the
+    /// two payments settle cycle 1 only: the pass steps to cycle 2, a month
+    /// away, asks nothing now and never runs ahead of the schedule. Counted by
+    /// payee and amount (the first fix) they settled cycles 1 and 2, the step
+    /// bound ended on a settled cycle and every pass of the account failed.
     #[tokio::test]
-    async fn a_cycle_the_owner_paid_by_hand_is_not_asked_again() {
+    async fn two_hand_payments_for_one_cycle_settle_that_cycle_only() {
         const MONTH: i64 = 30 * 86_400;
         let payee = "0x179dca89f69faef5765d2e7445aa5452b8159520";
         let d0 = 1_792_156_029;
-        let amount = 50_000i128;
-        let owner = vec![
-            (payee.to_string(), amount, d0 + 137, B256::repeat_byte(0x85)),
-            (payee.to_string(), amount, d0 + 636, B256::repeat_byte(0xd1)),
-        ];
-        let mut used = BTreeSet::new();
+        let cycle1 = format!("{payee}@{d0}");
+        let (h1, h2) = (B256::repeat_byte(0x85), B256::repeat_byte(0xd1));
+        let owner = BTreeSet::from([h1, h2]);
+        // Every pass offered the waiting cycle under a new proposal hash.
+        let offered = BTreeMap::from([
+            (h1, cycle1.clone()),
+            (h2, cycle1.clone()),
+            (B256::repeat_byte(0x8e), cycle1.clone()),
+        ]);
+        assert!(owner_paid_cycle(&owner, &offered, &cycle1));
+        assert!(!owner_paid_cycle(
+            &owner,
+            &offered,
+            &format!("{payee}@{}", d0 + MONTH)
+        ));
+        let mut o = weekly(d0);
+        o.counterparty = Counterparty::new(payee);
+        o.interval = Seconds::new(MONTH);
+        // The reviewer's pass on 10-17 12:50 (block time 1792213608).
+        let r = step_past_settled(&mut o, Timestamp::from_unix(1_792_213_608), |k| {
+            let hit = owner_paid_cycle(&owner, &offered, &k);
+            async move { Ok(hit) }
+        })
+        .await;
+        assert!(r.is_ok(), "{r:?}");
+        assert_eq!(o.next_due.as_unix(), d0 + MONTH, "cycle 2, a month away");
+    }
+
+    /// docs/60 P-213: an owner payment of the same amount to the same payee
+    /// under a reference no pass offered for the bill (a one-off invoice, a
+    /// payment for something else) is not a payment of the bill.
+    #[test]
+    fn an_invoice_of_the_bill_amount_to_the_bill_payee_is_not_the_bill() {
+        let cycle = "0x179dca89f69faef5765d2e7445aa5452b8159520@1792156029";
+        let invoice = B256::repeat_byte(0x1b);
+        let offered = BTreeMap::from([(B256::repeat_byte(0x85), cycle.to_string())]);
+        assert!(!owner_paid_cycle(
+            &BTreeSet::from([invoice]),
+            &offered,
+            cycle
+        ));
+        // Another cycle's reference does not answer this one either.
+        let other = BTreeMap::from([(invoice, format!("{cycle}0"))]);
+        assert!(!owner_paid_cycle(&BTreeSet::from([invoice]), &other, cycle));
+        // The key's case is not the bill's identity.
+        let upper = BTreeMap::from([(invoice, cycle.to_uppercase().replace("0X", "0x"))]);
+        assert!(owner_paid_cycle(&BTreeSet::from([invoice]), &upper, cycle));
+    }
+
+    /// docs/60 P-211: a standing order's due date is triggered on Autopilot
+    /// only, and never for a bill-cycle already paid by any path.
+    #[test]
+    fn a_standing_order_pays_only_on_autopilot_and_only_an_unpaid_cycle() {
+        assert!(order_due_step(false, false, 3, 1_792_156_029).is_ok());
+        let propose = order_due_step(true, false, 3, 1_792_156_029).unwrap_err();
         assert!(
-            owner_paid_cycle(&owner, &mut used, payee, amount, d0, MONTH),
-            "cycle 1: the first tap"
+            propose.contains("asks before paying") && propose.contains("Pay now"),
+            "{propose}"
         );
+        let paid = order_due_step(false, true, 3, 1_792_156_029).unwrap_err();
         assert!(
-            owner_paid_cycle(&owner, &mut used, payee, amount, d0 + MONTH, MONTH),
-            "cycle 2: the second tap paid it ahead"
+            paid.contains("already paid") && paid.contains("next unpaid cycle"),
+            "{paid}"
         );
+    }
+
+    /// docs/60 P-210: one bill whose record runs ahead of its schedule is set
+    /// aside with words; the other bills go on, and the pass does not fail.
+    /// Any other error still fails the pass.
+    #[test]
+    fn a_bill_settled_ahead_is_set_aside_and_the_pass_goes_on() {
+        let ahead = weekly(1_700_000_000);
+        let fine = weekly(1_700_000_000 + WEEK);
+        let (kept, aside) = keep_stepped(vec![
+            (
+                ahead.clone(),
+                Err(OperatorError::SettledAhead {
+                    cycle_key: ahead.cycle_key(),
+                }),
+            ),
+            (fine.clone(), Ok(())),
+        ])
+        .unwrap();
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].cycle_key(), fine.cycle_key());
+        assert_eq!(aside.len(), 1);
         assert!(
-            !owner_paid_cycle(&owner, &mut used, payee, amount, d0 + 2 * MONTH, MONTH),
-            "cycle 3 is unpaid"
+            aside[0].1.contains("not asked or paid this pass"),
+            "{}",
+            aside[0].1
         );
-        // Another amount, another payee, or a payment from before the cycle's interval settles nothing.
-        let mut fresh = BTreeSet::new();
-        assert!(!owner_paid_cycle(
-            &owner,
-            &mut fresh,
-            payee,
-            amount + 1,
-            d0,
-            MONTH
-        ));
-        assert!(!owner_paid_cycle(
-            &owner,
-            &mut fresh,
-            "0x0000000000000000000000000000000000000001",
-            amount,
-            d0,
-            MONTH
-        ));
-        assert!(!owner_paid_cycle(
-            &owner,
-            &mut fresh,
-            payee,
-            amount,
-            d0 + 3 * MONTH,
-            MONTH
-        ));
-        // Paid under the cycle's own key: marked, so it cannot also answer the next cycle.
-        let mut keyed = BTreeSet::from([B256::repeat_byte(0x85), B256::repeat_byte(0xd1)]);
-        assert!(!owner_paid_cycle(
-            &owner,
-            &mut keyed,
-            payee,
-            amount,
-            d0 + MONTH,
-            MONTH
-        ));
+        assert!(aside[0].1.contains(&ahead.cycle_key()), "{}", aside[0].1);
+        let failed = keep_stepped(vec![(fine, Err(OperatorError::ReadOnly))]);
+        assert!(failed.is_err());
     }
 
     #[tokio::test]
@@ -1268,38 +1356,26 @@ impl<R: Reasoner> Operator<R> {
     ///
     /// Public so that anything showing a pass -- the demo server -- shows the
     /// same obligations the pass acts on, from the same computation.
-    /// Every `SettledByPrincipal` on the policy as (payee lowercase, amount
-    /// minor, unix time, action hash): the owner's own payments, for
-    /// [`owner_paid_cycle`]. Empty when the chain does not answer.
-    async fn owner_settlements(&self, head: u64) -> Vec<(String, i128, i64, B256)> {
+    /// The action hash of every `SettledByPrincipal` on the policy: the
+    /// owner's own payments, for [`owner_paid_cycle`]. A failed read fails the
+    /// pass, as the agent's own payments' read does: without it a cycle the
+    /// owner paid under an offered reference would be asked again, bound to a
+    /// key no payment used, and one tap would pay it again (docs/60 P-210).
+    async fn owner_settlements(
+        &self,
+        head: u64,
+    ) -> Result<std::collections::BTreeSet<B256>, OperatorError> {
         let from = self
             .config
             .policy_from_block
             .unwrap_or(self.config.history_from_block);
-        let Ok(list) = self
+        Ok(self
             .client
             .principal_settlements(self.config.policy, from, head)
-            .await
-        else {
-            return Vec::new();
-        };
-        let client = self.client.clone();
-        arc::eight_at_a_time(list, |s| {
-            let client = client.clone();
-            async move {
-                client.block_timestamp(s.block).await.ok().map(|t| {
-                    (
-                        format!("{:#x}", s.to),
-                        s.amount.to_minor(),
-                        t.as_unix(),
-                        s.action_hash,
-                    )
-                })
-            }
-        })
-        .await
-        .map(|v| v.into_iter().flatten().collect())
-        .unwrap_or_default()
+            .await?
+            .into_iter()
+            .map(|s| s.action_hash)
+            .collect())
     }
 
     pub async fn obligations_due(
@@ -1332,59 +1408,34 @@ impl<R: Reasoner> Operator<R> {
                 obligations.push(seed.clone());
             }
         }
-        // What the owner paid by hand (`SettledByPrincipal`), with when: before
-        // docs/60 P-175 the service bound the owner's tap to the pass's
-        // proposal hash, which changes every pass, so the settlement keys
-        // below never saw those payments and the next pass asked again. A
-        // failed read leaves the settlement keys alone to decide, as before.
-        let owner_paid = std::sync::Arc::new(self.owner_settlements(head).await);
-        let used = std::sync::Arc::new(std::sync::Mutex::new(std::collections::BTreeSet::new()));
+        // What the owner paid by hand (`SettledByPrincipal`): before docs/60
+        // P-175 the service bound the owner's tap to the pass's proposal hash,
+        // which changes every pass, so the settlement keys below never saw
+        // those payments and the next pass asked again. Each counts for the
+        // cycle it was offered for, and only that one (P-210).
+        let owner_hashes = self.owner_settlements(head).await?;
+        let owner_paid = std::sync::Arc::new(owner_hashes.clone());
+        let offered = std::sync::Arc::new(self.config.offered.clone());
         // Bills' settled cycles eight bills at a time, not one bill after
         // another (docs/68 F4); within a bill the cycles stay in order.
         let stepped = arc::eight_at_a_time(std::mem::take(&mut obligations), |mut o| {
             let (client, policy) = (self.client.clone(), self.config.policy);
             let scope = self.config.principal_id.clone();
-            let (owner_paid, used) = (owner_paid.clone(), used.clone());
-            let (payee, amount, interval) = (
-                o.counterparty.as_str().to_lowercase(),
-                o.typical_amount.to_minor(),
-                o.interval.as_i64(),
-            );
+            let (owner_paid, offered) = (owner_paid.clone(), offered.clone());
             async move {
                 let r = step_past_settled(&mut o, now, |cycle| {
-                    let due = cycle
-                        .rsplit_once('@')
-                        .and_then(|(_, d)| d.parse::<i64>().ok())
-                        .unwrap_or(i64::MAX);
                     let key = B256::from(
                         *ledger::settlement_key_for(&Idempotency {
-                            key: cycle,
+                            key: cycle.clone(),
                             scope: scope.clone(),
                         })
                         .as_bytes(),
                     );
-                    let (client, owner_paid, used, payee) = (
-                        client.clone(),
-                        owner_paid.clone(),
-                        used.clone(),
-                        payee.clone(),
-                    );
+                    let (client, owner_paid, offered) =
+                        (client.clone(), owner_paid.clone(), offered.clone());
                     async move {
-                        let by_key = client.already_executed(policy, key).await?;
-                        let mut used = used.lock().unwrap_or_else(|e| e.into_inner());
-                        if by_key {
-                            // Paid under its own key: that payment answers this cycle only.
-                            used.insert(key);
-                            return Ok(true);
-                        }
-                        Ok(owner_paid_cycle(
-                            &owner_paid,
-                            &mut used,
-                            &payee,
-                            amount,
-                            due,
-                            interval,
-                        ))
+                        Ok(client.already_executed(policy, key).await?
+                            || owner_paid_cycle(&owner_paid, &offered, &cycle))
                     }
                 })
                 .await;
@@ -1392,10 +1443,8 @@ impl<R: Reasoner> Operator<R> {
             }
         })
         .await?;
-        for (o, r) in stepped {
-            r?;
-            obligations.push(o);
-        }
+        let (kept, aside) = keep_stepped(stepped)?;
+        obligations.extend(kept);
         let upcoming: Vec<Obligation> = upcoming(&obligations, now, self.config.horizon)
             .into_iter()
             .cloned()
@@ -1410,6 +1459,8 @@ impl<R: Reasoner> Operator<R> {
             obligations,
             upcoming,
             due,
+            aside,
+            owner_paid: owner_hashes,
         })
     }
 
@@ -1552,6 +1603,8 @@ impl<R: Reasoner> Operator<R> {
             obligations,
             upcoming: upcoming_all,
             due,
+            aside,
+            owner_paid,
         } = self.obligations_due(&history, now).await?;
         // PLAN 5.56: a bill whose invoice takes money off for paying early is
         // paid early at the discounted amount -- only from money no bill in
@@ -1677,6 +1730,18 @@ impl<R: Reasoner> Operator<R> {
             own_payments: own.clone(),
             agent_expiry,
         };
+        // A bill set aside is said in the record, in words, not dropped silently (docs/60 P-210).
+        for (o, why) in aside {
+            self.log.append(
+                now,
+                EventBody::Skipped {
+                    counterparty: o.counterparty.clone(),
+                    cycle_key: o.cycle_key(),
+                    note: why,
+                },
+            );
+            outcome.skipped.push(o);
+        }
 
         // Who we have paid before, and to which details. Built from the log
         // rather than configured, so an unfamiliar counterparty is genuinely
@@ -1785,10 +1850,10 @@ impl<R: Reasoner> Operator<R> {
         };
 
         // PLAN 5.25 (docs/59 §3.3): standing orders the owner wrote into the
-        // contract. Due ones are paid first — in Propose too, the owner already
-        // said yes to exactly this payee, amount and cadence — unless the
-        // policy is paused or HALT is present. Anyone could call `payDue`; the
-        // agent simply does it on time, and the caps bound it like any pay.
+        // contract. Due ones are paid first, on Autopilot only (docs/60 P-211:
+        // in Propose the owner taps Pay now), never for a bill-cycle already
+        // paid by any path, and not while HALT is present. Anyone could call
+        // `payDue`; the agent simply does it on time, and the caps bound it like any pay.
         // A failed read fails the pass: with no list, a bill an order pays
         // would also be paid below under its own cycle key, and the contract
         // cannot catch it (different replay keys; audit 2026-10-15).
@@ -1811,11 +1876,37 @@ impl<R: Reasoner> Operator<R> {
             let mut paid_cycles = 0u8;
             // Arrears are paid one cycle per call, at most three per pass.
             while due_at <= now_unsigned && paid_cycles < 3 {
+                let counterparty = ledger::Counterparty::new(cp.clone());
+                // The bill-cycle this date is, paid by any path: its own
+                // settlement key, or a reference offered for it (docs/60 P-211).
+                let cycle = format!("{cp}@{due_at}");
+                let bill_key = B256::from(
+                    *ledger::settlement_key_for(&Idempotency {
+                        key: cycle.clone(),
+                        scope: self.config.principal_id.clone(),
+                    })
+                    .as_bytes(),
+                );
+                let paid = self
+                    .client
+                    .already_executed(self.config.policy, bill_key)
+                    .await?
+                    || owner_paid_cycle(&owner_paid, &self.config.offered, &cycle);
+                if let Err(why) = order_due_step(propose_only, paid, sc.id, due_at) {
+                    self.log.append(
+                        now,
+                        EventBody::Skipped {
+                            counterparty,
+                            cycle_key: format!("schedule:{}:{due_at}", sc.id),
+                            note: why,
+                        },
+                    );
+                    break;
+                }
                 let key = self
                     .client
                     .schedule_action_hash(self.config.policy, sc.id, due_at)
                     .await?;
-                let counterparty = ledger::Counterparty::new(cp.clone());
                 match self.client.pay_due(self.config.policy, sc.id).await {
                     Ok(tx) => {
                         let readback = self
