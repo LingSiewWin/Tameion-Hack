@@ -41,12 +41,12 @@ export type OwnerViewProps = {
 
 const plate = "rounded-(--radius-plate) bg-(--plate)";
 const button = "inline-flex min-h-(--button) items-center justify-center rounded-(--radius-button) px-(--space-5) row-title";
-const compact = "inline-flex min-h-(--touch) shrink-0 items-center justify-center rounded-(--radius-button) bg-(--plate-2) px-(--space-4) row-title text-(--ink)";
+const compact = "inline-flex min-h-(--button-compact) shrink-0 items-center justify-center rounded-(--radius-button) bg-(--plate-2) px-(--space-4) row-title text-(--ink)";
 
 /** The symbolon mark (DESIGN §Direction): two halves that fit, the witness the dot between; drawn in ink, only when sealed. */
 function SealMark() {
   return (
-    <svg width="16" height="12" viewBox="0 0 16 12" aria-hidden className="shrink-0 text-(--ink)">
+    <svg width="16" height="12" viewBox="0 0 16 12" aria-hidden className="shrink-0 text-(--sealed)">
       <path d="M7 1a5 5 0 0 0 0 10z" fill="currentColor" />
       <path d="M9 1a5 5 0 0 1 0 10z" fill="currentColor" />
       <circle cx="8" cy="6" r="2" fill="currentColor" />
