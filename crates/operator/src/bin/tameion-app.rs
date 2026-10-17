@@ -549,6 +549,133 @@ async fn block_times(client: &arc::ArcClient, chain: &str, blocks: Vec<u64>) -> 
 /// settlement key from the pass, stable across passes, never the proposal's
 /// `actionHash`, which changes every pass (docs/60 P-175: one tap paid the same
 /// 30-day bill twice under two hashes). `None` for a row without one.
+/// The waiting "Let the agent buy from … at … (usually …)" rows (docs/60 P-217):
+/// the newest priced-out purchase per seller in the last day that no later paid
+/// purchase from that seller answered. `bought` is newest first.
+fn prices_to_approve(bought: &[Value], now: u64) -> Vec<Value> {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut rows = Vec::new();
+    for (i, p) in bought.iter().enumerate() {
+        let seller = p["seller"].as_str().unwrap_or("").to_lowercase();
+        if p["status"] != "needs-you"
+            || p["band"] != true
+            || now.saturating_sub(p["at"].as_u64().unwrap_or(0)) > 86_400
+            || !seen.insert(seller.clone())
+        {
+            continue;
+        }
+        let answered = bought[..i].iter().any(|q| {
+            q["status"] == "paid"
+                && q["seller"]
+                    .as_str()
+                    .is_some_and(|x| x.eq_ignore_ascii_case(&seller))
+        });
+        if !answered {
+            rows.push(json!({
+                "seller": seller, "host": p["host"], "amount": p["amount"], "minor": p["minor"], "usual": p["usual"],
+                "reason": p["reason"], "url": p["url"], "at": p["at"], "why": p["why"],
+            }));
+        }
+    }
+    rows
+}
+
+/// The agent key a request carries: `Authorization: Bearer`, else `?token=`.
+fn bearer_of(raw: &str, query: &str) -> Option<String> {
+    raw.lines()
+        .find_map(|l| {
+            let (k, v) = l.split_once(':')?;
+            if k.eq_ignore_ascii_case("authorization") {
+                v.trim()
+                    .strip_prefix("Bearer ")
+                    .map(|t| t.trim().to_string())
+            } else {
+                None
+            }
+        })
+        .or_else(|| {
+            query
+                .split('&')
+                .find_map(|kv| kv.strip_prefix("token="))
+                .map(String::from)
+        })
+}
+
+/// An events file as an outsider gets it on a locked account (docs/60 P-212):
+/// per line only `seq` and the leaf hash of the event's canonical bytes, so the
+/// root can be rebuilt and nothing the event says is read. A line that does
+/// not parse is left out, which fails the check rather than passing it.
+fn leaves_only(jsonl: &str) -> String {
+    jsonl
+        .lines()
+        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+        .filter_map(|v| {
+            let canonical = alloy::hex::decode(v["canonical"].as_str()?).ok()?;
+            let leaf = ledger::log::leaf_from_canonical(&canonical).to_hex();
+            Some(json!({ "seq": v["seq"], "leaf": leaf }).to_string() + "\n")
+        })
+        .collect()
+}
+
+/// The reference a waiting row's bill-cycle was paid under, if any: the
+/// bill-cycle's key (the owner's tap since docs/60 P-175), the row's own hash
+/// (before it), or any reference a pass offered for this bill-cycle (P-210:
+/// one cycle paid under two passes' hashes was offered again under a third).
+fn paid_reference(
+    row: &Value,
+    by_cycle: &std::collections::BTreeMap<String, Vec<alloy::primitives::B256>>,
+    executed: &std::collections::BTreeSet<alloy::primitives::B256>,
+) -> Option<alloy::primitives::B256> {
+    let offered = row["cycleKey"]
+        .as_str()
+        .and_then(|c| by_cycle.get(&c.to_lowercase()))
+        .cloned()
+        .unwrap_or_default();
+    ["settlementKey", "actionHash"]
+        .into_iter()
+        .filter_map(|k| {
+            row[k]
+                .as_str()
+                .and_then(|h| alloy::primitives::B256::from_str(h).ok())
+        })
+        .chain(offered)
+        .find(|h| executed.contains(h))
+}
+
+/// A bill's next unpaid cycle from `due`, stepped past every cycle paid under a
+/// reference a pass offered for it (docs/60 P-211: "Make it standing" started
+/// an order at a typed date whose cycle was paid twice). At most a year of
+/// steps; the pass and `prepare-schedule` check the chain as well.
+fn next_unpaid_due(
+    payee: &str,
+    mut due: i64,
+    every: i64,
+    by_cycle: &std::collections::BTreeMap<String, Vec<alloy::primitives::B256>>,
+    executed: &std::collections::BTreeSet<alloy::primitives::B256>,
+) -> i64 {
+    for _ in 0..366 {
+        let paid = by_cycle
+            .get(&format!("{}@{due}", payee.to_lowercase()))
+            .is_some_and(|refs| refs.iter().any(|h| executed.contains(h)));
+        if !paid || every <= 0 {
+            break;
+        }
+        due += every;
+    }
+    due
+}
+
+/// Why a standing order may not start at `first_due`, if it may not: a date
+/// before the bill's next unpaid cycle pays a cycle already paid (docs/60 P-211).
+fn first_due_refusal(first_due: u64, next_unpaid: Option<i64>) -> Option<String> {
+    let n = next_unpaid?;
+    ((first_due as i64) < n).then(|| {
+        format!(
+            "the bill-cycle due {first_due} (unix) is already paid; this bill's next unpaid cycle is due {n}. Start the order then, or it pays a cycle twice"
+        )
+    })
+}
+
 fn settle_key(row: &Value) -> Option<alloy::primitives::B256> {
     row["settlementKey"]
         .as_str()
@@ -2038,7 +2165,7 @@ impl App {
     /// The events behind one anchored root of one tenant, as the service
     /// wrote them before anchoring: what an auditor needs to recompute the
     /// root on their own machine (`operator --example audit`, docs/46 #1).
-    async fn level1_record(&self, query: &str) -> Vec<u8> {
+    async fn level1_record(&self, query: &str, raw: &str) -> Vec<u8> {
         let get = |k: &str| {
             query
                 .split('&')
@@ -2060,13 +2187,39 @@ impl App {
             .join(format!("{policy:#x}"))
             .join("log")
             .join(format!("{root:#x}.events.jsonl"));
-        match tokio::fs::read(&path).await {
-            Ok(bytes) => respond("200 OK", "application/x-ndjson; charset=utf-8", &bytes),
-            Err(_) => json_reply(
-                "404 Not Found",
-                json!({ "error": "no record of that root for that policy" }),
-            ),
+        let bytes = match tokio::fs::read(&path).await {
+            Ok(b) => b,
+            Err(_) => {
+                return json_reply(
+                    "404 Not Found",
+                    json!({ "error": "no record of that root for that policy" }),
+                );
+            }
+        };
+        // On a locked account an outsider gets what checking the root needs —
+        // each event's sequence number and leaf hash — and not the events: the
+        // balance, payees, amounts, purchase URLs and purposes stay with a read
+        // key or the owner's device (docs/60 P-212). The root rebuilt from the
+        // leaves is the same root, so "Check it yourself" still matches.
+        let open = match level1::load(&self.dir, &format!("{policy:#x}")) {
+            Some(t) => t.agent_tokens.is_empty() || self.reads_account(&t, raw, query),
+            None => true,
+        };
+        if open {
+            return respond("200 OK", "application/x-ndjson; charset=utf-8", &bytes);
         }
+        respond(
+            "200 OK",
+            "application/x-ndjson; charset=utf-8",
+            leaves_only(&String::from_utf8_lossy(&bytes)).as_bytes(),
+        )
+    }
+
+    /// Whether this request may read a locked account: the owner's device, or
+    /// an agent key with the `read` scope (the inbox's own rule, `token_gate`).
+    fn reads_account(&self, t: &level1::Tenant, raw: &str, query: &str) -> bool {
+        level1::reserve_token_ok(t, header(raw, "x-tameion-device"))
+            || level1::token_allows(t, bearer_of(raw, query).as_deref(), "read", now_secs()).is_ok()
     }
 
     /// The EIP-712 burn intent for the bill wallet to sign: move `amount` of
@@ -2997,23 +3150,57 @@ impl App {
         // the contract still waits the delay. ponytail: up to 20 reads per
         // inbox call; cache when tenants have long histories.
         let mut hashes: Vec<alloy::primitives::B256> = Vec::new();
-        for j in passes.iter().filter(|j| j.status == "done") {
+        // Every reference any pass offered for each bill-cycle: a cycle paid
+        // under one of them is paid, whichever pass's row is showing (docs/60
+        // P-210: the owner paid one cycle under two passes' hashes and the next
+        // pass's row, under a third, was offered again).
+        let mut by_cycle: std::collections::BTreeMap<String, Vec<alloy::primitives::B256>> =
+            std::collections::BTreeMap::new();
+        // Newest pass first, so a fresh cycle's key is not the one cut (docs/103 S6c-6).
+        for j in passes.iter().rev().filter(|j| j.status == "done") {
             if let Some(r) = &j.report {
                 for p in r["pendingSignature"].as_array().into_iter().flatten() {
                     // The bill-cycle's settlement key first: the owner's tap is
                     // bound to it since docs/60 P-175; older taps to the hash.
                     for key in ["settlementKey", "actionHash"] {
-                        if let Some(h) = p[key]
+                        let Some(h) = p[key]
                             .as_str()
                             .and_then(|h| alloy::primitives::B256::from_str(h).ok())
-                            .filter(|h| !hashes.contains(h))
-                        {
+                        else {
+                            continue;
+                        };
+                        if let Some(c) = p["cycleKey"].as_str() {
+                            let list = by_cycle.entry(c.to_lowercase()).or_default();
+                            if !list.contains(&h) {
+                                list.push(h);
+                            }
+                        }
+                        if !hashes.contains(&h) {
                             hashes.push(h);
                         }
                     }
                 }
             }
         }
+        // The waiting rows' cycles are read first: those are what a tap would pay.
+        // ponytail: 40 reads at most; a cycle offered under more references than that
+        // (a pass a minute before P-175) is checked on its newest 40.
+        let waiting: Vec<alloy::primitives::B256> = needs_you
+            .iter()
+            .filter_map(|n| n["cycleKey"].as_str())
+            .filter_map(|c| by_cycle.get(&c.to_lowercase()))
+            .flatten()
+            .copied()
+            .collect();
+        hashes.retain(|h| !waiting.contains(h));
+        let mut first: Vec<alloy::primitives::B256> = Vec::new();
+        for h in waiting {
+            if !first.contains(&h) {
+                first.push(h);
+            }
+        }
+        first.extend(hashes);
+        let mut hashes = first;
         hashes.truncate(40);
         let executed = level1::executed_hashes(&tenant, &hashes)
             .await
@@ -3028,16 +3215,7 @@ impl App {
         let needs_you: Vec<Value> = needs_you
             .into_iter()
             .filter(|n| {
-                // Settled under the bill-cycle's key (the owner's tap since
-                // docs/60 P-175) or under the row's own hash (before it).
-                let Some(h) = ["settlementKey", "actionHash"]
-                    .into_iter()
-                    .filter_map(|k| {
-                        n[k].as_str()
-                            .and_then(|h| alloy::primitives::B256::from_str(h).ok())
-                    })
-                    .find(|h| executed.contains(h))
-                else {
+                let Some(h) = paid_reference(n, &by_cycle, &executed) else {
                     return true;
                 };
                 let to = n["counterparty"].as_str().and_then(|x| Address::from_str(x).ok());
@@ -3239,13 +3417,15 @@ impl App {
                         .collect();
                     let mut seen: std::collections::BTreeSet<String> =
                         std::collections::BTreeSet::new();
-                    let cands: Vec<Value> = imported
+                    // The last pass's bills first: their next due date is stepped past
+                    // the cycles already paid; an imported bill's typed date is not
+                    // (docs/60 P-211).
+                    let cands: Vec<Value> = last
+                        .and_then(|j| j.report.as_ref())
+                        .and_then(|r| r["obligationsList"].as_array().cloned())
+                        .unwrap_or_default()
                         .into_iter()
-                        .chain(
-                            last.and_then(|j| j.report.as_ref())
-                                .and_then(|r| r["obligationsList"].as_array().cloned())
-                                .unwrap_or_default(),
-                        )
+                        .chain(imported)
                         .filter(|o| seen.insert(o["counterparty"].as_str().unwrap_or("").to_lowercase()))
                         .filter(|o| {
                             let conf = o["confidence"].as_f64().or_else(|| o["confidence"].as_str().and_then(|c| c.parse().ok())).unwrap_or(0.0);
@@ -3261,7 +3441,17 @@ impl App {
                                 && o["provenance"] != "x402 receipt"
                                 && !covered.contains(&o["counterparty"].as_str().unwrap_or("").to_lowercase())
                         })
-                        .map(|o| json!({ "payee": o["counterparty"], "amount": o["amount"], "everySecs": o["intervalSecs"], "nextDue": o["nextDue"], "confidence": o["confidence"], "basis": if o["samples"].as_u64() == Some(0) { "you imported this bill" } else { "seen repeatedly in your history" } }))
+                        .map(|o| {
+                            // And past a cycle paid since that pass, under any reference offered for it.
+                            let next = next_unpaid_due(
+                                o["counterparty"].as_str().unwrap_or(""),
+                                o["nextDue"].as_i64().unwrap_or(0),
+                                o["intervalSecs"].as_i64().unwrap_or(0),
+                                &by_cycle,
+                                &executed,
+                            );
+                            json!({ "payee": o["counterparty"], "amount": o["amount"], "everySecs": o["intervalSecs"], "nextDue": next, "confidence": o["confidence"], "basis": if o["samples"].as_u64() == Some(0) { "you imported this bill" } else { "seen repeatedly in your history" } })
+                        })
                         .collect();
                     (json!(orders), json!(cands))
                 }
@@ -3709,6 +3899,9 @@ impl App {
             "needsYou": needs_you,
             "invoices": invoices,
             "sellersToApprove": sellers,
+            // docs/60 P-217: purchases the agent did not make alone because the price
+            // was more than a quarter above that seller's usual; one tap lets one through.
+            "pricesToApprove": prices_to_approve(&bought, now_secs()),
             "purchases": bought.iter().take(20).collect::<Vec<_>>(),
             "exposure": exposure,
             "keyless": tenant.keyless,
@@ -5682,24 +5875,7 @@ impl App {
         {
             return None;
         }
-        let bearer = raw
-            .lines()
-            .find_map(|l| {
-                let (k, v) = l.split_once(':')?;
-                if k.eq_ignore_ascii_case("authorization") {
-                    v.trim()
-                        .strip_prefix("Bearer ")
-                        .map(|t| t.trim().to_string())
-                } else {
-                    None
-                }
-            })
-            .or_else(|| {
-                query
-                    .split('&')
-                    .find_map(|kv| kv.strip_prefix("token="))
-                    .map(String::from)
-            });
+        let bearer = bearer_of(raw, query);
         match level1::token_allows(&tenant, bearer.as_deref(), scope, now_secs()) {
             Ok(()) => None,
             Err(e) => Some(json_reply(
@@ -6406,6 +6582,35 @@ impl App {
                 json!({ "error": format!("{payee:#x} is not an approved payee yet; approve it first (one tap), then set the order") }),
             );
         }
+        // The order starts at this payee's bill's next unpaid cycle, never before:
+        // `payDue` pays past dates under its own key and the contract refuses
+        // nothing (docs/60 P-211). Read as the next pass would read it.
+        if tenant.deployed {
+            let next_unpaid = match level1::plan(&self.dir, &tenant).await {
+                Ok(p) => p["obligations"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .find(|o| {
+                        o["cycleKey"]
+                            .as_str()
+                            .is_some_and(|k| k.starts_with(&format!("{payee:#x}@")))
+                    })
+                    .and_then(|o| o["nextDue"].as_i64()),
+                Err(e) => {
+                    return json_reply(
+                        "503 Service Unavailable",
+                        json!({ "error": format!("could not read which cycles of this bill are paid ({e}); nothing was prepared, try again") }),
+                    );
+                }
+            };
+            if let Some(w) = first_due_refusal(first_due, next_unpaid) {
+                return json_reply(
+                    "409 Conflict",
+                    json!({ "error": w, "nextUnpaid": next_unpaid }),
+                );
+            }
+        }
         let days = every_secs as f64 / 86_400.0;
         json_reply(
             "200 OK",
@@ -6558,6 +6763,35 @@ impl App {
                 );
             }
         };
+        // Never a bill-cycle some path already paid (docs/60 P-211): the order's
+        // oldest date is what payDue pays, under a key no bill payment carries.
+        let order = match client.schedules(policy).await {
+            Ok(list) => list.into_iter().find(|s| s.id == id),
+            Err(e) => {
+                return json_reply(
+                    "503 Service Unavailable",
+                    json!({ "error": format!("could not read the standing order ({e}); nothing was paid") }),
+                );
+            }
+        };
+        if let Some(sc) = order {
+            let cycle = format!("{:#x}@{}", sc.payee, sc.next_due);
+            match level1::cycle_paid(&self.dir, &tenant, &cycle).await {
+                Ok(false) => {}
+                Ok(true) => {
+                    return json_reply(
+                        "409 Conflict",
+                        json!({ "error": format!("standing order #{id}'s due date {} is a bill-cycle already paid; paying it would pay it twice, so nothing was paid. End the order, then make it standing again from the next unpaid cycle", sc.next_due) }),
+                    );
+                }
+                Err(e) => {
+                    return json_reply(
+                        "503 Service Unavailable",
+                        json!({ "error": format!("could not read whether this cycle is paid ({e}); nothing was paid") }),
+                    );
+                }
+            }
+        }
         match client.pay_due(policy, id).await {
             Ok(tx) => json_reply(
                 "200 OK",
@@ -6565,6 +6799,52 @@ impl App {
             ),
             Err(e) => json_reply("502 Bad Gateway", json!({ "error": e.to_string() })),
         }
+    }
+
+    /// The owner's tap on a "Let the agent buy from … at …" row (docs/60
+    /// P-217): the next purchase from that seller at up to that price passes the
+    /// price band once, within ten minutes. The owner's device only: this lets
+    /// the agent pay more than usual, so an agent key cannot grant it.
+    fn level1_purchase_approve(&self, body: &str, raw: &str) -> Vec<u8> {
+        let v: Value = match serde_json::from_str(body) {
+            Ok(v) => v,
+            Err(e) => return json_reply("400 Bad Request", json!({ "error": e.to_string() })),
+        };
+        let addr = |k: &str| v[k].as_str().and_then(|x| Address::from_str(x.trim()).ok());
+        let (Some(policy), Some(seller)) = (addr("policy"), addr("seller")) else {
+            return json_reply(
+                "400 Bad Request",
+                json!({ "error": "policy and seller are required" }),
+            );
+        };
+        let Some(amount) = parse_money(&v["amount"]).filter(|m| m.to_minor() > 0) else {
+            return json_reply(
+                "400 Bad Request",
+                json!({ "error": "amount (USDC) is required" }),
+            );
+        };
+        let Some(tenant) = level1::load(&self.dir, &format!("{policy:#x}")) else {
+            return json_reply("404 Not Found", json!({ "error": "no such tenant" }));
+        };
+        if !level1::reserve_token_ok(&tenant, header(raw, "x-tameion-device")) {
+            return json_reply(
+                "401 Unauthorized",
+                json!({ "error": "only the owner's device can let the agent pay more than usual" }),
+            );
+        }
+        let until = now_secs() + 600;
+        operator::x402::approve_price(
+            &self.dir,
+            &tenant.policy,
+            &format!("{seller:#x}"),
+            amount.to_minor() as u128,
+            until,
+        );
+        json_reply(
+            "200 OK",
+            json!({ "seller": format!("{seller:#x}"), "max": amount.to_string(), "until": until,
+                "summary": format!("the agent may buy once from {seller:#x} at up to {amount} until unix {until}; your limits still bound it") }),
+        )
     }
 
     fn level1_prepare_withdraw(&self, body: &str) -> Vec<u8> {
@@ -7767,12 +8047,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         app.level1_prepare_guardians(&body)
                     }
                     ("POST", "/api/level1/pay-due") => app.level1_pay_due(&body).await,
+                    ("POST", "/api/level1/purchase-approve") => {
+                        app.level1_purchase_approve(&body, &req)
+                    }
                     ("POST", "/api/level1/prepare-notify") => {
                         app.level1_prepare_notify(&body).await
                     }
                     ("POST", "/api/level1/notify-signed") => app.level1_notify_signed(&body).await,
                     ("POST", "/api/level1/fund") => app.level1_fund(&body).await,
-                    ("GET", "/api/level1/record") => app.level1_record(query).await,
+                    ("GET", "/api/level1/record") => app.level1_record(query, &req).await,
                     ("GET", "/api/level1/records") => app.level1_records(query).await,
                     ("GET", "/api/level1/statement") => app.level1_statement(query).await,
                     ("POST", "/api/level1/run") => app.level1_run(&body).await,
@@ -8176,6 +8459,90 @@ mod settle_key_tests {
     use super::*;
     use alloy::primitives::B256;
     use ledger::{Currency, Money};
+
+    /// docs/60 P-217: a priced-out purchase waits as one row per seller until a
+    /// later paid purchase from that seller answers it, for a day at most.
+    #[test]
+    fn a_priced_out_purchase_waits_until_a_later_purchase_answers_it() {
+        let (a, b) = (
+            "0x00000000000000000000000000000000000000a1",
+            "0x00000000000000000000000000000000000000a2",
+        );
+        let now = 1_792_214_000u64;
+        let band = |seller: &str, at: u64| json!({ "seller": seller, "status": "needs-you", "band": true, "at": at, "amount": "0.002000 USDC", "usual": "0.001000 USDC" });
+        // Newest first, as `x402::purchases` returns them.
+        let bought = vec![
+            json!({ "seller": b, "status": "paid", "at": now - 10 }),
+            band(b, now - 20),
+            band(a, now - 30),
+            band(a, now - 40),
+            band("0x00000000000000000000000000000000000000a3", now - 90_000),
+        ];
+        let rows = prices_to_approve(&bought, now);
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(rows[0]["seller"], a);
+        assert_eq!(rows[0]["at"], now - 30, "the newest for that seller");
+    }
+
+    /// docs/60 P-211, uat-u2-fin: "Make it standing" offered the typed date of
+    /// the cycle paid twice. The candidate starts at the next unpaid cycle, and
+    /// `prepare-schedule` refuses any date before it; a first order is free.
+    #[test]
+    fn a_standing_order_starts_at_the_next_unpaid_cycle() {
+        const MONTH: i64 = 2_592_000;
+        let payee = "0x179DCA89F69FAEF5765D2E7445AA5452B8159520";
+        let d0 = 1_792_156_029;
+        let paid = B256::repeat_byte(0x85);
+        let by_cycle = std::collections::BTreeMap::from([(
+            format!("{}@{d0}", payee.to_lowercase()),
+            vec![paid, B256::repeat_byte(0x8e)],
+        )]);
+        let executed = std::collections::BTreeSet::from([paid]);
+        assert_eq!(
+            next_unpaid_due(payee, d0, MONTH, &by_cycle, &executed),
+            d0 + MONTH
+        );
+        assert_eq!(
+            next_unpaid_due(payee, d0, MONTH, &by_cycle, &Default::default()),
+            d0,
+            "nothing paid: the typed date stands"
+        );
+        let w = first_due_refusal(d0 as u64, Some(d0 + MONTH)).unwrap();
+        assert!(
+            w.contains("already paid") && w.contains(&(d0 + MONTH).to_string()),
+            "{w}"
+        );
+        assert_eq!(
+            first_due_refusal((d0 + MONTH) as u64, Some(d0 + MONTH)),
+            None
+        );
+        assert_eq!(
+            first_due_refusal(d0 as u64, None),
+            None,
+            "no bill for this payee yet"
+        );
+    }
+
+    /// docs/60 P-210, uat-u2-fin: the showing row (22:20 pass) is under hashes
+    /// no payment used; the cycle was paid under two earlier passes' hashes.
+    /// The row leaves Needs you; a row of another cycle stays.
+    #[test]
+    fn a_waiting_row_whose_bill_cycle_was_paid_under_another_pass_leaves() {
+        let h = |s: &str| B256::from_str(s).unwrap();
+        let cycle = "0x179dca89f69faef5765d2e7445aa5452b8159520@1792156029";
+        let (a, b, c, k) = (
+            h("0x85dcc14b8c469d30b6e7edd45f28d92267583487c27c38111089a41008861969"),
+            h("0xd160efeaea984549ffaa3620f39f0aa0d3f9243a754ccab50bf7b87e7ed444f7"),
+            h("0x8e14ca725749f09ad6fad8e5c2a128373f82a1e526a2dfa810e3f3cab1d789eb"),
+            h("0xf39a6156a544af2b1965d16d1ce40bfb73b73ad47f192f60c2db0649d38f256f"),
+        );
+        let by_cycle = std::collections::BTreeMap::from([(cycle.to_string(), vec![k, a, b, c])]);
+        let executed = std::collections::BTreeSet::from([a, b]);
+        let row = json!({ "cycleKey": cycle, "actionHash": format!("{c:#x}"), "settlementKey": format!("{k:#x}") });
+        assert_eq!(paid_reference(&row, &by_cycle, &executed), Some(a));
+        let next = json!({ "cycleKey": "0x179dca89f69faef5765d2e7445aa5452b8159520@1794748029", "actionHash": format!("{:#x}", B256::repeat_byte(1)) });
+        assert_eq!(paid_reference(&next, &by_cycle, &executed), None);
+    }
 
     /// docs/60 P-175: two checks offer the same 30-day bill under two proposal
     /// hashes; the owner's payment of either is the SAME call, keyed to the
