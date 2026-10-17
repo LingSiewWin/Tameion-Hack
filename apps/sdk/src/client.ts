@@ -113,6 +113,11 @@ export interface Status {
   paused?: unknown;
   stoppedTokens?: unknown;
   halt?: unknown;
+  /** With a policy: USDC a day over `windowDays`, from settled payments (null when the chain read failed). */
+  rate?: string | null;
+  windowDays?: number;
+  runway?: { byRateDays: number | null; firstShortfallDays: number | null } | null;
+  forces?: { at: number; kind: string; counterparty: string; deltaPerDay: string }[] | null;
   [field: string]: unknown;
 }
 export interface RunStarted {

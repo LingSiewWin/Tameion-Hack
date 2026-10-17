@@ -234,6 +234,21 @@ test("cli: exit 0 delivered, 1 refused, 2 usage", async () => {
   assert.equal(d.calls.length, 0);
 });
 
+test("cli: top quotes the service's burn rate and runways, and needs a policy", async () => {
+  const status = { policy: POLICY, rate: "0.001428 USDC", windowDays: 7, runway: { byRateDays: 28, firstShortfallDays: null }, forces: [{ at: 1_792_254_326, kind: "bill_added", counterparty: "0xe5e2d8dcc2038fd0a010a6e7845378b646e33854", deltaPerDay: "0.001428 USDC" }] };
+  const a = io([json(200, status)]);
+  assert.equal(await run(["top"], a.io), 0);
+  assert.match(a.calls[0]!.url, /\/api\/level1\/status\?policy=0x/);
+  assert.match(a.out.join("\n"), /at this burn \(0\.001428 USDC a day over the last 7 days\), the floor is 28 days away/);
+  assert.match(a.out.join("\n"), /every bill in the next 90 days is covered/);
+  assert.match(a.out.join("\n"), /bill_added 0xe5e2.* 0\.001428 USDC a day/);
+  const quiet = io([json(200, { ...status, rate: "0.000000 USDC", runway: { byRateDays: null, firstShortfallDays: 0 }, forces: [] })]);
+  assert.equal(await run(["top"], quiet.io), 0);
+  assert.match(quiet.out.join("\n"), /no burn yet: nothing was paid in the last 7 days\n.*due today/);
+  const none = io([], { env: {} });
+  assert.equal(await run(["top"], none.io), 2);
+});
+
 test("cli: unknown command gets a did-you-mean and never echoes the input", async () => {
   const a = io([]);
   assert.equal(await run(["inbx"], a.io), 2);

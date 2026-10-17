@@ -31,7 +31,7 @@ export interface Io {
   now: () => number;
 }
 
-const COMMANDS = ["status", "inbox", "bills", "pay", "buy", "recall", "help"] as const;
+const COMMANDS = ["status", "top", "inbox", "bills", "pay", "buy", "recall", "help"] as const;
 const VALUE_FLAGS = new Set(["--policy", "--url", "--token-file", "--why", "--max", "--op", "--method", "--root"]);
 const EVENT_ID = /^evt:(0|[1-9]\d*)$/;
 const BOOL_FLAGS = new Set(["--json", "--help"]);
@@ -40,6 +40,8 @@ const USDC = /^\d+(\.\d{1,6})?$/;
 const USAGE = `tameion — a Tameion account from the terminal
 
   tameion status                         the service: contract version, recent updates, kill switches
+  tameion top                            the burn rate, how far the floor is at that rate, the first bill
+                                         the money cannot cover, and what moved the rate
   tameion inbox                          mode, balance, limits, payees, what waits for the owner
   tameion bills                          the bills the agent knows and the ones waiting for the owner
   tameion pay <payee> <usdc> --why <text> [--op <operationId>]
@@ -168,6 +170,23 @@ function recallLines(d: Recall): string[] {
   return lines;
 }
 
+/** The account's momentum as the service folds it (never computed here): quote, do not recompute. */
+function topLines(d: Status): string[] {
+  const r = d.runway;
+  if (d.rate == null || !r) return ["the service could not read the account's balance just now; try again"];
+  const days = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
+  const lines = [
+    r.byRateDays == null
+      ? `no burn yet: nothing was paid in the last ${d.windowDays} days`
+      : `at this burn (${d.rate} a day over the last ${d.windowDays} days), the floor is ${days(r.byRateDays)} away`,
+    r.firstShortfallDays == null
+      ? "every bill in the next 90 days is covered"
+      : `the first bill the money above the floor cannot cover is ${r.firstShortfallDays === 0 ? "due today" : `in ${days(r.firstShortfallDays)}`}`,
+  ];
+  for (const f of d.forces ?? []) lines.push(`  ${new Date(f.at * 1000).toISOString().slice(0, 16)}Z ${f.kind} ${f.counterparty} ${f.deltaPerDay} a day`);
+  return lines;
+}
+
 function boughtLines(d: Bought, replayed: boolean, operationId?: string): string[] {
   const p = d.purchase;
   const lines = d.paid && p
@@ -247,10 +266,10 @@ export async function run(argv: string[], io: Io): Promise<number> {
     let reply: Reply<unknown>;
     let render: () => string[] = () => [];
     let allVerified = true;
-    if (cmd === "status") {
+    if (cmd === "status" || cmd === "top") {
       const r = await client.status(policy || undefined);
       reply = r;
-      if (r.ok) render = () => statusLines(r.data);
+      if (r.ok) render = () => (cmd === "top" ? topLines(r.data) : statusLines(r.data));
     } else if (cmd === "inbox" || cmd === "bills") {
       const r = await client.inbox(policy);
       reply = r;
