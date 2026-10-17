@@ -9606,9 +9606,7 @@ mod settle_key_tests {
     /// the last pass gets a pass for its first cycle.
     #[test]
     fn the_next_cycle_gets_its_pass_after_the_one_that_paid() {
-        // From the wall clock: `due_pass_at` drops a typed bill whose demo
-        // cycles are over by now, so a fixed date failed hours later.
-        let (due1, every) = (operator::demo::now(), 120u64);
+        let (due1, every) = (1_792_230_000u64, 120u64);
         let ran = due1 + 5;
         let report = json!({ "obligationsList": [
             { "nextDue": due1, "intervalSecs": every, "provenance": "imported" },
