@@ -94,6 +94,8 @@ test("needs you: one sentence and one action per item", () => {
     ["Let the agent pay Demo Vendor.", "Approve"],
     ["0.01 USDC to Demo Vendor is more than one payment may be.", "Raise the cap"],
   ]);
+  const onPropose = needs({ ...inbox, mode: "Propose", needsYou: [{ counterparty: VENDOR, amount: "0.010000 USDC", why: "per-action-cap: over", to: POLICY, data: "0x" }] });
+  assert.deepEqual(onPropose.map((x) => [x.sentence, x.action]), [["The agent prepared 0.01 USDC to Demo Vendor.", "Approve"]], "asking mode: the owner's tap pays it");
 });
 
 test("keccak-256 matches the published vectors", () => {

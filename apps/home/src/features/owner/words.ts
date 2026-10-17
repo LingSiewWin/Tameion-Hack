@@ -251,8 +251,10 @@ export type Need = {
   invoice?: { id: string; everyDays?: number; approvedPayee?: boolean };
 };
 
-/** Needs you, from the lists the service counts in `waitingCount` (sellers, invoices, prepared payments; in its order). */
-export function needs(inbox: Pick<Inbox, "sellersToApprove" | "invoices" | "needsYou" | "parties" | "payees">): Need[] {
+/** Needs you, from the lists the service counts in `waitingCount` (sellers, invoices, prepared payments; in its order).
+ *  A payment over the per-payment cap asks to raise the cap only on Autopilot, where the agent then pays it itself; on
+ *  the other modes the owner's tap pays it (Approve). */
+export function needs(inbox: Pick<Inbox, "sellersToApprove" | "invoices" | "needsYou" | "parties" | "payees" | "mode">): Need[] {
   const out: Need[] = [];
   for (const s of inbox.sellersToApprove ?? [])
     out.push({ key: `seller-${s.seller}-${s.host ?? ""}`, sentence: `Let the agent pay ${payeeName(inbox, s.seller)}.`, action: "Approve", kind: "seller", counterparty: s.seller, amount: s.amount });
@@ -268,7 +270,7 @@ export function needs(inbox: Pick<Inbox, "sellersToApprove" | "invoices" | "need
       invoice: { id: v.id, everyDays: v.everyDays, approvedPayee: v.approvedPayee },
     });
   for (const n of inbox.needsYou ?? []) {
-    const over = overCap(n.why);
+    const over = overCap(n.why) && inbox.mode === "Autopilot";
     out.push({
       key: `bill-${n.actionHash ?? n.counterparty + n.amount}`,
       sentence: over
