@@ -2,7 +2,7 @@
 // The record stream (Agent view): every record of the account, newest first, from GET /api/level1/symbolon. Each line
 // spells out its three slots; a line opens to the slots' alg, key id and whether the check passed, with the full leaf,
 // root and the anchoring transaction. A decision the rule blocked is a refusal and carries its code.
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import type { Slot, Symbolon, SymbolonRecord } from "../../lib/types.ts";
 import { copy } from "./copy.ts";
 import { money, short, when } from "./format.ts";
@@ -31,6 +31,14 @@ export function Stream({ data, now }: { data: Symbolon; now?: number }) {
   const unread = new Set(data.chainReadFailed.map((r) => r.toLowerCase()));
   const records = [...data.records].sort((a, b) => (b.at ?? 0) - (a.at ?? 0) || b.root.localeCompare(a.root) || b.seq - a.seq);
   const c = data.counts;
+  // "Open in Agent view" on the Owner home lands here with #pass-<unix time> (never a hash): the newest record of that
+  // check carries the id, and the stream scrolls to it once it is drawn.
+  const passes = new Set<number>();
+  const passId = (at?: number) => (at && !passes.has(at) && passes.add(at) ? `pass-${at}` : undefined);
+  useEffect(() => {
+    const id = decodeURIComponent(location.hash.slice(1));
+    if (id.startsWith("pass-")) document.getElementById(id)?.scrollIntoView({ block: "center" });
+  }, [data]);
 
   return (
     <section aria-labelledby="records-title" className="flex flex-col gap-(--space-2)">
@@ -82,7 +90,7 @@ export function Stream({ data, now }: { data: Symbolon; now?: number }) {
                 const anchor = txLink(data.explorer, r.anchorTx);
                 return (
                   <Fragment key={id}>
-                    <tr className={isOpen ? "" : "border-b border-(--rule)"}>
+                    <tr id={passId(r.at)} className={isOpen ? "" : "border-b border-(--rule)"}>
                       <td className="py-(--space-1) pr-(--space-4)">
                         <button
                           type="button"
