@@ -152,10 +152,26 @@ export function savedPub(): Pub | null {
     return null;
   }
 }
+/** The service answered with a refusal. `executed` is the envelope's word where it has one (docs/115 §2; this app's proxy
+ *  says "unknown" when the service did not answer a POST); a refusal without it executed nothing. */
+export class Refused extends Error {
+  readonly status: number;
+  readonly executed: "yes" | "no" | "unknown";
+  constructor(message: string, status: number, executed: "yes" | "no" | "unknown") {
+    super(message);
+    this.name = "Refused";
+    this.status = status;
+    this.executed = executed;
+  }
+}
+
 async function post<T>(path: string, body: unknown): Promise<T> {
   const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  const d = (await r.json().catch(() => ({}))) as { error?: string | { words?: string } };
-  if (!r.ok) throw new Error(typeof d.error === "string" ? d.error : (d.error?.words ?? `The service answered ${r.status}.`));
+  const d = (await r.json().catch(() => ({}))) as { error?: string | { words?: string; executed?: "yes" | "no" | "unknown" } };
+  if (!r.ok) {
+    const e = typeof d.error === "object" && d.error ? d.error : null;
+    throw new Refused(typeof d.error === "string" ? d.error : (e?.words ?? `The service answered ${r.status}.`), r.status, e?.executed ?? "no");
+  }
   return d as T;
 }
 

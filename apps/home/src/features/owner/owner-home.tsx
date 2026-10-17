@@ -9,7 +9,7 @@ import { OwnerSkeleton } from "../../components/skeletons.tsx";
 import { ApiError, fetchDemo, fetchInbox, fetchStatus, fetchSymbolon, fetchTenant, resolveAccount } from "../../lib/api.ts";
 import type { Inbox, Status } from "../../lib/types.ts";
 import { setView } from "../../lib/view.ts";
-import { calls, checkSettle, decideInvoice, keyIndexOf, ownerCall, prepare, raiseCap, savedPub, units, type Account } from "./owner-call.ts";
+import { calls, checkSettle, decideInvoice, keyIndexOf, ownerCall, prepare, raiseCap, Refused, savedPub, units, type Account } from "./owner-call.ts";
 import { OwnerView, type Outcome, type Phase } from "./owner-view.tsx";
 import { COPY, halvesByPayment, money, payeeName, type Halves, type Line, type Need } from "./words.ts";
 
@@ -59,7 +59,7 @@ export function OwnerHome({ name }: { name: string }) {
   const [toast, setToast] = useState<string | null>(null);
   const [clockMs, setClockMs] = useState(0);
   const busy = useRef(false);
-  const acctRef = useRef<Account | null>(null);
+  const acctRef = useRef<{ name: string; acct: Account } | null>(null);
 
   const refresh = useCallback(
     () =>
@@ -103,12 +103,14 @@ export function OwnerHome({ name }: { name: string }) {
 
   /** Where the owner signs: the account and its owner contract (by address, in memory only) and the chain's id. */
   const account = async (): Promise<Account> => {
-    if (acctRef.current) return acctRef.current;
+    // Kept per name: a page that moves to another account must never sign for the one before.
+    if (acctRef.current?.name === name) return acctRef.current.acct;
     const [found, tenant] = await Promise.all([resolveAccount(name), fetchTenant(name)]);
     const chainId = found?.chains.find((c) => c.key === tenant.chain)?.chainId;
     if (!found || !chainId) throw new Error(COPY.whereUnknown);
-    acctRef.current = { policy: found.policy, owner: tenant.owner, chain: tenant.chain, chainId };
-    return acctRef.current;
+    const acct = { policy: found.policy, owner: tenant.owner, chain: tenant.chain, chainId };
+    acctRef.current = { name, acct };
+    return acct;
   };
 
   /** One tap: phases named on the control, the outcome in words, never re-sent (DESIGN §Money lifecycle). */
@@ -130,10 +132,13 @@ export function OwnerHome({ name }: { name: string }) {
       else setOutcome({ key, text: done, failed: false });
     } catch (e) {
       const closed = (e as Error).name === "NotAllowedError" || (e as Error).name === "AbortError";
+      // Whether money (or a setting) may have moved: a refusal says so in its envelope; no answer at all after the call
+      // went out is "still checking", and the page never sends it again (DESIGN §Money lifecycle).
+      const moved = e instanceof Refused ? e.executed : sent ? "unknown" : "no";
       setOutcome({
         key,
         failed: true,
-        text: closed ? COPY.promptClosed : sent ? COPY.lostAnswer : COPY.nothingSent,
+        text: closed ? COPY.promptClosed : moved === "yes" ? COPY.sentWriting : moved === "unknown" ? COPY.lostAnswer : COPY.nothingSent,
         detail: closed ? undefined : (e as Error).message,
       });
       void refresh();

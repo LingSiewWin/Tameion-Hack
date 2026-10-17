@@ -8,5 +8,5 @@ import { useView } from "../../../lib/view.ts";
 // fetchName (src/lib/api.ts) turns the name into the address for API calls; the address never reaches an href or the Owner DOM.
 export default function AccountPage() {
   const { name } = useParams<{ name: string }>();
-  return useView() === "agent" ? <AgentView name={name} /> : <OwnerHome name={decodeURIComponent(name)} />;
+  return useView() === "agent" ? <AgentView name={name} /> : <OwnerHome key={name} name={decodeURIComponent(name)} />;
 }

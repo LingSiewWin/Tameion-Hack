@@ -317,6 +317,7 @@ export const COPY = {
   promptClosed: "The passkey prompt was closed. Nothing was sent.",
   nothingSent: "Nothing was sent.",
   lostAnswer: "It was sent and the answer was lost. Still checking: it will not be sent twice.",
+  sentWriting: "Sent; the record is still being written.",
   stillChecking: "Still checking. It will not be sent twice.",
   whatHappened: "What the service said",
   notReady: "The account is not ready to pay this yet; try again after the agent's next check.",
