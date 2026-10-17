@@ -486,6 +486,24 @@ fn order_due_step(propose_only: bool, paid: bool, id: u64, due_at: u64) -> Resul
     Ok(())
 }
 
+/// The transfers a bill's rhythm is learned from: history without the agent's
+/// own payments (`own`) and without the owner's payments through the policy
+/// (`owner_txs`, `SettledByPrincipal`). Both answer the account's own asks, at
+/// the time the account asked, so their timing is the checks' and the owner's,
+/// not the vendor's (docs/60 P-230); the cycles they paid are marked paid by
+/// key and by the references offered for them.
+fn rhythm_evidence(
+    history: &[Transfer],
+    own: &std::collections::BTreeSet<String>,
+    owner_txs: &std::collections::BTreeSet<String>,
+) -> Vec<Transfer> {
+    history
+        .iter()
+        .filter(|t| !own.contains(&t.tx_hash) && !owner_txs.contains(&t.tx_hash))
+        .cloned()
+        .collect()
+}
+
 /// What [`Operator::obligations_due`] found.
 #[derive(Debug, Clone)]
 pub struct DuePlan {
@@ -769,6 +787,48 @@ mod stepping_tests {
         .await;
         assert!(r.is_ok(), "{r:?}");
         assert_eq!(o.next_due.as_unix(), d0 + MONTH, "cycle 2, a month away");
+    }
+
+    /// docs/60 P-230, U1's re-check (uat2-u1-rc): a vendor paid 0.002 USDC five
+    /// times, 243 s apart; the check at the due time came late, the owner paid
+    /// that cycle 318 s after the last payment ("Approve & pay"), and the next
+    /// check came a cycle late. Counted as the vendor's rhythm, the owner's late
+    /// payment dropped the bill below the Autopilot floor (0.75); it answers an
+    /// ask, so it is not evidence: the clean rhythm keeps its confidence.
+    #[test]
+    fn a_late_owner_payment_is_not_a_broken_rhythm() {
+        let vendor = Counterparty::new("0xf4d08abf297f57acd381f000a25442186d860e43");
+        let t0 = 1_792_219_135i64; // 14:38:55
+        let pay = |i: usize, at: i64| Transfer {
+            tx_hash: format!("0x{i:064x}"),
+            counterparty: vendor.clone(),
+            amount: Money::minor(2_000, Currency::Usdc),
+            at: Timestamp::from_unix(at),
+            direction: ledger::Direction::Out,
+        };
+        let mut history: Vec<Transfer> = (0..5).map(|i| pay(i, t0 + 243 * i as i64)).collect();
+        history.push(pay(9, t0 + 972 + 318)); // the owner's settle, through the policy
+        let config = ledger::DetectionConfig {
+            dust_line: Some(Money::minor(1_000, Currency::Usdc)),
+            ..Default::default()
+        };
+        let score = |evidence: &[Transfer]| ledger::detect(evidence, config)[0].confidence.get();
+        let owner = BTreeSet::from([format!("0x{:064x}", 9)]);
+        let counted = score(&rhythm_evidence(
+            &history,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+        ));
+        assert!(counted < 0.75, "the cause, reproduced: {counted}");
+        let clean = rhythm_evidence(&history, &BTreeSet::new(), &owner);
+        assert_eq!(clean.len(), 5);
+        assert!(score(&clean) >= 0.75, "{}", score(&clean));
+        // The bill's next due stays on the vendor's rhythm (the paid cycle is
+        // stepped past by key), not moved by the owner's late tap.
+        assert_eq!(
+            ledger::detect(&clean, config)[0].next_due.as_unix(),
+            t0 + 972 + 243
+        );
     }
 
     /// docs/60 P-213: an owner payment of the same amount to the same payee
@@ -1392,15 +1452,14 @@ impl<R: Reasoner> Operator<R> {
     ///
     /// Public so that anything showing a pass -- the demo server -- shows the
     /// same obligations the pass acts on, from the same computation.
-    /// The action hash of every `SettledByPrincipal` on the policy: the
-    /// owner's own payments, for [`owner_paid_cycle`]. A failed read fails the
-    /// pass, as the agent's own payments' read does: without it a cycle the
-    /// owner paid under an offered reference would be asked again, bound to a
-    /// key no payment used, and one tap would pay it again (docs/60 P-210).
+    /// Every `SettledByPrincipal` on the policy: the owner's own payments. A
+    /// failed read fails the pass, as the agent's own payments' read does:
+    /// without it a cycle the owner paid under an offered reference would be
+    /// asked again, bound to a key no payment used (docs/60 P-210).
     async fn owner_settlements(
         &self,
         head: u64,
-    ) -> Result<std::collections::BTreeSet<B256>, OperatorError> {
+    ) -> Result<Vec<arc::PrincipalSettlement>, OperatorError> {
         let from = self
             .config
             .policy_from_block
@@ -1408,10 +1467,7 @@ impl<R: Reasoner> Operator<R> {
         Ok(self
             .client
             .principal_settlements(self.config.policy, from, head)
-            .await?
-            .into_iter()
-            .map(|s| s.action_hash)
-            .collect())
+            .await?)
     }
 
     pub async fn obligations_due(
@@ -1430,11 +1486,14 @@ impl<R: Reasoner> Operator<R> {
                 head,
             )
             .await?;
-        let evidence: Vec<Transfer> = history
-            .iter()
-            .filter(|t| !own.contains(&t.tx_hash))
-            .cloned()
-            .collect();
+        // The owner's own payments through the policy, read before detection:
+        // like the agent's, they answer the account's asks, so they mark cycles
+        // paid and are not the vendor's rhythm (docs/60 P-230: an owner paying
+        // late because the check came late dropped a clean bill below the floor).
+        let settlements = self.owner_settlements(head).await?;
+        let owner_txs: std::collections::BTreeSet<String> =
+            settlements.iter().map(|s| format!("{:#x}", s.tx)).collect();
+        let evidence = rhythm_evidence(history, &own, &owner_txs);
         let mut obligations = detect(&evidence, self.config.detection);
         for seed in &self.config.seeded {
             if !obligations
@@ -1449,7 +1508,8 @@ impl<R: Reasoner> Operator<R> {
         // which changes every pass, so the settlement keys below never saw
         // those payments and the next pass asked again. Each counts for the
         // cycle it was offered for, and only that one (P-210).
-        let owner_hashes = self.owner_settlements(head).await?;
+        let owner_hashes: std::collections::BTreeSet<B256> =
+            settlements.iter().map(|s| s.action_hash).collect();
         let owner_paid = std::sync::Arc::new(owner_hashes.clone());
         let offered = std::sync::Arc::new(self.config.offered.clone());
         // A standing order's payment answers the same bill-cycle (docs/60
