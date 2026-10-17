@@ -55,7 +55,8 @@ export function AddMoney({ account: props }: { account: AddProps }) {
   const demo = reads.demo instanceof Error ? null : reads.demo;
 
   return (
-    <div className="flex flex-col gap-(--space-5)">
+    // one column at the reading measure (68 ch), left-aligned, on every width (DESIGN §Typography, §Page grammar)
+    <div className="flex max-w-(--measure) flex-col gap-(--space-5)">
       <section aria-labelledby="add-title" className="flex flex-col gap-(--space-1)">
         <h1 id="add-title" className="row-title">
           Add money

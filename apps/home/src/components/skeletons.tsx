@@ -76,15 +76,15 @@ export function StepperSkeleton() {
 export function AddMoneySkeleton() {
   return (
     <Loading label="Loading">
-      <div className="flex flex-col gap-(--space-5)">
+      <div className="flex max-w-(--measure) flex-col gap-(--space-5)">
         <div className="flex flex-col gap-(--space-2)">
-          <Skeleton className="h-[22px] w-28" />
-          <Skeleton className="h-10 w-40" />
+          <Skeleton className="h-6 w-28" />
+          <Skeleton className="h-11 w-40" />
           <Skeleton className="h-[18px] w-56" />
         </div>
-        <Skeleton className="h-44 w-full" />
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-72 w-full" />
+        <Skeleton className="h-48 w-full rounded-(--radius-plate)" />
+        <Skeleton className="h-36 w-full rounded-(--radius-plate)" />
+        <Skeleton className="h-80 w-full rounded-(--radius-plate)" />
       </div>
     </Loading>
   );
