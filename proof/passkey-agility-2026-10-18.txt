@@ -1,0 +1,209 @@
+Signature agility in PasskeyPrincipal (docs/117 §3) — seat S24 — written 2026-10-18 00:13:29 +0800
+
+Branch seat/S24 (worktree runtime/wt/S24), commits:
+  f5f33ca feat(contracts): signature verifiers behind one IPrincipalVerifier interface
+  7eead7a feat(contracts): PasskeyPrincipal switches its key's algorithm through the recovery delay; retired algorithms never return
+  0c63b83 test(contracts): signature agility unit tests and four invariants (256 runs, depth 200)
+  67cdfb0 feat(scripts): live signature-agility proof: register, switch, old-alg revert, new-alg approve
+
+STATUS: framed — Arc testnet proof pending. The relayer 0x6c1c…9A25 holds 0.029377070673488846 USDC on Arc
+testnet (read 2026-10-18 00:13:41 +0800); the run measured below costs 4,697,302 gas ≈ 0.117 USDC at Arc's 25 gwei.
+The same four transactions ran live on Arbitrum Sepolia (section 3). The forge proof (section 2) stands on its own.
+
+======================================================================
+1. The precompile question (PasskeyPrincipal.sol:25 said "Arc lists no P-256 precompile";
+   scripts/prove_passkey.sh:24 said Arc has one). Answer: Arc testnet HAS it.
+----------------------------------------------------------------------
+2026-10-17 23:16:24 +0800, RPC https://rpc.testnet.arc.io (chain-id 5042002, block 67689203)
+$ cast call 0x0000000000000000000000000000000000000100 <OpenZeppelin P256.sol presence vector: sha256("123400"), r=5, s=1, Wycheproof key>
+  -> 0x0000000000000000000000000000000000000000000000000000000000000001        (valid signature: 1)
+$ cast call 0x…0100 <the same vector with s=2>
+  -> 0x   ("Warning: Contract code is empty")                                     (invalid: empty, RIP-7212 semantics)
+$ cast call 0x…0100 <scripts/prove_passkey.sh:155, a real passkey signature>
+  -> 0x0000000000000000000000000000000000000000000000000000000000000001
+Arbitrum Sepolia, same OZ vector (2026-10-18 00:03:42 +0800): 0x…0001.
+(Agrees with proof/chain-facts-arc-2026-10-14.txt item 2. The comment at PasskeyPrincipal.sol:22-26 is corrected in 7eead7a.)
+
+Arc RPC host moved (found while probing):
+  2026-10-17 23:12:34 +0800  cast chain-id --rpc-url https://rpc.testnet.arc.network
+    -> "dns error: failed to lookup address information: nodename nor servname provided, or not known"
+  nslookup rpc.testnet.arc.network 172.20.10.1 / 1.1.1.1 / 8.8.8.8 -> "** server can't find rpc.testnet.arc.network: NXDOMAIN" (all three)
+  https://docs.arc.network/arc/references/connect-to-arc -> 301 Moved Permanently -> https://docs.arc.io/arc/references/connect-to-arc,
+    which lists RPC https://rpc.testnet.arc.io (primary), rpc.blockdaemon.testnet.arc.io, rpc.drpc.testnet.arc.io,
+    rpc.quicknode.testnet.arc.io; explorer https://explorer.testnet.arc.io; faucet https://faucet.circle.com
+  https://rpc.testnet.arc.io: chain-id 5042002, base fee 20000000000, gas price 25000000000 (23:16:24 +0800)
+
+======================================================================
+2. Forge (forge 1.5.1-stable, solc 0.8.28 via-IR) — run started 2026-10-18 00:07:12 +0800 at 0c63b83 (+ the 67cdfb0 files)
+----------------------------------------------------------------------
+Ran 14 tests for test/PasskeyAgility.t.sol:PasskeyAgilityTest
+[PASS] test_a_new_account_is_on_the_passkey() (gas: 831551)
+[PASS] test_a_retired_algorithm_never_comes_back() (gas: 650080)
+[PASS] test_a_verifier_is_code_and_never_the_built_in_id() (gas: 826996)
+[PASS] test_a_verifier_waits_the_delay_then_anyone_applies_it() (gas: 964772)
+[PASS] test_after_the_switch_every_passkey_path_is_refused() (gas: 637573)
+[PASS] test_leaving_the_passkey_returns_the_account_to_one_key() (gas: 1337887)
+[PASS] test_only_an_approved_call_proposes_a_verifier() (gas: 22810)
+[PASS] test_recovery_and_co_owners_belong_to_the_passkey() (gas: 634672)
+[PASS] test_rotating_the_key_inside_an_algorithm_retires_nothing() (gas: 621751)
+[PASS] test_the_p256_verifier_reads_what_execute_reads() (gas: 750983)
+[PASS] test_the_passkey_or_the_recovery_address_cancels() (gas: 1218103)
+[PASS] test_the_post_quantum_slot_always_reverts() (gas: 8842)
+[PASS] test_the_post_quantum_slot_registers_but_never_verifies() (gas: 518151)
+[PASS] test_the_secp256k1_verifier() (gas: 40568)
+Suite result: ok. 14 passed; 0 failed; 0 skipped; finished in 230.11s (233.61ms CPU time)
+
+Ran 4 tests for test/PasskeyAgility.t.sol:PasskeyAgilityInvariantTest
+[PASS] invariant_oldAlgSignatureReverts() (runs: 256, calls: 51200, reverts: 0)
+╭----------------+----------------+-------+---------+----------╮
+| Contract       | Selector       | Calls | Reverts | Discards |
++==============================================================+
+| AgilityHandler | cancel         | 10246 | 0       | 0        |
+|----------------+----------------+-------+---------+----------|
+| AgilityHandler | pokeWithActive | 10326 | 0       | 0        |
+|----------------+----------------+-------+---------+----------|
+| AgilityHandler | propose        | 10169 | 0       | 0        |
+|----------------+----------------+-------+---------+----------|
+| AgilityHandler | tryOldKey      | 10208 | 0       | 0        |
+|----------------+----------------+-------+---------+----------|
+| AgilityHandler | warpAndApply   | 10251 | 0       | 0        |
+╰----------------+----------------+-------+---------+----------╯
+Logs:
+  switches 3 proposals 20
+  cancels 11 oldAttempts 25
+  pokes 28
+[PASS] invariant_oneActiveAlg() (runs: 256, calls: 51200, reverts: 0)
+╭----------------+----------------+-------+---------+----------╮
+| Contract       | Selector       | Calls | Reverts | Discards |
++==============================================================+
+| AgilityHandler | cancel         | 10287 | 0       | 0        |
+|----------------+----------------+-------+---------+----------|
+| AgilityHandler | pokeWithActive | 10144 | 0       | 0        |
+|----------------+----------------+-------+---------+----------|
+| AgilityHandler | propose        | 10481 | 0       | 0        |
+|----------------+----------------+-------+---------+----------|
+| AgilityHandler | tryOldKey      | 10202 | 0       | 0        |
+|----------------+----------------+-------+---------+----------|
+| AgilityHandler | warpAndApply   | 10086 | 0       | 0        |
+╰----------------+----------------+-------+---------+----------╯
+Logs:
+  switches 2 proposals 9
+  cancels 3 oldAttempts 39
+  pokes 7
+[PASS] invariant_pendingCancellable() (runs: 256, calls: 51200, reverts: 0)
+╭----------------+----------------+-------+---------+----------╮
+| Contract       | Selector       | Calls | Reverts | Discards |
++==============================================================+
+| AgilityHandler | cancel         | 10235 | 0       | 0        |
+|----------------+----------------+-------+---------+----------|
+| AgilityHandler | pokeWithActive | 10298 | 0       | 0        |
+|----------------+----------------+-------+---------+----------|
+| AgilityHandler | propose        | 10187 | 0       | 0        |
+|----------------+----------------+-------+---------+----------|
+| AgilityHandler | tryOldKey      | 10267 | 0       | 0        |
+|----------------+----------------+-------+---------+----------|
+| AgilityHandler | warpAndApply   | 10213 | 0       | 0        |
+╰----------------+----------------+-------+---------+----------╯
+Logs:
+  switches 2 proposals 22
+  cancels 13 oldAttempts 25
+  pokes 43
+[PASS] invariant_retiredNeverActive() (runs: 256, calls: 51200, reverts: 0)
+╭----------------+----------------+-------+---------+----------╮
+| Contract       | Selector       | Calls | Reverts | Discards |
++==============================================================+
+| AgilityHandler | cancel         | 10302 | 0       | 0        |
+|----------------+----------------+-------+---------+----------|
+| AgilityHandler | pokeWithActive | 10199 | 0       | 0        |
+|----------------+----------------+-------+---------+----------|
+| AgilityHandler | propose        | 10227 | 0       | 0        |
+|----------------+----------------+-------+---------+----------|
+| AgilityHandler | tryOldKey      | 10349 | 0       | 0        |
+|----------------+----------------+-------+---------+----------|
+| AgilityHandler | warpAndApply   | 10123 | 0       | 0        |
+╰----------------+----------------+-------+---------+----------╯
+Logs:
+  switches 2 proposals 11
+  cancels 3 oldAttempts 33
+  pokes 8
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 327.98s (1012.34s CPU time)
+
+Ran 21 test suites in 327.98s (1990.56s CPU time): 205 tests passed, 0 failed, 0 skipped (205 total tests)
+forge fmt --check: ok
+forge lint src, findings: 0
+(afterInvariant logs are the last run's coverage: each run is 200 random calls over propose / cancel /
+warpAndApply / pokeWithActive / tryOldKey; tryOldKey signs with every key that is not the active one, on
+execute, executeSigned, and the passkey's bytes form.)
+
+Mutation check (run between the two full suites): with `_requireP256()` removed from `execute`, at 16 runs x depth 50:
+  [FAIL: a key outside the active algorithm approved a call]
+  Suite result: FAILED. 0 passed; 1 failed; 0 skipped; finished in 20.60s
+  (file restored; the runs above are on the unmutated code)
+
+======================================================================
+3. Live, Arbitrum Sepolia (chain 421614): deploy + register + switch + old-alg revert + new-alg approve
+   TAMEION_RELAYER_KEY="$(cat ~/.tameion/treasury.key)" DELAY=60 scripts/prove_passkey_agility.sh arbsep
+----------------------------------------------------------------------
+== signature agility, arbsep (chain 421614), 2026-10-18 00:03:42 +0800
+rpc https://sepolia-rollup.arbitrum.io/rpc   explorer https://arbitrum-sepolia.blockscout.com
+relayer 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25 balance 86806083462059393 wei   secp256k1 test signer 0x843E88A4A7037dABb056ed39118e60C031424EC4
+P-256 precompile probe (0x100, OpenZeppelin's Wycheproof vector): 0x0000000000000000000000000000000000000000000000000000000000000001
+-- deploy (delay 60s; recovery = relayer)
+  src/PasskeyPrincipal.sol:PasskeyPrincipal  at 0x99e91A14f0f1A5020F1E200eA854714957Bb3cea  tx 0x7df8cf6fc2075bcdaa39a614843e95bd21c9e0f4b0917fb8b8a689363d1c6025
+  src/verifiers/Secp256k1Verifier.sol:Secp256k1Verifier  at 0x97b3Ae95976e0bEC39A8C0B9a76931bc0d178456  tx 0x38477bf2b4291e4ff1ec55877ee7b15e3ad25a8919a00ee9ddb3ef0988fa90f6
+  src/verifiers/P256WebAuthnVerifier.sol:P256WebAuthnVerifier  at 0x0FA6C89bb436fAe6E3844a54aAdDF3b7626A7a97  tx 0x479474a3c48696c995b7e0ea54a818fba21ca729e70040c68691cd57c19c48b3
+  activeAlg 0x6ff6f80cb90e20e335bb554f9c23fb5777d57f30fc10fdc5fe8e28c4b48160f4  (P256_WEBAUTHN = keccak256("p256-webauthn") = 0x6ff6f80cb90e20e335bb554f9c23fb5777d57f30fc10fdc5fe8e28c4b48160f4)
+-- tx 1: register (the passkey proposes Secp256k1Verifier for 0x843E88A4A7037dABb056ed39118e60C031424EC4)
+  tx 0x50ed074e0e81bd8a4c717a075a10dd0868f4b88c932e81b9a9ec54e88db5ba92  status 0x1  block 320124386  gasUsed 174875
+     https://arbitrum-sepolia.blockscout.com/tx/0x50ed074e0e81bd8a4c717a075a10dd0868f4b88c932e81b9a9ec54e88db5ba92
+  pendingAlg eta 1792253118
+-- tx 2: switch (anyone applies after the delay)
+  tx 0x02baf32961b0244d2c837495dcd75b6074b4d456f8e18f3523c5dbd0ea14fb66  status 0x1  block 320124634  gasUsed 123569
+     https://arbitrum-sepolia.blockscout.com/tx/0x02baf32961b0244d2c837495dcd75b6074b4d456f8e18f3523c5dbd0ea14fb66
+  activeAlg 0xd4fa99b1e08c4e5e6deb461846aa629344d95ff03ed04754c2053d54c756f439  (keccak256("secp256k1") = 0xd4fa99b1e08c4e5e6deb461846aa629344d95ff03ed04754c2053d54c756f439)
+  retired(P256_WEBAUTHN) true
+  verifiers(secp256k1) 0x97b3Ae95976e0bEC39A8C0B9a76931bc0d178456
+-- tx 3: the old algorithm (a valid passkey assertion over the next challenge) must revert
+  tx 0xfef89c8eacfeca7fc2ae528d38029b4ca7ec8773c9a5f3a67dcf4b9ce1b9ae71  status 0x0  block 320124738  gasUsed 29821
+     https://arbitrum-sepolia.blockscout.com/tx/0xfef89c8eacfeca7fc2ae528d38029b4ca7ec8773c9a5f3a67dcf4b9ce1b9ae71
+  eth_call of the same calldata: Error: server returned an error response: error code 3: execution reverted, data: "0x99c222a1d4fa99b1e08c4e5e6deb461846aa629344d95ff03ed04754c2053d54c756f439"
+  revert data 0x99c222a1d4fa99b1e08c4e5e6deb461846aa629344d95ff03ed04754c2053d54c756f439 = AlgNotActive(bytes32) [selector 0x99c222a1], activeAlg: 0xd4fa99b1e08c4e5e6deb461846aa629344d95ff03ed04754c2053d54c756f439 
+  explorer record of tx 3: unavailable
+-- tx 4: the new algorithm approves (secp256k1 executeSigned)
+  tx 0xaf97a5cd86130a438ada64312a68c5e7e609c646e90c904405e99f31f219367f  status 0x1  block 320124795  gasUsed 50938
+     https://arbitrum-sepolia.blockscout.com/tx/0xaf97a5cd86130a438ada64312a68c5e7e609c646e90c904405e99f31f219367f
+  nonce 2
+owner 0x99e91A14f0f1A5020F1E200eA854714957Bb3cea  secp256k1 verifier 0x97b3Ae95976e0bEC39A8C0B9a76931bc0d178456  p256 verifier 0x0FA6C89bb436fAe6E3844a54aAdDF3b7626A7a97
+explorer: https://arbitrum-sepolia.blockscout.com/address/0x99e91A14f0f1A5020F1E200eA854714957Bb3cea
+
+Receipts read back (cast receipt, Arbitrum Sepolia public RPC):
+  deploy PasskeyPrincipal     0x7df8cf6fc2075bcdaa39a614843e95bd21c9e0f4b0917fb8b8a689363d1c6025 status 0x1 block 320124292 gasUsed 3112357
+  deploy Secp256k1Verifier    0x38477bf2b4291e4ff1ec55877ee7b15e3ad25a8919a00ee9ddb3ef0988fa90f6 status 0x1 block 320124310 gasUsed 163115
+  deploy P256WebAuthnVerifier 0x479474a3c48696c995b7e0ea54a818fba21ca729e70040c68691cd57c19c48b3 status 0x1 block 320124328 gasUsed 1042627
+  tx 1 register (propose)     0x50ed074e0e81bd8a4c717a075a10dd0868f4b88c932e81b9a9ec54e88db5ba92 status 0x1 block 320124386 gasUsed 174875
+  tx 2 switch (apply)         0x02baf32961b0244d2c837495dcd75b6074b4d456f8e18f3523c5dbd0ea14fb66 status 0x1 block 320124634 gasUsed 123569
+  tx 3 old alg (passkey)      0xfef89c8eacfeca7fc2ae528d38029b4ca7ec8773c9a5f3a67dcf4b9ce1b9ae71 status 0x0 block 320124738 gasUsed 29821
+  tx 4 new alg (secp256k1)    0xaf97a5cd86130a438ada64312a68c5e7e609c646e90c904405e99f31f219367f status 0x1 block 320124795 gasUsed 50938
+  total gas 4697302
+
+Explorer record of tx 3 (https://sepolia.arbiscan.io/tx/0xfef89c8eacfeca7fc2ae528d38029b4ca7ec8773c9a5f3a67dcf4b9ce1b9ae71):
+  Status: Fail — "Warning! Error encountered during contract execution [execution reverted]"; block 320124738;
+  from 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25 to 0x99e91A14f0f1A5020F1E200eA854714957Bb3cea;
+  gas used 29,821 of a 600,000 limit; Oct-17-2026 04:05:53 PM +UTC.
+  The explorer shows no error name because the source is not verified there (publishing it is the founder's call);
+  the revert data from eth_call above names it: 0x99c222a1 = AlgNotActive(bytes32), argument keccak256("secp256k1").
+  (arbitrum-sepolia.blockscout.com's API answered curl with a Cloudflare challenge page, hence "unavailable" above.)
+
+The passkey in this run is a software P-256 key (~/.tameion/test-keys/agility-p256.key) signing the WebAuthn
+assertion format a phone returns (UP+UV flags, clientDataJSON with the base64url challenge); not a phone.
+
+======================================================================
+4. Arc testnet: pending (funds)
+----------------------------------------------------------------------
+  relayer 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25 on Arc: 0.013297031673488846 USDC at 2026-10-17 23:14:30 +0800
+  (Blockscout eth-rpc mirror), 0.029377070673488846 USDC at 2026-10-18 00:13:41 +0800 (rpc.testnet.arc.io).
+  0.006001252673488846 USDC at 2026-10-18 00:17:20 +0800 (rpc.testnet.arc.io): another sender is spending from this key.
+  Needed: ≈0.117 USDC (4,697,302 gas from section 3 at 25 gwei); the PasskeyPrincipal deploy alone is
+  3,112,357 gas ≈ 0.062 USDC at the 20 gwei base fee, more than the balance. The script refuses below 0.15 USDC.
+  To finish: fund 0x6c1c…9A25 on Arc testnet at https://faucet.circle.com, then
+    TAMEION_RELAYER_KEY="$(cat ~/.tameion/treasury.key)" scripts/prove_passkey_agility.sh arc | tee -a proof/passkey-agility-2026-10-18.txt
