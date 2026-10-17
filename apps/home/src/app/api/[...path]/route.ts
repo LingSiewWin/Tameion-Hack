@@ -26,7 +26,9 @@ async function proxy(req: Request, { params }: Ctx): Promise<Response> {
       body: req.method === "POST" ? await req.arrayBuffer() : undefined,
       cache: "no-store",
       redirect: "manual",
-      signal: req.signal,
+      // A reader who leaves cancels a read; a POST is left to finish, so a payment is never cut off half-way by a
+      // closed tab (its idempotent reply is there to read again).
+      signal: req.method === "GET" ? req.signal : undefined,
     });
   } catch {
     // A read moved nothing; a POST may have reached the service before the answer was lost: say so, never re-send.
