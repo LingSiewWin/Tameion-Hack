@@ -132,3 +132,17 @@ test("the desk's owner challenges are the Rust bytes (desk::{base,control,step}_
     "0xa4e74a38febef2dfe5e250cc6b23b498f0a89e5167df205e2ff27a8b993629b1",
   );
 });
+
+// docs/60 P-226: the bytes "Save bill" signs are the bytes the service checks (level1::bills_challenge, the same vector).
+test("the bills challenge matches the service's", async () => {
+  const { billsChallenge } = await import("../src/lib/guard.ts");
+  const bill = { payee: "0x179dCA89F69FAEF5765D2E7445aa5452B8159520", amount: "0.05", everyDays: 30, nextDue: 1792156029 };
+  assert.equal(
+    billsChallenge(421614, "0x42463b314d392fe34abe1854b925f0f6e55fa555", [bill], 1792216000),
+    "0x6d37a6d579dd8a3f43b1a55f3735445329134b69101a8efc5ac1719f1e7a9838",
+  );
+  assert.notEqual(
+    billsChallenge(421614, "0x42463b314d392fe34abe1854b925f0f6e55fa555", [{ ...bill, amount: "0.06" }], 1792216000),
+    billsChallenge(421614, "0x42463b314d392fe34abe1854b925f0f6e55fa555", [bill], 1792216000),
+  );
+});

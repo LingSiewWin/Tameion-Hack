@@ -330,13 +330,11 @@ function InvoiceRow({ v }: { v: Invoice }) {
   // computes (docs/60 P-72/P-73). An account locked to agent keys takes this
   // browser's key instead, as before.
   const decide = async (accept: boolean) => {
-    let signed = {};
-    if (!inbox?.agentTokens?.length) {
-      const chainId = cfg.chains.find((c) => c.key === tenant.chain)?.chainId;
-      if (!chainId) throw new Error("This page does not know the account's chain; reload it.");
-      const issued = Math.floor(Date.now() / 1000);
-      signed = { issued, auth: await passkeyAssert(invoiceDecideChallenge(chainId, tenant.policy, v.id, accept, issued), pub) };
-    }
+    // Signed on every account (docs/60 P-225): with agent keys the owner's device opens the route, and the passkey decides.
+    const chainId = cfg.chains.find((c) => c.key === tenant.chain)?.chainId;
+    if (!chainId) throw new Error("This page does not know the account's chain; reload it.");
+    const issued = Math.floor(Date.now() / 1000);
+    const signed = { issued, auth: await passkeyAssert(invoiceDecideChallenge(chainId, tenant.policy, v.id, accept, issued), pub) };
     await post("/api/level1/invoice-decide", { policy: tenant.policy, id: v.id, accept, ...signed });
   };
   const state = no.state.kind !== "idle" ? no.state : yes.state;

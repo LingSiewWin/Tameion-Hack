@@ -6,7 +6,7 @@ import { Section } from "@/components/layout/section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { build, PAYEES, reserveTokenChallenge } from "@/lib/guard";
+import { billsChallenge, build, PAYEES, reserveTokenChallenge } from "@/lib/guard";
 import { dueText, eth, everyText, isAddr, isZero, looksEnded, passkeyAssert, reserveToken, saveName, spanText, usd, walletAccount } from "@/lib/tameion";
 import type { Preview, WatchJob, WatchReport } from "@/lib/types";
 import { useAccount, useAction, useRecord } from "./ctx";
@@ -233,7 +233,7 @@ export function Owe() {
 
 /** The first-bill row Start had (docs/60 P-77), now on the account page. */
 function TypeBill() {
-  const { tenant, inbox, cfg, post, sign, refresh, runPass } = useAccount();
+  const { tenant, inbox, cfg, pub, post, sign, refresh, runPass } = useAccount();
   const save = useAction();
   const [row, setRow] = useState({ payee: "", amount: "", every: "30" });
   const everyDays = Number(row.every);
@@ -312,10 +312,19 @@ function TypeBill() {
                 throw new Error(
                   who.found?.error ?? "A bill is who you pay (a name, alice.eth, acme.com or their wallet), a USDC amount, and every 1 to 366 days.",
                 );
-              const bill = { payee, amount: row.amount.trim(), everyDays };
+              const bill = { payee, amount: row.amount.trim(), everyDays, nextDue: Math.floor(Date.now() / 1000) };
               let href: string | undefined;
               // Ask first whether this page may save bills here, so a refusal costs no passkey tap (docs/60 P-225).
               await post("/api/level1/bills", { policy: tenant.policy, check: true, reserveToken: reserveToken.get(tenant.policy) ?? undefined });
+              // An account with agent keys takes a bill from this device only with the owner's passkey over exactly
+              // this bill (docs/60 P-226): a copied device token alone saves nothing.
+              let signed = {};
+              if (inbox?.agentTokens?.length) {
+                const chainId = cfg.chains.find((c) => c.key === tenant.chain)?.chainId;
+                if (!chainId) throw new Error("This page does not know the account's chain; reload it.");
+                const issued = Math.floor(Date.now() / 1000);
+                signed = { issued, auth: await passkeyAssert(billsChallenge(chainId, tenant.policy, [bill], issued), pub) };
+              }
               // A live account pays only payees it approved: the passkey approves this one first.
               if (inbox?.deployed) {
                 const prep = await post<{ to: string; data: string }>("/api/level1/prepare-payees", { policy: tenant.policy, payees: [payee.toLowerCase()] });
@@ -325,6 +334,7 @@ function TypeBill() {
                 policy: tenant.policy,
                 bills: [bill],
                 reserveToken: reserveToken.get(tenant.policy) ?? undefined,
+                ...signed,
               });
               if (r.refused.length) throw new Error(r.refused[0].why);
               // A domain it was typed as is kept as its name (docs/81); a Tameion or

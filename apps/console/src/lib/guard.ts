@@ -134,6 +134,24 @@ export const invoiceDecideChallenge = (chainId: number, policy: string, id: stri
     encodePacked(["string", "uint64", "address", "bytes32", "uint8", "uint64"], ["tameion.invoice-decide.v1", BigInt(chainId), addr(policy), id as Hex, accept ? 1 : 0, BigInt(issued)]),
   );
 
+/** level1::bills_challenge — save exactly these bills when only the owner's device opened the import (docs/60 P-226). */
+export const billsChallenge = (
+  chainId: number,
+  policy: string,
+  bills: { payee: string; amount: string; everyDays: number; nextDue: number; discountBps?: number; earlyDays?: number }[],
+  issued: number,
+) => {
+  const types: string[] = ["string", "uint64", "address"];
+  const values: unknown[] = ["tameion.bills.v1", BigInt(chainId), addr(policy)];
+  for (const b of bills) {
+    types.push("address", "uint256", "uint32", "uint64", "uint16", "uint32");
+    values.push(addr(b.payee), minor(b.amount), b.everyDays, BigInt(b.nextDue), b.discountBps ?? 0, b.earlyDays ?? 0);
+  }
+  types.push("uint64");
+  values.push(BigInt(issued));
+  return keccak256(encodePacked(types, values));
+};
+
 // ---- on-chain calls: what each button may sign ----------------------------------
 /** Every call the owner's passkey makes (the same set /level1/call.js describes). */
 export const CALLS = parseAbi([
