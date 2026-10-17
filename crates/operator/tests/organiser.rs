@@ -513,6 +513,8 @@ fn phantom_invoice() {
         reference: keccak256("INV-2026-10-001"),
         issued_at: now,
         issuer: None,
+        alg: None,
+        key_hash: None,
     };
     let phantom = Invoice {
         reference: keccak256("INV-2026-10-002"),
