@@ -430,6 +430,40 @@ fn keep_stepped(
     Ok((kept, aside))
 }
 
+/// A model refuses a bill only as a look-alike; any other refusal becomes the
+/// owner's question, with the model's own why (docs/60 P-218) — the rule
+/// `decide_or_rule` applies to invoices (P-216). A model's refusal left a real
+/// bill unpaid with no one asked. The rule decider's refusals come from code
+/// and stand, and so does a refusal where code does not allow `ask`.
+fn model_refusal_asks(
+    case: &decide::Case,
+    d: decide::Decision,
+    note: Option<String>,
+    name: &str,
+) -> (decide::Decision, Option<String>) {
+    if d.by != ActorKind::Model
+        || d.action != decide::Action::Refuse
+        || d.basis == decide::Basis::LookAlike
+        || !case.allowed.contains(&decide::Action::Ask)
+    {
+        return (d, note);
+    }
+    let words = format!(
+        "{name} refused a bill; only a look-alike is refused without the owner, so the owner is asked"
+    );
+    let asked = decide::Decision {
+        action: decide::Action::Ask,
+        ..d
+    };
+    (
+        asked,
+        Some(match note {
+            Some(n) => format!("{n}; {words}"),
+            None => words,
+        }),
+    )
+}
+
 /// Whether the pass may trigger this due date of a standing order, and why not
 /// (docs/60 P-211): only on Autopilot, and never for a bill-cycle some path
 /// already paid. `payDue` pays the order's oldest date under its own key, which
@@ -1416,12 +1450,18 @@ impl<R: Reasoner> Operator<R> {
         let owner_hashes = self.owner_settlements(head).await?;
         let owner_paid = std::sync::Arc::new(owner_hashes.clone());
         let offered = std::sync::Arc::new(self.config.offered.clone());
+        // A standing order's payment answers the same bill-cycle (docs/60
+        // P-219): ended or not, an order to this payee whose key for this due
+        // date is spent (`PaidDue`) paid it. A failed read fails the pass, as
+        // the pass's own read of the orders does.
+        let orders = std::sync::Arc::new(self.client.schedules(self.config.policy).await?);
         // Bills' settled cycles eight bills at a time, not one bill after
         // another (docs/68 F4); within a bill the cycles stay in order.
         let stepped = arc::eight_at_a_time(std::mem::take(&mut obligations), |mut o| {
             let (client, policy) = (self.client.clone(), self.config.policy);
             let scope = self.config.principal_id.clone();
-            let (owner_paid, offered) = (owner_paid.clone(), offered.clone());
+            let (owner_paid, offered, orders) =
+                (owner_paid.clone(), offered.clone(), orders.clone());
             async move {
                 let r = step_past_settled(&mut o, now, |cycle| {
                     let key = B256::from(
@@ -1431,11 +1471,34 @@ impl<R: Reasoner> Operator<R> {
                         })
                         .as_bytes(),
                     );
-                    let (client, owner_paid, offered) =
-                        (client.clone(), owner_paid.clone(), offered.clone());
+                    let (client, owner_paid, offered, orders) = (
+                        client.clone(),
+                        owner_paid.clone(),
+                        offered.clone(),
+                        orders.clone(),
+                    );
                     async move {
-                        Ok(client.already_executed(policy, key).await?
-                            || owner_paid_cycle(&owner_paid, &offered, &cycle))
+                        if client.already_executed(policy, key).await?
+                            || owner_paid_cycle(&owner_paid, &offered, &cycle)
+                        {
+                            return Ok(true);
+                        }
+                        let Some((payee, due)) = cycle
+                            .rsplit_once('@')
+                            .and_then(|(p, d)| Some((p.to_string(), d.parse::<u64>().ok()?)))
+                        else {
+                            return Ok(false);
+                        };
+                        for sc in orders
+                            .iter()
+                            .filter(|sc| format!("{:#x}", sc.payee) == payee)
+                        {
+                            let paid_due = client.schedule_action_hash(policy, sc.id, due).await?;
+                            if client.already_executed(policy, paid_due).await? {
+                                return Ok(true);
+                            }
+                        }
+                        Ok(false)
                     }
                 })
                 .await;
@@ -2180,6 +2243,8 @@ impl<R: Reasoner> Operator<R> {
                 cap_minor: u128::try_from(authority.per_action_cap.to_minor()).ok(),
             };
             let (decided, decided_note) = decide::decide_or_rule(decider, &case).await;
+            let (decided, decided_note) =
+                model_refusal_asks(&case, decided, decided_note, decider.name());
             let decided_line = decide::record_line(&decided, decided_note.as_deref());
 
             self.log.append(
@@ -3138,7 +3203,9 @@ mod decide_pass_tests {
     /// A policy node: `mode` as given, no standing orders, every payee
     /// approved, big caps; every call's method and selector recorded. Sending
     /// a transaction fails (so a pass that tried to pay would fail loudly).
-    async fn node(mode: u128, seen: Arc<Mutex<Vec<String>>>) -> String {
+    /// `order_paid`: one ended standing order to the bill's payee whose payment
+    /// for that due date is spent (`PaidDue`); `None`, no orders.
+    async fn node(mode: u128, seen: Arc<Mutex<Vec<String>>>, order_paid: Option<u64>) -> String {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = format!("http://{}", listener.local_addr().unwrap());
         tokio::spawn(async move {
@@ -3198,6 +3265,30 @@ mod decide_pass_tests {
                                 Ok(json!(word(big)))
                             }
                             s if s == selector("attestedPayee(address)") => Ok(json!(word(1))),
+                            s if order_paid.is_some() && s == selector("scheduleCount()") => {
+                                Ok(json!(word(1)))
+                            }
+                            s if order_paid.is_some() && s == selector("schedules(uint256)") => {
+                                let due = order_paid.unwrap_or(0);
+                                Ok(json!(format!(
+                                    "0x{:0>64}{:064x}{:064x}{:064x}{:064x}",
+                                    "1111111111111111111111111111111111111111",
+                                    20_000_000u128,
+                                    30 * 86_400u64,
+                                    due + 30 * 86_400,
+                                    0u8
+                                )))
+                            }
+                            // The order's key for a due date: that date, as a word.
+                            s if s == selector("scheduleActionHash(uint256,uint64)") => {
+                                let due = data.trim_start_matches("0x").get(72..136).unwrap_or("0");
+                                Ok(json!(format!("0x{due}")))
+                            }
+                            s if s == selector("executed(bytes32)") => {
+                                let h = data.trim_start_matches("0x").get(8..72).unwrap_or("");
+                                let spent = order_paid.is_some_and(|d| h == format!("{d:064x}"));
+                                Ok(json!(word(u128::from(spent))))
+                            }
                             _ => Ok(json!(format!("0x{}", "0".repeat(64 * 8)))),
                         },
                         _ => Err("unsupported"),
@@ -3253,8 +3344,17 @@ mod decide_pass_tests {
         decider: &D,
         tag: &str,
     ) -> (RunOutcome, Vec<String>, Vec<String>) {
+        pass_with(mode, decider, tag, None).await
+    }
+
+    async fn pass_with<D: Decider + Sync>(
+        mode: u128,
+        decider: &D,
+        tag: &str,
+        order_paid: Option<u64>,
+    ) -> (RunOutcome, Vec<String>, Vec<String>) {
         let seen = Arc::new(Mutex::new(Vec::new()));
-        let url = node(mode, seen.clone()).await;
+        let url = node(mode, seen.clone(), order_paid).await;
         let client = ArcClient::with_signer(&url, &format!("0x{}", "11".repeat(32))).unwrap();
         let policy = Address::repeat_byte(0xcc);
         let mut config = Config::new(policy, policy, Address::repeat_byte(0xdd));
@@ -3319,9 +3419,32 @@ mod decide_pass_tests {
         );
     }
 
+    /// docs/60 P-218: a model's refusal of a bill is the owner's question, with
+    /// the model's own why — until P-218 it landed in refused and the bill went
+    /// unpaid with no one asked. Named as a look-alike, the refusal stands.
     #[tokio::test]
-    async fn a_model_refusal_lands_in_refused_with_its_own_record() {
+    async fn a_model_refusal_of_a_bill_asks_the_owner_unless_a_look_alike() {
         let (o, log, seen) = pass(2, &Fake(Some(Action::Refuse)), "refuse").await;
+        assert_eq!(
+            (o.blocked.len(), o.pending_signature.len(), o.settled.len()),
+            (0, 1, 0)
+        );
+        assert!(!paid(&seen));
+        let (_, d, note) = &o.decisions[0];
+        assert_eq!((d.action, d.by), (Action::Ask, ActorKind::Model));
+        assert_eq!(d.why, "The fake model chose refuse.", "the model's own why");
+        assert!(
+            note.as_deref()
+                .is_some_and(|n| n.contains("only a look-alike")),
+            "{note:?}"
+        );
+        assert!(
+            log.iter()
+                .any(|l| l.contains("Decided by model fake-model: ask")),
+            "{log:?}"
+        );
+
+        let (o, log, seen) = pass(2, &LookAlike, "refuse-lookalike").await;
         assert_eq!(
             (o.blocked.len(), o.pending_signature.len(), o.settled.len()),
             (1, 0, 0)
@@ -3333,6 +3456,63 @@ mod decide_pass_tests {
                     && l.contains("Decided by model fake-model: refuse")),
             "{log:?}"
         );
+    }
+
+    /// docs/60 P-219: a cycle an ended standing order paid (`PaidDue` under the
+    /// order's key for that due date) is paid: the pass asks nothing for it and
+    /// steps to the next cycle. Without the order's payment the cycle is asked.
+    #[tokio::test]
+    async fn a_cycle_a_standing_order_paid_is_not_asked_again() {
+        const DAY: i64 = 86_400;
+        // The bill's cycle: six monthly payments, the last 31 days ago.
+        let due = (1_800_000_000 - DAY) as u64;
+        let (o, _, seen) = pass_with(1, &Fake(Some(Action::Ask)), "order-paid", Some(due)).await;
+        assert_eq!(
+            (o.pending_signature.len(), o.settled.len()),
+            (0, 0),
+            "{:?}",
+            o.pending_signature
+        );
+        assert!(!paid(&seen));
+        let next = o
+            .obligations
+            .iter()
+            .find(|b| b.counterparty.as_str().starts_with("0x1111"))
+            .unwrap();
+        assert_eq!(
+            next.next_due.as_unix(),
+            due as i64 + 30 * DAY,
+            "stepped past the paid cycle"
+        );
+        let (o, _, _) = pass_with(1, &Fake(Some(Action::Ask)), "order-unpaid", Some(due + 1)).await;
+        assert_eq!(
+            o.pending_signature.len(),
+            1,
+            "another date's payment does not answer this cycle"
+        );
+    }
+
+    /// A model that refuses, naming a look-alike.
+    struct LookAlike;
+
+    impl Decider for LookAlike {
+        async fn decide(&self, _case: &decide::Case) -> Result<decide::Decision, ReasonerError> {
+            Ok(decide::Decision {
+                action: Action::Refuse,
+                basis: Basis::LookAlike,
+                why: "The payee imitates one the owner pays.".into(),
+                by: ActorKind::Model,
+                model: Some("fake-model".into()),
+            })
+        }
+
+        fn name(&self) -> &str {
+            "fake-model"
+        }
+
+        fn kind(&self) -> ActorKind {
+            ActorKind::Model
+        }
     }
 
     #[tokio::test]
