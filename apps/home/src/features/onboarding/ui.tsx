@@ -15,7 +15,8 @@ export const T = {
   attention: "row text-(--attention)",
 };
 
-const BUTTON = "flex h-(--button) w-full items-center justify-center rounded-(--radius-button) px-(--space-4) text-center transition-transform duration-100 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100";
+// Press: 100 ms in to 0.98 (DESIGN §Motion), on the wrapper; reduced motion keeps it still.
+const BUTTON = "flex h-(--button) w-full items-center justify-center rounded-(--radius-button) px-(--space-4) text-center transition-transform duration-(--press-out) active:scale-(--press-scale) active:duration-(--press-in) motion-reduce:transition-none motion-reduce:active:scale-100";
 /** The one primary action: ink. */
 export const CTA = `${T.rowTitle} ${BUTTON} bg-(--ink) text-(--paper)`;
 /** A second action: one step of fill. */
