@@ -19,6 +19,20 @@ _The account page of a test account (Arbitrum Sepolia, 2026-10-16): the instruct
 payment with 0.048 of the 0.05 a day still left, two purchases the agent made with its reason beside each, and "Check it yourself"
 at the foot._
 
+## Try it in 5 minutes
+
+**Live:** `TAMEION_PUBLIC_URL` (testnet; the invite word is in the submission form). No install, no wallet, no seed phrase, no address to type.
+
+1. **Open.** Tap "Try it in 5 minutes", name the account, one passkey tap. It arrives funded with 0.05 test USDC.
+2. **Bill.** One tap: "Let the agent pay Demo Vendor 0.002 USDC every 2 minutes" — that approves the payee and saves the bill.
+3. **Autopilot.** One tap. It applies in 30 s unless you cancel, and anyone can see it coming.
+4. **Watch it pay.** At the due time the agent pays by itself: amount, payee, its reason, the transaction, the line in the book. Two minutes later, again.
+5. **Raise and cut.** Raise the cap on one payment: it waits 30 s with a Cancel. Cut it: instant.
+
+Your own agent on the same account — give it a key in Settings → Agents, then:
+- **MCP:** `cargo build --locked -p operator --bin tameion-mcp && claude mcp add tameion -e TAMEION_URL=<the public link> -e TAMEION_TOKEN=<the agent key> -- $PWD/target/debug/tameion-mcp`
+- **SDK and CLI:** `apps/sdk/` — `@tameion/sdk`, a TypeScript client with no runtime dependencies, and the `tameion` CLI (`TAMEION_URL=<the public link> tameion inbox`, `tameion buy <url> --max <usdc> --why "…"`); the key comes from `TAMEION_TOKEN` or `--token-file`, never the command line.
+
 ## The problem, in numbers measured on 2026-10-16
 
 - **Agents already pay.** 2,768,695 x402-style USDC payments from 150,399 wallets on Base in 30 days (2026-09-16 to 10-16). The x402
@@ -101,7 +115,7 @@ Each row ran against a real chain; the file in `proof/` holds the requests, answ
 - **Open:** as of the last user test the signed mandate sentence does not name the cap on one payment; a finance lead cannot yet hold a read-only seat once the
   operator mints an agent key (the records are open, a viewer seat is not built); the passkey can withdraw everything at once, by design
   (a withdrawal delay is not built); no mainnet; the contracts are unaudited; no person has yet signed with real Touch ID on this build
-  (the tests used a virtual authenticator); there is no public address, so the pages run on the operator's own machine.
+  (the tests used a virtual authenticator); the public copy (`fly.toml`, `scripts/deploy_fly.sh`) is prepared but not deployed yet, so the pages run on the operator's own machine.
 - **x402 compatibility is narrow.** The account pays by x402's ERC-7710 method so that the cap stays on chain. The only seller it has paid is our own test seller
   (`scripts/x402_seller.py`); no third-party seller has been paid. None of the 1,401 payment options in the first 600 Bazaar listings names ERC-7710 (they name EIP-3009 or Permit2: `proof/x402-bazaar-payment-methods-2026-10-17.txt`), so
   whether an outside seller's facilitator accepts our method is untested — and is the first thing an outside operator's agent will meet.
