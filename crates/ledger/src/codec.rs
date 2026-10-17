@@ -179,3 +179,67 @@ impl Encoder {
         self.u64(v.not_before).u64(v.expires_at)
     }
 }
+
+/// Reads back what [`Encoder`] wrote. Every read is `None` when the bytes
+/// run out or a tag is not one the encoder writes; the caller re-encodes
+/// what it read and compares, so the two can never drift apart unnoticed.
+pub(crate) struct Decoder<'a>(pub(crate) &'a [u8]);
+
+impl<'a> Decoder<'a> {
+    fn take(&mut self, n: usize) -> Option<&'a [u8]> {
+        if self.0.len() < n {
+            return None;
+        }
+        let (head, rest) = self.0.split_at(n);
+        self.0 = rest;
+        Some(head)
+    }
+
+    pub(crate) fn tag(&mut self) -> Option<u8> {
+        self.take(1).map(|b| b[0])
+    }
+
+    pub(crate) fn u64(&mut self) -> Option<u64> {
+        Some(u64::from_be_bytes(self.take(8)?.try_into().ok()?))
+    }
+
+    pub(crate) fn bytes(&mut self) -> Option<&'a [u8]> {
+        let n = usize::try_from(self.u64()?).ok()?;
+        self.take(n)
+    }
+
+    pub(crate) fn str(&mut self) -> Option<String> {
+        String::from_utf8(self.bytes()?.to_vec()).ok()
+    }
+
+    pub(crate) fn opt_str(&mut self) -> Option<Option<String>> {
+        match self.tag()? {
+            0 => Some(None),
+            1 => Some(Some(self.str()?)),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn money(&mut self) -> Option<Money> {
+        let minor = i128::from_be_bytes(self.take(16)?.try_into().ok()?);
+        let ccy = match self.tag()? {
+            1 => Currency::Usdc,
+            2 => Currency::Eurc,
+            3 => Currency::Usd,
+            4 => Currency::Eur,
+            5 => Currency::GoldGram,
+            _ => return None,
+        };
+        Some(Money::minor(minor, ccy))
+    }
+
+    pub(crate) fn provenance(&mut self) -> Option<Provenance> {
+        Some(match self.tag()? {
+            1 => Provenance::Inferred,
+            2 => Provenance::CounterpartyAsserted,
+            3 => Provenance::HumanConfirmed,
+            4 => Provenance::Onchain,
+            _ => return None,
+        })
+    }
+}

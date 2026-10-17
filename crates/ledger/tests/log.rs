@@ -524,3 +524,96 @@ fn an_event_is_cited_by_its_sequence_number() {
     let ids: Vec<String> = log.events().iter().map(Event::id).collect();
     assert_eq!(ids, ["evt:0", "evt:1", "evt:2", "evt:3"]);
 }
+
+// ------------------------------------------------------------- decoding
+
+fn unhex(s: &str) -> Vec<u8> {
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
+        .collect()
+}
+
+#[test]
+fn every_kind_decodes_back_to_itself_and_nothing_else_decodes() {
+    let mut log = DecisionLog::new();
+    let bodies = [
+        EventBody::Observation {
+            balance: usdc("12.500000"),
+            transfers_seen: 7,
+            obligations_found: 2,
+            total_due: usdc("3.000000"),
+            note: "saw".into(),
+        },
+        EventBody::Decision {
+            counterparty: cp("0x1111"),
+            amount: usdc("20.000000"),
+            decision: Decision::Review,
+            action_hash: a_hash("act_1"),
+            confidence: Confidence::new(0.85).unwrap(),
+            balance_seen: usdc("12735.000000"),
+            weakest_evidence: Some(Provenance::Onchain),
+            evidence: vec!["0xaaa".into(), "0xbbb".into()],
+            note: "due".into(),
+        },
+        EventBody::Escalation {
+            counterparty: cp("0xccc"),
+            amount: usdc("5000.000000"),
+            reason: "over the cap".into(),
+            note: "asking".into(),
+        },
+        EventBody::Skipped {
+            counterparty: cp("0xddd"),
+            cycle_key: "0xddd@1".into(),
+            note: "paid already".into(),
+        },
+        EventBody::Hedge {
+            coin: "ETH".into(),
+            outcome: "TRADED".into(),
+            size_before: "0".into(),
+            size_delta: "-0.01".into(),
+            size_after: "-0.01".into(),
+            mark_px: "2500.5".into(),
+            notional_after: usdc("25.005000"),
+            oid: Some("42".into()),
+            note: "hedged".into(),
+        },
+        EventBody::HedgeProposal {
+            coin: "ETH".into(),
+            advice: "widen-band".into(),
+            band_bps: Some(800),
+            reason: "carry".into(),
+            by: "model".into(),
+            note: "proposed".into(),
+        },
+    ];
+    for (i, body) in bodies.into_iter().enumerate() {
+        log.append(at(i as i64), body);
+    }
+    settlement(&mut log, "0xaaa", "0xaaa@1", "10.000000", 9);
+    for hex in [
+        FLOWCHECK_HEX,
+        RESERVATION_HEX,
+        RESERVATION_NONE_HEX,
+        METERCHECK_HEX,
+        PRICETABLE_HEX,
+    ] {
+        let e = Event::decode(&unhex(hex)).expect("a pinned event decodes");
+        log.append(e.at, e.body);
+    }
+    assert_eq!(log.len(), 12);
+    for e in log.events() {
+        let bytes = e.canonical();
+        assert_eq!(Event::decode(&bytes).as_ref(), Some(e), "{}", e.body.kind());
+        assert_eq!(Event::decode(&bytes[..bytes.len() - 1]), None, "truncated");
+        let mut longer = bytes.clone();
+        longer.push(0);
+        assert_eq!(Event::decode(&longer), None, "a trailing byte");
+    }
+    // A counterparty the encoder could never have written (upper case) is
+    // refused, not silently normalised into a different record.
+    let mut forged = log.events()[6].canonical();
+    let at = forged.windows(5).position(|w| w == b"0xaaa").unwrap();
+    forged[at..at + 5].copy_from_slice(b"0xAAA");
+    assert_eq!(Event::decode(&forged), None);
+}

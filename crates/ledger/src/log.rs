@@ -49,7 +49,7 @@
 
 use crate::action::Provenance;
 use crate::canon::ActionHash;
-use crate::codec::Encoder;
+use crate::codec::{Decoder, Encoder};
 use crate::money::Money;
 use crate::obligations::{Confidence, Counterparty};
 use crate::time::Timestamp;
@@ -716,6 +716,149 @@ impl Event {
             }
         }
         e.buf
+    }
+
+    /// The event whose canonical bytes are exactly `bytes`, or `None`: a
+    /// truncated line, a trailing byte, an unknown tag, or anything
+    /// [`Event::canonical`] would not write byte for byte. A reader of an
+    /// events file gets the typed event back without trusting the file.
+    pub fn decode(bytes: &[u8]) -> Option<Event> {
+        let mut d = Decoder(bytes);
+        if d.str()? != "air-log/v0.1" {
+            return None;
+        }
+        let seq = d.u64()?;
+        let at = Timestamp::from_unix(d.u64()? as i64);
+        let body = match d.tag()? {
+            1 => EventBody::Observation {
+                balance: d.money()?,
+                transfers_seen: usize::try_from(d.u64()?).ok()?,
+                obligations_found: usize::try_from(d.u64()?).ok()?,
+                total_due: d.money()?,
+                note: d.str()?,
+            },
+            2 => EventBody::Decision {
+                counterparty: Counterparty::new(d.str()?),
+                amount: d.money()?,
+                decision: match d.tag()? {
+                    1 => Decision::Allow,
+                    2 => Decision::Review,
+                    3 => Decision::Block,
+                    _ => return None,
+                },
+                action_hash: ActionHash::from_bytes(d.bytes()?.try_into().ok()?),
+                confidence: Confidence::new(d.u64()? as f64 / 10_000.0)?,
+                balance_seen: d.money()?,
+                weakest_evidence: match d.tag()? {
+                    0 => None,
+                    1 => Some(d.provenance()?),
+                    _ => return None,
+                },
+                evidence: {
+                    let n = d.u64()?;
+                    let mut out = Vec::new();
+                    for _ in 0..n {
+                        out.push(d.str()?);
+                    }
+                    out
+                },
+                note: d.str()?,
+            },
+            3 => EventBody::Settlement {
+                counterparty: Counterparty::new(d.str()?),
+                cycle_key: d.str()?,
+                amount: d.money()?,
+                tx_hash: d.str()?,
+                action_hash: ActionHash::from_bytes(d.bytes()?.try_into().ok()?),
+                settlement_key: ActionHash::from_bytes(d.bytes()?.try_into().ok()?),
+                note: d.str()?,
+            },
+            4 => EventBody::Escalation {
+                counterparty: Counterparty::new(d.str()?),
+                amount: d.money()?,
+                reason: d.str()?,
+                note: d.str()?,
+            },
+            5 => EventBody::Skipped {
+                counterparty: Counterparty::new(d.str()?),
+                cycle_key: d.str()?,
+                note: d.str()?,
+            },
+            6 => EventBody::Hedge {
+                coin: d.str()?,
+                outcome: d.str()?,
+                size_before: d.str()?,
+                size_delta: d.str()?,
+                size_after: d.str()?,
+                mark_px: d.str()?,
+                notional_after: d.money()?,
+                oid: d.opt_str()?,
+                note: d.str()?,
+            },
+            7 => EventBody::HedgeProposal {
+                coin: d.str()?,
+                advice: d.str()?,
+                band_bps: match d.tag()? {
+                    0 => None,
+                    1 => Some(d.u64()?),
+                    _ => return None,
+                },
+                reason: d.str()?,
+                by: d.str()?,
+                note: d.str()?,
+            },
+            8 => EventBody::FlowCheck {
+                period_start: d.u64()? as i64,
+                period_end: d.u64()? as i64,
+                balance_start: d.money()?,
+                inflows: d.money()?,
+                outflows: d.money()?,
+                balance_end_book: d.money()?,
+                balance_end_chain: d.money()?,
+                diff: d.money()?,
+                note: d.str()?,
+            },
+            9 => EventBody::Reservation {
+                reservation_id: d.str()?,
+                issuer: d.str()?,
+                unit: d.str()?,
+                qty: d.u64()?,
+                controller: d.str()?,
+                prev_controller: d.opt_str()?,
+                action: match d.tag()? {
+                    0 => ReservationAction::Created,
+                    1 => ReservationAction::TransferProposed,
+                    2 => ReservationAction::TransferApplied,
+                    3 => ReservationAction::TransferCancelled,
+                    4 => ReservationAction::Consumed,
+                    5 => ReservationAction::Refused,
+                    _ => return None,
+                },
+                note: d.str()?,
+            },
+            10 => EventBody::MeterCheck {
+                from: d.u64()? as i64,
+                to: d.u64()? as i64,
+                model: d.str()?,
+                ours_in: d.u64()?,
+                ours_out: d.u64()?,
+                theirs_in: d.u64()?,
+                theirs_out: d.u64()?,
+                note: d.str()?,
+            },
+            11 => EventBody::PriceTable {
+                source: d.str()?,
+                fetched_at: d.u64()? as i64,
+                table_hash: d.str()?,
+                rows: u32::try_from(d.u64()?).ok()?,
+                note: d.str()?,
+            },
+            _ => return None,
+        };
+        let e = Event { seq, at, body };
+        // The strict inverse: a normalised counterparty, a rounded
+        // confidence or bytes left over would re-encode differently.
+        (d.0.is_empty() && e.canonical() == bytes).then_some(e)
     }
 
     /// This event's domain-prefixed Merkle leaf.
