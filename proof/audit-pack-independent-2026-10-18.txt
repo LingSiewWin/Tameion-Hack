@@ -1,0 +1,1510 @@
+Audit pack, independent run (docs/117 §5), seat S26b, the witness
+Written 2026-10-18 05:04:25 +0800 (2026-10-17T21:04:25Z)
+
+I did not write scripts/audit_pack.py or scripts/test_audit_pack.py. I ran them from clean clones of main, changed no code, and
+recorded what happened. A line starting with "$" is a command I ran; the lines after it are its output, copied from the logs I
+saved. Two mechanical edits only: the session's scratch directory (a long temporary path) is written <scratch>, and git's
+"Updating files: n%" progress counters are dropped. My own words are in the parts headed "Witness". The small scripts I used to
+hash, diff and repeat (normalize_compare2.py, linediff.sh, root_lines.py, attempts.sh, ab-diff.sh) are mine, not part of the
+repository; they are named where used.
+
+Two passes, because main moved while I worked:
+  pass A  00:25-00:39 +0800  first clone of main (72a0ddf), the gate steps, the live run on the real account, the comparison
+  pass B  04:50-05:00 +0800  the coordinator asked for a repeat on the current main: `git pull --ff-only` was refused, so a second
+                             fresh clone (main 23be9f6), the same steps again, the live run repeated
+
+Sections: 0 result; 1 clones and the pull; 2 tools; 3 pass A; 4 pass B; 5 comparison with the author's run; 6 the one crash;
+7 what needed a step the README did not say; 8 not covered. Sections 5 to 8 are the short ones to read after this one.
+
+== 0. Result
+
+Step 1, clone main
+  pass A  PASS   main 72a0ddf777e97102dd8ca8159caaf8673fbe1b6a, depth 1, 1201 tracked files, clean tree
+  pass B  `git pull --ff-only` REFUSED ("forced update": origin/main had been rewritten, 72a0ddf is not an ancestor of 23be9f6).
+          A second fresh `git clone --depth 1 -b main` PASSED: 23be9f6187d4ff301db141d8e6f280efc0511930, 1217 tracked files, clean tree.
+Step 3a, python3 -m unittest scripts/test_audit_pack.py
+  pass A  PASS   Ran 2 tests in 1.997s, OK, exit 0 (nothing skipped)
+  pass B  PASS   Ran 2 tests in 0.848s, OK, exit 0 (nothing skipped)
+Step 3b, test_all.sh line 38 (fixture pack, then bean-check)
+  pass A  PASS   "bean-check Beancount 3.2.3: exit 0", exit 0
+  pass B  PASS   "bean-check Beancount 3.2.3: exit 0", exit 0
+Step 4, the real account uat2-u1-rc (0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1), 2026-10-16 to 2026-10-17, the two public nodes, no key
+  pass A  PASS   1 run of 1: "audit pack: every check held", exit 0; bean-check on its ledger exit 0
+  pass B  attempt 1 FAIL   Python traceback, exit 1, no pack written: publicnode refused an eth_call ("historical state ... is not
+                           available"). Cause and a way out: section 6.
+          attempts 2, 3, 4 PASS   each "audit pack: every check held", exit 0; bean-check on each ledger exit 0
+          So 4 of my 5 live runs held and 1 crashed. The crash is loud: no pack, no "every check held" line.
+Step 5, compare with proof/audit-pack-2026-10-18.txt (the author's run, sha256 f8738105ef97…faaf, unchanged since I first read it)
+  both    SAME figures. Only the chain block of the closing read and the clock times differ, as they must for a run made later.
+          All 7 pack files are byte-identical to the author's (his sha256 values) in all four successful runs, after I swap in his
+          block number and times; countersign.json and signatures.json are identical as written. Section 5.
+Step 6  this file
+
+The three figures asked for (identical in all four successful live runs):
+  closing balance asserted   2026-10-18 balance Assets:USDC:Arbitrum-Sepolia:0xdaf055  0.092000 ~ 0 USDC
+                             opening 0.000000; one funding of 0.100000; 5 payments of 0.008000 in all; the chain's number
+                             (block 320130404 in pass A; 320189824, 320189972 and 320190104 in pass B)
+  root check line            records    10/10 recomputed and anchored by the account's key on both nodes; rootOf now: MATCH
+  countersign ratio          invoices   2/2 payee signatures valid; payments countersigned 1/5
+
+Discrepancies
+  - Figures: none against the author's run.
+  - New, not in the author's file: the live command can crash on publicnode's state window (1 of my 5 runs). Section 6.
+  - The brief's "the app's anchors.jsonl" does not exist at the app root; the script reads tenants/<policy>/log/anchors.jsonl. Section 7.
+  - `git pull --ff-only` cannot follow main: it was force-updated at least twice while I worked (72a0ddf to 23be9f6 to 83c913d).
+    The audit-pack files (audit_pack.py, test_audit_pack.py, test_all.sh, the fixture) are byte-identical on all of those commits.
+
+== 1. Clones, and the pull the coordinator asked for
+
+-- 1a. pass A, the first clone (00:25 +0800)
+$ git clone --depth 1 -b main https://github.com/LingSiewWin/Tameion-Hack <scratch>/s26b-clone
+Cloning into '<scratch>/s26b-clone'...
+Updating files: 100% (1201/1201), done.
+(my wrapper's exit= line printed nothing: this shell is zsh and ${PIPESTATUS[0]} is bash syntax. The clone is verified below.)
+2026-10-18 00:37:34 +0800
+tracked files in the clone: 1201
+shallow: true
+branch: main   HEAD: 72a0ddf777e97102dd8ca8159caaf8673fbe1b6a
+git status --short (tracked changes): [0 lines]
+$ git ls-remote origin main
+2388d5e095f629553ac84c70414982adf8871927	refs/heads/main
+
+-- 1a'. main moved while pass A ran: fetched by sha into the same clone, objects only
+2026-10-18 00:37:48 +0800
+$ git fetch --depth 1 origin 2388d5e095f629553ac84c70414982adf8871927   # objects only, working tree untouched
+From https://github.com/LingSiewWin/Tameion-Hack
+ * branch            2388d5e095f629553ac84c70414982adf8871927 -> FETCH_HEAD
+fetch exit=0
+
+$ git log -3 --format="%h %aI %s" FETCH_HEAD
+2388d5e 2026-10-17T23:34:35+08:00 test(operator): the organiser's three sentences as three tests on anvil
+
+$ git diff --stat 72a0ddf FETCH_HEAD -- scripts/audit_pack.py scripts/test_audit_pack.py scripts/test_all.sh crates/operator/tests/fixtures/audit-pack
+(end of diff stat; empty = those files are byte-identical on the newer main)
+
+$ git diff --stat 72a0ddf FETCH_HEAD | tail -5
+ crates/operator/tests/organiser.rs   | 661 +++++++++++++++++++++++++++++++++++
+ proof/credit-line-2026-10-18.txt     | 310 ++++++++++++++++
+ proof/passkey-agility-2026-10-18.txt | 209 +++++++++++
+ scripts/prove_credit.sh              | 134 +++++++
+ 8 files changed, 2125 insertions(+)
+
+-- 1b. pass B, the coordinator's pull on the first clone
+2026-10-18 04:50:19 +0800
+before: 72a0ddf777e97102dd8ca8159caaf8673fbe1b6a
+$ git -C <scratch>/s26b-clone pull --ff-only
+From https://github.com/LingSiewWin/Tameion-Hack
+ + 72a0ddf...23be9f6 main       -> origin/main  (forced update)
+hint: Diverging branches can't be fast-forwarded, you need to either:
+hint:
+hint: 	git merge --no-ff
+hint:
+hint: or:
+hint:
+hint: 	git rebase
+hint:
+hint: Disable this message with "git config set advice.diverging false"
+fatal: Not possible to fast-forward, aborting.
+pull exit=128
+after:  72a0ddf777e97102dd8ca8159caaf8673fbe1b6a
+72a0ddf777e97102dd8ca8159caaf8673fbe1b6a
+LingSiewWin <lingsiewwin99@gmail.com>
+2026-10-18T00:24:49+08:00 (author)  2026-10-18T00:24:49+08:00 (committer)
+docs(proof): the ISA 500 audit pack on two real accounts, bean-check exit 0
+branch: main  shallow: true
+tracked files: 1201  status lines: 0
+remote main:  23be9f6187d4ff301db141d8e6f280efc0511930	refs/heads/main
+2026-10-18 04:50:23 +0800
+2026-10-18 04:51:03 +0800
+$ git log -6 --format="%h author=%aI committer=%cI %s" origin/main
+23be9f6 author=2026-10-18T04:49:30+08:00 committer=2026-10-18T04:49:30+08:00 docs(proof): two settlement rails measured and a price table pinned under an anchored root
+970e786 author=2026-10-18T00:32:18+08:00 committer=2026-10-18T00:38:46+08:00 docs(arc): Confirmations(n) also covers a node that stopped answering the finalized tag
+2db80bd author=2026-10-18T00:16:16+08:00 committer=2026-10-18T00:38:46+08:00 feat(operator): the pass records the price table when its hash changes (PRICETABLE)
+226ed8b author=2026-10-17T23:59:58+08:00 committer=2026-10-18T00:38:46+08:00 fix: Arc testnet RPC host in scripts, the console verifier and foundry.toml
+f7a21a5 author=2026-10-17T23:42:45+08:00 committer=2026-10-18T00:38:46+08:00 feat(scripts): price_hash.py recomputes a pinned table's hash in pure Python
+5e6a7b1 author=2026-10-17T23:42:40+08:00 committer=2026-10-18T00:38:46+08:00 feat(operator): price table from LiteLLM and OpenRouter, pinned by keccak of its rows
+
+commits reachable from origin/main in this shallow clone: 11
+$ git merge-base 72a0ddf origin/main
+(no common ancestor known to this shallow clone; exit 1)
+$ git merge-base --is-ancestor 72a0ddf origin/main
+is-ancestor exit=1 (0 = yes, 1 = no)
+
+$ git diff --stat 72a0ddf origin/main -- scripts/audit_pack.py scripts/test_audit_pack.py scripts/test_all.sh crates/operator/tests/fixtures/audit-pack
+(end; empty = byte-identical)
+
+$ git diff --stat 72a0ddf origin/main | tail -25
+ crates/operator/src/price.rs            | 362 +++++++++++++++++
+ crates/operator/tests/app_http.rs       |  51 +++
+ crates/operator/tests/organiser.rs      | 661 ++++++++++++++++++++++++++++++++
+ proof/credit-line-2026-10-18.txt        | 310 +++++++++++++++
+ proof/passkey-agility-2026-10-18.txt    | 209 ++++++++++
+ proof/price-table-2026-10-18.txt        | 134 +++++++
+ proof/rails-2026-10-17.txt              | 152 ++++++++
+ scripts/evidence/anchor.py              |   2 +-
+ scripts/gateway_deposit.sh              |   2 +-
+ scripts/guardian_approve.sh             |   2 +-
+ scripts/max_loss.sh                     |   2 +-
+ scripts/pay_due.sh                      |   2 +-
+ scripts/price_hash.py                   | 100 +++++
+ scripts/prove_arc.sh                    |   2 +-
+ scripts/prove_credit.sh                 | 134 +++++++
+ scripts/prove_module_7579.sh            |   2 +-
+ scripts/prove_passkey.sh                |   2 +-
+ scripts/register_agent.sh               |   2 +-
+ scripts/verify.sh                       |   2 +-
+ scripts/verify_desk.py                  |   2 +-
+ scripts/verify_statement.sh             |   2 +-
+ scripts/verify_tenant.sh                |   2 +-
+ scripts/x402_buy.py                     |   2 +-
+ scripts/x402_seller.py                  |   2 +-
+ 39 files changed, 3678 insertions(+), 19 deletions(-)
+
+-- 1c. pass B, a second fresh clone of main
+2026-10-18 04:50:55 +0800
+$ git clone --depth 1 -b main https://github.com/LingSiewWin/Tameion-Hack <scratch>/s26b-clone2
+Cloning into '<scratch>/s26b-clone2'...
+clone exit=0
+2026-10-18 04:53:43 +0800
+
+2026-10-18 04:53:52 +0800
+clone2 branch: main   HEAD: 23be9f6187d4ff301db141d8e6f280efc0511930
+author LingSiewWin <lingsiewwin99@gmail.com>
+author date 2026-10-18T04:49:30+08:00  committer date 2026-10-18T04:49:30+08:00
+subject docs(proof): two settlement rails measured and a price table pinned under an anchored root
+shallow: true   tracked files: 1217   status lines: 0
+$ git ls-remote origin main
+bfa5ced3ecc62b48c1f740e78515e04507cd8fc3	refs/heads/main
+audit_pack.py sha256: ec8771c591388a0aba3cfda2985e22e3393768d885e8d2e9a0099a6f52fdbe26   (author's proof: ec8771c591388a0a…)
+test_audit_pack.py sha256: 731c6cc2bed9dd161b7cb024c8af28e71e43edd0564ba608b31f236b86c2f14c
+test_all.sh sha256: 02050f531cc769257965c041981eee9c7094560d42460161356922c170f91308
+same three files and the fixture dir in the first clone (72a0ddf)?
+  identical: scripts/audit_pack.py
+  identical: scripts/test_audit_pack.py
+  identical: scripts/test_all.sh
+  identical: crates/operator/tests/fixtures/audit-pack (every file)
+
+== 2. Tools (the same PATH prefix for both passes)
+2026-10-18 00:29:43 +0800
+PATH prefix: /opt/homebrew/bin:$HOME/.local/bin:$HOME/.foundry/bin
+python3 -> /opt/homebrew/bin/python3
+bean-check -> /Users/lingsiewwin/.local/bin/bean-check
+cast -> /Users/lingsiewwin/.foundry/bin/cast
+Python 3.15.0
+Beancount 3.2.3
+cast Version: 1.5.1-stable
+Commit SHA: b0a9dd9ceda36f63e2326ce530c10e6916f4b8a2
+OpenSSL 4.0.3 29 Sep 2026
+hashlib KECCAK-256: yes
+Darwin Lings-MacBook-Air.local 25.6.0 Darwin Kernel Version 25.6.0: Fri Jul 31 19:18:29 PDT 2026; root:xnu-12377.161.14~5/RELEASE_ARM64_T8122 arm64
+
+2026-10-18 00:35:28 +0800
+clone HEAD: 72a0ddf777e97102dd8ca8159caaf8673fbe1b6a
+audit_pack.py sha256 in the clone: ec8771c591388a0aba3cfda2985e22e3393768d885e8d2e9a0099a6f52fdbe26
+author's proof says:               ec8771c591388a0a… (prefix)
+
+--- default PATH of this shell, before any export of mine ---
+/Users/lingsiewwin/Documents/Github/Tameion-Hack/.venv/bin:/Users/lingsiewwin/.aiken/bin:/Users/lingsiewwin/.cre/bin:/Users/lingsiewwin/.cargo/bin:/opt/homebrew/bin:/opt/homebrew/Cellar/pyenv-virtualenv/1.4.0/shims:/Users/lingsiewwin/.pyenv/shims:/Users/lingsiewwin/.pyenv/bin:/Users/lingsiewwin/.bun/bin:/Users/lingsiewwin/.local/bin:/opt/anaconda3/bin:/Users/lingsiewwin/.vscode/extensions/vadimcn.vscode-lldb-1.12.3/bin:/Users/lingsiewwin/.local/share/solana/install/active_release/bin:/Library/Frameworks/Python.framework/Versions/3.10/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/Library/Frameworks/Python.framework/Versions/3.12/bin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/usr/local/go/bin:/Users/lingsiewwin/.vscode/extensions/vadimcn.vscode-lldb-1.12.3/bin:/Users/lingsiewwin/.foundry/bin
+python3 -> /Users/lingsiewwin/Documents/Github/Tameion-Hack/.venv/bin/python3
+cast -> /Users/lingsiewwin/.foundry/bin/cast
+bean-check -> /Users/lingsiewwin/.local/bin/bean-check
+Python 3.14.8
+
+--- how the script picks the chain / account facts (lines 515-545) ---
+        args.first, args.last = dt.date.fromisoformat(args.start), dt.date.fromisoformat(args.end)
+    except ValueError:
+        print("from and to are dates, YYYY-MM-DD")
+        return 2
+    tenants = os.path.join(args.app_dir, "tenants")
+    tenant_file = os.path.join(tenants, f"{policy}.json")
+    if not ADDR.match(policy) or args.last < args.first or not os.path.exists(tenant_file):
+        print(f"need a policy address with {tenant_file}, and from <= to")
+        return 2
+    if args.statement and not args.host:
+        print("--statement needs --host: a statement is checked against the signer the service advertises")
+        return 2
+    tenant = json.load(open(tenant_file))
+    c = CHAINS.get(tenant.get("chain"))
+    if c is None:
+        print(f"no chain preset for {tenant.get('chain')!r}")
+        return 2
+    urls = [args.rpc or c["rpcs"][0], args.rpc2 or c["rpcs"][1]]
+    t0 = int(dt.datetime.combine(args.first, dt.time(), dt.timezone.utc).timestamp())
+    t1 = int(dt.datetime.combine(args.last + dt.timedelta(days=1), dt.time(), dt.timezone.utc).timestamp())
+    pack = os.path.join(args.out, policy, f"{args.start}_{args.end}")
+    os.makedirs(pack, exist_ok=True)
+    fails = []
+
+    # 1. The agent's record, from its canonical bytes.
+    log_dir = os.path.join(tenants, policy, "log")
+    records = load_record(log_dir)
+    anchors = read_jsonl(os.path.join(log_dir, "anchors.jsonl"))
+    events = [e for r in records.values() for e in r["events"]]
+
+    # 2. The chain, on two nodes.
+
+== 3. Pass A: main 72a0ddf, 2026-10-18 00:29 to 00:39 +0800
+
+-- 3.1 step 3a, the unit tests
+2026-10-18 00:29:49 +0800
+$ cd s26b-clone  # <scratch>/s26b-clone
+$ python3 -m unittest scripts/test_audit_pack.py
+..
+----------------------------------------------------------------------
+Ran 2 tests in 1.997s
+
+OK
+exit=0
+2026-10-18 00:29:51 +0800
+
+-- 3.2 step 3b, test_all.sh line 38, extracted from the file byte for byte (run-step38.sh) and run the way its run() helper does
+line 38 of scripts/test_all.sh:
+step "audit pack: bean-check on the fixture's ledger" run 'f=crates/operator/tests/fixtures/audit-pack; a="file://$PWD/$f/answers.json"; out=$(mktemp -d); trap "rm -rf \"$out\"" EXIT; python3 scripts/audit_pack.py "$f" 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 2026-10-16 2026-10-17 --rpc "$a" --rpc2 "$a" --gateway "$a" --block 320121361 --out "$out" >/dev/null || exit 1; if command -v bean-check >/dev/null; then bean-check "$out"/*/*/ledger.beancount && echo "  bean-check $(bean-check --version | head -1): exit 0"; else printf "  \033[31mskipped: bean-check not installed\033[0m\n"; fi'
+
+inner command (between run ' and the closing '):
+f=crates/operator/tests/fixtures/audit-pack; a="file://$PWD/$f/answers.json"; out=$(mktemp -d); trap "rm -rf \"$out\"" EXIT; python3 scripts/audit_pack.py "$f" 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 2026-10-16 2026-10-17 --rpc "$a" --rpc2 "$a" --gateway "$a" --block 320121361 --out "$out" >/dev/null || exit 1; if command -v bean-check >/dev/null; then bean-check "$out"/*/*/ledger.beancount && echo "  bean-check $(bean-check --version | head -1): exit 0"; else printf "  \033[31mskipped: bean-check not installed\033[0m\n"; fi
+
+2026-10-18 00:30:03 +0800
+$ bash -o pipefail -c "$cmd"   # cwd = <scratch>/s26b-clone
+  bean-check Beancount 3.2.3: exit 0
+exit=0
+2026-10-18 00:30:07 +0800
+
+-- 3.3 step 4, the account files copied (cp -R) into a scratch app dir, then hashed against the source
+2026-10-18 00:30:43 +0800
+$ mkdir -p <scratch>/s26b-app/tenants
+$ cp -R /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/app/tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1* <scratch>/s26b-app/tenants/
+cp exit=0
+
+--- copied (find, relative to scratch app dir; size bytes) ---
+    1194  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.history.json
+    1681  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.invoice-decisions.jsonl
+    1426  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.invoices.jsonl
+    1993  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.json
+     562  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.payments.jsonl
+       2  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.purchases.anchored
+     762  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.purchases.jsonl
+       2  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.purchases.pending.json
+    2319  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/decisions.jsonl
+    8726  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x1ef887b746a36f17791fc92a8ca5441ae93a866959372ebe7d962fac1b79a65a.events.jsonl
+    5886  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x244e74dda71bae929247ce8c9f7a7fb8c884ab3ac0f988d3b5c92dea128eee85.events.jsonl
+    1440  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x2b3b48cfe826612e3c895c926c04f235877b0d0eef81fb8c8ca6855c6fe38b04.events.jsonl
+    9337  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x39285d6eaa1f07323d05a30e3df0889074d052978e80f5542e420cdc576efc3d.events.jsonl
+    9040  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b.events.jsonl
+    6172  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x82e8633c440807c1d227d53ef98987c34923c24900931d2ac0cb5bd613a20d05.events.jsonl
+    4365  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x8db8b570f0d69b33072b75d834b57f3be5e2f27af4bd0c8aa34f821978931424.events.jsonl
+    4365  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x9651e9d967e095116114b3c1f2158105d0525c593bc74deb87fb5cccebb74e67.events.jsonl
+    4536  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x9f741ad6e9cba923514433fba58c3136e1944ad3a311835bf4dd9b47daa155ca.events.jsonl
+   10069  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0xbef05bf7a7ec4a22611d4c37e7fcb9d3cc095f09297b311b9c73422ed291b7a2.events.jsonl
+    3810  ./tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/anchors.jsonl
+
+--- sha256 source vs copy (same bytes?) ---
+same  92f75d377d9931d8d374c604b62992948789712f2506660790ad2dcdc10c3b36  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.history.json
+same  0ad2c3df0f0a7da3f9eb47e9f87ca7da339ef1d2933956efb8d4f1d6b51f8caa  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.invoice-decisions.jsonl
+same  27d529809cee17c259da9b379c123a987805698d40bc8441e7be4758160a69bf  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.invoices.jsonl
+same  4ef036e04dd2705dd7cab218a79506ff3817ed9cc517291ed73b210076524489  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.json
+same  cb473a384e8a9699cfefde0c644429a693246e156425fec904c7d9523b392dc6  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.payments.jsonl
+same  4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.purchases.anchored
+same  a2f76803318cd636c2ed5c7ff1f83be5b994548b5ed13674a7703f377f7703de  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.purchases.jsonl
+same  44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.purchases.pending.json
+same  8bd69470a1192596aadc263f3def26e45a39c3f7822c6336f8008ea15bf44590  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/decisions.jsonl
+same  20793a6be3e5a29ce687df5dae023161d00dccef9dee212d574cca88bae0aa2b  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x1ef887b746a36f17791fc92a8ca5441ae93a866959372ebe7d962fac1b79a65a.events.jsonl
+same  420a199de46cb952f679573e6fa4b6cc456242bca50292473ac40b13fde5276b  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x244e74dda71bae929247ce8c9f7a7fb8c884ab3ac0f988d3b5c92dea128eee85.events.jsonl
+same  c35e6a62b7aaeca7039aceddf1d3f7b0691417815f248ec5580a0cc8a73820f4  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x2b3b48cfe826612e3c895c926c04f235877b0d0eef81fb8c8ca6855c6fe38b04.events.jsonl
+same  c551c08f471bc5fcdbd7f213b9859321e7056e72809a37eb1829ba11a33e89e0  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x39285d6eaa1f07323d05a30e3df0889074d052978e80f5542e420cdc576efc3d.events.jsonl
+same  87938c9c08a8fb25cb9407455094f711e5036070e2da8ede0b5ad7cdaaee0731  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b.events.jsonl
+same  87b16b75fefa6e1b2b7f54e3d58d9482e578f96218192ec2c9a8abdb2fba1c9c  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x82e8633c440807c1d227d53ef98987c34923c24900931d2ac0cb5bd613a20d05.events.jsonl
+same  114aaa5fa6775b4104aed6a533516a9f3f6ed924313b2005ea56893e0828cfb9  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x8db8b570f0d69b33072b75d834b57f3be5e2f27af4bd0c8aa34f821978931424.events.jsonl
+same  4f0391a92111eb7b0c13e0391c8e707a47b4f22a8e81d8571784cbbbe250b748  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x9651e9d967e095116114b3c1f2158105d0525c593bc74deb87fb5cccebb74e67.events.jsonl
+same  90283f45f9077365e1d55714fc66a5963f79761b0ae43c4ad7bd116f7660bdb3  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x9f741ad6e9cba923514433fba58c3136e1944ad3a311835bf4dd9b47daa155ca.events.jsonl
+same  58487e79d4632fa2a8cabdcb1a3b5e7decd5234ab6a7fa9a31a34ed61d6a94fd  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0xbef05bf7a7ec4a22611d4c37e7fcb9d3cc095f09297b311b9c73422ed291b7a2.events.jsonl
+same  747016557f1a4c272571731988b999d9901b9aec2e3cdd74c45af61fcf660f92  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/anchors.jsonl
+
+-- 3.4 step 4, the live run
+2026-10-18 00:30:55 +0800
+$ cd s26b-clone  # <scratch>/s26b-clone
+$ python3 scripts/audit_pack.py <scratch>/s26b-app 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 2026-10-16 2026-10-17 --rpc https://sepolia-rollup.arbitrum.io/rpc --rpc2 https://arbitrum-sepolia-rpc.publicnode.com --out <scratch>/s26b-out
+audit pack: <scratch>/s26b-out/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/2026-10-16_2026-10-17
+  ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320130404)
+  payments   1 in the agent's anchored record, 2 by the owner's passkey, 2 flagged ! (on chain, not in the record)
+  records    10/10 recomputed and anchored by the account's key on both nodes; rootOf now: MATCH
+  invoices   2/2 payee signatures valid; payments countersigned 1/5
+  statements no --host given: weekly statements not checked
+  gateway    0.000000 USDC at Circle for the bill wallet 0x3c559e1152b109323eb70ad0fcf6d4e7aa9210f5 (second balance line)
+  bean-check passed (Beancount 3.2.3)
+audit pack: every check held
+exit=0
+2026-10-18 00:32:21 +0800
+
+-- 3.5 bean-check on the produced ledger, and the ledger
+2026-10-18 00:32:30 +0800
+$ ls -la <pack dir>
+total 120
+drwxr-xr-x@ 9 lingsiewwin  wheel    288 Oct 18 00:32 .
+drwxr-xr-x@ 3 lingsiewwin  wheel     96 Oct 18 00:30 ..
+-rw-r--r--@ 1 lingsiewwin  wheel   3962 Oct 18 00:32 countersign.json
+-rw-r--r--@ 1 lingsiewwin  wheel   4486 Oct 18 00:32 ledger.beancount
+-rw-r--r--@ 1 lingsiewwin  wheel   5910 Oct 18 00:32 README.md
+-rw-r--r--@ 1 lingsiewwin  wheel  17692 Oct 18 00:32 replay.txt
+-rw-r--r--@ 1 lingsiewwin  wheel   7698 Oct 18 00:32 root.json
+-rw-r--r--@ 1 lingsiewwin  wheel   3334 Oct 18 00:32 signatures.json
+-rw-r--r--@ 1 lingsiewwin  wheel   5060 Oct 18 00:32 sources.json
+
+$ bean-check <pack dir>/ledger.beancount
+bean-check exit=0
+Beancount 3.2.3
+
+$ cat <pack dir>/ledger.beancount
+; Audit pack ledger: uat2-u1-rc (0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1) on Arbitrum-Sepolia, 2026-10-16 to 2026-10-17 (UTC days, both included).
+; Chain reads at block 320130404 on two nodes (sources.json). Hashes are metadata; postings carry names and amounts.
+
+option "title" "uat2-u1-rc: agent account"
+option "operating_currency" "USDC"
+
+2026-10-16 commodity USDC
+2026-10-16 open Assets:USDC:Arbitrum-Sepolia:0xdaf055 USDC
+  policy: "0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1"
+2026-10-16 open Equity:Opening-Balances USDC
+2026-10-16 open Income:Funding USDC
+2026-10-16 open Expenses:Payees:0x1aac04-b3ca63 USDC
+  address: "0x1aac044400fc736def9bf9cd6d24a34115b3ca63"
+  nameFrom: "the address"
+2026-10-16 open Expenses:Payees:0xee80b9-1bb1f3 USDC
+  address: "0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3"
+  nameFrom: "the address"
+2026-10-16 open Expenses:Payees:0xf4d08a-860e43 USDC
+  address: "0xf4d08abf297f57acd381f000a25442186d860e43"
+  nameFrom: "the address"
+
+2026-10-17 * "0x6c1c…9a25" "Funding"
+  tx: "0xbc0816f4e2a04717ea211387319aaf7132c88bc63466338d2102b74f1d27deaa"
+  from: "0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25"
+  source: "chain: the USDC transfer into the account"
+  Assets:USDC:Arbitrum-Sepolia:0xdaf055  0.100000 USDC
+  Income:Funding
+
+2026-10-17 * "0x1aac…ca63" "Paid by the owner with the passkey"
+  tx: "0xdffa283a9e8f83ac19c1d9e02f10ff35bb54b976a21ae4f4ef2f5f4a1e465116"
+  settlementKey: "0xe5725877d212151cfe651dd8c674993ef5745038269da699755625126e5b3d70"
+  source: "chain: the USDC transfer and the policy's SettledByPrincipal event"
+  invoice: "0xe5725877d212151cfe651dd8c674993ef5745038269da699755625126e5b3d70"
+  Expenses:Payees:0x1aac04-b3ca63  0.003000 USDC
+  Assets:USDC:Arbitrum-Sepolia:0xdaf055
+
+2026-10-17 * "0xf4d0…0e43" "Paid by the owner with the passkey"
+  tx: "0x6dd582b6143e8d82a28b974eec47d80f62b60fce4dd4b31c02b856ab2465d062"
+  settlementKey: "0xf076910fb2f3ef707b65e5fa4a5d979bcf53bb7c1912d2b7297108f0900e6184"
+  source: "chain: the USDC transfer and the policy's SettledByPrincipal event"
+  asked: "payee-attested: 0xf4d08abf297f57acd381f000a25442186d860e43 is not attested on chain, so the contract would refuse it. The principal can attest it or settle by hand"
+  askedIn: "evt:2 under 0x1ef887b746a36f17791fc92a8ca5441ae93a866959372ebe7d962fac1b79a65a"
+  Expenses:Payees:0xf4d08a-860e43  0.002000 USDC
+  Assets:USDC:Arbitrum-Sepolia:0xdaf055
+
+2026-10-17 * "0xee80…b1f3" "x402 purchase by the agent"
+  event: "evt:0"
+  root: "0xbef05bf7a7ec4a22611d4c37e7fcb9d3cc095f09297b311b9c73422ed291b7a2"
+  receipt: "0x89e2694df0e09fa4bf55f69474f7898bebebcb05b1c85048f853e26fa824e61e"
+  action: "0xb4425a6cd2866cacd42a7d8f9295207ca95eca5c18fd7479016fe12f2b27cc40"
+  settlementKey: "0xb4425a6cd2866cacd42a7d8f9295207ca95eca5c18fd7479016fe12f2b27cc40"
+  tx: "0xdac6d67825192e38dcc93802db922eb2772083fb95531462c4aec02320ece2fd"
+  why: "bought x402 http://127.0.0.1:7918/v1/mid?coin=ETH: ETH mid price for the SDK proof (S18)"
+  source: "the agent's anchored record, matched on chain"
+  Expenses:Payees:0xee80b9-1bb1f3  0.001000 USDC
+  Assets:USDC:Arbitrum-Sepolia:0xdaf055
+
+2026-10-17 ! "0xee80…b1f3" "Paid by the agent key, not in this account's anchored record"
+  tx: "0xcf66a705eb7e972908d009ad87bf83de910a8ec5ed3f1cad5b3397f01395965d"
+  settlementKey: "0x74bed25fcc1f580a43b2113cbffe275391ad9a89ef5549573b06ca77b300f132"
+  source: "chain: the USDC transfer and the policy's Paid event; in no file of this app dir"
+  Expenses:Payees:0xee80b9-1bb1f3  0.001000 USDC
+  Assets:USDC:Arbitrum-Sepolia:0xdaf055
+
+2026-10-17 ! "0xee80…b1f3" "Paid by the agent key, not in this account's anchored record"
+  tx: "0x6d3d7831cec730fd5ea2db075f1ffe2b754b6c69355d0b9ea202e8b810efa2b6"
+  settlementKey: "0xdf45aaf4126afc624a74163e1ac9f658c2522c8f2ebb2554cec0fee55703340d"
+  source: "chain: the USDC transfer and the policy's Paid event; in this app dir's payments, not yet under an anchored root"
+  why: "SDK proof: direct pay to the approved payee (S18)"
+  Expenses:Payees:0xee80b9-1bb1f3  0.001000 USDC
+  Assets:USDC:Arbitrum-Sepolia:0xdaf055
+
+2026-10-18 balance Assets:USDC:Arbitrum-Sepolia:0xdaf055  0.092000 ~ 0 USDC
+  source: "chain: balanceOf at block 320130404, less the transfers after the period"
+
+2026-10-16 open Assets:USDC:Gateway:0x3c559e USDC
+  wallet: "0x3c559e1152b109323eb70ad0fcf6d4e7aa9210f5"
+2026-10-18 balance Assets:USDC:Gateway:0x3c559e  0.000000 ~ 0 USDC
+  source: "Circle Gateway, read; not reconciled to any history"
+
+-- 3.6 the countersign ratio and the files the script says it read
+2026-10-18 00:38:58 +0800
+$ head -9 <pack>/countersign.json
+{
+ "rule": "a payment counts when it was settled under the id of an invoice the payee signed (EIP-712, re-verified here) for the same payee and amount; a withdrawal is not a payment; a recurring invoice's later cycles settle under the bill's action, not the invoice's, and do not count",
+ "slots": "per payment, the shape of ledger::symbolon (docs/117 addendum): counterparty = the payee's signed invoice, witness = the transfer read back from the chain; the agent slot stays empty until records carry the agent's own signature",
+ "paymentsInPeriod": 5,
+ "withPayeeSignedInvoice": 1,
+ "ratio": "1/5",
+ "share": 0.2,
+ "payments": [
+  {
+$ grep -E "\"(ratio|share|withPayeeSignedInvoice|paymentsInPeriod|signedness)\"" <pack>/countersign.json
+ "paymentsInPeriod": 5,
+ "withPayeeSignedInvoice": 1,
+ "ratio": "1/5",
+ "share": 0.2,
+   "signedness": "Double"
+   "signedness": "Single"
+   "signedness": "Single"
+   "signedness": "Single"
+   "signedness": "Single"
+
+$ cat <pack>/sources.json
+{
+ "builtAt": "2026-10-17T16:32:21Z",
+ "chain": {
+  "key": "arbitrum-sepolia",
+  "chainId": 421614,
+  "usdc": "0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d",
+  "recordContract": "0xe7c381aafa077cc99359e8b297d2125efd76b8f5"
+ },
+ "nodes": [
+  {
+   "url": "https://sepolia-rollup.arbitrum.io/rpc",
+   "head": 320130404
+  },
+  {
+   "url": "https://arbitrum-sepolia-rpc.publicnode.com",
+   "head": 320130407
+  }
+ ],
+ "readAtBlock": 320130404,
+ "transfersFromBlock": 319995525,
+ "account": {
+  "policy": "0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1",
+  "agent": "0x5342886f08fb99f6a571dca291fc32ab92f0b210"
+ },
+ "balance": {
+  "balanceOf": "0.092000",
+  "transfersAfterPeriod": "0.000000",
+  "closing": "0.092000",
+  "opening": "0.000000",
+  "transfersAddUpToBalanceOf": true
+ },
+ "period": {
+  "from": "2026-10-16",
+  "to": "2026-10-17",
+  "fromUnix": 1792108800,
+  "toUnixExclusive": 1792281600
+ },
+ "files": [
+  {
+   "path": "tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.json",
+   "sha256": "4ef036e04dd2705dd7cab218a79506ff3817ed9cc517291ed73b210076524489"
+  },
+  {
+   "path": "tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x1ef887b746a36f17791fc92a8ca5441ae93a866959372ebe7d962fac1b79a65a.events.jsonl",
+   "sha256": "20793a6be3e5a29ce687df5dae023161d00dccef9dee212d574cca88bae0aa2b"
+  },
+  {
+   "path": "tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x244e74dda71bae929247ce8c9f7a7fb8c884ab3ac0f988d3b5c92dea128eee85.events.jsonl",
+   "sha256": "420a199de46cb952f679573e6fa4b6cc456242bca50292473ac40b13fde5276b"
+  },
+  {
+   "path": "tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x2b3b48cfe826612e3c895c926c04f235877b0d0eef81fb8c8ca6855c6fe38b04.events.jsonl",
+   "sha256": "c35e6a62b7aaeca7039aceddf1d3f7b0691417815f248ec5580a0cc8a73820f4"
+  },
+  {
+   "path": "tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x39285d6eaa1f07323d05a30e3df0889074d052978e80f5542e420cdc576efc3d.events.jsonl",
+   "sha256": "c551c08f471bc5fcdbd7f213b9859321e7056e72809a37eb1829ba11a33e89e0"
+  },
+  {
+   "path": "tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b.events.jsonl",
+   "sha256": "87938c9c08a8fb25cb9407455094f711e5036070e2da8ede0b5ad7cdaaee0731"
+  },
+  {
+   "path": "tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x82e8633c440807c1d227d53ef98987c34923c24900931d2ac0cb5bd613a20d05.events.jsonl",
+   "sha256": "87b16b75fefa6e1b2b7f54e3d58d9482e578f96218192ec2c9a8abdb2fba1c9c"
+  },
+  {
+   "path": "tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x8db8b570f0d69b33072b75d834b57f3be5e2f27af4bd0c8aa34f821978931424.events.jsonl",
+   "sha256": "114aaa5fa6775b4104aed6a533516a9f3f6ed924313b2005ea56893e0828cfb9"
+  },
+  {
+   "path": "tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x9651e9d967e095116114b3c1f2158105d0525c593bc74deb87fb5cccebb74e67.events.jsonl",
+   "sha256": "4f0391a92111eb7b0c13e0391c8e707a47b4f22a8e81d8571784cbbbe250b748"
+  },
+  {
+   "path": "tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x9f741ad6e9cba923514433fba58c3136e1944ad3a311835bf4dd9b47daa155ca.events.jsonl",
+   "sha256": "90283f45f9077365e1d55714fc66a5963f79761b0ae43c4ad7bd116f7660bdb3"
+  },
+  {
+   "path": "tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0xbef05bf7a7ec4a22611d4c37e7fcb9d3cc095f09297b311b9c73422ed291b7a2.events.jsonl",
+   "sha256": "58487e79d4632fa2a8cabdcb1a3b5e7decd5234ab6a7fa9a31a34ed61d6a94fd"
+  },
+  {
+   "path": "tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/anchors.jsonl",
+   "sha256": "747016557f1a4c272571731988b999d9901b9aec2e3cdd74c45af61fcf660f92"
+  },
+  {
+   "path": "tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.invoices.jsonl",
+   "sha256": "27d529809cee17c259da9b379c123a987805698d40bc8441e7be4758160a69bf"
+  },
+  {
+   "path": "tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.invoice-decisions.jsonl",
+   "sha256": "0ad2c3df0f0a7da3f9eb47e9f87ca7da339ef1d2933956efb8d4f1d6b51f8caa"
+  },
+  {
+   "path": "tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.payments.jsonl",
+   "sha256": "cb473a384e8a9699cfefde0c644429a693246e156425fec904c7d9523b392dc6"
+  },
+  {
+   "path": "tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.purchases.jsonl",
+   "sha256": "a2f76803318cd636c2ed5c7ff1f83be5b994548b5ed13674a7703f377f7703de"
+  }
+ ],
+ "witnesses": [
+  {
+   "alg": "balance-read",
+   "keyId": "chain:421614",
+   "sig": null,
+   "block": 320130404,
+   "balance": "0.092000",
+   "account": "0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1"
+  },
+  {
+   "present": true,
+   "alg": "balance-read",
+   "keyId": "gateway:0x3c559e1152b109323eb70ad0fcf6d4e7aa9210f5",
+   "sig": null,
+   "at": 1792254676,
+   "balance": "0.000000",
+   "domains": [],
+   "source": "https://gateway-api-testnet.circle.com/v1/balances"
+  }
+ ],
+ "tools": {
+  "python": "3.15.0",
+  "keccak": "Python hashlib KECCAK-256 (OpenSSL 4.0.3 29 Sep 2026)",
+  "cast": "cast Version: 1.5.1-stable",
+  "bean-check": "Beancount 3.2.3"
+ },
+ "beanCheck": {
+  "exit": 0,
+  "output": ""
+ },
+ "vendorUsageReport": "not present in this app dir"
+}
+-- 3.7 independent reads with cast (not the script)
+2026-10-18 00:34:51 +0800
+node https://sepolia-rollup.arbitrum.io/rpc
+$ cast block-number --rpc-url https://sepolia-rollup.arbitrum.io/rpc
+320131265
+$ cast call 0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d "balanceOf(address)(uint256)" 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 --rpc-url https://sepolia-rollup.arbitrum.io/rpc
+92000 [9.2e4]
+$ cast call 0xe7c381aafa077cc99359e8b297d2125efd76b8f5 "rootOf(address)(bytes32)" 0x5342886f08fb99f6a571dca291fc32ab92f0b210 --rpc-url https://sepolia-rollup.arbitrum.io/rpc
+0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b
+
+node https://arbitrum-sepolia-rpc.publicnode.com
+$ cast block-number --rpc-url https://arbitrum-sepolia-rpc.publicnode.com
+320131289
+$ cast call 0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d "balanceOf(address)(uint256)" 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 --rpc-url https://arbitrum-sepolia-rpc.publicnode.com
+92000 [9.2e4]
+$ cast call 0xe7c381aafa077cc99359e8b297d2125efd76b8f5 "rootOf(address)(bytes32)" 0x5342886f08fb99f6a571dca291fc32ab92f0b210 --rpc-url https://arbitrum-sepolia-rpc.publicnode.com
+0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b
+
+
+-- 3.8 step 5, against the author's run: sha256 of the pack files, then with his run-time values put in
+2026-10-18 00:34:03 +0800
+--- my pack: sha256 of each file as written ---
+0f0b5788a22563d7e49f92621689cc795a8259db4170c244f0cd198ac41e3061  countersign.json
+b175f5d167fbffc711ccccbd4a74916976e3409191ecd8cdd7ea2d5c4cf820ec  ledger.beancount
+2046f9caaa38e43fd7daeb256b685856b0c0b34d456f1b913c6446cd310ff191  README.md
+e77a9b722fdb12ec9db0d0946957d4c4a9519a63e597ee58a20209cab2888306  replay.txt
+62228adafd7b14c5601dccb0c6b95c4e179bd94b32745a7f7141779df1c75658  root.json
+947cb7ff574e0714447458126eccf9b45efeb7b0dfcd3a5da3c57aec0f611a00  signatures.json
+0382032d4f31f87826bcdab7244ddf4dd5426ea53ed5006c727b430ea9dcc2c1  sources.json
+
+--- the author sha256 (audit-pack-2026-10-18.txt, section 2) ---
+0f0b5788a22563d7e49f92621689cc795a8259db4170c244f0cd198ac41e3061  countersign.json
+186ee09befce5c3dc592a2996aa4be2d12c9cda2d59eaeff66da45dab5bcc816  ledger.beancount
+1398688ed60853742d47798b30e6aed4dea9dd9ddf40b7c56e85f3fa1775140d  README.md
+09e3fda58bf4cdd9d5d0c72b5f05790151fc58e91087eb22de234ac4fe99b049  replay.txt
+1c55f8f141a0514a839ed82e6d66f9e9bd8458708448cc9821e4b4dd0e7c33ef  root.json
+947cb7ff574e0714447458126eccf9b45efeb7b0dfcd3a5da3c57aec0f611a00  signatures.json
+aaa2fea624c619201b5134445090345e9e3cb841e641922bdca851ae51f9a881  sources.json
+
+--- where the block number and the Gateway read time appear in my files (counts) ---
+ledger.beancount   block320130404=2  gw-time "16:31 UTC"=0
+replay.txt         block320130404=2  gw-time "16:31 UTC"=0
+root.json          block320130404=1  gw-time "16:31 UTC"=0
+README.md          block320130404=0  gw-time "16:31 UTC"=1
+sources.json       block320130404=3  gw-time "16:31 UTC"=0
+signatures.json    block320130404=0  gw-time "16:31 UTC"=0
+countersign.json   block320130404=0  gw-time "16:31 UTC"=0
+author gateway at 1792253218 2026-10-17 16:06:58 UTC
+my gateway at 1792254676 2026-10-17 16:31:16 UTC
+
+2026-10-18 00:34:28 +0800
+countersign.json   raw SAME  (0f0b5788a22563d7e49f92621689cc795a8259db4170c244f0cd198ac41e3061)
+ledger.beancount   raw differs; after putting the author's 320124915 in place of mine: SAME as the author  (186ee09befce5c3dc592a2996aa4be2d12c9cda2d59eaeff66da45dab5bcc816)
+README.md          raw differs; after putting the author's 16:06 UTC in place of mine: SAME as the author  (1398688ed60853742d47798b30e6aed4dea9dd9ddf40b7c56e85f3fa1775140d)
+replay.txt         raw differs; after putting the author's 320124915 in place of mine: SAME as the author  (09e3fda58bf4cdd9d5d0c72b5f05790151fc58e91087eb22de234ac4fe99b049)
+root.json          raw differs; after putting the author's 320124915 in place of mine: SAME as the author  (1c55f8f141a0514a839ed82e6d66f9e9bd8458708448cc9821e4b4dd0e7c33ef)
+signatures.json    raw SAME  (947cb7ff574e0714447458126eccf9b45efeb7b0dfcd3a5da3c57aec0f611a00)
+sources.json       raw differs ; search over builtAt (400 s) x node-2 head (160 blocks): SAME as the author with builtAt=2026-10-17T16:07:52Z node-2 head=320124919
+
+-- 3.9 step 5, line by line: the root section and the script's summary
+2026-10-18 00:38:47 +0800
+--- A. my root.json in the author's line shape (python3 root_lines.py <pack>/root.json) ---
+  record 0x2b3b48cfe826612e3c895c926c04f235877b0d0eef81fb8c8ca6855c6fe38b04  1 events  recomputed = file name  anchor tx 0x6d5dfa50bc6acffe42d3804e79de6a15154f56c077898f521885f15f615843df: MATCH, MATCH  -> MATCH
+  record 0x9f741ad6e9cba923514433fba58c3136e1944ad3a311835bf4dd9b47daa155ca  3 events  recomputed = file name  anchor tx 0xb84e1fa00eca27b38f3f5ddae52880435a57d51bc0c9c41d06ec62e32c40cf65: MATCH, MATCH  -> MATCH
+  record 0x82e8633c440807c1d227d53ef98987c34923c24900931d2ac0cb5bd613a20d05  4 events  recomputed = file name  anchor tx 0xfeb55421f3cd1ecc1446504c73b7a2f179993a2d0e35d0511d5a6c6d8ce3ca08: MATCH, MATCH  -> MATCH
+  record 0x244e74dda71bae929247ce8c9f7a7fb8c884ab3ac0f988d3b5c92dea128eee85  4 events  recomputed = file name  anchor tx 0xbe82f5a223a35cb1b4fb764f40b99353b8a6898fa5e5fa493db7f7ba9574a7fb: MATCH, MATCH  -> MATCH
+  record 0x9651e9d967e095116114b3c1f2158105d0525c593bc74deb87fb5cccebb74e67  3 events  recomputed = file name  anchor tx 0x2366b49b56b1266bae0243a0869d5dbf750b6417a0171014b4e029939c094e1f: MATCH, MATCH  -> MATCH
+  record 0x1ef887b746a36f17791fc92a8ca5441ae93a866959372ebe7d962fac1b79a65a  5 events  recomputed = file name  anchor tx 0xcdc50233ae95402d4fcc0dcc176d116bce421a44baec2f7a689f4bc245a581e8: MATCH, MATCH  -> MATCH
+  record 0x8db8b570f0d69b33072b75d834b57f3be5e2f27af4bd0c8aa34f821978931424  3 events  recomputed = file name  anchor tx 0x2fbe2a3bcdd41469593d2b9b76419c8f12858b928a5adcd19307a6ec41eeac04: MATCH, MATCH  -> MATCH
+  record 0x39285d6eaa1f07323d05a30e3df0889074d052978e80f5542e420cdc576efc3d  5 events  recomputed = file name  anchor tx 0x60ed46e98e9ae36d8d574fbc7af87624b87604605c70836adb497ca88bd4b6e4: MATCH, MATCH  -> MATCH
+  record 0xbef05bf7a7ec4a22611d4c37e7fcb9d3cc095f09297b311b9c73422ed291b7a2  6 events  recomputed = file name  anchor tx 0x1d28d738c6a7005a4008abc3431d43fa7daa611d5def5169ceeed18397096bb2: MATCH, MATCH  -> MATCH
+  record 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b  5 events  recomputed = file name  anchor tx 0xb0f704f0525f4d288a6477c3e1701e0b5ebb9f1b90d51587e9c3ede3a0db7b24: MATCH, MATCH  -> MATCH
+  rootOf(0x5342886f08fb99f6a571dca291fc32ab92f0b210) at block 320130404 = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b; latest anchored from this app dir = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b -> MATCH
+  written, never anchored: []
+
+--- B. the author's lines, extracted from proof/audit-pack-2026-10-18.txt with: grep -E "^  (record 0x|rootOf\(|written, never anchored)" ---
+  record 0x2b3b48cfe826612e3c895c926c04f235877b0d0eef81fb8c8ca6855c6fe38b04  1 events  recomputed = file name  anchor tx 0x6d5dfa50bc6acffe42d3804e79de6a15154f56c077898f521885f15f615843df: MATCH, MATCH  -> MATCH
+  record 0x9f741ad6e9cba923514433fba58c3136e1944ad3a311835bf4dd9b47daa155ca  3 events  recomputed = file name  anchor tx 0xb84e1fa00eca27b38f3f5ddae52880435a57d51bc0c9c41d06ec62e32c40cf65: MATCH, MATCH  -> MATCH
+  record 0x82e8633c440807c1d227d53ef98987c34923c24900931d2ac0cb5bd613a20d05  4 events  recomputed = file name  anchor tx 0xfeb55421f3cd1ecc1446504c73b7a2f179993a2d0e35d0511d5a6c6d8ce3ca08: MATCH, MATCH  -> MATCH
+  record 0x244e74dda71bae929247ce8c9f7a7fb8c884ab3ac0f988d3b5c92dea128eee85  4 events  recomputed = file name  anchor tx 0xbe82f5a223a35cb1b4fb764f40b99353b8a6898fa5e5fa493db7f7ba9574a7fb: MATCH, MATCH  -> MATCH
+  record 0x9651e9d967e095116114b3c1f2158105d0525c593bc74deb87fb5cccebb74e67  3 events  recomputed = file name  anchor tx 0x2366b49b56b1266bae0243a0869d5dbf750b6417a0171014b4e029939c094e1f: MATCH, MATCH  -> MATCH
+  record 0x1ef887b746a36f17791fc92a8ca5441ae93a866959372ebe7d962fac1b79a65a  5 events  recomputed = file name  anchor tx 0xcdc50233ae95402d4fcc0dcc176d116bce421a44baec2f7a689f4bc245a581e8: MATCH, MATCH  -> MATCH
+  record 0x8db8b570f0d69b33072b75d834b57f3be5e2f27af4bd0c8aa34f821978931424  3 events  recomputed = file name  anchor tx 0x2fbe2a3bcdd41469593d2b9b76419c8f12858b928a5adcd19307a6ec41eeac04: MATCH, MATCH  -> MATCH
+  record 0x39285d6eaa1f07323d05a30e3df0889074d052978e80f5542e420cdc576efc3d  5 events  recomputed = file name  anchor tx 0x60ed46e98e9ae36d8d574fbc7af87624b87604605c70836adb497ca88bd4b6e4: MATCH, MATCH  -> MATCH
+  record 0xbef05bf7a7ec4a22611d4c37e7fcb9d3cc095f09297b311b9c73422ed291b7a2  6 events  recomputed = file name  anchor tx 0x1d28d738c6a7005a4008abc3431d43fa7daa611d5def5169ceeed18397096bb2: MATCH, MATCH  -> MATCH
+  record 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b  5 events  recomputed = file name  anchor tx 0xb0f704f0525f4d288a6477c3e1701e0b5ebb9f1b90d51587e9c3ede3a0db7b24: MATCH, MATCH  -> MATCH
+  rootOf(0x5342886f08fb99f6a571dca291fc32ab92f0b210) at block 320124915 = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b; latest anchored from this app dir = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b -> MATCH
+  written, never anchored: []
+
+--- C. diff author mine (expect only the block number in the rootOf line) ---
+11c11
+<   rootOf(0x5342886f08fb99f6a571dca291fc32ab92f0b210) at block 320124915 = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b; latest anchored from this app dir = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b -> MATCH
+---
+>   rootOf(0x5342886f08fb99f6a571dca291fc32ab92f0b210) at block 320130404 = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b; latest anchored from this app dir = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b -> MATCH
+diff exit=1 (1 = differences listed above)
+
+--- D. the script's own summary, author vs mine: diff of the 8 lines after the "audit pack:" path line ---
+(author)
+  ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320124915)
+  payments   1 in the agent's anchored record, 2 by the owner's passkey, 2 flagged ! (on chain, not in the record)
+  records    10/10 recomputed and anchored by the account's key on both nodes; rootOf now: MATCH
+  invoices   2/2 payee signatures valid; payments countersigned 1/5
+  statements no --host given: weekly statements not checked
+  gateway    0.000000 USDC at Circle for the bill wallet 0x3c559e1152b109323eb70ad0fcf6d4e7aa9210f5 (second balance line)
+  bean-check passed (Beancount 3.2.3)
+audit pack: every check held
+exit=0
+(mine)
+  ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320130404)
+  payments   1 in the agent's anchored record, 2 by the owner's passkey, 2 flagged ! (on chain, not in the record)
+  records    10/10 recomputed and anchored by the account's key on both nodes; rootOf now: MATCH
+  invoices   2/2 payee signatures valid; payments countersigned 1/5
+  statements no --host given: weekly statements not checked
+  gateway    0.000000 USDC at Circle for the bill wallet 0x3c559e1152b109323eb70ad0fcf6d4e7aa9210f5 (second balance line)
+  bean-check passed (Beancount 3.2.3)
+audit pack: every check held
+exit=0
+(diff author mine)
+1c1
+<   ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320124915)
+---
+>   ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320130404)
+diff exit=1
+
+-- 3.10 extras, not asked: the unit test with no cast on PATH; the clone's tree afterwards
+2026-10-18 00:36:16 +0800
+# EXTRA (not asked): same unit test with a PATH that has no cast and no bean-check
+$ PATH=/opt/homebrew/bin:/usr/bin:/bin python3 -m unittest scripts/test_audit_pack.py
+ss
+----------------------------------------------------------------------
+Ran 2 tests in 0.000s
+
+OK (skipped=2)
+exit=0
+
+# EXTRA: as test_all.sh line 37 prints it (run ... | tail -3), same PATH
+Ran 2 tests in 0.000s
+
+OK (skipped=2)
+step exit=0
+
+2026-10-18 00:36:54 +0800
+$ git status --short --ignored | head
+!! scripts/__pycache__/
+(end)
+
+$ git diff --stat
+(end)
+
+audit-pack/ default out dir in clone exists? no
+
+--- did the account source change while I ran? (mtime/size/sha256 of the 20 copied files vs source, re-checked now) ---
+re-check done (no CHANGED lines above = source unchanged)
+
+== 4. Pass B: main 23be9f6, 2026-10-18 04:53 to 05:00 +0800
+
+-- 4.1 step 3a, the unit tests
+2026-10-18 04:53:54 +0800
+$ cd s26b-clone2   # <scratch>/s26b-clone2
+$ python3 -m unittest scripts/test_audit_pack.py
+..
+----------------------------------------------------------------------
+Ran 2 tests in 0.848s
+
+OK
+exit=0
+2026-10-18 04:53:55 +0800
+
+-- 4.2 step 3b, test_all.sh line 38 again
+line 38 of scripts/test_all.sh:
+step "audit pack: bean-check on the fixture's ledger" run 'f=crates/operator/tests/fixtures/audit-pack; a="file://$PWD/$f/answers.json"; out=$(mktemp -d); trap "rm -rf \"$out\"" EXIT; python3 scripts/audit_pack.py "$f" 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 2026-10-16 2026-10-17 --rpc "$a" --rpc2 "$a" --gateway "$a" --block 320121361 --out "$out" >/dev/null || exit 1; if command -v bean-check >/dev/null; then bean-check "$out"/*/*/ledger.beancount && echo "  bean-check $(bean-check --version | head -1): exit 0"; else printf "  \033[31mskipped: bean-check not installed\033[0m\n"; fi'
+
+inner command (between run ' and the closing '):
+f=crates/operator/tests/fixtures/audit-pack; a="file://$PWD/$f/answers.json"; out=$(mktemp -d); trap "rm -rf \"$out\"" EXIT; python3 scripts/audit_pack.py "$f" 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 2026-10-16 2026-10-17 --rpc "$a" --rpc2 "$a" --gateway "$a" --block 320121361 --out "$out" >/dev/null || exit 1; if command -v bean-check >/dev/null; then bean-check "$out"/*/*/ledger.beancount && echo "  bean-check $(bean-check --version | head -1): exit 0"; else printf "  \033[31mskipped: bean-check not installed\033[0m\n"; fi
+
+2026-10-18 04:53:55 +0800
+$ bash -o pipefail -c "$cmd"   # cwd = <scratch>/s26b-clone2
+  bean-check Beancount 3.2.3: exit 0
+exit=0
+2026-10-18 04:53:56 +0800
+
+-- 4.3 step 4, the account files copied again into a second scratch app dir (04:51); same bytes as the first copy
+2026-10-18 04:51:18 +0800
+$ ls -d /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/app/tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1*   # what the glob expands to now
+tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1
+tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.history.json
+tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.invoice-decisions.jsonl
+tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.invoices.jsonl
+tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.json
+tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.payments.jsonl
+tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.purchases.anchored
+tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.purchases.jsonl
+tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.purchases.pending.json
+$ ls -la /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/app/anchors.jsonl   # the brief's 'app anchors.jsonl'
+ls: /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/app/anchors.jsonl: No such file or directory
+
+$ mkdir -p <scratch>/s26b-app2/tenants
+$ cp -R /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/app/tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1* <scratch>/s26b-app2/tenants/
+cp exit=0
+
+--- file count and bytes: first copy (00:30) vs this copy ---
+s26b-app   files=20
+s26b-app2  files=20
+
+--- sha256 of every file, this copy vs the source, then vs the first copy ---
+copy=source  same-as-first-copy  92f75d377d9931d8d374c604b62992948789712f2506660790ad2dcdc10c3b36  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.history.json
+copy=source  same-as-first-copy  0ad2c3df0f0a7da3f9eb47e9f87ca7da339ef1d2933956efb8d4f1d6b51f8caa  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.invoice-decisions.jsonl
+copy=source  same-as-first-copy  27d529809cee17c259da9b379c123a987805698d40bc8441e7be4758160a69bf  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.invoices.jsonl
+copy=source  same-as-first-copy  4ef036e04dd2705dd7cab218a79506ff3817ed9cc517291ed73b210076524489  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.json
+copy=source  same-as-first-copy  cb473a384e8a9699cfefde0c644429a693246e156425fec904c7d9523b392dc6  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.payments.jsonl
+copy=source  same-as-first-copy  4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.purchases.anchored
+copy=source  same-as-first-copy  a2f76803318cd636c2ed5c7ff1f83be5b994548b5ed13674a7703f377f7703de  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.purchases.jsonl
+copy=source  same-as-first-copy  44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.purchases.pending.json
+copy=source  same-as-first-copy  8bd69470a1192596aadc263f3def26e45a39c3f7822c6336f8008ea15bf44590  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/decisions.jsonl
+copy=source  same-as-first-copy  20793a6be3e5a29ce687df5dae023161d00dccef9dee212d574cca88bae0aa2b  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x1ef887b746a36f17791fc92a8ca5441ae93a866959372ebe7d962fac1b79a65a.events.jsonl
+copy=source  same-as-first-copy  420a199de46cb952f679573e6fa4b6cc456242bca50292473ac40b13fde5276b  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x244e74dda71bae929247ce8c9f7a7fb8c884ab3ac0f988d3b5c92dea128eee85.events.jsonl
+copy=source  same-as-first-copy  c35e6a62b7aaeca7039aceddf1d3f7b0691417815f248ec5580a0cc8a73820f4  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x2b3b48cfe826612e3c895c926c04f235877b0d0eef81fb8c8ca6855c6fe38b04.events.jsonl
+copy=source  same-as-first-copy  c551c08f471bc5fcdbd7f213b9859321e7056e72809a37eb1829ba11a33e89e0  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x39285d6eaa1f07323d05a30e3df0889074d052978e80f5542e420cdc576efc3d.events.jsonl
+copy=source  same-as-first-copy  87938c9c08a8fb25cb9407455094f711e5036070e2da8ede0b5ad7cdaaee0731  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b.events.jsonl
+copy=source  same-as-first-copy  87b16b75fefa6e1b2b7f54e3d58d9482e578f96218192ec2c9a8abdb2fba1c9c  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x82e8633c440807c1d227d53ef98987c34923c24900931d2ac0cb5bd613a20d05.events.jsonl
+copy=source  same-as-first-copy  114aaa5fa6775b4104aed6a533516a9f3f6ed924313b2005ea56893e0828cfb9  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x8db8b570f0d69b33072b75d834b57f3be5e2f27af4bd0c8aa34f821978931424.events.jsonl
+copy=source  same-as-first-copy  4f0391a92111eb7b0c13e0391c8e707a47b4f22a8e81d8571784cbbbe250b748  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x9651e9d967e095116114b3c1f2158105d0525c593bc74deb87fb5cccebb74e67.events.jsonl
+copy=source  same-as-first-copy  90283f45f9077365e1d55714fc66a5963f79761b0ae43c4ad7bd116f7660bdb3  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0x9f741ad6e9cba923514433fba58c3136e1944ad3a311835bf4dd9b47daa155ca.events.jsonl
+copy=source  same-as-first-copy  58487e79d4632fa2a8cabdcb1a3b5e7decd5234ab6a7fa9a31a34ed61d6a94fd  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/0xbef05bf7a7ec4a22611d4c37e7fcb9d3cc095f09297b311b9c73422ed291b7a2.events.jsonl
+copy=source  same-as-first-copy  747016557f1a4c272571731988b999d9901b9aec2e3cdd74c45af61fcf660f92  tenants/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/log/anchors.jsonl
+
+--- files in the first copy that are not in this one ---
+(end)
+
+-- 4.4 step 4, the live run, attempt 1: it crashed
+2026-10-18 04:53:56 +0800
+$ cd s26b-clone2   # <scratch>/s26b-clone2
+$ python3 scripts/audit_pack.py <scratch>/s26b-app2 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 2026-10-16 2026-10-17 --rpc https://sepolia-rollup.arbitrum.io/rpc --rpc2 https://arbitrum-sepolia-rpc.publicnode.com --out <scratch>/s26b-out2
+Traceback (most recent call last):
+  File "<scratch>/s26b-clone2/scripts/audit_pack.py", line 971, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "<scratch>/s26b-clone2/scripts/audit_pack.py", line 554, in main
+    ch = read_chain(urls, c, policy, start, args.block)
+  File "<scratch>/s26b-clone2/scripts/audit_pack.py", line 366, in read_chain
+    root_of = both(urls, lambda u: call(u, c["anchor"], sel("rootOf(address)") + word(writer), at).lower(), "rootOf")
+  File "<scratch>/s26b-clone2/scripts/audit_pack.py", line 299, in both
+    answers = [fn(u) for u in urls]
+               ~~^^^
+  File "<scratch>/s26b-clone2/scripts/audit_pack.py", line 366, in <lambda>
+    root_of = both(urls, lambda u: call(u, c["anchor"], sel("rootOf(address)") + word(writer), at).lower(), "rootOf")
+                                   ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<scratch>/s26b-clone2/scripts/audit_pack.py", line 268, in call
+    return rpc(url, "eth_call", [{"to": to, "data": data}, hex(block)])
+  File "<scratch>/s26b-clone2/scripts/audit_pack.py", line 262, in rpc
+    raise RuntimeError(f"{url}: {method}: {reply['error']}")
+RuntimeError: https://arbitrum-sepolia-rpc.publicnode.com: eth_call: {'code': -32000, 'message': 'historical state 79ba7ada753514d7da947b13e05a049aed88c52f23a4b6d5ce59b2869e8a50de is not available'}
+exit=1
+2026-10-18 04:54:45 +0800
+
+-- 4.5 the same command, attempts 2, 3 and 4 (attempts.sh runs it once per attempt, each with its own --out)
+2026-10-18 04:55:47 +0800
+attempt 2   $ cd s26b-clone2   # <scratch>/s26b-clone2
+$ python3 scripts/audit_pack.py <scratch>/s26b-app2 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 2026-10-16 2026-10-17 --rpc https://sepolia-rollup.arbitrum.io/rpc --rpc2 https://arbitrum-sepolia-rpc.publicnode.com --out <scratch>/s26b-out2-attempt2
+audit pack: <scratch>/s26b-out2-attempt2/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/2026-10-16_2026-10-17
+  ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320189824)
+  payments   1 in the agent's anchored record, 2 by the owner's passkey, 2 flagged ! (on chain, not in the record)
+  records    10/10 recomputed and anchored by the account's key on both nodes; rootOf now: MATCH
+  invoices   2/2 payee signatures valid; payments countersigned 1/5
+  statements no --host given: weekly statements not checked
+  gateway    0.000000 USDC at Circle for the bill wallet 0x3c559e1152b109323eb70ad0fcf6d4e7aa9210f5 (second balance line)
+  bean-check passed (Beancount 3.2.3)
+audit pack: every check held
+exit=0
+2026-10-18 04:56:24 +0800
+
+2026-10-18 04:56:24 +0800
+attempt 3   $ cd s26b-clone2   # <scratch>/s26b-clone2
+$ python3 scripts/audit_pack.py <scratch>/s26b-app2 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 2026-10-16 2026-10-17 --rpc https://sepolia-rollup.arbitrum.io/rpc --rpc2 https://arbitrum-sepolia-rpc.publicnode.com --out <scratch>/s26b-out2-attempt3
+audit pack: <scratch>/s26b-out2-attempt3/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/2026-10-16_2026-10-17
+  ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320189972)
+  payments   1 in the agent's anchored record, 2 by the owner's passkey, 2 flagged ! (on chain, not in the record)
+  records    10/10 recomputed and anchored by the account's key on both nodes; rootOf now: MATCH
+  invoices   2/2 payee signatures valid; payments countersigned 1/5
+  statements no --host given: weekly statements not checked
+  gateway    0.000000 USDC at Circle for the bill wallet 0x3c559e1152b109323eb70ad0fcf6d4e7aa9210f5 (second balance line)
+  bean-check passed (Beancount 3.2.3)
+audit pack: every check held
+exit=0
+2026-10-18 04:56:59 +0800
+
+2026-10-18 04:56:59 +0800
+attempt 4   $ cd s26b-clone2   # <scratch>/s26b-clone2
+$ python3 scripts/audit_pack.py <scratch>/s26b-app2 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 2026-10-16 2026-10-17 --rpc https://sepolia-rollup.arbitrum.io/rpc --rpc2 https://arbitrum-sepolia-rpc.publicnode.com --out <scratch>/s26b-out2-attempt4
+audit pack: <scratch>/s26b-out2-attempt4/0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1/2026-10-16_2026-10-17
+  ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320190104)
+  payments   1 in the agent's anchored record, 2 by the owner's passkey, 2 flagged ! (on chain, not in the record)
+  records    10/10 recomputed and anchored by the account's key on both nodes; rootOf now: MATCH
+  invoices   2/2 payee signatures valid; payments countersigned 1/5
+  statements no --host given: weekly statements not checked
+  gateway    0.000000 USDC at Circle for the bill wallet 0x3c559e1152b109323eb70ad0fcf6d4e7aa9210f5 (second balance line)
+  bean-check passed (Beancount 3.2.3)
+audit pack: every check held
+exit=0
+2026-10-18 04:57:36 +0800
+
+
+-- 4.6 bean-check on each produced ledger, and the balance lines of attempt 2
+2026-10-18 04:59:39 +0800
+--- attempt 2: bean-check on its own ledger ---
+$ bean-check <attempt 2 pack>/ledger.beancount
+bean-check exit=0
+--- attempt 3: bean-check on its own ledger ---
+$ bean-check <attempt 3 pack>/ledger.beancount
+bean-check exit=0
+--- attempt 4: bean-check on its own ledger ---
+$ bean-check <attempt 4 pack>/ledger.beancount
+bean-check exit=0
+Beancount 3.2.3
+
+--- attempt 2 pack: ls -la ---
+total 120
+drwxr-xr-x@ 9 lingsiewwin  wheel    288 Oct 18 04:56 .
+drwxr-xr-x@ 3 lingsiewwin  wheel     96 Oct 18 04:55 ..
+-rw-r--r--@ 1 lingsiewwin  wheel   3962 Oct 18 04:56 countersign.json
+-rw-r--r--@ 1 lingsiewwin  wheel   4486 Oct 18 04:56 ledger.beancount
+-rw-r--r--@ 1 lingsiewwin  wheel   5910 Oct 18 04:56 README.md
+-rw-r--r--@ 1 lingsiewwin  wheel  17692 Oct 18 04:56 replay.txt
+-rw-r--r--@ 1 lingsiewwin  wheel   7698 Oct 18 04:56 root.json
+-rw-r--r--@ 1 lingsiewwin  wheel   3334 Oct 18 04:56 signatures.json
+-rw-r--r--@ 1 lingsiewwin  wheel   5060 Oct 18 04:56 sources.json
+
+--- attempt 2 ledger: the balance lines and the flagged payments ---
+58:2026-10-17 ! "0xee80…b1f3" "Paid by the agent key, not in this account's anchored record"
+59-  tx: "0xcf66a705eb7e972908d009ad87bf83de910a8ec5ed3f1cad5b3397f01395965d"
+--
+65:2026-10-17 ! "0xee80…b1f3" "Paid by the agent key, not in this account's anchored record"
+66-  tx: "0x6d3d7831cec730fd5ea2db075f1ffe2b754b6c69355d0b9ea202e8b810efa2b6"
+--
+73:2026-10-18 balance Assets:USDC:Arbitrum-Sepolia:0xdaf055  0.092000 ~ 0 USDC
+74-  source: "chain: balanceOf at block 320189824, less the transfers after the period"
+--
+78:2026-10-18 balance Assets:USDC:Gateway:0x3c559e  0.000000 ~ 0 USDC
+79-  source: "Circle Gateway, read; not reconciled to any history"
+
+-- 4.7 the countersign ratio and the files read, attempt 2
+2026-10-18 04:59:39 +0800
+$ head -9 <attempt 2 pack>/countersign.json
+{
+ "rule": "a payment counts when it was settled under the id of an invoice the payee signed (EIP-712, re-verified here) for the same payee and amount; a withdrawal is not a payment; a recurring invoice's later cycles settle under the bill's action, not the invoice's, and do not count",
+ "slots": "per payment, the shape of ledger::symbolon (docs/117 addendum): counterparty = the payee's signed invoice, witness = the transfer read back from the chain; the agent slot stays empty until records carry the agent's own signature",
+ "paymentsInPeriod": 5,
+ "withPayeeSignedInvoice": 1,
+ "ratio": "1/5",
+ "share": 0.2,
+ "payments": [
+  {
+$ grep -E "\"(ratio|share|withPayeeSignedInvoice|paymentsInPeriod|signedness)\"" <attempt 2 pack>/countersign.json
+ "paymentsInPeriod": 5,
+ "withPayeeSignedInvoice": 1,
+ "ratio": "1/5",
+ "share": 0.2,
+   "signedness": "Double"
+   "signedness": "Single"
+   "signedness": "Single"
+   "signedness": "Single"
+   "signedness": "Single"
+
+$ cat <attempt 2 pack>/sources.json
+(its sources.json is not repeated: it has the same 16 files and hashes as 3.6; 4.10 shows the lines that differ from pass A's)
+
+-- 4.8 independent reads with cast, 04:54
+2026-10-18 04:54:45 +0800
+node https://sepolia-rollup.arbitrum.io/rpc
+$ cast block-number --rpc-url https://sepolia-rollup.arbitrum.io/rpc
+320189582
+$ cast call 0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d "balanceOf(address)(uint256)" 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 --rpc-url https://sepolia-rollup.arbitrum.io/rpc
+92000 [9.2e4]
+$ cast call 0xe7c381aafa077cc99359e8b297d2125efd76b8f5 "rootOf(address)(bytes32)" 0x5342886f08fb99f6a571dca291fc32ab92f0b210 --rpc-url https://sepolia-rollup.arbitrum.io/rpc
+0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b
+
+node https://arbitrum-sepolia-rpc.publicnode.com
+$ cast block-number --rpc-url https://arbitrum-sepolia-rpc.publicnode.com
+320189596
+$ cast call 0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d "balanceOf(address)(uint256)" 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 --rpc-url https://arbitrum-sepolia-rpc.publicnode.com
+92000 [9.2e4]
+$ cast call 0xe7c381aafa077cc99359e8b297d2125efd76b8f5 "rootOf(address)(bytes32)" 0x5342886f08fb99f6a571dca291fc32ab92f0b210 --rpc-url https://arbitrum-sepolia-rpc.publicnode.com
+0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b
+
+
+-- 4.9 step 5, against the author's run: attempts 2, 3, 4
+2026-10-18 04:59:39 +0800
+################ attempt 2: python3 normalize_compare2.py <pack> ################
+my run: read block 320189824, node heads 320189824 / 320189828, builtAt 2026-10-17T20:56:24Z, Circle read at 1792270565
+author: read block 320124915, node heads 320124915 / 320124919 (builtAt and node-2 head inferred in pass A), builtAt 2026-10-17T16:07:52Z, Circle read at 1792253218
+
+countersign.json   as written: IDENTICAL to the author  0f0b5788a22563d7e49f92621689cc795a8259db4170c244f0cd198ac41e3061
+ledger.beancount   as written: differs; with the author's run-time values put in: IDENTICAL to the author  186ee09befce5c3dc592a2996aa4be2d12c9cda2d59eaeff66da45dab5bcc816
+README.md          as written: differs; with the author's run-time values put in: IDENTICAL to the author  1398688ed60853742d47798b30e6aed4dea9dd9ddf40b7c56e85f3fa1775140d
+replay.txt         as written: differs; with the author's run-time values put in: IDENTICAL to the author  09e3fda58bf4cdd9d5d0c72b5f05790151fc58e91087eb22de234ac4fe99b049
+root.json          as written: differs; with the author's run-time values put in: IDENTICAL to the author  1c55f8f141a0514a839ed82e6d66f9e9bd8458708448cc9821e4b4dd0e7c33ef
+signatures.json    as written: IDENTICAL to the author  947cb7ff574e0714447458126eccf9b45efeb7b0dfcd3a5da3c57aec0f611a00
+sources.json       as written: differs; with the author's run-time values put in: IDENTICAL to the author  aaa2fea624c619201b5134445090345e9e3cb841e641922bdca851ae51f9a881
+
+all seven pack files byte-identical to the author's after swapping run-time values
+
+################ attempt 3: python3 normalize_compare2.py <pack> ################
+my run: read block 320189972, node heads 320189972 / 320189977, builtAt 2026-10-17T20:56:59Z, Circle read at 1792270602
+author: read block 320124915, node heads 320124915 / 320124919 (builtAt and node-2 head inferred in pass A), builtAt 2026-10-17T16:07:52Z, Circle read at 1792253218
+
+countersign.json   as written: IDENTICAL to the author  0f0b5788a22563d7e49f92621689cc795a8259db4170c244f0cd198ac41e3061
+ledger.beancount   as written: differs; with the author's run-time values put in: IDENTICAL to the author  186ee09befce5c3dc592a2996aa4be2d12c9cda2d59eaeff66da45dab5bcc816
+README.md          as written: differs; with the author's run-time values put in: IDENTICAL to the author  1398688ed60853742d47798b30e6aed4dea9dd9ddf40b7c56e85f3fa1775140d
+replay.txt         as written: differs; with the author's run-time values put in: IDENTICAL to the author  09e3fda58bf4cdd9d5d0c72b5f05790151fc58e91087eb22de234ac4fe99b049
+root.json          as written: differs; with the author's run-time values put in: IDENTICAL to the author  1c55f8f141a0514a839ed82e6d66f9e9bd8458708448cc9821e4b4dd0e7c33ef
+signatures.json    as written: IDENTICAL to the author  947cb7ff574e0714447458126eccf9b45efeb7b0dfcd3a5da3c57aec0f611a00
+sources.json       as written: differs; with the author's run-time values put in: IDENTICAL to the author  aaa2fea624c619201b5134445090345e9e3cb841e641922bdca851ae51f9a881
+
+all seven pack files byte-identical to the author's after swapping run-time values
+
+################ attempt 4: python3 normalize_compare2.py <pack> ################
+my run: read block 320190104, node heads 320190104 / 320190109, builtAt 2026-10-17T20:57:36Z, Circle read at 1792270636
+author: read block 320124915, node heads 320124915 / 320124919 (builtAt and node-2 head inferred in pass A), builtAt 2026-10-17T16:07:52Z, Circle read at 1792253218
+
+countersign.json   as written: IDENTICAL to the author  0f0b5788a22563d7e49f92621689cc795a8259db4170c244f0cd198ac41e3061
+ledger.beancount   as written: differs; with the author's run-time values put in: IDENTICAL to the author  186ee09befce5c3dc592a2996aa4be2d12c9cda2d59eaeff66da45dab5bcc816
+README.md          as written: differs; with the author's run-time values put in: IDENTICAL to the author  1398688ed60853742d47798b30e6aed4dea9dd9ddf40b7c56e85f3fa1775140d
+replay.txt         as written: differs; with the author's run-time values put in: IDENTICAL to the author  09e3fda58bf4cdd9d5d0c72b5f05790151fc58e91087eb22de234ac4fe99b049
+root.json          as written: differs; with the author's run-time values put in: IDENTICAL to the author  1c55f8f141a0514a839ed82e6d66f9e9bd8458708448cc9821e4b4dd0e7c33ef
+signatures.json    as written: IDENTICAL to the author  947cb7ff574e0714447458126eccf9b45efeb7b0dfcd3a5da3c57aec0f611a00
+sources.json       as written: differs; with the author's run-time values put in: IDENTICAL to the author  aaa2fea624c619201b5134445090345e9e3cb841e641922bdca851ae51f9a881
+
+all seven pack files byte-identical to the author's after swapping run-time values
+
+--- sha256 of each pack file as written: pass A (s26b-out, 00:32, clone 72a0ddf) ---
+0f0b5788a22563d7e49f92621689cc795a8259db4170c244f0cd198ac41e3061  countersign.json
+b175f5d167fbffc711ccccbd4a74916976e3409191ecd8cdd7ea2d5c4cf820ec  ledger.beancount
+2046f9caaa38e43fd7daeb256b685856b0c0b34d456f1b913c6446cd310ff191  README.md
+e77a9b722fdb12ec9db0d0946957d4c4a9519a63e597ee58a20209cab2888306  replay.txt
+62228adafd7b14c5601dccb0c6b95c4e179bd94b32745a7f7141779df1c75658  root.json
+947cb7ff574e0714447458126eccf9b45efeb7b0dfcd3a5da3c57aec0f611a00  signatures.json
+0382032d4f31f87826bcdab7244ddf4dd5426ea53ed5006c727b430ea9dcc2c1  sources.json
+--- pass B attempt 2 as written ---
+0f0b5788a22563d7e49f92621689cc795a8259db4170c244f0cd198ac41e3061  countersign.json
+ff6e508c340b221e5b6fb1911721153530a837b4796993bd5107c1fcbe67dd6b  ledger.beancount
+e534fa6f102b106c57669fdd5f35d71738e3ec98ccefa794cf2ff4dc085c9be6  README.md
+2f934cb4a14d4459f13388840da2b6fa496ec4a8a5725ca22c52c93fe46340d7  replay.txt
+d9578dd36504f4c034e2576304285998070c6ff0e858107fb075af9ee6ac164a  root.json
+947cb7ff574e0714447458126eccf9b45efeb7b0dfcd3a5da3c57aec0f611a00  signatures.json
+dc309dbd276171b124cb69c843789d6d3daaca94b41f9af48db43d45bbe42a59  sources.json
+--- pass B attempt 3 as written ---
+0f0b5788a22563d7e49f92621689cc795a8259db4170c244f0cd198ac41e3061  countersign.json
+04bde8d0b89a92a114804b4399eb96e102e37519f8d213c2abc5936c9480e904  ledger.beancount
+e534fa6f102b106c57669fdd5f35d71738e3ec98ccefa794cf2ff4dc085c9be6  README.md
+fb87fba19e8cc8e3fe14b7db57133c2e91e133ed2adfa90e66f426fb77614ac7  replay.txt
+b3bd41bebd685c58f9fadd8ae875ab8c32690ce15897e414d34c1f5f1bdfbe76  root.json
+947cb7ff574e0714447458126eccf9b45efeb7b0dfcd3a5da3c57aec0f611a00  signatures.json
+2d1e12fe08131938daa1453de98404a06e530b4dca61e9bde8c7161042bb1661  sources.json
+--- pass B attempt 4 as written ---
+0f0b5788a22563d7e49f92621689cc795a8259db4170c244f0cd198ac41e3061  countersign.json
+0036ff55fad8c9f8f6695b72f5f717967ade85c56f2d68a8d0ff9d97cc4ac880  ledger.beancount
+c6f4ca86f5ed0329ef6bffb44c17d421b9085de9c91c38417bc45b244b6b604a  README.md
+f5202b841fe848b7857d1b21593ba712274f48aab7a5564d9e53560e849cb8b9  replay.txt
+c52098a13a707a0148bcda7e3a9e32b28c024e85920dee0a49e5ce0527ac5ab5  root.json
+947cb7ff574e0714447458126eccf9b45efeb7b0dfcd3a5da3c57aec0f611a00  signatures.json
+4c374b222956f8158d64aa43a073e88fc001bfc2cdd6d3fe520231a990dfb825  sources.json
+
+2026-10-18 04:59:39 +0800
+################ attempt 2 ################
+--- root section: diff author mine (author lines are grep -E "^  (record 0x|rootOf\(|written, never anchored)" of his file) ---
+11c11
+<   rootOf(0x5342886f08fb99f6a571dca291fc32ab92f0b210) at block 320124915 = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b; latest anchored from this app dir = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b -> MATCH
+---
+>   rootOf(0x5342886f08fb99f6a571dca291fc32ab92f0b210) at block 320189824 = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b; latest anchored from this app dir = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b -> MATCH
+diff exit=1 (0 = identical, 1 = differences listed above)
+
+--- script summary: the author (his section 2) ---
+  ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320124915)
+  payments   1 in the agent's anchored record, 2 by the owner's passkey, 2 flagged ! (on chain, not in the record)
+  records    10/10 recomputed and anchored by the account's key on both nodes; rootOf now: MATCH
+  invoices   2/2 payee signatures valid; payments countersigned 1/5
+  statements no --host given: weekly statements not checked
+  gateway    0.000000 USDC at Circle for the bill wallet 0x3c559e1152b109323eb70ad0fcf6d4e7aa9210f5 (second balance line)
+  bean-check passed (Beancount 3.2.3)
+audit pack: every check held
+exit=0
+--- script summary: mine ---
+  ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320189824)
+  payments   1 in the agent's anchored record, 2 by the owner's passkey, 2 flagged ! (on chain, not in the record)
+  records    10/10 recomputed and anchored by the account's key on both nodes; rootOf now: MATCH
+  invoices   2/2 payee signatures valid; payments countersigned 1/5
+  statements no --host given: weekly statements not checked
+  gateway    0.000000 USDC at Circle for the bill wallet 0x3c559e1152b109323eb70ad0fcf6d4e7aa9210f5 (second balance line)
+  bean-check passed (Beancount 3.2.3)
+audit pack: every check held
+exit=0
+--- diff author mine ---
+1c1
+<   ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320124915)
+---
+>   ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320189824)
+diff exit=1 (0 = identical, 1 = differences listed above)
+
+################ attempt 3 ################
+--- root section: diff author mine (author lines are grep -E "^  (record 0x|rootOf\(|written, never anchored)" of his file) ---
+11c11
+<   rootOf(0x5342886f08fb99f6a571dca291fc32ab92f0b210) at block 320124915 = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b; latest anchored from this app dir = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b -> MATCH
+---
+>   rootOf(0x5342886f08fb99f6a571dca291fc32ab92f0b210) at block 320189972 = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b; latest anchored from this app dir = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b -> MATCH
+diff exit=1 (0 = identical, 1 = differences listed above)
+
+--- script summary: the author (his section 2) ---
+  ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320124915)
+  payments   1 in the agent's anchored record, 2 by the owner's passkey, 2 flagged ! (on chain, not in the record)
+  records    10/10 recomputed and anchored by the account's key on both nodes; rootOf now: MATCH
+  invoices   2/2 payee signatures valid; payments countersigned 1/5
+  statements no --host given: weekly statements not checked
+  gateway    0.000000 USDC at Circle for the bill wallet 0x3c559e1152b109323eb70ad0fcf6d4e7aa9210f5 (second balance line)
+  bean-check passed (Beancount 3.2.3)
+audit pack: every check held
+exit=0
+--- script summary: mine ---
+  ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320189972)
+  payments   1 in the agent's anchored record, 2 by the owner's passkey, 2 flagged ! (on chain, not in the record)
+  records    10/10 recomputed and anchored by the account's key on both nodes; rootOf now: MATCH
+  invoices   2/2 payee signatures valid; payments countersigned 1/5
+  statements no --host given: weekly statements not checked
+  gateway    0.000000 USDC at Circle for the bill wallet 0x3c559e1152b109323eb70ad0fcf6d4e7aa9210f5 (second balance line)
+  bean-check passed (Beancount 3.2.3)
+audit pack: every check held
+exit=0
+--- diff author mine ---
+1c1
+<   ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320124915)
+---
+>   ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320189972)
+diff exit=1 (0 = identical, 1 = differences listed above)
+
+################ attempt 4 ################
+--- root section: diff author mine (author lines are grep -E "^  (record 0x|rootOf\(|written, never anchored)" of his file) ---
+11c11
+<   rootOf(0x5342886f08fb99f6a571dca291fc32ab92f0b210) at block 320124915 = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b; latest anchored from this app dir = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b -> MATCH
+---
+>   rootOf(0x5342886f08fb99f6a571dca291fc32ab92f0b210) at block 320190104 = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b; latest anchored from this app dir = 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b -> MATCH
+diff exit=1 (0 = identical, 1 = differences listed above)
+
+--- script summary: the author (his section 2) ---
+  ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320124915)
+  payments   1 in the agent's anchored record, 2 by the owner's passkey, 2 flagged ! (on chain, not in the record)
+  records    10/10 recomputed and anchored by the account's key on both nodes; rootOf now: MATCH
+  invoices   2/2 payee signatures valid; payments countersigned 1/5
+  statements no --host given: weekly statements not checked
+  gateway    0.000000 USDC at Circle for the bill wallet 0x3c559e1152b109323eb70ad0fcf6d4e7aa9210f5 (second balance line)
+  bean-check passed (Beancount 3.2.3)
+audit pack: every check held
+exit=0
+--- script summary: mine ---
+  ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320190104)
+  payments   1 in the agent's anchored record, 2 by the owner's passkey, 2 flagged ! (on chain, not in the record)
+  records    10/10 recomputed and anchored by the account's key on both nodes; rootOf now: MATCH
+  invoices   2/2 payee signatures valid; payments countersigned 1/5
+  statements no --host given: weekly statements not checked
+  gateway    0.000000 USDC at Circle for the bill wallet 0x3c559e1152b109323eb70ad0fcf6d4e7aa9210f5 (second balance line)
+  bean-check passed (Beancount 3.2.3)
+audit pack: every check held
+exit=0
+--- diff author mine ---
+1c1
+<   ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320124915)
+---
+>   ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320190104)
+diff exit=1 (0 = identical, 1 = differences listed above)
+
+
+-- 4.10 pass A against pass B, file by file
+2026-10-18 04:59:39 +0800
+# pass A pack (s26b-out, 00:32, clone 72a0ddf) against pass B attempt 2 pack, file by file
+=== diff A B  countersign.json ===
+(byte-identical)
+=== diff A B  ledger.beancount ===
+2c2
+< ; Chain reads at block 320130404 on two nodes (sources.json). Hashes are metadata; postings carry names and amounts.
+---
+> ; Chain reads at block 320189824 on two nodes (sources.json). Hashes are metadata; postings carry names and amounts.
+74c74
+<   source: "chain: balanceOf at block 320130404, less the transfers after the period"
+---
+>   source: "chain: balanceOf at block 320189824, less the transfers after the period"
+=== diff A B  README.md ===
+16c16
+< - **Circle Gateway (second witness):** the bill wallet 0x3c55…10f5 holds 0.000000 USDC at Circle (every chain read zero), read 2026-10-17 16:31 UTC; booked as read, not reconciled to any history.
+---
+> - **Circle Gateway (second witness):** the bill wallet 0x3c55…10f5 holds 0.000000 USDC at Circle (every chain read zero), read 2026-10-17 20:56 UTC; booked as read, not reconciled to any history.
+=== diff A B  replay.txt ===
+3c3
+< # record contract 0xe7c381aafa077cc99359e8b297d2125efd76b8f5 (pinned here), agent key 0x5342886f08fb99f6a571dca291fc32ab92f0b210 (read on chain at block 320130404)
+---
+> # record contract 0xe7c381aafa077cc99359e8b297d2125efd76b8f5 (pinned here), agent key 0x5342886f08fb99f6a571dca291fc32ab92f0b210 (read on chain at block 320189824)
+98c98
+< rootOf(0x5342886f08fb99f6a571dca291fc32ab92f0b210) at block 320130404, both nodes: 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b   MATCH
+---
+> rootOf(0x5342886f08fb99f6a571dca291fc32ab92f0b210) at block 320189824, both nodes: 0x7f064737a76ca95a144993d4eb233287ac7209a3e8f356062199f1fd6dcf450b   MATCH
+=== diff A B  root.json ===
+231c231
+<   "block": 320130404,
+---
+>   "block": 320189824,
+=== diff A B  signatures.json ===
+(byte-identical)
+=== diff A B  sources.json ===
+2c2
+<  "builtAt": "2026-10-17T16:32:21Z",
+---
+>  "builtAt": "2026-10-17T20:56:24Z",
+12c12
+<    "head": 320130404
+---
+>    "head": 320189824
+16c16
+<    "head": 320130407
+---
+>    "head": 320189828
+19c19
+<  "readAtBlock": 320130404,
+---
+>  "readAtBlock": 320189824,
+109c109
+<    "block": 320130404,
+---
+>    "block": 320189824,
+118c118
+<    "at": 1792254676,
+---
+>    "at": 1792270565,
+
+-- 4.11 the newest main at 05:00, and whether the audit-pack files changed on it
+2026-10-18 04:59:57 +0800
+clone2 HEAD (what pass B ran): 23be9f6187d4ff301db141d8e6f280efc0511930
+$ git ls-remote origin main
+83c913d513dab6efc3dd64c79bac79fc1e8b3e3a	refs/heads/main
+$ git fetch --depth 1 origin main   # objects only; the working tree of clone2 is not touched
+ * branch            main       -> FETCH_HEAD
+ + 23be9f6...83c913d main       -> origin/main  (forced update)
+fetched tip: 83c913d513dab6efc3dd64c79bac79fc1e8b3e3a
+83c913d author=2026-10-18T04:53:59+08:00 committer=2026-10-18T04:53:59+08:00 test(operator): the meter's reconciliation record is the second listed writer of an events file
+
+$ git diff --stat HEAD FETCH_HEAD -- scripts/audit_pack.py scripts/test_audit_pack.py scripts/test_all.sh crates/operator/tests/fixtures/audit-pack
+(end; empty = byte-identical on the newest main)
+$ git diff --stat HEAD FETCH_HEAD | tail -3
+ proof/meter-2026-10-17.txt                         |   97 ++
+ proof/recall-2026-10-17.txt                        |  157 +++
+ 26 files changed, 4118 insertions(+), 30 deletions(-)
+
+clone2 working tree changes: 0 lines
+
+== 5. Comparison with the author's run (step 5)
+
+Figure by figure, the author's run (seat S26, proof/audit-pack-2026-10-18.txt, built 00:07 +0800 on seat/S26 at 8a31441) against mine.
+"same" means equal character for character, apart from the block number where one is shown.
+
+figure                               author                     witness pass A             witness pass B (attempts 2, 3, 4)
+script bytes (sha256)                ec8771c591388a0a…          ec8771c591388a0a…fdbe26    same, in both clones (log 30)
+payments in the period               5, 0.008000 USDC           same                       same, three times
+opening                              0.000000                   same                       same
+funding in the period                0.100000 (1 transfer in)   same                       same
+closing, asserted with `~ 0`         0.092000                   same                       same, three times
+  read at block                      320124915                  320130404                  320189824 / 320189972 / 320190104  (differs: run time)
+payments split                       1 in the record, 2 by the owner's passkey, 2 flagged !      same       same
+the two flagged transactions         0xcf66a705…965d, 0x6d3d7831…a2b6                            same       same
+records                              10/10 recomputed and anchored by the account's key on both nodes; rootOf now: MATCH      same   same
+the 10 record lines + rootOf line    (his grep, log 17)         diff: only the block in the rootOf line   same, three times (log 38)
+rootOf(0x5342…b210)                  0x7f064737…450b            same                       same
+invoices                             2/2 payee signatures valid same                       same
+countersign ratio                    1/5                        1/5                        1/5, three times
+statements                           not checked (no --host)    same                       same
+Circle Gateway, bill wallet 0x3c55…10f5   0.000000 USDC         same                       same
+bean-check                           passed (Beancount 3.2.3); own run exit 0   same       same, exit 0 each time
+verdict                              "every check held", exit 0 same                       same, attempts 2-4 (attempt 1 crashed, section 6)
+cast balanceOf, both nodes           92000 minor units          92000 (00:34)              92000 (04:54)
+cast rootOf, both nodes              0x7f064737…450b            same (00:34)               same (04:54)
+unit test time                       7.650 s                    1.997 s                    0.848 s   (not a figure)
+
+The seven pack files (sha256 of the author's, from his file; mine from logs 09/10 for pass A and 37 for pass B):
+  countersign.json, signatures.json   identical as written, in every run.
+  ledger.beancount, replay.txt, root.json   identical to his once my block number is replaced by his (320124915).
+  README.md                           identical once my Circle read time ("16:31 UTC", "20:56 UTC", ...) is replaced by his ("16:06 UTC").
+  sources.json                        identical once builtAt, the two node heads, readAtBlock, the witness block and the Circle read
+                                      time are replaced by his. His builtAt (2026-10-17T16:07:52Z) and second node head (320124919)
+                                      are not printed in his file: in pass A I found them by trying every second of a 400-second
+                                      window and every head in a 160-block window until the sha256 matched, and pass B reuses them.
+  Pass A against pass B, file by file (log 41): the only lines that differ are the block number, the Circle read time, builtAt and the
+  two node heads.
+
+== 6. Witness: the live run crashed once (pass B, attempt 1)
+
+What is wrong. scripts/audit_pack.py:261-262 raises on any JSON-RPC error reply, and nothing above it catches the exception
+(main() is called bare at line 971). The retry loop at lines 250-260 covers only URLError and TimeoutError. So one refused eth_call
+ends the run with a Python traceback, exit 1, and an empty pack directory (os.makedirs at line 536 had run; nothing else was written).
+The head comment (lines 28-29) says exit 1 means "one failed (the pack is still written and says which)" and exit 2 means "a tool or
+an input is missing". A crash is neither, and exit 1 cannot be told from a failed check without reading the output.
+
+Why (measured, log 40). publicnode's Arbitrum Sepolia node answers eth_call only for blocks up to about 120 blocks old. At 128 blocks
+and older it answers -32000 "historical state <hash> is not available". The other node, sepolia-rollup.arbitrum.io, answered at
+every age I tried, up to 4000 blocks. The block time here is about a quarter of a second (attempt 2, 3 and 4 read blocks 320189824,
+320189972 and 320190104 at 04:55:47, 04:56:24 and 04:56:59: 3.8 to 4.0 blocks a second), so publicnode stops answering about 30
+seconds after the block. read_chain picks `at = min(heads)` at line 326, then scans eth_getLogs on both nodes (lines 339-358), and
+only then makes the three state reads at `at`: balanceOf (line 360), agent() (line 362), rootOf (line 366). In attempt 1 the
+traceback is in line 366, on publicnode, the 6th of those calls: the first five were answered, the sixth fell outside the window.
+Attempt 1 lasted 49 seconds in all; attempts 2, 3 and 4 lasted 37, 35 and 37 seconds and passed. I did not time the phases inside
+the script, so "the log scan was slower that time" is an inference from these numbers, not a measurement.
+
+What to do instead (not applied; I changed no code). In read_chain, move the three state reads (lines 360-366) up to just after
+`at = at or min(heads)` (line 326), before the log scan. They are the only reads that need state at `at`; the log scan needs only
+blocks up to `at`. They then happen within a second of choosing `at`, far inside the window. Second, make rpc() (or main()) turn this
+RuntimeError into a printed message and exit 2, so a crash cannot be taken for "a check failed". The offline fixture cannot show
+either: file:// answers have no clock, which is why the unit tests and test_all.sh line 38 passed every time.
+This belongs in docs/60-problems-and-fixes.md; I was not to touch the founder's tree, so the coordinator should log it.
+
+-- 6.1 the code, with line numbers
+2026-10-18 05:01:18 +0800
+$ awk (print selected lines of scripts/audit_pack.py with their numbers; same bytes in clone 72a0ddf and clone 23be9f6)
+--- lines 28-29 ---
+  28  `cast wallet verify`. Exit 0 when every check held, 1 when one failed (the pack is still written and says which), 2 when
+  29  a tool or an input is missing.
+--- lines 241-263 ---
+ 241  def rpc(url, method, params):
+ 242      key = method + " " + json.dumps(params, sort_keys=True)
+ 243      if url.startswith("file://"):
+ 244          if url not in ANSWERS:
+ 245              ANSWERS[url] = json.load(open(url[len("file://"):]))
+ 246          if key not in ANSWERS[url]:
+ 247              raise RuntimeError(f"{url} holds no answer for {key}")
+ 248          return ANSWERS[url][key]
+ 249      body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode()
+ 250      for attempt in range(4):
+ 251          try:
+ 252              req = urllib.request.Request(url, body, {"Content-Type": "application/json",
+ 253                                                       "User-Agent": "tameion-audit-pack/1"})
+ 254              with urllib.request.urlopen(req, timeout=30) as r:
+ 255                  reply = json.load(r)
+ 256              break
+ 257          except (urllib.error.URLError, TimeoutError) as e:  # public nodes throttle: back off and ask again
+ 258              if attempt == 3:
+ 259                  raise RuntimeError(f"{url}: {method}: {e}") from e
+ 260              time.sleep(1 + attempt)
+ 261      if "error" in reply:
+ 262          raise RuntimeError(f"{url}: {method}: {reply['error']}")
+ 263      RECORDED[key] = reply["result"]
+--- lines 319-328 ---
+ 319  def read_chain(urls, c, policy, start_block, at=None):
+ 320      """Every USDC transfer into and out of the account since `start_block` (the same set from both nodes), its block
+ 321      time, the policy's own event in each outgoing one, and balanceOf, agent() and rootOf at one block read on both."""
+ 322      for u in urls:
+ 323          if int(rpc(u, "eth_chainId", []), 16) != c["id"]:
+ 324              raise RuntimeError(f"{u} is not chain {c['id']}")
+ 325      heads = [int(rpc(u, "eth_blockNumber", []), 16) for u in urls]
+ 326      at = at or min(heads)
+ 327      transfer, me = hx(keccak(b"Transfer(address,address,uint256)")), "0x" + word(policy)
+ 328  
+--- lines 357-367 ---
+ 357                  m["by"], m["action"] = classify(rpc(urls[0], "eth_getTransactionReceipt", [tx]), policy, m)
+ 358              moves.append(m)
+ 359      moves.sort(key=lambda m: (m["block"], m["logIndex"]))
+ 360      balance = both(urls, lambda u: int(call(u, c["usdc"], sel("balanceOf(address)") + word(policy), at), 16),
+ 361                     "the account's USDC balance")
+ 362      writer, who = both(urls, lambda u: "0x" + call(u, policy, sel("agent()"), at)[-40:].lower(), "agent()"), "agent"
+ 363      if writer == DEAD:  # an account with no agent key anchors with its operator key
+ 364          writer, who = both(urls, lambda u: "0x" + call(u, policy, sel("operator()"), at)[-40:].lower(),
+ 365                             "operator()"), "operator"
+ 366      root_of = both(urls, lambda u: call(u, c["anchor"], sel("rootOf(address)") + word(writer), at).lower(), "rootOf")
+ 367      return {"heads": heads, "at": at, "moves": moves, "balance": balance, "writer": writer, "writerIs": who,
+--- lines 534-537 ---
+ 534      t1 = int(dt.datetime.combine(args.last + dt.timedelta(days=1), dt.time(), dt.timezone.utc).timestamp())
+ 535      pack = os.path.join(args.out, policy, f"{args.start}_{args.end}")
+ 536      os.makedirs(pack, exist_ok=True)
+ 537      fails = []
+--- lines 969-971 ---
+ 969  
+ 970  if __name__ == "__main__":
+ 971      sys.exit(main())
+
+-- 6.2 how old a block each node still serves for eth_call (read only)
+2026-10-18 04:58:05 +0800
+# Diagnostic (not in the brief): how old a block can an eth_call read on each node?
+# For each age k: h = fresh eth_blockNumber, then cast call balanceOf(account) --block h-k. Read only.
+
+node https://sepolia-rollup.arbitrum.io/rpc
+age     0 blocks (head 320190354, block 320190354): 92000 [9.2e4] 
+age    16 blocks (head 320190362, block 320190346): 92000 [9.2e4] 
+age    64 blocks (head 320190368, block 320190304): 92000 [9.2e4] 
+age   100 blocks (head 320190376, block 320190276): 92000 [9.2e4] 
+age   120 blocks (head 320190381, block 320190261): 92000 [9.2e4] 
+age   128 blocks (head 320190387, block 320190259): 92000 [9.2e4] 
+age   140 blocks (head 320190395, block 320190255): 92000 [9.2e4] 
+age   160 blocks (head 320190403, block 320190243): 92000 [9.2e4] 
+age   200 blocks (head 320190412, block 320190212): 92000 [9.2e4] 
+age   400 blocks (head 320190418, block 320190018): 92000 [9.2e4] 
+age  1000 blocks (head 320190426, block 320189426): 92000 [9.2e4] 
+age  4000 blocks (head 320190535, block 320186535): 92000 [9.2e4] 
+
+node https://arbitrum-sepolia-rpc.publicnode.com
+age     0 blocks (head 320190545, block 320190545): 92000 [9.2e4] 
+age    16 blocks (head 320190550, block 320190534): 92000 [9.2e4] 
+age    64 blocks (head 320190558, block 320190494): 92000 [9.2e4] 
+age   100 blocks (head 320190563, block 320190463): 92000 [9.2e4] 
+age   120 blocks (head 320190568, block 320190448): 92000 [9.2e4] 
+age   128 blocks (head 320190573, block 320190445): Error: server returned an error response: error code -32000: historical state 49168fddd64b19c2e53aeabf9c31aa5c710f8822d9ca23f2cb93ff697b9f4c38 is not available 
+age   140 blocks (head 320190579, block 320190439): Error: server returned an error response: error code -32000: historical state 27112aff2ffe58ca5d455ec6c0f543e9890c4f7c63c9888a32d2e117b03a56f5 is not available 
+age   160 blocks (head 320190585, block 320190425): Error: server returned an error response: error code -32000: historical state d330ccb721e2a616908f3cf234495fcb79cf56303fa2b411a9caf3272a87a94b is not available 
+age   200 blocks (head 320190591, block 320190391): Error: server returned an error response: error code -32000: historical state 95fee494693837a159a5a2ccab5fa6ad895bf2de24b5e3080e7e49563dc313bc is not available 
+age   400 blocks (head 320190595, block 320190195): Error: server returned an error response: error code -32000: historical state 9526433c848a860c301d35df55ed010da0d48d0151c376a56c6f7c9820b25cc3 is not available 
+age  1000 blocks (head 320190602, block 320189602): Error: server returned an error response: error code -32000: historical state dbf3d1f90085a59beecb40cd7db09a55b7f692febaf8e7a34e680009ed604d6c is not available 
+age  4000 blocks (head 320190608, block 320186608): Error: server returned an error response: error code -32000: historical state 2c7b83f64f6ea8459b028ee656857b9b03d6a7e4115aa22da6f725a7c8a55988 is not available 
+
+== 7. Witness: what needed a step the README did not say
+
+1. There is no README for this. The repository's README.md has no audit-pack section (log 19: no match for "audit_pack" or "audit pack"
+   in README.md or apps/sdk/README.md; "audit" appears there only for the older `cargo run -p operator --example audit` replay).
+   The instructions that do exist are the head comment of scripts/audit_pack.py, the README.md the script writes into each pack
+   ("Check it yourself"), and the comment above test_all.sh lines 37-38 (`uv tool install beancount`).
+
+2. The app directory is not in a clone, and nothing says where to get one. The pack's README says "To rebuild the pack from a clone
+   with the same app dir: python3 scripts/audit_pack.py <app_dir> <policy> 2026-10-16 2026-10-17". .gitignore line 13 ignores
+   runtime/* (log 19), so a clone holds no app dir. Neither that README nor the head comment lists which files of the app dir are
+   read; I took them from the code (audit_pack.py lines 519-542 and 628-671) and from the fixture's layout:
+     tenants/<policy>.json                     (its "chain" field picks the chain preset: arbitrum-sepolia)
+     tenants/<policy>/log/0x*.events.jsonl     (one file per anchored record)
+     tenants/<policy>/log/anchors.jsonl
+     tenants/<policy>.invoices.jsonl, .invoice-decisions.jsonl, .payments.jsonl, .purchases.jsonl
+   sources.json of each run lists the 16 files it read. The only app dir a stranger has is the trimmed fixture in
+   crates/operator/tests/fixtures/audit-pack, which runs offline from recorded answers. So step 4 (the full account, live) can be
+   repeated by a third party only if the operator hands over a tenants/<policy> directory.
+
+3. The brief said to copy "the app's anchors.jsonl". There is none at the app root (log 23: runtime/app/anchors.jsonl: No such file).
+   The one the script reads is tenants/<policy>/log/anchors.jsonl, and it came with the directory copy. The brief's glob
+   tenants/<policy>* also took four files the script never reads (<policy>.history.json, <policy>.purchases.anchored,
+   <policy>.purchases.pending.json, <policy>/decisions.jsonl): 20 files copied, 16 read. I copied twice (00:30 and 04:51); the
+   source files were byte-identical both times (log 23).
+
+4. PATH. The default PATH of this shell puts the repository's .venv/bin first, so plain `python3` is 3.14.8 from the venv (log 12).
+   The brief names /opt/homebrew/bin/python3 (3.15.0), so every command ran after
+   export PATH=/opt/homebrew/bin:$HOME/.local/bin:$HOME/.foundry/bin:$PATH   (python3, bean-check, cast). Not tested: 3.14.8.
+
+5. A missing `cast` does not fail the gate. test_audit_pack.py is decorated @unittest.skipUnless(shutil.which("cast"), ...), so with
+   cast off PATH both tests are skipped, unittest prints "OK (skipped=2)" with exit 0, and test_all.sh line 37 prints "ok" (log 13).
+   In the same way the "Balance failed" assertion of the second test runs only if bean-check is on PATH (test_audit_pack.py line 76),
+   and in test_all.sh line 38 a missing bean-check prints a red "skipped" line and still exits 0. I had both tools on PATH, so
+   nothing was skipped in my runs ("Ran 2 tests ... OK", no "skipped").
+
+6. Size and shell. A depth-1 clone is about 230 MB and took about 3 minutes both times (pass A: the first call passed the harness's
+   2-minute limit and ran in the background; pass B: 04:50:55 to 04:53:43). This shell is zsh: in pass A my wrapper's
+   ${PIPESTATUS[0]} printed nothing, so I verified that clone by file count (1201 tracked files) and a clean `git status` instead of
+   by exit code. In pass B the clone ran under bash and logged "clone exit=0".
+
+7. Network. The live run needs outbound HTTPS to the two RPC nodes and to gateway-api-testnet.circle.com. No key. 86 seconds in
+   pass A, 35 to 37 seconds in pass B (49 seconds for the attempt that crashed).
+
+8. Main is rewritten under a clone. `git pull --ff-only` on the first clone refused: "+ 72a0ddf...23be9f6 main -> origin/main
+   (forced update)" and "fatal: Not possible to fast-forward" (log 20); 72a0ddf is not an ancestor of the new main (log 22). The
+   commits on the new main carry author times earlier than their committer time of 00:38:46 +0800, which is what a rebase leaves.
+   Nine minutes after that pull (04:59:57) main was force-updated again (23be9f6 to 83c913d, log 42). I forced nothing in the first clone: I made a second
+   fresh `git clone --depth 1 -b main` and ran pass B there. A reader who wants "current main" should clone, not pull.
+
+-- log 19, the README and .gitignore checks quoted in items 1 and 2
+2026-10-18 00:38:58 +0800
+$ cd s26b-clone; grep -n -i audit README.md
+92:| **Anyone can re-check the book.** The audit recomputes the anchored root from the events and compares it with the chain on two public nodes; one changed byte fails it. | `proof/readme-judge-check-2026-10-16.txt` (from a clone, below), `proof/e2e-audit-2026-10-13.txt`, `proof/uat-u1-2026-10-16.txt` ("MATCH on both RPCs") |
+117:  (a withdrawal delay is not built); no mainnet; the contracts are unaudited; no person has yet signed with real Touch ID on this build
+137:AUDIT_EVENTS=proof/arc-log-2026-10-13/$R.events.jsonl TAMEION_LOG_DIR=proof/arc-log-2026-10-13 \
+139:  cargo run --locked -q -p operator --example audit
+(grep exit=0)
+
+$ grep -n -i "audit_pack\|audit pack" README.md apps/sdk/README.md
+(grep exit=1; 1 = no match)
+
+$ sed -n "10,15p;33,37p" .gitignore
+
+# Runtime state. The two chain anchor addresses are public contract addresses the image copies (Dockerfile):
+# tracked so an uploader that honours this file (railway up) still ships them.
+runtime/*
+!runtime/arc_anchor.addr
+!runtime/arbitrum-sepolia_anchor.addr
+
+# Audit packs (scripts/audit_pack.py): an account's ledger and evidence, account data, never committed.
+/audit-pack/
+
+# Markdown (founder, 2026-10-15): the root README.md is the only Markdown file
+
+$ git check-ignore -v runtime/app/tenants/x.json
+.gitignore:13:runtime/*	runtime/app/tenants/x.json
+
+$ ls crates/operator/tests/fixtures/audit-pack/tenants
+0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1
+0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.invoice-decisions.jsonl
+0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.invoices.jsonl
+0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.json
+0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1.payments.jsonl
+
+== 8. Witness: not covered
+
+- The second account in the author's file (acme-agents-8433, 0xf0ae90c66d410dc0cc3bc9e6a667af8c39fb6b85) and the weekly-statement
+  path (--host http://127.0.0.1:7880) are not repeated: no --host given, so "statements: weekly statements not checked" in my runs.
+- The author's by-hand edited-event case is not repeated; the second unit test (test_an_edited_event_fails_against_its_anchored_root)
+  covers it and passed in both passes.
+- Python 3.14.8 (the repo .venv), the `cast keccak` fallback (Python's OpenSSL here has KECCAK-256), and any machine but this Mac.
+- Whether the fixture's answers.json was recorded honestly. What I can say is that my live runs and the fixture agree on every figure
+  they share (closing 0.092000, countersign 1/5, the invoice, the flagged payments).
+- Two values in the author's sources.json (builtAt and the second node's head) are not printed in his file. In pass A I found them by
+  searching a window until the sha256 matched, so they are inferred; the match itself is exact.
+- The cause of the crash in section 6 is measured on the node side (log 40) and read off the code order; the phase timings inside
+  the script were not instrumented.
+- Under the founder's tree I opened and printed no file except the author's proof file. From runtime/app I listed directories (ls)
+  to expand the tenants/<policy>* glob and to look for runtime/app/anchors.jsonl (absent), copied the 20 files (cp -R) to the scratch
+  directory, and took the sha256 of each source file and each copy, twice. Nothing in the founder's tree was changed except the
+  creation of this file.
+- Both passes run the committed code only; I changed no code.
+
+End of record. Plainly: the figures in proof/audit-pack-2026-10-18.txt reproduce from a clean clone, in four of five live runs; the fifth
+crashed on a public-node limit (section 6). I ran it end to end against the two public nodes; I did not fix anything.
