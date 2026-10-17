@@ -650,7 +650,8 @@ async function scenario(browser, AxeBuilder, sc, cfg) {
   // --fast: the Owner home's own development flag shows loading, empty, error and offline at once; otherwise the state is made for real
   R.flag = cfg.fast && sc.route === "account" && sc.view === "owner" ? FLAGS[sc.state] : undefined;
   const policy = sc.state === "empty" ? (cfg.policyEmpty ?? cfg.policy) : sc.state === "needs-you" ? (cfg.policyNeeds ?? cfg.policy) : cfg.policy;
-  const { ctx, page, errors } = await newPage(browser, sc, { pub: sc.state === "guest" ? null : cfg.pub });
+  const pub = sc.state === "guest" || !policy ? null : policy === cfg.policy ? cfg.pub : await (cfg.pubs[policy] ??= ownerPub(cfg.url, policy));
+  const { ctx, page, errors } = await newPage(browser, sc, { pub });
   let release;
   R.hold = new Promise((r) => (release = r));
   const quiet = ["loading", "error", "offline"].includes(sc.state);
@@ -996,6 +997,7 @@ async function main() {
       const browser = await chromium.launch({ headless: true, ...(channel ? { channel } : {}) });
       const AxeBuilder = await import("@axe-core/playwright").then((m) => m.AxeBuilder ?? m.default?.AxeBuilder ?? m.default);
       cfg.pub = await ownerPub(cfg.url, cfg.policy);
+      cfg.pubs = {};
       if (!cfg.pub) steps.push({ name: "owner-mode", sev: "warn", lines: [`could not read ${cfg.policy}'s owner key through ${cfg.url}: every account page is rendered as a guest (read-only)`] });
       const c2 = { ...cfg, palette };
       const runnable = plan.filter((s) => !s.skip);
