@@ -54,6 +54,8 @@ export function Money() {
 /** Approve the account to pull from the bill wallet: built here (never the
  *  service's calldata), sent only from the bill wallet, on the account's chain. */
 async function approveFromBillWallet(pl: NonNullable<Inbox["pull"]>, spender: string, amount: bigint, chain: { chainId: number; name: string }) {
+  // The service sends only `error` when it could not read the bill wallet (docs/60 P-243): nothing to check the sender against.
+  if (!pl.wallet) throw new Error(pl.error || "The bill wallet could not be read just now; reload and try again.");
   const from = await walletAccount();
   if (!from) throw new Error("Needs your bill wallet in this browser (MetaMask or similar), or use the call below from your wallet.");
   if (from.toLowerCase() !== pl.wallet.toLowerCase()) throw new Error(`This browser's wallet (ends ••${tail(from)}) is not your bill wallet (ends ••${tail(pl.wallet)}).`);
@@ -186,8 +188,8 @@ function Allow() {
   return (
     <Panel title="The money stays in your wallet" icon={Wallet} tone={low ? "attention" : undefined}>
       <p>
-        {pl.error ? (
-          pl.error
+        {pl.error || !pl.wallet ? (
+          (pl.error ?? "The bill wallet could not be read just now.")
         ) : (
           <>
             The agent may pull up to <span className="figures font-medium">{usd(pl.allowance)} USDC</span> from your wallet <Payee addr={pl.wallet} nameable={false} />, which
@@ -197,11 +199,11 @@ function Allow() {
         )}
       </p>
       <div className="flex flex-wrap gap-2">
-        <Button disabled={allow.state.kind === "working"} onClick={() => allow.run("Allowing…", send(minor(pl.suggestedAllowance), `Allowed ${usd(pl.suggestedAllowance)} USDC.`))}>
+        <Button disabled={allow.state.kind === "working" || !pl.wallet} onClick={() => allow.run("Allowing…", send(minor(pl.suggestedAllowance), `Allowed ${usd(pl.suggestedAllowance)} USDC.`))}>
           {allow.state.kind === "working" && <Loader2 className="size-4 animate-spin" />}
           Allow {usd(pl.suggestedAllowance)} USDC
         </Button>
-        <Button variant="outline" disabled={cut.state.kind === "working"} onClick={() => cut.run("Cutting…", send(0n, "Cut to zero."))}>
+        <Button variant="outline" disabled={cut.state.kind === "working" || !pl.wallet} onClick={() => cut.run("Cutting…", send(0n, "Cut to zero."))}>
           Cut it to zero
         </Button>
       </div>

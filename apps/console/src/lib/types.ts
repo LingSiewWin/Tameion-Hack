@@ -33,6 +33,9 @@ export type Tenant = {
   [k: string]: unknown;
 };
 
+/** `GET /api/level1/demo` (docs/115 §3): the judge's five minutes, when the host runs demo mode. */
+export type Demo = { enabled: boolean; vendor: string; bill: { usdc: string; everySecs: number }; delaySecs: number };
+
 /** `GET /api/level1/name/<handle>` (docs/79 §6a Service 6). */
 export type NameRecord = { name: string; account: string; owner: string; chains: { key: string; name: string; chainId: number; deployed: boolean; account?: string }[] };
 
@@ -197,7 +200,20 @@ export type Inbox = {
     approveData: string;
     revokeData: string;
     error?: string | null;
-  } | null;
+  }
+    /** the bill wallet's chain read failed: the service sends only why (tameion-app.rs `pull`, docs/60 P-243) */
+    | {
+        error: string;
+        allowance?: undefined;
+        wallet?: undefined;
+        walletBalance?: undefined;
+        suggestedAllowance?: undefined;
+        suggestedBasis?: undefined;
+        usdc?: undefined;
+        approveData?: undefined;
+        revokeData?: undefined;
+      }
+    | null;
   suggestedLimit?: { daily: string; perAction: string; basis: string; floor?: string; byAgent?: boolean } | null;
   recommendAutopilot?: boolean;
   /** docs/81: the bills the owner typed (before the first pass turns them into candidates) */
