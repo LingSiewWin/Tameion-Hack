@@ -1,6 +1,7 @@
 // Lane preflight (seat H6): the gate for apps/home, and the evidence for it. Static steps first (tokens.css against DESIGN.md,
-// scripts/contrast.mjs, the zero-hash test, colour literals), then every route x state x view x width in a headless Chrome:
-// axe-core, DESIGN's rules read from computed styles, the focus ring, reduced motion. Needs the app running
+// scripts/contrast.mjs, the zero-hash test, colour literals, the hex lint and `21st review` once they exist), then every
+// route x state x view x width in a headless Chrome: axe-core, DESIGN's rules (founder, 2026-10-18 07:01) read from computed
+// styles, the focus ring, reduced motion. The numbers it checks against are SPEC below. Needs the app running
 // (APP_URL, default http://localhost:3010; the lane service's origin check wants "localhost", not 127.0.0.1).
 //
 //   npm run ci                                  the gate; exits 1 on any FAIL
@@ -39,7 +40,13 @@ export const ROUTES = {
   add: { path: (p) => `/a/${p}/add`, states: ["rest", "loading", "error", "offline"] },
   receive: { path: (p) => `/a/${p}/receive`, states: ["rest", "loading", "error", "offline"] },
 };
-const CORE = ["paper", "plate", "ink", "text-2", "rule", "red", "accent"];
+const CORE = ["paper", "plate", "plate-2", "ink", "ink-2", "rule", "attention", "transit"];
+// The numbers the checks use, from DESIGN.md (founder, 2026-10-18 07:01). When the founder changes a value, change it here.
+export const SPEC = {
+  contentMax: 1120, gutter: { narrow: 20, wide: 32 }, touch: 44, button: 52, buttonCompact: 44, buttonRadius: 12,
+  authority: [31, 38], heroStatement: [49, 56], heroNarrow: [31, 38], heroNarrowUnder: 640,
+  mono: [[13, 20], [15, 22]], weights: { sans: [400, 500, 600], mono: [400, 500] }, drawer: 400, crossfadeMs: 200, skeletonMinMs: 300,
+};
 
 export function parseArgs(argv) {
   const o = {};
@@ -59,7 +66,7 @@ export function hexNorm(v) {
   const s = v.trim();
   let m = /^#([0-9a-f]{3})$/i.exec(s);
   if (m) return "#" + [...m[1]].map((c) => c + c).join("").toUpperCase();
-  m = /^#([0-9a-f]{6})$/i.exec(s);
+  m = /^#([0-9a-f]{6}|[0-9a-f]{8})$/i.exec(s);
   if (m) return "#" + m[1].toUpperCase();
   m = /^rgb\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)\s*\)$/.exec(s);
   if (m) return "#" + [m[1], m[2], m[3]].map((x) => (+x).toString(16).padStart(2, "0")).join("").toUpperCase();
@@ -79,11 +86,14 @@ export function contrast(a, b) {
 export function designPalette(md) {
   const out = { owner: {}, agent: {} };
   for (const line of md.split("\n")) {
-    if (!/^\|\s*`--/.test(line)) continue;
+    if (!/^\|/.test(line)) continue;
     const cells = line.split("|").slice(1, -1).map((c) => c.trim());
-    const names = cells[0].match(/--[\w-]+/g) ?? [];
-    const own = cells[1]?.match(/#[0-9A-Fa-f]{6}/g) ?? [];
-    const night = /same/i.test(cells[2] ?? "") ? own : (cells[2]?.match(/#[0-9A-Fa-f]{6}/g) ?? []);
+    if (cells.length < 3 || !/^[`\w-]/.test(cells[0]) || /^[-: ]+$/.test(cells[0])) continue;
+    // a name cell is "paper", "`--paper`", "up / down"; the value cells hold hex in backticks
+    const names = cells[0].replace(/`/g, "").split("/").map((n) => n.trim()).filter(Boolean).map((n) => "--" + n.replace(/^--/, "").replace(/\s+/g, "-"));
+    const HEX = /#[0-9A-Fa-f]{8}\b|#[0-9A-Fa-f]{6}\b/g;
+    const own = cells[1]?.match(HEX) ?? [];
+    const night = /same/i.test(cells[2] ?? "") ? own : (cells[2]?.match(HEX) ?? []);
     names.forEach((n, i) => {
       if (own[i]) out.owner[n] = own[i].toUpperCase();
       if (night[i]) out.agent[n] = night[i].toUpperCase();
@@ -166,6 +176,16 @@ function stepZeroHash() {
   return run("zero-hash", ["--test", "test/owner-no-hash.test.mts"], "test/owner-no-hash.test.mts is missing (H2: DESIGN Rule 1, a seeded Owner page with no /0x[0-9a-fA-F]{8,}/ in the DOM)");
 }
 
+// Steps another seat builds, wired in as soon as the npm script exists (DESIGN §Acceptance: the tokens-only hex lint, `21st review` with zero errors).
+function stepScripts(name, keys, missing, strict) {
+  const pkg = JSON.parse(readFileSync(join(APP, "package.json"), "utf8"));
+  const key = keys.find((k) => pkg.scripts?.[k]);
+  if (!key) return { name, sev: strict ? "fail" : "note", lines: [missing] };
+  const r = spawnSync("npm", ["run", "--silent", key], { cwd: APP, encoding: "utf8" });
+  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim().split("\n").filter((l) => l.trim());
+  return { name, sev: r.status === 0 ? "pass" : "fail", lines: r.status === 0 ? out.slice(-2) : out.slice(-12) };
+}
+
 function stepLiterals() {
   const walk = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]));
   const hits = [];
@@ -219,8 +239,8 @@ function install({ key, view, pub }) {
   document.addEventListener("DOMContentLoaded", tick);
 }
 
-/** DESIGN's rules, read from the rendered page. Returns { findings, metrics }. */
-function domRules({ view, width, route, palette }) {
+/** DESIGN's rules (founder, 2026-10-18 07:01), read from the rendered page. Returns { findings, metrics }. spec is SPEC from this file. */
+function domRules({ view, width, route, palette, spec }) {
   const h = window.__h6;
   const F = [];
   const add = (sev, rule, el, detail) => F.push({ sev, rule, sel: el ? h.sel(el) : "", text: el ? (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 50) : "", detail });
@@ -230,10 +250,12 @@ function domRules({ view, width, route, palette }) {
   const st = (e) => getComputedStyle(e);
   const px = (v) => parseFloat(v);
   const isSheet = (e) => !!e.closest("dialog, [role=dialog], [data-sheet]");
+  const near = (a, b, t = 0.6) => Math.abs(a - b) <= t;
   const metrics = {};
   metrics.busy = !!document.querySelector('[aria-busy="true"]'); // the page is a skeleton: no hero yet
+  const tok = (n) => (palette[`--${n}`] ?? "").toUpperCase();
 
-  // Rule 1: zero hashes in the Owner view, in the text and in every attribute (hrefs included)
+  // Hashes live in the Agent view only: none in the Owner DOM (text and every attribute, hrefs included), none in any route
   if (view === "owner") {
     const HASH = /0x[0-9a-fA-F]{8,}/;
     const t = document.body.innerText.match(HASH);
@@ -250,62 +272,100 @@ function domRules({ view, width, route, palette }) {
   // routes are by account name (ruled 2026-10-18 06:32): the 0x address lives in API calls, never in the URL
   if (/0x[0-9a-fA-F]{8,}/.test(location.pathname)) add("fail", "route-has-hash", null, `the route ${location.pathname.slice(0, 30)}... carries a 0x address; routes are /a/<name>`);
 
-  // Typography: no monospace in Owner; the Agent view is Plex Mono 13/20 throughout
+  // Typography: IBM Plex Sans in Owner, Plex Mono (the machine's eye) in Agent; only the weights DESIGN names; the roles' sizes
   const mono = (e) => /mono|courier|consolas|menlo|monospace/i.test(st(e).fontFamily);
   if (view === "owner") for (const e of texts) if (mono(e)) add("fail", "owner-mono", e, st(e).fontFamily.slice(0, 50));
   if (view === "agent") {
     const non = texts.filter((e) => !mono(e));
     if (non.length) add("warn", "agent-not-mono", non[0], `${non.length} text elements are not Plex Mono`);
-    const off = texts.filter((e) => st(e).fontSize !== "13px" || Math.abs(px(st(e).lineHeight) - 20) > 0.6);
-    if (off.length) add("warn", "agent-size", off[0], `${off.length} text elements are not 13/20 (first: ${st(off[0]).fontSize}/${st(off[0]).lineHeight})`);
+    const off = texts.filter((e) => !spec.mono.some(([s, l]) => near(px(st(e).fontSize), s, 0.3) && near(px(st(e).lineHeight), l)));
+    if (off.length) add("warn", "agent-size", off[0], `${off.length} text elements are neither monoDense 13/20 nor monoRead 15/22 (first: ${st(off[0]).fontSize}/${st(off[0]).lineHeight})`);
   }
+  const okW = view === "agent" ? spec.weights.mono : spec.weights.sans;
+  const badW = texts.filter((e) => !okW.includes(+st(e).fontWeight));
+  if (badW.length) add("fail", "font-weight", badW[0], `${badW.length} text elements use weights outside ${okW.join("/")} (first: ${st(badW[0]).fontWeight})`);
+  const loaded = [...document.fonts].filter((f) => f.status === "loaded").map((f) => f.family);
+  const want = view === "agent" ? /plex[_ ]?mono/i : /plex[_ ]?sans/i;
+  if (!loaded.some((f) => want.test(f))) add("fail", "font-not-loaded", null, `${view === "agent" ? "IBM Plex Mono" : "IBM Plex Sans"} is not loaded (loaded: ${[...new Set(loaded)].join(", ").slice(0, 80) || "none"}); the page is in a fallback face`);
   const h1s = all.filter((e) => e.tagName === "H1");
   if (!metrics.busy && h1s.length !== 1) add("fail", "one-hero", h1s[0] ?? null, `${h1s.length} h1 on the page (DESIGN: one hero per surface)`);
   if (h1s[0]) {
     const s = st(h1s[0]);
     metrics.h1 = `${s.fontSize}/${s.lineHeight}/${s.fontWeight}`;
+    const fits = (pair) => near(px(s.fontSize), pair[0], 0.6) && near(px(s.lineHeight), pair[1], 0.6);
     if (route === "account" && view === "owner") {
-      const ok = [[44, 48], [32, 36]].some(([a, b]) => Math.abs(px(s.fontSize) - a) < 0.6 && Math.abs(px(s.lineHeight) - b) < 0.6) && s.fontWeight === "500";
-      if (!ok) add("fail", "type-statementLine", h1s[0], `h1 is ${metrics.h1}; DESIGN statementLine is 44/48/500 (32/36 under 390)`);
+      if (!fits(spec.authority)) add("fail", "type-authority", h1s[0], `h1 is ${metrics.h1}; the Owner hero is the authority role ${spec.authority.join("/")}`);
       if (!/\s/.test(h1s[0].innerText) || /^[\d.,\s]*(USDC)?$/.test(h1s[0].innerText.trim())) add("warn", "hero-not-a-sentence", h1s[0], "the Owner hero is a sentence, not a number");
     }
+    if (route === "guest" && !fits(width < spec.heroNarrowUnder ? spec.heroNarrow : spec.heroStatement)) add("warn", "type-heroStatement", h1s[0], `h1 is ${metrics.h1}; the landing hero is heroStatement ${spec.heroStatement.join("/")} (${spec.heroNarrow.join("/")} under ${spec.heroNarrowUnder} px)`);
+  }
+  // one accented word inside a headline is banned
+  for (const hd of all.filter((e) => /^H[1-3]$/.test(e.tagName))) {
+    const hs = st(hd);
+    for (const c of hd.querySelectorAll("*")) {
+      if (!h.own(c)) continue;
+      const cs = st(c);
+      if (cs.color !== hs.color || cs.fontWeight !== hs.fontWeight || cs.fontStyle !== hs.fontStyle) { add("fail", "accented-word", c, `"${h.own(c).slice(0, 20)}" differs from its headline in colour, weight or style`); break; }
+    }
+  }
+  // measure <= 68 ch: average characters per line (a 68ch line holds about 75 average characters)
+  for (const e of all.filter((x) => /^(P|LI|H1|H2|H3)$/.test(x.tagName))) {
+    const t = (e.innerText || "").replace(/\s+/g, " ").trim(), lh = px(st(e).lineHeight);
+    if (t.length < 150 || !(lh > 0)) continue;
+    const lines = Math.max(1, Math.round(e.getBoundingClientRect().height / lh));
+    if (t.length / lines > 80) add("warn", "measure", e, `about ${Math.round(t.length / lines)} characters per line (DESIGN: measure <= 68 ch)`);
   }
 
-  // Banned list (DESIGN §Banned) and copy rules, element by element
+  // Banned list and copy rules, element by element
+  const money = /(\d+(?:\.\d+)?)\s*USDC/g, clock = /\b\d{1,2}:\d{2}\b/;
   for (const e of texts) {
     const own = h.own(e), s = st(e);
-    const w = /\b(submit|soon|guarantee[ds]?|locked|yield|delta-neutral)\b/i.exec(own);
+    const w = /\b(submit|soon|quote only|guarantee[ds]?|locked|yield|delta-neutral)\b/i.exec(own);
     if (w) add("fail", "banned-word", e, `"${w[0]}"`);
     if (/\$\s?\d/.test(own)) add("fail", "no-dollar-sign", e, "money is 0.05 USDC, never $");
-    if (/\s·\s/.test(own)) add(view === "owner" ? "fail" : "warn", "middle-dot-meta", e, "a · b · c strings are banned");
+    if (/\s·\s/.test(own)) add("fail", "middle-dot-meta", e, "meta strings joined with middle dots are banned");
     if (s.textTransform === "uppercase") add("fail", "tracked-uppercase", e, "text-transform: uppercase");
-    else if (/^[A-Z][A-Z0-9 ]{3,}$/.test(own) && !/^(USDC|EURC|USD|ERC|CCTP|MCP|API|UTC|HTTP)$/.test(own)) add("warn", "all-caps", e, `"${own.slice(0, 20)}"`);
+    else if (/^[A-Z][A-Z0-9 ]{3,}$/.test(own) && !/^(USDC|EURC|USD|ERC|CCTP|MCP|API|UTC|HTTP|AIS|MMSI)$/.test(own)) add("warn", "all-caps", e, `"${own.slice(0, 20)}"`);
     if (view === "owner" && (/\b\d{4}-\d{2}-\d{2}\b|T\d{2}:\d{2}:\d{2}|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(own))) add("warn", "date-not-in-words", e, "dates read Today 05:41, Yesterday, 12 Oct");
-    for (const m of own.matchAll(/(\d+(?:\.\d+)?)\s*USDC/g)) {
+    for (const m of own.matchAll(money)) {
       const frac = (m[1].split(".")[1] ?? "");
       if (frac.length > 6 || /0$/.test(frac)) add("warn", "money-not-shortest", e, `"${m[0]}": six decimals trimmed to the shortest that is exact`);
-      if (view === "owner" && !/tabular-nums/.test(st(e).fontVariantNumeric)) add("warn", "money-not-tabular", e, `"${m[0]}": tabular lining figures wherever money appears`);
     }
+    if ((own.match(money) || clock.test(own)) && !/tabular-nums/.test(s.fontVariantNumeric) && !mono(e)) add("fail", "figures-not-tabular", e, `"${(own.match(money)?.[0] ?? own.match(clock)[0])}": tabular lining figures wherever money or time appears`);
   }
   for (const hd of all.filter((e) => /^H[1-6]$/.test(e.tagName) || e.getAttribute("role") === "heading")) if (/\s[—–]\s/.test(hd.textContent)) add("fail", "word-dash-heading", hd, "no WORD — fragment headings");
   for (const b of all.filter((e) => e.matches("button, a[href], [role=button]"))) {
-    if (/[→←↗↘↑↓➔➜➝⟶]/.test(b.textContent) || b.querySelector('svg[class*="arrow" i], svg[data-lucide*="arrow" i]')) add("fail", "arrow-on-button", b, "no arrows on buttons");
+    if (/[→←↗↘↑↓➔➜➝⟶]/.test(b.textContent) || b.querySelector('svg[class*="arrow" i], svg[data-lucide*="arrow" i]')) add("fail", "arrow-on-button", b, "no arrows in links or buttons");
     else if (b.querySelector('svg[class*="chevron" i], svg[class*="caret" i]')) add("warn", "chevron-on-button", b, "a chevron on a button: an arrow by another name?");
   }
 
-  // Visual bans: gradients, glows, shadows (the sheet's own excepted), spinners as pages
+  // Visual bans: gradients, glow, shadows (the sheet's own excepted), spinner pages, borders on content, radii off the scale
+  const RADII = [0, 4, 8, 12, 16, 24];
+  const ledgerRow = (e, sides) => (e.matches("tr, td, th, thead, tbody, tfoot") || !!e.closest("table")) || (e.matches("li, [role=listitem]") && sides.every((x) => x === "Bottom" || x === "Top"));
+  const radii = new Map();
   for (const e of all) {
     const s = st(e);
     if (/gradient/.test(s.backgroundImage)) add("fail", "gradient", e, s.backgroundImage.slice(0, 50));
     if (s.boxShadow !== "none" && !isSheet(e)) add("fail", "shadow", e, s.boxShadow.slice(0, 50));
     if (s.textShadow !== "none") add("fail", "glow", e, s.textShadow.slice(0, 50));
     if (/blur|drop-shadow/.test(s.filter) || /blur/.test(s.backdropFilter ?? "")) add("fail", "glow", e, `filter ${s.filter}`);
-    if (/spin/i.test(s.animationName) || (e.getAttribute("role") === "progressbar" && px(s.width) > innerWidth * 0.5)) add("fail", "spinner", e, "no spinners as pages");
+    if (/spin/i.test(s.animationName) || (e.getAttribute("role") === "progressbar" && px(s.width) > innerWidth * 0.5)) add("fail", "spinner", e, "no spinner pages");
+    const sides = ["Top", "Right", "Bottom", "Left"].filter((x) => px(s[`border${x}Width`]) > 0 && s[`border${x}Style`] !== "none" && !/rgba\(\s*\d+,\s*\d+,\s*\d+,\s*0\s*\)/.test(s[`border${x}Color`]));
+    const control = e.matches("button, [role=button], a[href], input, select, textarea, summary, [role=tab], [role=radio]") || !!e.closest("button, [role=button], a[href]");
+    if (sides.length && !control && !ledgerRow(e, sides) && !sides.every((x) => s[`border${x}Style`] === "dashed") && !isSheet(e)) add("fail", "border-on-content", e, `${sides.join("+")} ${s.borderTopStyle} ${s.borderTopWidth}; depth is one step of fill, never a border (rule is for table rows only)`);
+    const r = px(s.borderTopLeftRadius);
+    if (r > 0 && r < 99 && !RADII.includes(Math.round(r))) radii.set(Math.round(r), e);
   }
+  for (const [r, e] of radii) add("warn", "radius-off-scale", e, `${r}px; the scale is ${RADII.filter(Boolean).join(" / ")}`);
 
-  // Colour: every colour on the page is a token; a saturated stranger is "a second accent"; --red only on Needs you, Stop, refusals
-  const allowed = new Set(Object.values(palette).map((x) => x.toUpperCase()));
-  const red = (palette["--red"] ?? "").toUpperCase();
+  // Colour: every colour on the page is a token; transit only as a mark; up and down never alone; attention only for Needs you, Stop, refused, failures
+  const allowed = new Set(), allowedA = [];
+  for (const x of Object.values(palette)) {
+    const v = x.toUpperCase();
+    if (v.length === 9) allowedA.push({ hex: v.slice(0, 7), a: parseInt(v.slice(7), 16) / 255 });
+    else allowed.add(v);
+  }
+  const red = tok("attention") || tok("red");
   const rgb = (v) => {
     const m = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+%?))?\s*\)$/.exec(v);
     if (!m) return null;
@@ -318,6 +378,8 @@ function domRules({ view, width, route, palette }) {
     if (c && c.a === 0) return;
     const key = c ? (c.a < 1 ? `${hex(c)}@${c.a}` : hex(c)) : raw;
     if (key === red) reds.add(e);
+    if (prop === "color" && view === "owner" && key === tok("transit")) add("fail", "transit-as-text", e, "transit is for marks only, never text on light");
+    if (prop === "color" && (key === tok("up") || key === tok("down")) && !/[+\-−–]|\b(up|down|in|out|more|less|received|paid|spent|refused|days?)\b/i.test(e.innerText || "")) add("warn", "direction-alone", e, "up and down colour a direction; with a sign or a word, never alone");
     const u = used.get(key) ?? { n: 0, e, prop, raw };
     u.n++;
     used.set(key, u);
@@ -335,22 +397,24 @@ function domRules({ view, width, route, palette }) {
   }
   for (const [key, u] of used) {
     if (allowed.has(key)) continue;
+    if (key.includes("@")) { const [hx, al] = key.split("@"); if (allowedA.some((t) => t.hex === hx && Math.abs(t.a - +al) < 0.012)) continue; }
     const c = rgb(u.raw);
     let sev = "warn", why = "a colour literal, not a token";
     if (c) {
       const mx = Math.max(c.r, c.g, c.b), mn = Math.min(c.r, c.g, c.b), l = (mx + mn) / 510;
       const sat = mx === mn ? 0 : (mx - mn) / 255 / (1 - Math.abs(2 * l - 1));
-      if (sat > 0.3 && l > 0.1 && l < 0.9) { sev = "fail"; why = "a saturated colour that is no token: a second accent?"; }
+      if (sat > 0.3 && l > 0.1 && l < 0.9) { sev = "fail"; why = "a saturated colour that is no token"; }
     }
     add(sev, "off-token-colour", u.e, `${u.prop} ${key} x${u.n}: ${why}`);
   }
   for (const e of reds) {
     const around = `${e.innerText || ""} ${e.getAttribute("aria-label") || ""} ${e.parentElement?.parentElement?.innerText?.slice(0, 120) || ""}`;
-    if (!e.closest("[data-needs-you],[data-stop],[data-refusal],[role=alert]") && !/needs you|stop|refus|declin|nothing was sent|not sent|cannot|can.t/i.test(around)) add("warn", "red-outside-allowed", e, "--red is for Needs you, Stop and refusals only");
+    if (/^\s*[−–-]\s?\d/.test(e.innerText || "")) continue; // a negative amount is --down, which shares the red
+    if (!e.closest("[data-needs-you],[data-stop],[data-refusal],[role=alert]") && !/needs you|stop|refus|declin|fail|did not answer|nothing was sent|not sent|cannot|can.t|error/i.test(around)) add("warn", "attention-outside-allowed", e, "attention red is for Needs you, Stop, refused and failures only");
   }
   metrics.reds = reds.size;
 
-  // Layout: no sideways scroll, Owner column <= 720 px, touch targets >= 44 px
+  // Layout: no sideways scroll, content max, gutter, touch targets >= 44 px, buttons 52 (44 compact)
   const de = document.documentElement;
   if (de.scrollWidth > de.clientWidth + 1) {
     const off = all.filter((e) => e.getBoundingClientRect().right > de.clientWidth + 1 && !e.closest("[style*='overflow']"))[0];
@@ -360,25 +424,23 @@ function domRules({ view, width, route, palette }) {
   if (main) {
     const r = main.getBoundingClientRect();
     metrics.main = `${Math.round(r.left)}..${Math.round(r.right)} (${Math.round(r.width)} wide)`;
-    if (view === "owner" && r.width > 720.5) add("fail", "owner-column", main, `main is ${Math.round(r.width)} px wide; Owner content max is 720`);
-    if (view === "agent" && width >= 1024 && r.width < width * 0.9) add("warn", "agent-not-full-width", main, `main is ${Math.round(r.width)} of ${width} px`);
-    const pad = px(st(main).paddingLeft);
-    const want = width >= 768 ? 24 : 16;
-    if (Math.abs(pad - want) > 0.6 && !(view === "owner" && width >= 768 + 720)) metrics.gutter = `main padding-left ${pad}px (DESIGN ${want}px)`;
+    if (r.width > spec.contentMax + 0.5) add("fail", "content-max", main, `main is ${Math.round(r.width)} px wide; content max is ${spec.contentMax}`);
+    const pad = px(st(main).paddingLeft), want = width >= 768 ? spec.gutter.wide : spec.gutter.narrow;
+    if (!near(pad, want) && !(width > spec.contentMax + 2 * want)) metrics.gutter = `main padding-left ${pad}px (DESIGN ${want}px)`;
   }
   if (width < 768) {
     const IA = 'button, a[href], input:not([type=hidden]), select, textarea, summary, [role=button], [role=tab], [role=radio], [role=switch], [role=checkbox]';
     for (const e of all.filter((x) => x.matches(IA))) {
       const r = e.getBoundingClientRect();
-      if (r.width >= 43.5 && r.height >= 43.5) continue;
+      if (r.width >= spec.touch - 0.5 && r.height >= spec.touch - 0.5) continue;
       const label = e.closest("label");
-      if (label && label.getBoundingClientRect().height >= 43.5 && /^(radio|checkbox)$/.test(e.type)) continue;
+      if (label && label.getBoundingClientRect().height >= spec.touch - 0.5 && /^(radio|checkbox)$/.test(e.type)) continue;
       const inline = e.tagName === "A" && e.parentElement && e.parentElement.innerText.length > e.innerText.length + 12;
-      add(inline ? "warn" : "fail", "touch-target", e, `${Math.round(r.width)}x${Math.round(r.height)} px; DESIGN touch targets are >= 44`);
+      add(inline ? "warn" : "fail", "touch-target", e, `${Math.round(r.width)}x${Math.round(r.height)} px; DESIGN touch targets are >= ${spec.touch}`);
     }
   }
 
-  // The shell: the network word in words and shape, the capsule says which view it is
+  // The shell: Testnet is a word and a dashed capsule; the capsule says which view it is
   const header = document.querySelector("header");
   const pill = header && [...header.querySelectorAll("*")].find((e) => /^testnet$/i.test(h.own(e)) && h.vis(e));
   if (!pill) add("fail", "network-word", header, 'the header does not say "Testnet"');
@@ -386,7 +448,8 @@ function domRules({ view, width, route, palette }) {
     let b = pill;
     while (b && px(st(b).borderTopWidth) === 0 && b !== header) b = b.parentElement;
     const bs = b ? st(b) : null;
-    if (!bs || px(bs.borderTopWidth) === 0 || rgb(bs.backgroundColor)?.a !== 0) add("fail", "network-pill", pill, "Testnet must be a hollow pill: a border and no fill");
+    if (!bs || px(bs.borderTopWidth) === 0 || rgb(bs.backgroundColor)?.a !== 0) add("fail", "network-pill", pill, "Testnet must be a capsule outline with no fill");
+    else if (bs.borderTopStyle !== "dashed") add("fail", "network-pill-dashed", pill, `Testnet is a dashed capsule; the border is ${bs.borderTopStyle}`);
   }
   const seg = ["Owner", "Agent"].map((l) => h.capsule(l));
   if (!seg[0] || !seg[1]) add("fail", "capsule", header, "the header has no Owner | Agent capsule");
@@ -576,7 +639,7 @@ async function scenario(browser, AxeBuilder, sc, cfg) {
       const z = await page.evaluate(() => [...document.body.querySelectorAll("*")].filter((e) => window.__h6.vis(e) && /^0(\.0+)?( USDC)?$/.test(window.__h6.own(e))).map((e) => window.__h6.sel(e)));
       if (z.length) R.findings.push({ sev: "fail", rule: "fake-zero", sel: z[0], text: "", detail: `${z.length} element(s) read 0 while loading` });
     }
-    const { findings, metrics } = await page.evaluate(domRules, { view: sc.view, width: sc.width, route: sc.route, palette: cfg.palette[sc.view] });
+    const { findings, metrics } = await page.evaluate(domRules, { view: sc.view, width: sc.width, route: sc.route, palette: cfg.palette[sc.view], spec: SPEC });
     R.findings.push(...findings);
     R.metrics = metrics;
     // a skeleton has no hero; the heading rule waits for the content
@@ -673,8 +736,6 @@ async function motionAndShell(browser, sc, cfg) {
       const media = await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches);
       if (media !== reduced) R.findings.push({ sev: "fail", rule: "emulation", sel: "", text: "", detail: `prefers-reduced-motion is ${media}, expected ${reduced}` });
       const idle = await page.evaluate(sampleMotion, { action: null, ms: 400 });
-      const pulses = idle.restRunning.filter((a) => /pulse|skeleton/i.test(a.name));
-      if (pulses.length && !reduced) R.findings.push({ sev: "warn", rule: "skeleton-pulse-infinite", sel: pulses[0].id.split("|").pop(), text: "", detail: `the skeleton pulse repeats for as long as it is shown (${pulses[0].name}, ${pulses[0].duration} ms, infinite); DESIGN §Motion says it "stops after first paint"` });
       const loops = idle.restRunning.filter((a) => !/pulse|skeleton/i.test(a.name) && (a.infinite || a.props.some((p) => !["opacity", "mixBlendMode"].includes(p))));
       if (loops.length) R.findings.push({ sev: "fail", rule: "moves-at-rest", sel: loops[0].id.split("|").pop(), text: "", detail: `${loops.length} animation(s) still run on a settled page (${loops.map((a) => a.name || a.id.split("|")[0]).join(", ")}); nothing moves that is not a state change` });
       for (const to of ["agent", "owner"]) {
@@ -686,7 +747,7 @@ async function motionAndShell(browser, sc, cfg) {
         if (moving.length) R.findings.push({ sev: "fail", rule: "flip-not-opacity", sel: moving[0].pseudo || moving[0].id.split("|").pop(), text: "", detail: `the flip animates ${[...new Set(moving.flatMap((a) => a.props))].filter((p) => p !== "mixBlendMode").join(", ")}; DESIGN: crossfade only, no slide, no scale` });
         const fade = m.seen.filter((a) => a.props.includes("opacity"));
         if (!reduced && !fade.some((a) => Math.abs(a.duration - 200) <= 25)) R.findings.push({ sev: "warn", rule: "flip-200ms", sel: "", text: "", detail: `no 200 ms opacity crossfade seen on the flip to ${to} (saw ${m.seen.map((a) => `${a.name || "?"}:${a.duration}`).join(", ") || "nothing"})` });
-        if (reduced && !fade.length) R.findings.push({ sev: "note", rule: "flip-instant", sel: "", text: "", detail: `under reduced motion the flip to ${to} is instant (DESIGN allows the opacity crossfade; instant is quieter)` });
+        if (reduced && fade.length) R.findings.push({ sev: "warn", rule: "reduced-motion-crossfade", sel: fade[0].pseudo || fade[0].id.split("|").pop(), text: "", detail: `a ${fade[0].duration} ms crossfade still runs under reduced motion; DESIGN (founder 07:01): the capsule swaps instantly (the lane brief had said crossfade only: a ruling is needed)` });
         R.crossfade = m.seen.map((a) => `${a.pseudo || a.name}:${a.duration}`).join(" ");
       }
       if (!reduced) {
@@ -731,6 +792,7 @@ async function sheetCheck(browser, sc, cfg) {
     if (!d.named) R.findings.push({ sev: "fail", rule: "sheet-unnamed", sel: "dialog", text: "", detail: "the sheet has no accessible name" });
     if (!d.inside) R.findings.push({ sev: "fail", rule: "sheet-focus", sel: "dialog", text: "", detail: "focus did not move into the sheet" });
     if (sc.width >= 1024 && !(d.right >= d.w - 1 && d.left > d.w * 0.4)) R.findings.push({ sev: "fail", rule: "sheet-drawer", sel: "dialog", text: "", detail: `>= 1024 px must be a right drawer; sheet spans ${Math.round(d.left)}..${Math.round(d.right)} of ${d.w}` });
+    else if (sc.width >= 1024 && Math.abs(d.right - d.left - SPEC.drawer) > 4) R.findings.push({ sev: "fail", rule: "sheet-drawer-width", sel: "dialog", text: "", detail: `the drawer is ${Math.round(d.right - d.left)} px wide; DESIGN: a ${SPEC.drawer} px right drawer` });
     if (sc.width < 1024 && !(d.bottom >= d.h - 1 && d.top > d.h * 0.1)) R.findings.push({ sev: "warn", rule: "sheet-size", sel: "dialog", text: "", detail: `mobile sheet opens at content size from the bottom; spans ${Math.round(d.top)}..${Math.round(d.bottom)} of ${d.h}` });
     let escaped = true;
     for (let i = 0; i < 12; i++) {
@@ -791,7 +853,7 @@ async function keyboardFit(browser, route, cfg) {
     if (!m.cta) R.findings.push({ sev: "warn", rule: "keyboard-cta", sel: "", text: "", detail: "no CTA button found on the page" });
     else {
       if (m.cta.bottom > m.h + 0.5) R.findings.push({ sev: "fail", rule: "keyboard-cta", sel: "button", text: m.cta.text, detail: `CTA spans ${Math.round(m.cta.top)}..${Math.round(m.cta.bottom)} of ${m.h} px with the keyboard open` });
-      if (Math.abs(m.cta.hgt - 56) > 0.6 || m.cta.w < 375 - 32 - 1) R.findings.push({ sev: "warn", rule: "cta-plate", sel: "button", text: m.cta.text, detail: `CTA is ${Math.round(m.cta.w)}x${Math.round(m.cta.hgt)} px; DESIGN: a 56 px plate, full width` });
+      if (![SPEC.button, SPEC.buttonCompact].some((h) => Math.abs(m.cta.hgt - h) <= 0.6) || m.cta.w < 375 - 2 * SPEC.gutter.narrow - 1) R.findings.push({ sev: "warn", rule: "cta-plate", sel: "button", text: m.cta.text, detail: `CTA is ${Math.round(m.cta.w)}x${Math.round(m.cta.hgt)} px; DESIGN: a ${SPEC.button} px plate (${SPEC.buttonCompact} compact), full width on mobile` });
     }
   } catch (e) {
     R.findings.push({ sev: "fail", rule: "scenario-error", sel: "", text: "", detail: String(e.message).split("\n")[0].slice(0, 160) });
@@ -867,12 +929,16 @@ async function main() {
     console.log(`${plan.length} scenarios; proof dir ${cfg.proof}`);
     return 0;
   }
-  const steps = [stepTokens(), run("contrast", ["scripts/contrast.mjs"], "scripts/contrast.mjs is missing (H1: WCAG 4.5:1 for every pair in both views)"), stepZeroHash(), stepLiterals()];
+  const steps = [
+    stepTokens(), run("contrast", ["scripts/contrast.mjs"], "scripts/contrast.mjs is missing (H1: WCAG 4.5:1 for every pair in both views)"), stepZeroHash(), stepLiterals(),
+    stepScripts("hex-lint", ["lint:tokens", "lint:hex", "tokens:lint", "lint-tokens"], "no tokens-only hex lint script yet (H1 writes it: no literal colour outside src/tokens.*; npm script lint:tokens)", cfg.strict),
+    stepScripts("21st-review", ["review:21st", "21st:review", "21st-review", "design:review"], "no `21st review` script yet (H1 finds the CLI; npm script review:21st)", cfg.strict),
+  ];
   const md = join(APP, "DESIGN.md"), tk = join(APP, "src/tokens.css");
   const pal = existsSync(md) ? designPalette(readFileSync(md, "utf8")) : {};
   const css = existsSync(tk) ? cssTokens(readFileSync(tk, "utf8")) : { owner: {}, agent: {} };
-  // the colours a view may use: DESIGN's table, overridden by what tokens.css really says
-  const palette = Object.fromEntries(["owner", "agent"].map((v) => [v, { ...(pal[v] ?? {}), ...Object.fromEntries(Object.entries(css[v]).map(([k, x]) => [k, hexNorm(x)]).filter(([, x]) => x)) }]));
+  // the colours a view may use are DESIGN's table; with no DESIGN.md in the tree, what tokens.css says
+  const palette = Object.fromEntries(["owner", "agent"].map((v) => [v, Object.keys(pal[v] ?? {}).length ? pal[v] : Object.fromEntries(Object.entries(css[v]).map(([k, x]) => [k, hexNorm(x)]).filter(([, x]) => x))]));
   for (const s of steps) console.log(`${s.sev.toUpperCase().padEnd(5)} ${s.name}${s.lines.length ? "\n        " + s.lines.join("\n        ") : ""}`);
 
   const results = [];

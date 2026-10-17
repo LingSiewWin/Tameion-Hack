@@ -21,16 +21,22 @@ test("colours: hex and rgb() normalise, contrast follows WCAG", () => {
   assert.ok(contrast("#1E5F46", "#0F1511") < 4.5, "DESIGN's night --up (same as day) fails 4.5:1");
 });
 
-test("DESIGN.md's palette table and tokens.css read to the same shape", () => {
+test("DESIGN.md's palette table (both formats) and tokens.css read to the same shape", () => {
   const md = new URL("../DESIGN.md", import.meta.url);
   if (existsSync(md)) {
     const p = designPalette(readFileSync(md, "utf8"));
     assert.equal(p.owner["--paper"], "#EEF2EA");
-    assert.equal(p.agent["--paper"], "#0F1511");
+    assert.ok(p.agent["--paper"] && p.agent["--paper"] !== p.owner["--paper"], "the Agent view has its own paper");
   }
-  const row = designPalette("| `--rule` | `#D5DCD2` | same | hairlines |\n| `--up` / `--down` | `#1E5F46` / `#7A4B1E` | `#7FD1A8` / `#D9A06A` | money |");
-  assert.equal(row.agent["--rule"], "#D5DCD2", '"same" takes the Owner value');
-  assert.deepEqual([row.agent["--up"], row.agent["--down"], row.owner["--down"]], ["#7FD1A8", "#D9A06A", "#7A4B1E"]);
+  const founder = designPalette("| Token | Light | Dark | Used for |\n|---|---|---|---|\n| paper | `#EEF2EA` | `#0E1B22` | the page |\n| up / down | `#2F7A00` / `#B3261E` | `#9FD66A` / `#FF6B5E` | direction |\n| scrim / skeleton | `#000000B3` / `#DEE4DA` | `#000000B3` / `#22343D` | sheets |\n| sealed | ink | ink | the mark |");
+  assert.deepEqual([founder.owner["--paper"], founder.agent["--paper"]], ["#EEF2EA", "#0E1B22"]);
+  assert.deepEqual([founder.owner["--up"], founder.owner["--down"], founder.agent["--up"], founder.agent["--down"]], ["#2F7A00", "#B3261E", "#9FD66A", "#FF6B5E"]);
+  assert.deepEqual([founder.owner["--scrim"], founder.agent["--skeleton"]], ["#000000B3", "#22343D"]);
+  assert.equal(founder.owner["--sealed"], undefined, "a non-hex value is not a colour");
+  const lane = designPalette("| `--rule` | `#D5DCD2` | same | hairlines |\n| `--up` / `--down` | `#1E5F46` / `#7A4B1E` | `#7FD1A8` / `#D9A06A` | money |");
+  assert.equal(lane.agent["--rule"], "#D5DCD2", '"same" takes the Owner value');
+  assert.deepEqual([lane.agent["--up"], lane.agent["--down"], lane.owner["--down"]], ["#7FD1A8", "#D9A06A", "#7A4B1E"]);
+  assert.equal(hexNorm("#000000b3"), "#000000B3");
   const t = cssTokens(':root, :root[data-view="owner"] { --paper: #eef2ea; } /* x */ :root[data-view="agent"] { --paper: #0F1511; }');
   assert.equal(t.owner["--paper"], "#eef2ea");
   assert.equal(t.agent["--paper"], "#0F1511");
