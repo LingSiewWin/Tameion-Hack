@@ -14,7 +14,7 @@ const NO_AGENT = "0x000000000000000000000000000000000000dEaD";
 
 /** Two public nodes per chain, neither of them Tameion's (the same as `verify_tenant.sh`). */
 export const NODES: Record<string, readonly [string, string]> = {
-  "arc-testnet": ["https://rpc.testnet.arc.network", "https://explorer.testnet.arc.io/api/eth-rpc"],
+  "arc-testnet": ["https://rpc.testnet.arc.io", "https://explorer.testnet.arc.io/api/eth-rpc"],
   "arbitrum-sepolia": ["https://sepolia-rollup.arbitrum.io/rpc", "https://arbitrum-sepolia-rpc.publicnode.com"],
 };
 

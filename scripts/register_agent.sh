@@ -20,7 +20,7 @@ REGISTRY=0x8004A818BFB912233c491871b3d84c89A494BD9e
 REGISTERED_TOPIC=$(cast keccak "Registered(uint256,string,address)")
 
 case "${1:-}" in
-  arc)    RPC_URL=${RPC_URL:-https://rpc.testnet.arc.network};   CHAIN=5042002 ;;
+  arc)    RPC_URL=${RPC_URL:-https://rpc.testnet.arc.io};   CHAIN=5042002 ;;
   arbsep) RPC_URL=${RPC_URL:-https://sepolia-rollup.arbitrum.io/rpc}; CHAIN=421614 ;;
   *) echo "usage: $0 arc|arbsep" >&2; exit 2 ;;
 esac

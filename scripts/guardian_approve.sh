@@ -8,7 +8,7 @@
 set -euo pipefail
 OWNER=${1:?owner PasskeyPrincipal address}
 QX=${2:?new key x, or "status"}
-RPC=${TAMEION_RPC_ARC:-https://rpc.testnet.arc.network}
+RPC=${TAMEION_RPC_ARC:-https://rpc.testnet.arc.io}
 KEY_FILE=${TAMEION_KEY_FILE:-$HOME/.tameion/treasury.key}
 
 if [ "$QX" = status ]; then

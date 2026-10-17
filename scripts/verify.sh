@@ -20,7 +20,7 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-export RPC_URL=${RPC_URL:-https://rpc.testnet.arc.network}
+export RPC_URL=${RPC_URL:-https://rpc.testnet.arc.io}
 steps=${1:-1 2 3 4}
 rc=0
 

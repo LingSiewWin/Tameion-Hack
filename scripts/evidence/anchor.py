@@ -33,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import desk  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
-ARC_RPC = "https://rpc.testnet.arc.network"
+ARC_RPC = "https://rpc.testnet.arc.io"
 ARC_CHAIN_ID = 5042002
 ARC_EXPLORER = "https://explorer.testnet.arc.io"
 # keccak256("MemoryAnchored(address,uint256,bytes32,uint256)"), from `cast keccak`.

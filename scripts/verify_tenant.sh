@@ -54,7 +54,7 @@ echo "checked $how"
 chain=$(printf '%s' "$records" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("chain") or "arc-testnet")')
 case "$chain" in
   arbitrum-sepolia) d1=https://sepolia-rollup.arbitrum.io/rpc; d2=https://arbitrum-sepolia-rpc.publicnode.com ;;
-  *) d1=https://rpc.testnet.arc.network; d2=https://explorer.testnet.arc.io/api/eth-rpc ;;
+  *) d1=https://rpc.testnet.arc.io; d2=https://explorer.testnet.arc.io/api/eth-rpc ;;
 esac
 echo "chain   $chain"
 RPC_URL=${RPC_URL:-$d1}

@@ -13,7 +13,7 @@ sent again unchanged (a replay)."""
 import base64, json, os, subprocess, sys, time, urllib.error, urllib.request
 
 policy, keyfile, url = sys.argv[1:4]
-rpc = sys.argv[4] if len(sys.argv) > 4 else "https://rpc.testnet.arc.network"
+rpc = sys.argv[4] if len(sys.argv) > 4 else "https://rpc.testnet.arc.io"
 replay = sys.argv[5] if len(sys.argv) > 5 else None
 
 

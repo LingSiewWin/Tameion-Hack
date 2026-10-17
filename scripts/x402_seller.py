@@ -22,7 +22,7 @@ without a well-formed `extensions["payment-identifier"].info.id`."""
 import base64, json, os, re, subprocess, sys, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-RPC = os.environ.get("RPC", "https://rpc.testnet.arc.network")
+RPC = os.environ.get("RPC", "https://rpc.testnet.arc.io")
 CHAIN_ID = int(os.environ.get("CHAIN_ID", "5042002"))
 USDC = os.environ.get("USDC", "0x3600000000000000000000000000000000000000")
 PAY_TO = os.environ["PAY_TO"]

@@ -57,7 +57,7 @@ case "$NET" in
     WALLET_PK=$RELAYER_PK
     ;;
   arc)
-    RPC_URL=${RPC_URL:-https://rpc.testnet.arc.network}
+    RPC_URL=${RPC_URL:-https://rpc.testnet.arc.io}
     CHAIN=5042002
     # USDC is Arc's native asset: the policy is the native BudgetPolicy and
     # money moves as value. Amounts are thousandths, as in prove_arc.sh.

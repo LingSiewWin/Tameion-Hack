@@ -19,7 +19,7 @@ cbor_metadata = false
 fs_permissions = [{ access = "read", path = "../runtime" }]
 
 [rpc_endpoints]
-arc_testnet = "https://rpc.testnet.arc.network"
+arc_testnet = "https://rpc.testnet.arc.io"
 local = "http://127.0.0.1:8545"
 
 [lint]

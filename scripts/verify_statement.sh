@@ -93,7 +93,7 @@ fi
 c=FAIL
 ZERO=0x0000000000000000000000000000000000000000000000000000000000000000
 case "$CHAIN" in
-  arc-testnet)      d1=https://rpc.testnet.arc.network;        d2=https://explorer.testnet.arc.io/api/eth-rpc;     ANCHOR=0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB ;;
+  arc-testnet)      d1=https://rpc.testnet.arc.io;        d2=https://explorer.testnet.arc.io/api/eth-rpc;     ANCHOR=0xDAb65A5380BCC2Eebc3A3A91d0AD11Eec95994dB ;;
   arbitrum-sepolia) d1=https://sepolia-rollup.arbitrum.io/rpc; d2=https://arbitrum-sepolia-rpc.publicnode.com;     ANCHOR=0xe7C381AAFA077CC99359E8b297D2125efD76B8F5 ;;
   *) d1=; d2=; ANCHOR= ;;
 esac

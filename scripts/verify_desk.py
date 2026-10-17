@@ -57,7 +57,7 @@ import urllib.request
 from decimal import ROUND_HALF_UP, Decimal
 
 RPCS = {421614: ["https://sepolia-rollup.arbitrum.io/rpc", "https://arbitrum-sepolia-rpc.publicnode.com"],
-        5042002: ["https://rpc.testnet.arc.network", "https://explorer.testnet.arc.io/api/eth-rpc"]}
+        5042002: ["https://rpc.testnet.arc.io", "https://explorer.testnet.arc.io/api/eth-rpc"]}
 # The record contract (MemoryAnchor) per chain, pinned here, never taken from the kit (same as the /lender page).
 ANCHORS = {421614: "0xe7c381aafa077cc99359e8b297d2125efd76b8f5", 5042002: "0xdab65a5380bcc2eebc3a3a91d0ad11eec95994db"}
 HL = "https://api.hyperliquid-testnet.xyz/info"

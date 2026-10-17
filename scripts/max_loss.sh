@@ -10,7 +10,7 @@
 # Needs: cast (foundry), curl, python3. Read-only; no key.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RPC_URL=${RPC_URL:-https://rpc.testnet.arc.network}
+RPC_URL=${RPC_URL:-https://rpc.testnet.arc.io}
 POLICY=${POLICY:-$(cat "$ROOT/runtime/arc_policy.addr")}
 FROM_BLOCK=${FROM_BLOCK:-64981000}          # just before the live policy was deployed (attestations at 64981196); override for another deployment
 INFO=${INFO:-https://api.hyperliquid-testnet.xyz/info}

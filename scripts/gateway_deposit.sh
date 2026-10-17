@@ -19,7 +19,7 @@ set -euo pipefail
 
 # GW_CHAIN=arc-testnet (default) | arbitrum-sepolia | base-sepolia | sepolia — the chain the USDC is on.
 case "${GW_CHAIN:-arc-testnet}" in
-  arc-testnet)      RPC=${TAMEION_RPC_ARC:-https://rpc.testnet.arc.network}; USDC=0x3600000000000000000000000000000000000000; DOMAIN=26 ;;
+  arc-testnet)      RPC=${TAMEION_RPC_ARC:-https://rpc.testnet.arc.io}; USDC=0x3600000000000000000000000000000000000000; DOMAIN=26 ;;
   arbitrum-sepolia) RPC=${RPC:-https://sepolia-rollup.arbitrum.io/rpc};     USDC=0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d; DOMAIN=3 ;;
   base-sepolia)     RPC=${RPC:-https://sepolia.base.org};                   USDC=0x036CbD53842c5426634e7929541eC2318f3dCF7e; DOMAIN=6 ;;
   sepolia)          RPC=${RPC:-https://ethereum-sepolia-rpc.publicnode.com}; USDC=0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238; DOMAIN=0 ;;
