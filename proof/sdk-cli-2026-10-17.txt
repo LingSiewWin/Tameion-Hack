@@ -116,3 +116,81 @@ Content-Length: 920
 -- control: a fresh key, no Authorization
 HTTP/1.1 401 Unauthorized
 {"error":"this account's owner requires an agent key: send Authorization: Bearer <token> (the owner mints one on the account page)","scope":"buy"}
+
+================================================================================================================
+pay, 17:3x — the direct pay route (S16's POST /api/level1/pay), after the PM restarted :7880 at 17:32:52 with the merged build
+Written 2026-10-17 17:35:17 +0800 by the S18 seat. Same account and token file; the CLI rebuilt from apps/sdk (ℹ tests 21 ℹ pass 21 ℹ fail 0 ). No seller involved.
+== 2026-10-17 17:33:47 +0800 pay, before (block 320034992)
+payee  0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3 USDC minor 2000
+policy 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 USDC minor 93000 [9.3e4]
+
+$ tameion inbox (before)
+Autopilot · balance 0.093000 USDC
+per payment 0.010000 USDC · per 24 h 0.048000 USDC (spent 0.002000 USDC, left now 0.010000 USDC) · floor 0.000000 USDC
+payees: 2 approved, 2 payable now
+exit=0
+
+== 2026-10-17 17:34:09 +0800 pay #1 (no --op: the CLI makes one and prints it before sending)
+$ tameion pay 0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3 0.001 --why 'SDK proof: direct pay to the approved payee (S18)' --url http://localhost:7880 --policy 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 --token-file ~/.tameion/test-keys/uat2-u1-rc-buy.token
+exit=0 (4 s)
+-- stderr
+operation op_63da2d30-008e-43c9-add2-3a2df02933a0 — if no answer comes back, resend with --op op_63da2d30-008e-43c9-add2-3a2df02933a0, never a new one
+-- stdout
+paid 0.001000 USDC to 0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3 · https://sepolia.arbiscan.io/tx/0x6d3d7831cec730fd5ea2db075f1ffe2b754b6c69355d0b9ea202e8b810efa2b6
+operation op_63da2d30-008e-43c9-add2-3a2df02933a0
+
+== 2026-10-17 17:34:28 +0800 pay #2, the same operationId
+$ tameion pay 0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3 0.001 --why 'SDK proof: direct pay to the approved payee (S18)' --op op_63da2d30-008e-43c9-add2-3a2df02933a0 --url http://localhost:7880 --policy 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 --token-file ~/.tameion/test-keys/uat2-u1-rc-buy.token
+exit=0 (1 s)
+-- stderr
+operation op_63da2d30-008e-43c9-add2-3a2df02933a0 — if no answer comes back, resend with --op op_63da2d30-008e-43c9-add2-3a2df02933a0, never a new one
+-- stdout
+paid 0.001000 USDC to 0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3 · https://sepolia.arbiscan.io/tx/0x6d3d7831cec730fd5ea2db075f1ffe2b754b6c69355d0b9ea202e8b810efa2b6
+replayed: this operationId was already paid; nothing was paid again
+operation op_63da2d30-008e-43c9-add2-3a2df02933a0
+
+== 2026-10-17 17:34:33 +0800 chain after (block 320035161)
+payee  0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3 USDC minor 3000   (was 2000)
+policy 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 USDC minor 92000 [9.2e4]   (was 93000)
+receipt 0x6d3d7831cec730fd5ea2db075f1ffe2b754b6c69355d0b9ea202e8b810efa2b6: status 1 (success) block 320035086
+USDC Transfer events from the account to the payee in blocks 320034992-320035161: 1
+  tx 0x6d3d7831cec730fd5ea2db075f1ffe2b754b6c69355d0b9ea202e8b810efa2b6 value 1000
+
+== 2026-10-17 17:34:49 +0800 status (P-271)
+$ tameion status --url http://localhost:7880 --policy 0xdaf0…d4c1 --token-file ~/.tameion/test-keys/uat2-u1-rc-buy.token
+contract 2026-10-17.1
+paused: false
+halt: false
+stoppedTokens: []
+  2026-10-17 Contract 2026-10-17.1: every agent reply carries ok and contractVersion; a refusal is one error object with code, by, executed, audience, meaning, nextStep, retryAfterSecs and words (the old sentence). The codes are served at GET /api/level1/codes.
+  2026-10-17 A paid-API purchase refused after its signature reached the seller says executed: yes or unknown from the chain; never resend it then.
+  2026-10-17 treasury_inbox adds paused, halt and recentUpdates; MCP tool results carry structuredContent, and an error's text is the error object.
+exit=0
+
+$ tameion status --json (contractVersion and top-level fields)
+  keys: ['codes', 'contractVersion', 'halt', 'mode', 'ok', 'paused', 'policy', 'recentUpdates', 'stoppedTokens']
+  ok: True contractVersion: 2026-10-17.1
+
+== 2026-10-17 17:34:51 +0800 inbox
+$ tameion inbox
+Autopilot · balance 0.092000 USDC
+per payment 0.010000 USDC · per 24 h 0.048000 USDC (spent 0.003000 USDC, left now 0.010000 USDC) · floor 0.000000 USDC
+payees: 2 approved, 2 payable now
+waiting for the owner: 4
+  - invoice 0.004000 USDC 0x1aac…ca63: accept or decline an invoice a vendor sent
+  - invoice 0.003000 USDC 0x1aac…ca63: accept or decline an invoice a vendor sent
+  - bill 0.002000 USDC 0xf4d0…0e43: approve a payment the agent prepared — 0xf4d08a…860e43 was approved 0 days ago, so the owner should see this 0.002 USDC bill first, even though it matches the usual amount and was paid 5 times before. · cycles-behind: 32 more cycles of this bill fell due after this one and nobody paid them: it may have ended. Settle one by hand to confirm, and I will continue from there
+  - bill 0.001000 USDC 0xee80…b1f3: approve a payment the agent prepared — 0xee80b9…1bb1f3 was approved moments ago and has never been paid, so the owner should see this 0.001 USDC bill before it goes out.
+paid: 0.008000 USDC in 5 payments
+exit=0
+
+$ tameion inbox --json (payments field)
+  ok: None contractVersion: None
+  payments: 1
+    {'status': 'paid', 'amount': '0.001000 USDC', 'payee': '0xee80b9f69d80a04d4b2e803c426715aa8c1bb1f3', 'why': 'SDK proof: direct pay to the approved payee (S18)', 'operationId': 'op_63da2d30-008e-43c9-add2-3a2df02933a0', 'tx': '0x6d3d7831cec730fd5ea2db075f1ffe2b754b6c69355d0b9ea202e8b810efa2b6'}
+
+RESULT  pay #1 paid 0.001 USDC (tx 0x6d3d7831cec730fd5ea2db075f1ffe2b754b6c69355d0b9ea202e8b810efa2b6, status 1, block 320035086) in 4 s;
+        pay #2 with the same operationId answered in 1 s as a replay, paying nothing: one Transfer from the account to the payee in
+        blocks 320034992-320035161, payee 2000 -> 3000, account 93000 -> 92000 (the payee's 2000 before includes payments made by others
+        since 16:16). tameion status: exit 0, contract 2026-10-17.1 (P-271 held). The inbox lists the payment under payments with its why
+        and operationId; the inbox reply itself carries no ok/contractVersion yet (docs/60 P-274).
