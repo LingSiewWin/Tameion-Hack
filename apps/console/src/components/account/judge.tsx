@@ -419,7 +419,9 @@ function RaiseCutStep({ d, now, saved, keep }: { d: Demo; now: number; saved: Sa
   const cut = useAction();
   const caps = inbox!.caps;
   const p = inbox?.pending;
-  const waiting = !!p && ((p.kinds ?? 0) & 1) !== 0;
+  // A cancel this page signed is final: an inbox that still lists the raise for a while after it (P-286) must not show
+  // "applying the higher cap" over a raise that was cancelled.
+  const waiting = !!p && ((p.kinds ?? 0) & 1) !== 0 && !saved.cancelled;
   const left = waiting ? (p.eta ?? 0) - now : 0;
   const up = raiseOf(caps);
   const down = cutOf(caps, d.bill.usdc);
