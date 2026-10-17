@@ -143,6 +143,13 @@ pub const CODES: &[Code] = &[
         "The ask waits in the owner's Needs you; one tap lets one purchase through at that price.",
     ),
     c(
+        "reservation_not_controlled",
+        "mandate",
+        "agent",
+        "This account does not control the reservation, so nothing was consumed.",
+        "Read the account's reservations and consume one it controls; a transferred reservation belongs to its new controller.",
+    ),
+    c(
         "over_per_payment",
         "budget",
         "user",
@@ -253,6 +260,27 @@ pub const CODES: &[Code] = &[
         "agent",
         "The request does not fit the account as it is now.",
         "Read the account (treasury_inbox), adjust the request, and send it again.",
+    ),
+    c(
+        "sig_alg_missing",
+        "input",
+        "agent",
+        "The signed object names no signature algorithm (`alg`), so it cannot be verified.",
+        "Add `alg` (p256-webauthn, secp256k1-eip712 or ml-dsa-65) to the signed body, sign it again and send it.",
+    ),
+    c(
+        "sig_alg_unknown",
+        "input",
+        "agent",
+        "The signed object's `alg` is not one this service verifies: p256-webauthn, secp256k1-eip712 or ml-dsa-65.",
+        "Sign with one of those three, name it in `alg`, and send the body again.",
+    ),
+    c(
+        "recall_unknown",
+        "input",
+        "agent",
+        "The cited event id does not exist in this account's record.",
+        "Cite an id from `records` (evt:<seq>), or drop the citation.",
     ),
     c(
         "rate_limited",
@@ -811,5 +839,18 @@ mod tests {
         assert!(named > 15, "the scan found the sites ({named})");
         assert!(recent_updates().as_array().is_some_and(|u| !u.is_empty()));
         assert_eq!(catalogue()["codes"].as_array().unwrap().len(), CODES.len());
+        // The catalogue is openapi.json's RefusalCode, both ways: acceptance
+        // rule 17 checks the served one on a chain, this one without.
+        let doc: Value =
+            serde_json::from_str(include_str!("../../../apps/classic/openapi.json")).unwrap();
+        let listed: std::collections::BTreeSet<&str> = doc["components"]["schemas"]["RefusalCode"]
+            ["enum"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+            .collect();
+        let served: std::collections::BTreeSet<&str> = CODES.iter().map(|c| c.name).collect();
+        assert_eq!(served, listed, "refusal::CODES against openapi.json");
     }
 }

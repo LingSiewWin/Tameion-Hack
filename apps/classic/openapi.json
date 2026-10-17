@@ -3930,7 +3930,11 @@
           "service_error",
           "service_unavailable",
           "state_conflict",
-          "service_paused"
+          "service_paused",
+          "sig_alg_missing",
+          "sig_alg_unknown",
+          "reservation_not_controlled",
+          "recall_unknown"
         ],
         "description": "the catalogue `refusal::CODES`, served at GET /api/level1/codes"
       },

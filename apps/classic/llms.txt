@@ -84,7 +84,8 @@ The codes:
   every payment; only Autopilot pays), `agent_lapsed` (renew),
   `account_keyless` (no agent key: the owner pays), `account_not_deployed`
   (not on chain yet), `price_out_of_band` (a price over a quarter above the
-  seller's usual waits for the owner).
+  seller's usual waits for the owner), `reservation_not_controlled` (this
+  account does not control the reservation; nothing was consumed).
 - Budget: `over_per_payment`, `over_24h` (wait for room, `caps.leftNow`),
   `below_floor`, `insufficient_funds`, `over_max_price` (above your maxUsdc).
 - Payee: `payee_not_approved` (the ask waits in Needs you), `payee_cooling_off`
@@ -93,7 +94,10 @@ The codes:
   `idempotency_pending` (still running), `seller_pending` (an earlier purchase
   from this seller can still be collected), `already_paid`.
 - Input: `invalid_body`, `not_found`, `body_too_large`, `state_conflict` (the
-  request does not fit the account as it is now: read it first).
+  request does not fit the account as it is now: read it first),
+  `sig_alg_missing` (the signed body names no `alg`), `sig_alg_unknown` (its
+  `alg` is not p256-webauthn, secp256k1-eip712 or ml-dsa-65), `recall_unknown`
+  (a cited `evt:<seq>` is not in this account's record).
 - Service, chain, upstream: `rate_limited`, `account_busy`,
   `service_unavailable`, `service_paused` (the operator paused it, e.g. the
   demo's relayer is under its floor), `service_error`, `chain_unavailable`,
