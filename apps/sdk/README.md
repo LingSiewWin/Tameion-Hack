@@ -20,6 +20,7 @@ tameion bills  --token-file ~/.tameion/agent.token
 tameion status
 tameion pay 0xee80…b1f3 0.25 --why "October hosting" --token-file ~/.tameion/agent.token
 tameion buy 'https://seller.example/v1/report' --max 0.01 --why "weekly research report" --token-file ~/.tameion/agent.token
+tameion recall evt:1 evt:2 --root 0x…                                  # check what you remember against the record and the chain
 ```
 
 | Command | Does | Needs scope |
@@ -29,6 +30,7 @@ tameion buy 'https://seller.example/v1/report' --max 0.01 --why "weekly research
 | `bills` | the bills the agent knows, standing orders, and bill payments waiting for the owner | `read` |
 | `pay <payee> <usdc> --why <text> [--op <id>]` | pays a payee the owner approved, now, from the account, inside the mandate. Autopilot only, and only once the payee's cooling-off has ended. | `buy` |
 | `buy <url> --max <usdc> --why <text> [--op <id>]` | one call of a paid API, paid from the account inside the mandate | `buy` |
+| `recall <evt:N…> [--root <0x…>]` | each event re-hashed from its recorded bytes and proved against the root on chain (the latest anchored record unless `--root` names an earlier one): verified, unverified or unknown. Exits 0 only when every id verified. | none for the proof; `read` for the event's fields on an account with agent keys |
 
 `--json` prints the service's reply as JSON. Exit codes: **0** delivered, **1** the service refused or the outcome is unknown,
 **2** usage (nothing was sent).
@@ -58,7 +60,9 @@ else if (r.error.audience === "user") { /* a person must act on the account page
 ```
 
 Methods: `status(policy?)`, `inbox(policy)`, `run(policy)` (a check now; one per account per ten minutes, otherwise the recent one
-answers), `bills(policy, bills)` (tell the agent about bills; scope `import`; it pays nothing by itself), `pay(input)`, `buy(input)`.
+answers), `bills(policy, bills)` (tell the agent about bills; scope `import`; it pays nothing by itself), `pay(input)`, `buy(input)`,
+`recall(policy, ids, root?)` (events you remember, checked against the anchored record and the chain; `evt:N` is the event's seq in
+one record, and every pass writes its own record from 0).
 Every method returns `{ ok: true, data }` or `{ ok: false, error }`, plus `status`, `replayed` and `raw`. A method throws only when
 it is called wrongly: a bad `baseUrl`, or a spend with no valid `operationId`.
 
