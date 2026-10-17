@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronsUpDown, Link2, Pencil, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { describeEvent } from "@/app/agent/feed";
 import { useSse } from "@/app/agent/live";
 import { TopBar } from "@/components/brand";
 import { Columns, Page, PageHeader } from "@/components/layout/page";
@@ -26,6 +27,7 @@ import { Activity } from "./activity";
 import { AgentControls, Suggestions } from "./agent";
 import { AccountProvider, makeCtx, useBusy, useInvalidate, useRecord } from "./ctx";
 import { Hero, Status } from "./hero";
+import { isDemo, JudgePath } from "./judge";
 import { KeysNag } from "./keys-nag";
 import { AccountMandate } from "./mandate";
 import { Money } from "./money";
@@ -49,8 +51,17 @@ export function Account({ tenant, cfg, onSwitch, onNew }: { tenant: Tenant; cfg:
   // The account's live stream, read with fetch so it carries this device's token (docs/60 P-173: `EventSource`
   // cannot send a header, and once an agent key exists the stream answers 401 without one). Named events:
   // `hello` on connect, `pass` as a check queues / runs / ends, `inbox` after any change to the account.
+  // The last event in words, for the judge's live panel (docs/115 §3 step 4).
+  const [said, setSaid] = useState<string>();
   const stream = useSse(`/api/level1/events?policy=${tenant.policy}`, tenant.policy, (e) => {
     if (e.event === "inbox" || e.event === "pass") void refresh();
+    if (e.event !== "hello") {
+      let data: unknown = null;
+      try {
+        data = JSON.parse(e.data);
+      } catch {}
+      setSaid(describeEvent(e.event, data).text);
+    }
   });
   const live = stream.link.kind === "open";
   // /desk's "Add guardians" links here as /?keys: open Settings → Owners, where the Keys panel is (docs/104).
@@ -88,7 +99,10 @@ export function Account({ tenant, cfg, onSwitch, onNew }: { tenant: Tenant; cfg:
   // Whose account this is, decided by this browser's own key (docs/60 P-72 H3): a
   // link to someone else's account opens read-only, never as "Your treasury".
   const { pub, owns } = ownerPub(tenant, inbox?.owners?.keys);
-  const ctx = makeCtx({ tenant, cfg, inbox, pub, owns }, refresh, track);
+  // The account's own delay (a demo account waits 30 s, docs/115 §3), where the host's default would say otherwise: every
+  // "raising waits … s" on the page reads `cfg.delaySecs` from here.
+  const own = typeof tenant.delay_secs === "number" ? { ...cfg, delaySecs: tenant.delay_secs } : cfg;
+  const ctx = makeCtx({ tenant, cfg: own, inbox, pub, owns }, refresh, track);
 
   // The agent's first check starts by itself the moment money can be reached;
   // with no scheduler on the host, the page nudges a check once an hour.
@@ -197,6 +211,8 @@ export function Account({ tenant, cfg, onSwitch, onNew }: { tenant: Tenant; cfg:
                 device where you made it, or ask to join from Settings and approve this device there.
               </p>
             )}
+            {/* The judge's five minutes (docs/115 §3), on an account opened with "Try it in 5 minutes". */}
+            {owns && isDemo(tenant) && <JudgePath said={said} />}
             {/* P-202: "1 of 3 keys set" on the page, not only inside Settings → Owners. */}
             {owns && (
               <KeysNag
