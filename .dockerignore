@@ -1,20 +1,35 @@
-target/
+**/target/
+**/node_modules/
 runtime/
-# proof/: the text and JSON evidence ships (served at /proof/<name>); screenshots and
-# per-run folders stay out of the image.
-proof/*.png
-proof/*/
+# The image needs only the chains' anchor addresses from runtime/ (public addresses, read by level1.rs).
+!runtime/arc_anchor.addr
+!runtime/arbitrum-sepolia_anchor.addr
 docs/
+proof/
+# The two proof files the console links to (hero.tsx); everything else in proof/ stays local.
+!proof/hedge-testnet-live-open-2026-10-13.txt
+!proof/hedge-testnet-nowithdraw-2026-10-13.txt
 archive/
 cache/
 out/
 contracts/out/
 contracts/cache/
 contracts/broadcast/
+contracts/lib/
+scripts/research/
+**/__pycache__/
+.venv/
+.pytest_cache/
+.claude/
 .playwright-mcp/
 .git/
+nohup.out
+.env*
 *.key
+*.pem
+*.token
+*.blob
 # The console is built inside the image (Dockerfile stage "console"), never copied in.
-apps/console/node_modules/
 apps/console/.next/
 apps/console/out/
+apps/desk-se/
