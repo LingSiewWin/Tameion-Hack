@@ -4,7 +4,7 @@
 // symbolon through the /api proxy every 30 s; each figure is labelled by the field it comes from and the page computes no
 // money. A read that fails keeps the last answer on screen, marked with its time; what the service said sits behind a
 // disclosure.
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useSkeleton } from "../../components/skeleton.tsx";
 import { AgentSkeleton } from "../../components/skeletons.tsx";
 import { fetchInbox, fetchStatus, fetchSymbolon } from "../../lib/api.ts";
@@ -63,9 +63,9 @@ export function AgentScreen({ reads, onRetry, now }: { reads: Reads; onRetry?: (
   const failed = (Object.keys(reads) as (keyof Reads)[]).filter((k) => reads[k].error !== null);
   const latest = Math.max(...Object.values(reads).map((s: Src<unknown>) => s.at ?? 0));
   return (
-    <div className="mono flex flex-col gap-(--space-5)">
+    <div className="mono-dense flex flex-col gap-(--space-5)">
       <div className="flex flex-wrap gap-x-(--space-5) gap-y-(--space-1)">
-        <h1 className="mono m-0">{copy.title}</h1>
+        <h1 className="row-title m-0">{copy.title}</h1>
         {policy && <span className="break-all">{policy}</span>}
         {symbolon.value?.chain && <span>{symbolon.value.chain}</span>}
         {inbox.value?.mode && <span>{copy.mode(inbox.value.mode)}</span>}
@@ -74,7 +74,7 @@ export function AgentScreen({ reads, onRetry, now }: { reads: Reads; onRetry?: (
       {failed.length > 0 && (
         <div role="alert" className="flex flex-col gap-(--space-2)">
           <div className="flex flex-wrap items-center gap-x-(--space-4) gap-y-(--space-2)">
-            <p className="m-0">
+            <p className="mono-read m-0">
               {failed.map((k) => (
                 <span key={k} className="mr-(--space-4) inline-block">
                   {copy.didNotAnswer(SOURCES[k], reads[k].at ? clock(reads[k].at) : null)}
@@ -85,7 +85,7 @@ export function AgentScreen({ reads, onRetry, now }: { reads: Reads; onRetry?: (
               <button
                 type="button"
                 onClick={onRetry}
-                className="min-h-(--touch) cursor-pointer rounded-(--radius-plate) border border-(--rule) bg-transparent px-(--space-3) text-(--ink) [font:inherit]"
+                className="min-h-(--button-compact) cursor-pointer rounded-(--radius-button) border-0 bg-(--plate-2) px-(--space-4) text-(--ink) [font:inherit]"
               >
                 {copy.tryAgain}
               </button>
@@ -104,7 +104,7 @@ export function AgentScreen({ reads, onRetry, now }: { reads: Reads; onRetry?: (
         </div>
       )}
       <Top status={status.value} inbox={inbox.value} />
-      {symbolon.value ? <Stream data={symbolon.value} now={now} /> : <p className="m-0">{copy.recordsMissing}</p>}
+      {symbolon.value ? <Stream data={symbolon.value} now={now} /> : <p className="mono-read m-0">{copy.recordsMissing}</p>}
     </div>
   );
 }
@@ -126,14 +126,17 @@ export function Top({ status, inbox }: { status: Status | null; inbox: Inbox | n
   return (
     <section aria-label={T.region} className="flex flex-col gap-(--space-1)">
       <div role="region" aria-label={T.table} tabIndex={0} className="relative overflow-x-auto">
-        <table className="mono border-collapse whitespace-nowrap text-left">
+        <table className="mono-dense border-collapse text-left">
           <thead>
             <tr>
               <th scope="col" className="pr-(--space-5) font-normal">
                 {T.unit}
               </th>
               {cols.map((c) => (
-                <th key={c.head} scope="col" className="pr-(--space-5) text-right font-normal">
+                <th key={c.head} scope="col" className="whitespace-nowrap pr-(--space-5) text-right font-normal">
+                  {c.head === T.reserved.head && (
+                    <span aria-hidden className="mr-(--space-2) inline-block size-(--space-2) rounded-(--radius-mark) bg-(--transit) align-middle" />
+                  )}
                   {c.head}
                 </th>
               ))}
@@ -143,8 +146,18 @@ export function Top({ status, inbox }: { status: Status | null; inbox: Inbox | n
                 <span className="sr-only">{T.source}</span>
               </th>
               {cols.map((c) => (
-                <th key={c.head} scope="col" className="pb-(--space-1) pr-(--space-5) text-right font-normal">
-                  {c.source}
+                <th key={c.head} scope="col" className="pb-(--space-1) pr-(--space-5) text-right align-top font-normal">
+                  {/* a long field name breaks after its dots, so the table fits the 1120 px surface */}
+                  {c.source.split(".").map((part, i, all) => (
+                    <Fragment key={i}>
+                      {part}
+                      {i < all.length - 1 && (
+                        <>
+                          .<wbr />
+                        </>
+                      )}
+                    </Fragment>
+                  ))}
                 </th>
               ))}
             </tr>
@@ -155,7 +168,7 @@ export function Top({ status, inbox }: { status: Status | null; inbox: Inbox | n
                 {T.usdc}
               </th>
               {cols.map((c) => (
-                <td key={c.head} className="pt-(--space-1) pr-(--space-5) text-right">
+                <td key={c.head} className="whitespace-nowrap pt-(--space-1) pr-(--space-5) text-right">
                   {c.value ?? copy.none}
                 </td>
               ))}
@@ -163,7 +176,7 @@ export function Top({ status, inbox }: { status: Status | null; inbox: Inbox | n
           </tbody>
         </table>
       </div>
-      {missing.length > 0 && <p className="meta m-0">{T.noFigure(missing)}</p>}
+      {missing.length > 0 && <p className="mono-read m-0 text-(--ink-2)">{T.noFigure(missing)}</p>}
     </section>
   );
 }

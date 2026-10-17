@@ -35,11 +35,11 @@ export function Stream({ data, now }: { data: Symbolon; now?: number }) {
   return (
     <section aria-labelledby="records-title" className="flex flex-col gap-(--space-2)">
       <div className="flex flex-wrap items-baseline gap-x-(--space-5) gap-y-(--space-1)">
-        <h2 id="records-title" className="mono m-0">
+        <h2 id="records-title" className="row-title m-0">
           {C.records(records.length)}
         </h2>
         {c && (
-          <p className="mono m-0" aria-label={C.countsLabel}>
+          <p className="mono-dense m-0" aria-label={C.countsLabel}>
             {(["single", "double", "triple", "unsigned"] as const).map((k) => (
               <span key={k} className="mr-(--space-4) inline-block last:mr-0">
                 {C.counts[k]} {c[k]}
@@ -47,14 +47,14 @@ export function Stream({ data, now }: { data: Symbolon; now?: number }) {
             ))}
           </p>
         )}
-        {unread.size > 0 && <p className="meta m-0">{C.unread(unread.size)}</p>}
+        {unread.size > 0 && <p className="mono-read m-0 text-(--ink-2)">{C.unread(unread.size)}</p>}
       </div>
-      {data.locked && <p className="meta m-0">{C.locked}</p>}
+      {data.locked && <p className="mono-read m-0">{C.locked}</p>}
       {records.length === 0 ? (
-        <p className="mono m-0">{C.empty}</p>
+        <p className="mono-read m-0">{C.empty}</p>
       ) : (
         <div role="region" aria-label={C.region} tabIndex={0} className="relative overflow-x-auto">
-          <table className="mono w-full border-collapse whitespace-nowrap text-left">
+          <table className="mono-dense w-full border-collapse whitespace-nowrap text-left">
             <thead className="meta">
               <tr className="border-b border-(--rule)">
                 {(data.locked ? C.headLocked : C.head).map((h) => (
@@ -99,7 +99,7 @@ export function Stream({ data, now }: { data: Symbolon; now?: number }) {
                       <td className="pr-(--space-4)">
                         {r.decision === "BLOCK" ? (
                           <>
-                            <span className="text-(--red)">{C.refused}</span> <span className="meta">{C.refusedCode}</span>
+                            <span className="text-(--attention)">{C.refused}</span> <span className="meta">{C.refusedCode}</span>
                           </>
                         ) : (
                           (r.decision?.toLowerCase() ?? copy.none)
@@ -221,7 +221,7 @@ function Detail({ r, explorer, unread }: { r: SymbolonRecord; explorer?: string 
       {r.note && (
         <div className={line}>
           <span className="meta">{D.note}</span>
-          <span className="break-normal">{r.note}</span>
+          <span className="mono-read break-normal">{r.note}</span>
         </div>
       )}
     </div>

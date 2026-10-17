@@ -84,8 +84,10 @@ const render = (s: Symbolon, extra: Partial<Parameters<typeof AgentScreen>[0]["r
 
 test("top: each figure from its field, labelled by it; a field the service left empty is a dash and named, never 0", () => {
   const html = render(symbolon);
+  const text = html.replace(/<wbr\/>/g, ""); // field names may break after their dots
   for (const label of ["inbox.balance", "inbox.runway.horizonTotal", "inbox.paidTotal", "status.rate (7 d) ÷ 1440", "status.runway.byRateDays"])
-    assert.ok(html.includes(label), label);
+    assert.ok(text.includes(label), label);
+  assert.match(html, /status\.<wbr\/>runway\.<wbr\/>firstShortfallDays/);
   assert.match(html, />0\.047<\/td>/);
   assert.match(html, />0\.003<\/td>/);
   assert.match(html, />≈ 0\.00000029<\/td>/);
@@ -105,8 +107,8 @@ test("stream: newest first, three slots per line, counts in the header, a refusa
   assert.match(html, /Seller: verified, secp256k1-eip712, 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854/);
   assert.match(html, /Agent: none/);
   assert.match(html, /Witness: the anchoring could not be read this time/, "a failed chain read is ?, not none");
-  assert.match(html, /<span class="text-\(--red\)">refused<\/span> <span class="meta">block<\/span>/);
-  assert.equal((html.match(/text-\(--red\)/g) ?? []).length, 1, "red only on the refusal");
+  assert.match(html, /<span class="text-\(--attention\)">refused<\/span> <span class="meta">block<\/span>/);
+  assert.equal((html.match(/text-\(--attention\)/g) ?? []).length, 1, "attention only on the refusal");
   assert.match(html, /href="https:\/\/sepolia\.arbiscan\.io\/tx\/0x(66){32}"/);
   assert.match(html, /0x508d…a968/);
   assert.match(html, /Anchoring not read this time for 1 root/);
