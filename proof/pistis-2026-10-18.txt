@@ -1,0 +1,169 @@
+# pistis: the score each account's own record earns (docs/117 §13, step a; seat S30a)
+# No external lender; testnet; not a lending protocol.
+# branch seat/S30a at 2d08b90 (8 commits on main 4ee1cd3); worktree runtime/wt/S30a; never pushed; main and :7880 untouched
+# run: 2026-10-18 05:06:31 +0800 -> 2026-10-18 05:08:26 +0800
+# command: TAMEION_RPC_ARC=https://rpc.testnet.arc.io runtime/seats/S30a/target/debug/examples/score_all /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/app
+# the override is main's own default since crates/arc/src/lib.rs:45 (rpc.testnet.arc.network answers NXDOMAIN; docs.arc.io lists rpc.testnet.arc.io, chain 5042002)
+# score = survival x independence x recency (pistis::score, Params::default(): loop window 30 d, half-life 30 d); bps = round(10000 x score)
+# records, each once by Symbolon::id: settlements and decisions from ledger::symbolon::project; escalations = refusals, unsigned;
+#   payee-signed invoices = claims keyed by the digest the payee signed; money in from <policy>.history.json = unsigned (only shows whether money came back)
+# slots: witness = the settlement's payment read back (ArcClient::confirm_paid), else the root's anchoring tx read back (ArcClient::anchored_in);
+#   counterparty = sig::slot_sig over the invoice digest (invoice::verify first), for the bill cycle a settlement paid; agent = none (no record carries one)
+# a chain read that fails twice is counted apart ('failed') and marks its row a lower bound, never 'not witnessed'
+
+pistis over /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/app/tenants at 2026-10-17T21:06:32Z (1792271192): score = survival x independence x recency, loop window 30 d, half-life 30 d
+account       chain             recs unsigned single double triple survival    indep  recency   bps  read-backs held/tried (failed)
+0x048a…160a   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x075f…7916   arc-testnet         18        8     10      0      0    0.000    1.000    0.000     0  2/2
+0x08db…ee32   arbitrum-sepolia     5        2      3      0      0    0.000    0.000    0.000     0  1/1
+0x0aa9…4d5f   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x0c69…eab0   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x11a1…2dec   arc-testnet          0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x1645…32ab   arc-testnet        100       47     53      0      0    0.000    1.000    0.000     0  13/13
+0x184d…8ffd   arc-testnet          0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x19ee…0613   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x1a51…7b88   arbitrum-sepolia     6        2      4      0      0    0.000    0.000    0.000     0  2/2
+0x1cfb…0323   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x1ea1…e488   arc-testnet          2        0      2      0      0    0.000    1.000    0.000     0  2/2
+0x224f…991a   arc-testnet          4        2      2      0      0    0.000    0.000    0.000     0  1/1
+0x23a0…bb8f   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x24dd…0687   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x257a…a78e   arc-testnet          0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x26e6…1e53   arbitrum-sepolia    27       15     12      0      0    0.000    0.000    0.000     0  24/24
+0x2ecd…e8a3   arc-testnet         12        6      6      0      0    0.000    0.000    0.000     0  1/1
+0x2fbb…b927   arc-testnet          0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x35a2…342f   arbitrum-sepolia    62       29     33      0      0    0.000    1.000    0.000     0  30/30
+0x380b…3072   arc-testnet          0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x4246…a555   arbitrum-sepolia     4        2      2      0      0    0.000    1.000    0.000     0  5/5
+0x4600…1250   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x4827…80e3   arbitrum-sepolia     8        4      4      0      0    0.000    0.000    0.000     0  5/5
+0x489d…1661   arc-testnet          4        1      3      0      0    0.000    0.000    0.000     0  1/1
+0x4e0b…339d   arc-testnet          0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x546d…fd28   arc-testnet          0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x5d03…8433   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x5d2c…b952   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x5d74…4c37   arc-testnet         12        6      6      0      0    0.000    0.000    0.000     0  1/1
+0x6196…502b   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x64f5…cea7   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x6535…f8e7   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x6adf…adbb   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x6f29…ccc5   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x727e…e5f3   arbitrum-sepolia     9        4      5      0      0    0.000    1.000    0.000     0  8/8
+0x74cf…6be6   arbitrum-sepolia     5        1      4      0      0    0.000    0.000    0.000     0  2/2
+0x7839…0df9   arc-testnet         16        8      8      0      0    0.000    0.000    0.000     0  1/1
+0x7993…173b   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x7bae…e6d2   arbitrum-sepolia     4        2      2      0      0    0.000    0.000    0.000     0  2/2
+0x7ebc…9273   arbitrum-sepolia    35       19     16      0      0    0.000    0.000    0.000     0  29/29
+0x800d…665c   arc-testnet          0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x818e…e58c   arbitrum-sepolia     6        3      3      0      0    0.000    0.000    0.000     0  1/1
+0x845e…7020   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x8f76…d42d   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x98b1…0457   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0x9eb4…26a7   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0xa494…44b0   arc-testnet          0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0xa754…7bcd   arbitrum-sepolia     8        5      3      0      0    0.000    1.000    0.000     0  7/7
+0xaaec…85c6   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0xaafa…7679   arbitrum-sepolia     2        0      2      0      0    0.000    0.000    0.000     0  2/2
+0xb011…b5b9   arc-testnet          4        2      2      0      0    0.000    0.000    0.000     0  1/1
+0xb19f…74de   arc-testnet         14        7      7      0      0    0.000    0.000    0.000     0  1/1
+0xb327…cfab   arbitrum-sepolia     6        5      1      0      0    0.000    1.000    0.000     0  2/2
+0xc011…be7c   arc-testnet          2        0      2      0      0    0.000    1.000    0.000     0  2/2
+0xcae9…708e   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0xcc48…dcee   arc-testnet          0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0xcd8d…4308   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0xd384…eced   arc-testnet          0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0xd8a9…5bd2   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0xdaf0…d4c1   arbitrum-sepolia    32       16     16      0      0    0.000    1.000    0.000     0  11/11
+0xdefa…060f   arc-testnet          2        0      2      0      0    0.000    0.000    0.000     0  0/0
+0xe4e0…e11b   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0xea69…b669   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+0xf0ae…6b85   arbitrum-sepolia    10        0     10      0      0    0.000    1.000    0.000     0  14/14
+0xf1c7…04a8   arbitrum-sepolia    27       12     15      0      0    0.000    0.000    0.000     0  4/4
+0xf69d…26ae   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  1/1
+0xf799…635d   arc-testnet         11        6      5      0      0    0.000    1.000    0.000     0  6/6
+0xfd77…106d   arbitrum-sepolia     0        0      0      0      0    0.000    0.000    0.000     0  0/0
+
+total: 69 of 69 accounts scored, 457 records (each once): 214 unsigned, 243 single, 0 double, 0 triple-signed; chain read-backs 182/182 held, 0 failed
+
+bps histogram (69 accounts):
+[    0,  1000)   69 #####################################################################
+[ 1000,  2000)    0 
+[ 2000,  3000)    0 
+[ 3000,  4000)    0 
+[ 4000,  5000)    0 
+[ 5000,  6000)    0 
+[ 6000,  7000)    0 
+[ 7000,  8000)    0 
+[ 8000,  9000)    0 
+[ 9000, 10000]    0 
+# exit: 0
+
+## Derived from the table (awk over the account rows)
+account rows 69; with any record 30; survival > 0: 0; independence 1.000: 12; independence strictly between 0 and 1: 0; recency > 0: 0; bps > 0: 0
+
+## Cross-checks
+proof/symbolon-count-2026-10-18.txt (S20s, separate code path), its total and invoice lines:
+total                                          228        0    228      0      0
+payee-signed invoices that verify 13; settlement lines of their bill cycles 0
+event lines across all events files before dedup, and invoice lines with a signature (python3 over runtime/app/tenants):
+{'DECISION': 206, 'ESCALATION': 197, 'SETTLEMENT': 23, 'INFLOW': 17, 'SIGNED_INVOICE_LINES': 15} | signed invoice lines on accounts without a log folder: 2
+single here minus the 15 signed invoices = 228 (symbolon_count: 228 settlements and decisions); 15 = 13 there + 2 on an account it does not walk
+unsigned here = 214 = 197 escalations + 17 inflows = 214; settlements 23 lines, 22 records: one x402 purchase sits in two anchored roots (finding 1)
+
+## Properties: PROPTEST_CASES=4096 cargo test -p pistis (2026-10-18 05:09:37 +0800 -> 2026-10-18 05:09:48 +0800)
+     Running unittests src/lib.rs (/Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/seats/S30a/target/debug/deps/pistis-f12942df91d6116f)
+test tests::no_records_is_no_score ... ok
+test tests::extreme_inputs_do_not_panic ... ok
+test tests::one_fresh_triple_settlement_scores_full_and_a_half_life_halves_it ... ok
+test tests::a_later_refusal_of_the_same_amount_is_a_dispute_even_unsigned ... ok
+test tests::witness_only_records_have_no_price ... ok
+test tests::a_counterparty_whose_money_comes_back_contributes_nothing ... ok
+test tests::the_same_record_twice_counts_once_with_its_best_slots ... ok
+test tests::closing_a_loop_takes_back_the_counterpartys_evidence ... ok
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/score.rs (/Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/seats/S30a/target/debug/deps/score-4e671f724f5fbaaf)
+test the_score_stays_in_range ... ok
+test recency_falls_with_age ... ok
+test a_closed_loop_never_raises_the_score ... ok
+test a_triple_signed_record_never_lowers_survival ... ok
+test a_record_counted_twice_counts_once ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.60s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+## Remove the mechanism and it must fail: each use of the loop rule deleted in a scratch edit, the loop property run, the file restored (git checkout)
+== mutant 1: crates/pistis/src/lib.rs:156 loses `.filter(|r| clean(r))` (the loop rule in survival)
+minimal failing input: rs = [], cp = 0, out = 0, back = 0, days_ago = 0, back_after = 0, out_slots = [
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+== mutant 2: crates/pistis/src/lib.rs:166 loses `.filter(|r| clean(r))` (the loop rule in independence)
+minimal failing input: rs = [], cp = 0, out = 0, back = 0, days_ago = 0, back_after = 0, out_slots = [
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.01s
+== mutant 3: crates/pistis/src/lib.rs:178 loses `.filter(|r| clean(r))` (the loop rule in recency)
+minimal failing input: rs = [], cp = 0, out = 0, back = 0, days_ago = 0, back_after = 0, out_slots = [
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.04s
+
+## Gates on 2d08b90
+fmt: pistis, operator clean
+clippy pistis:     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.69s
+clippy operator:     Finished `dev` profile [unoptimized + debuginfo] target(s) in 35.74s
+cargo test -p pistis: test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+cargo test -p pistis: test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.60s
+cargo test -p pistis: test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+cargo test -p operator --no-fail-fast: 15 suites, 311 passed, 0 failed, 1 ignored (exit=0)
+
+## Findings in the data (for docs/60)
+1) One x402 purchase is the same settlement in two anchored roots of 0xf799…635d (identical bytes after the header; both anchored in one second):
+  file 0x37ec939772d061a9 seq 0 at 1791986590 sha256(body) 1adc66a968d0426f
+  file 0x7902ff5204e46311 seq 0 at 1791986590 sha256(body) 1adc66a968d0426f
+  anchor 0x0f60fe5d855ebf44 events 9 anchorTx 0x3739eefdbfdba784 at 1791985931
+  anchor 0x7902ff5204e46311 events 5 anchorTx 0xf9c7a98da85927a2 at 1791988343
+  anchor 0x37ec939772d061a9 events 2 anchorTx 0xd2d26f023a451436 at 1791988343
+2) A 'paid' x402 purchase line with no tx (0xf799…635d) becomes a settlement with an empty tx_hash (crates/operator/src/x402.rs, unanchored_events):
+  status paid, at 1791983929 tx present: True url //127.0.0.1:7902/v1/mid?coin=ETH
+  status paid, at 1791984531 tx present: True url //127.0.0.1:7904/v1/mid?coin=SOL
+  status paid, at 1791986590 tx present: False url //127.0.0.1:7907/v1/mid?coin=BTC
+
+## Earlier runs
+run 2 (00:31), run 4 (04:53) and run 5 (05:00) printed the same rows as run 6 above; run 3 (00:38 -> 04:49, across the network outage):
+total: 69 of 69 accounts scored, 457 records (each once): 218 unsigned, 239 single, 0 double, 0 triple-signed; chain read-backs 178/182 held
+4 reads failed in the outage and that code counted a failed read as 'not witnessed' (0x727e…e5f3 independence 1.000 -> 0.000);
+fixed in 'fix(operator): score_all retries a chain read once and counts a failed read apart' (one retry; a failed read is counted apart).
