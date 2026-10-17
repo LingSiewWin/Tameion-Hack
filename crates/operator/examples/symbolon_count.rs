@@ -22,6 +22,7 @@ use alloy::primitives::{Address, B256};
 use arc::ArcClient;
 use ledger::symbolon::{Extras, Signedness, SlotSig, project, record_hash};
 use ledger::{Event, EventBody};
+use operator::sig::{self, Alg, KeyRef};
 use operator::{audit, invoice, level1, watch};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -44,18 +45,30 @@ fn signed_invoices(app: &Path, policy: Address, chain_id: u64) -> Vec<Signed> {
             let issued = v["issuedAt"].as_u64()?;
             // Checked as of its issue date: the signature and the terms.
             let inv = invoice::verify(chain_id, policy, &v, issued).ok()?;
-            let sig = alloy::hex::decode(v["signature"].as_str()?.trim_start_matches("0x")).ok()?;
-            let payee = format!("{:#x}", inv.payee);
+            let hex = |k: &str| alloy::hex::decode(v[k].as_str()?.trim_start_matches("0x")).ok();
+            let sig = hex("signature")?;
+            // The slot says how it was signed (`sig::slot_sig`): by the payee's
+            // address, or by the ML-DSA-65 key the payee bound on this account.
+            let pk = match inv.alg {
+                Some(Alg::MlDsa65) => {
+                    let bound = invoice::binding_for(app, &format!("{policy:#x}"), inv.payee);
+                    invoice::floor(&inv, bound.as_ref()).ok()?;
+                    Some(hex("publicKey")?)
+                }
+                _ => None,
+            };
+            let key = match &pk {
+                Some(pk) => KeyRef::MlDsa65(pk),
+                None => KeyRef::Address(inv.payee),
+            };
+            let alg = inv.alg.unwrap_or(Alg::Secp256k1Eip712);
+            let d = invoice::digest(chain_id, &inv);
+            let slot = sig::slot_sig(alg, &key, &d.0, &sig, issued as i64).ok()?;
             Some((
-                payee.clone(),
+                format!("{:#x}", inv.payee),
                 inv.due_at,
                 u64::from(inv.every_days) * 86_400,
-                SlotSig {
-                    alg: "secp256k1-eip712".into(),
-                    key_id: payee,
-                    sig,
-                    at: issued as i64,
-                },
+                slot,
             ))
         })
         .collect()
