@@ -13,13 +13,22 @@ them.
 
 ## For an AI agent working for the company
 
-- MCP server: `tameion-mcp` (stdio). Sixteen tools; none can sign for the
-  owner. Every tool carries `readOnlyHint` (read and `prepare_*` tools only
-  read or compute calldata; `run_pass`, `import_bills`, `watch_address` change
-  state, never money). `buy_service` is the one that spends (marked
-  `destructiveHint: true`), and only inside the account's limits. Set
-  `TAMEION_URL` to this host and, if the owner minted one, `TAMEION_TOKEN` to
-  the agent key.
+- MCP server, the same eighteen tools two ways. Over HTTP, nothing to
+  install: `POST /mcp` on this host (Streamable HTTP, MCP 2025-06-18: one
+  JSON-RPC message per POST, a JSON reply, 202 for a notification; no SSE
+  stream and no session, so GET answers 405), with
+  `Authorization: Bearer <agent key>`. Claude Code:
+
+      claude mcp add --transport http --scope project tameion https://<this host>/mcp --header 'Authorization: Bearer ${TAMEION_TOKEN}'
+
+  The single quotes keep `${TAMEION_TOKEN}` a reference: Claude Code reads
+  the variable when it connects, and the key never lands in the config file.
+  Or over stdio: `tameion-mcp` with `TAMEION_URL` set to this host and, if the
+  owner minted one, `TAMEION_TOKEN` set to the agent key. None of the tools
+  can sign for the owner. Every tool carries `readOnlyHint` (read and
+  `prepare_*` tools only read or compute calldata; `run_pass`, `import_bills`,
+  `watch_address` change state, never money). `buy_service` and `pay` spend
+  (marked `destructiveHint: true`), and only inside the account's limits.
 - Agent keys: the owner's passkey mints a bearer token with scopes `read`,
   `run`, `prepare`, `import`, `buy` and an expiry. Once one exists, the
   account's read / run / prepare / import routes need
@@ -132,6 +141,19 @@ The codes:
   24-hour limit, floor, Autopilot. A seller nobody approved answers 409 with
   `needsYou` and appears on the account page for one tap; never retry it.
   `inbox.purchases` lists what was bought, with the reason.
+- Pay an approved payee: `POST /api/level1/pay {"policy", "payee", "amount",
+  "why"}` with a `buy` agent key and `Idempotency-Key: <operation id>` (8 to
+  128 of A-Z a-z 0-9 _ . : -; one per payment, the same on a retry). Only on
+  Autopilot, only a payee the owner approved and past its cooling-off, inside
+  the per-payment cap, the 24-hour limit and the floor: the account's
+  contract checks each in the payment's own transaction. The action hash is
+  keccak256(policy ‖ operation id), so the chain refuses a second payment
+  under the same id; the same id and body answers with the first payment
+  (`replayed: true`), a different body is `idempotency_conflict`. `why` is
+  written to the account's book beside the payment and anchored with the next
+  check. Refusals: `mode_propose`, `mode_watch`, `agent_lapsed`,
+  `payee_not_approved`, `payee_cooling_off`, `over_per_payment`, `over_24h`,
+  `below_floor`, `insufficient_funds`, `invalid_body`. MCP tool: `pay`.
 
 - A keyless account (`inbox.keyless: true`) has no agent key at all: the
   agent only reads and proposes; tell the owner one tap pays everything
