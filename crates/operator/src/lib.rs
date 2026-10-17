@@ -3525,6 +3525,176 @@ mod decide_pass_tests {
         seen.iter().any(|s| s.ends_with(&pay))
     }
 
+    /// docs/117 §2, hash first: a pass whose agent key is known, with an
+    /// invoice its payee signed with a bound ML-DSA-65 key (received, decided
+    /// and recorded the way `level1::run` does it), anchors leaves in which
+    /// neither public key nor either signature appears, raw or in hex — nor
+    /// does anything written to the audit directory.
+    #[tokio::test]
+    async fn no_public_key_in_any_anchored_leaf() {
+        use crate::invoice::{self, Checks, Invoice, KeyBinding};
+        use crate::sig::{self, Alg};
+        use alloy::signers::SignerSync;
+        use alloy::signers::local::PrivateKeySigner;
+        use ml_dsa::{KeyExport, Keypair, SignatureEncoding, Signer};
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let url = node(2, seen, None).await;
+        let agent_secret = B256::repeat_byte(0x4b);
+        let agent = PrivateKeySigner::from_bytes(&agent_secret).unwrap();
+        let client = ArcClient::with_signer(&url, &format!("{agent_secret:#x}")).unwrap();
+        let policy = Address::repeat_byte(0xcc);
+        let dir = std::env::temp_dir().join(format!("op-no-key-leaf-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(level1::tenants_dir(&dir)).unwrap();
+        let t: level1::Tenant = serde_json::from_value(json!({
+            "chain": "arbitrum-sepolia", "owner": "0x0000000000000000000000000000000000000001",
+            "policy": format!("{policy:#x}"), "agent": format!("{:#x}", agent.address()),
+            "operator": "0x0000000000000000000000000000000000000004", "watched": "0x0000000000000000000000000000000000000005",
+            "recovery": "0x0000000000000000000000000000000000000000", "per_action": "1", "daily": "1", "floor": "0",
+            "delay_secs": 60, "mode": 2, "created_block": 0, "history_from_block": 0, "created": 0
+        }))
+        .unwrap();
+        // The payee: an address key that binds, and the ML-DSA-65 key that bills.
+        const CHAIN: u64 = 421_614;
+        let now = Timestamp::from_unix(1_800_000_000);
+        let at = now.as_unix() as u64;
+        let payee = PrivateKeySigner::random();
+        let mlkey = ml_dsa::SigningKey::<ml_dsa::MlDsa65>::from_seed(&[42u8; 32].into());
+        let ml_pub = mlkey.verifying_key().to_bytes();
+        let b = KeyBinding {
+            payee: payee.address(),
+            policy,
+            alg: Alg::MlDsa65,
+            pk_sha256: sig::key_hash(&ml_pub),
+            bound_at: at,
+        };
+        let bsig = payee
+            .sign_hash_sync(&invoice::binding_digest(CHAIN, &b))
+            .unwrap()
+            .as_bytes();
+        invoice::bind(&dir, &t, CHAIN, &invoice::binding_json(&b, &bsig), at).unwrap();
+        let inv = Invoice {
+            payee: payee.address(),
+            policy,
+            amount: 20_000_000,
+            due_at: at + 5 * 86_400,
+            every_days: 30,
+            discount_bps: 0,
+            early_days: 0,
+            reference: alloy::primitives::keccak256("INV-PQ-1"),
+            issued_at: at - 60,
+            issuer: None,
+            alg: Some(Alg::MlDsa65),
+            key_hash: None,
+        };
+        let ml_sig = mlkey
+            .sign(invoice::digest(CHAIN, &inv).as_slice())
+            .to_bytes();
+        let mut body = invoice::to_json(&inv, &ml_sig);
+        body["publicKey"] = json!(alloy::hex::encode_prefixed(ml_pub));
+        let checked = invoice::verify(CHAIN, policy, &body, at).unwrap();
+        invoice::floor(
+            &checked,
+            invoice::binding_for(&dir, &t.policy, payee.address()).as_ref(),
+        )
+        .unwrap();
+        let line =
+            invoice::record_received(&dir, &t.policy, &checked, &body, &Checks::default(), at)
+                .unwrap();
+        assert_eq!(
+            line["publicKey"], body["publicKey"],
+            "the invoice store keeps the key"
+        );
+        // The pass, as `level1::run` drives it: the invoice decided first, its
+        // event in the same log, then the pass over the history.
+        let history: Vec<Transfer> = (0..6)
+            .map(|i| Transfer {
+                tx_hash: format!("0xseed{i:02}"),
+                counterparty: Counterparty::new("0x1111111111111111111111111111111111111111"),
+                amount: Money::minor(20_000_000, Currency::Usdc),
+                at: Timestamp::from_unix(now.as_unix() - (31 + (5 - i) * 30) * 86_400),
+                direction: Direction::Out,
+            })
+            .collect();
+        let decider = Fake(Some(Action::Ask));
+        let (events, records) = level1::decide_invoices(
+            &dir,
+            &t,
+            &client,
+            ledger::DetectionConfig::default(),
+            &history,
+            &decider,
+            now,
+        )
+        .await;
+        assert_eq!((events.len(), records.len()), (1, 1), "{records:?}");
+        let mut config = Config::new(policy, policy, Address::repeat_byte(0xdd));
+        config.audit_dir = Some(dir.join("log"));
+        let mut op = Operator::new_unchecked(client, config, reasoner::RuleBased);
+        for (when, body) in events {
+            op.log_mut().append(Timestamp::from_unix(when as i64), body);
+        }
+        op.run_once_deciding(now, Some(history), true, &decider)
+            .await
+            .unwrap();
+        // Every key and signature, raw and hex, whole and its first 32 bytes.
+        let agent_pub = agent.public_key();
+        let point = agent.credential().verifying_key().to_encoded_point(true);
+        let raws: Vec<Vec<u8>> = vec![
+            agent_pub.to_vec(),
+            point.as_bytes().to_vec(),
+            agent_secret.to_vec(),
+            ml_pub.to_vec(),
+            ml_sig.to_vec(),
+            [42u8; 32].to_vec(),
+        ];
+        let mut needles: Vec<Vec<u8>> = Vec::new();
+        for r in &raws {
+            for part in [&r[..], &r[..32]] {
+                needles.push(part.to_vec());
+                let h = alloy::hex::encode(part);
+                needles.push(h.clone().into_bytes());
+                needles.push(h.to_uppercase().into_bytes());
+            }
+        }
+        let has = |hay: &[u8], n: &[u8]| hay.windows(n.len()).any(|w| w == n);
+        let events = op.log().events();
+        assert!(
+            events.iter().any(|e| e.body.note().contains(&format!(
+                "Invoice {:#x}",
+                invoice::id(inv.payee, inv.reference)
+            ))),
+            "the ML-DSA invoice is in the record"
+        );
+        assert!(events.len() >= 3, "a whole pass: {}", events.len());
+        for e in events {
+            let leaf = e.canonical();
+            for n in &needles {
+                assert!(
+                    !has(&leaf, n),
+                    "event {} ({}) carries key material",
+                    e.seq,
+                    e.body.kind()
+                );
+            }
+        }
+        // What the audit directory holds for anyone to download: the same.
+        let mut files = 0;
+        for f in std::fs::read_dir(dir.join("log")).unwrap().flatten() {
+            let text = std::fs::read(f.path()).unwrap();
+            files += 1;
+            for n in &needles {
+                assert!(
+                    !has(&text, n),
+                    "{} carries key material",
+                    f.path().display()
+                );
+            }
+        }
+        assert!(files >= 1, "the pass wrote its record");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[tokio::test]
     async fn a_model_ask_is_one_needs_you_row_with_its_why_and_nothing_is_paid() {
         let (o, log, seen) = pass(2, &Fake(Some(Action::Ask)), "ask").await;

@@ -3108,7 +3108,7 @@ fn remember_invoice_decision(app_dir: &Path, policy: &str, record: &Value) {
 /// lines. `ask` leaves the invoice in the owner's list with the agent's why
 /// (an Escalation: the statement's "needs you"); `refuse` is a blocked
 /// Decision (the statement's "refused"), declined by `run` once the pass held.
-async fn decide_invoices<D: Decider + Sync>(
+pub(crate) async fn decide_invoices<D: Decider + Sync>(
     app_dir: &Path,
     t: &Tenant,
     client: &ArcClient,
