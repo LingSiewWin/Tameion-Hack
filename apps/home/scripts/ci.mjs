@@ -14,6 +14,7 @@
 // env: POLICY            an account with paid rows, by NAME (routes are /a/<name>); default northwind-agents, the lane service's
 //      POLICY_EMPTY      an account with no bills        } without these the service reply is patched in the page and the
 //      POLICY_NEEDS      an account with a waiting item  } log says "mocked"; the screenshot is then a fixture, not a real account
+//      SHOTS_DIR         where the PNGs go (default PROOF_DIR): a seat's tree before it is merged has its own folder
 //      PROOF_DIR         default <main checkout>/proof/home-2026-10-18      PW_CHANNEL  default chrome (PW_CHANNEL= for bundled chromium)
 //      APP_TREE          where the server runs, when lsof cannot say (only for the commit line in the log)
 //      APP_DIR           check another tree (a seat's apps/home) instead of this one: its tokens, contrast, test, literals
@@ -32,7 +33,8 @@ export const VIEW_KEY = "tameion.home.view";
 export const HEIGHT = { 1280: 800, 390: 844 };
 export const ROUTES = {
   guest: { path: () => "/", states: ["rest", "loading", "error", "offline"] },
-  account: { path: (p) => `/a/${p}`, states: ["rest", "loading", "empty", "error", "offline", "needs-you", "sealed", "detail"] },
+  // rest is the owner's browser (the passkey's public half seeded, nothing signed); guest is the same page read-only
+  account: { path: (p) => `/a/${p}`, states: ["rest", "guest", "loading", "empty", "error", "offline", "needs-you", "sealed", "detail"] },
   new: { path: () => "/new", states: ["rest", "error"] },
   add: { path: (p) => `/a/${p}/add`, states: ["rest", "loading", "error", "offline"] },
   receive: { path: (p) => `/a/${p}/receive`, states: ["rest", "loading", "error", "offline"] },
@@ -110,7 +112,7 @@ export function matrix(args, have = { policy: true }) {
     for (const state of list(args.state, ROUTES[route]?.states ?? []))
       for (const view of list(args.view, ["owner", "agent"]))
         for (const width of list(args.width, ["1280", "390"]).map(Number)) {
-          if (!ROUTES[route]?.states.includes(state)) continue;
+          if (!ROUTES[route]?.states.includes(state) || (state === "guest" && view === "agent")) continue;
           out.push({ route, state, view, width, needsPolicy: route !== "guest" && route !== "new", skip: route !== "guest" && route !== "new" && !have.policy });
         }
   return out;
@@ -178,9 +180,10 @@ function stepLiterals() {
 
 // ---------------------------------------------------------------------------------------------------------------- in the page
 // These run inside the browser: they close over nothing from this module, only over window.__h6 (install) and their argument.
-function install({ key, view }) {
+function install({ key, view, pub }) {
   try {
     if (localStorage.getItem(key) === null) localStorage.setItem(key, view);
+    if (pub && localStorage.getItem("tameion.pub") === null) localStorage.setItem("tameion.pub", JSON.stringify(pub));
   } catch {
     // storage blocked: the page will show Owner
   }
@@ -342,7 +345,7 @@ function domRules({ view, width, route, palette }) {
     add(sev, "off-token-colour", u.e, `${u.prop} ${key} x${u.n}: ${why}`);
   }
   for (const e of reds) {
-    const around = `${e.innerText || ""} ${e.getAttribute("aria-label") || ""} ${e.parentElement?.innerText?.slice(0, 80) || ""}`;
+    const around = `${e.innerText || ""} ${e.getAttribute("aria-label") || ""} ${e.parentElement?.parentElement?.innerText?.slice(0, 120) || ""}`;
     if (!e.closest("[data-needs-you],[data-stop],[data-refusal],[role=alert]") && !/needs you|stop|refus|declin|nothing was sent|not sent|cannot|can.t/i.test(around)) add("warn", "red-outside-allowed", e, "--red is for Needs you, Stop and refusals only");
   }
   metrics.reds = reds.size;
@@ -444,17 +447,17 @@ const worst = (xs) => xs.reduce((m, x) => (SEV[x.sev] > SEV[m] ? x.sev : m), "pa
 const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"];
 const DENY = /^\s*(stop|approve|decline|raise|pay now|send|sign|confirm|delete|revoke|start|resume|cancel|withdraw|add money|make your own|close|try again)\b/i;
 
-async function newPage(browser, sc, { reduced = false, seed = true } = {}) {
+async function newPage(browser, sc, { reduced = false, seed = true, pub = null } = {}) {
   const ctx = await browser.newContext({
     viewport: { width: sc.width, height: sc.height ?? HEIGHT[sc.width] ?? 800 }, deviceScaleFactor: 1, isMobile: sc.width < 768, hasTouch: sc.width < 768,
     reducedMotion: reduced ? "reduce" : "no-preference", colorScheme: "light", locale: "en-GB", timezoneId: "Asia/Kuala_Lumpur",
   });
-  await ctx.addInitScript(install, { key: VIEW_KEY, view: seed ? sc.view : "owner" });
+  await ctx.addInitScript(install, { key: VIEW_KEY, view: seed ? sc.view : "owner", pub });
   const page = await ctx.newPage();
   page.setDefaultTimeout(15000);
   const errors = [];
-  page.on("console", (m) => { if (m.type() === "error") errors.push(m.text().replace(/\s+/g, " ").slice(0, 160)); });
-  page.on("pageerror", (e) => errors.push(`pageerror: ${String(e.message).slice(0, 160)}`));
+  page.on("console", (m) => { if (m.type() === "error") errors.push(m.text().replace(/\s+/g, " ").slice(0, 700)); });
+  page.on("pageerror", (e) => errors.push(`pageerror: ${String(e.message).replace(/\s+/g, " ").slice(0, 700)}`));
   page.on("response", (r) => { if (r.status() >= 400) errors.push(`${r.status()} ${new URL(r.url()).pathname}`); });
   return { ctx, page, errors };
 }
@@ -510,6 +513,7 @@ async function afterLoad(page, ctx, sc, R) {
   if (R.flag) return;
   if (sc.state === "offline") {
     // the connection drops after a good read: the next read fails and the page keeps what it had, each figure marked stale with its time
+    if (await page.evaluate(() => !!document.querySelector('[aria-busy="true"]'))) { R.pending = "the route is still a skeleton: nothing to mark stale"; return; }
     await ctx.setOffline(true);
     await page.evaluate(() => { window.dispatchEvent(new Event("offline")); window.dispatchEvent(new Event("focus")); document.dispatchEvent(new Event("visibilitychange")); }).catch(() => {});
     const t0 = Date.now();
@@ -552,7 +556,7 @@ async function scenario(browser, AxeBuilder, sc, cfg) {
   // --fast: the Owner home's own development flag shows loading, empty, error and offline at once; otherwise the state is made for real
   R.flag = cfg.fast && sc.route === "account" && sc.view === "owner" ? FLAGS[sc.state] : undefined;
   const policy = sc.state === "empty" ? (cfg.policyEmpty ?? cfg.policy) : sc.state === "needs-you" ? (cfg.policyNeeds ?? cfg.policy) : cfg.policy;
-  const { ctx, page, errors } = await newPage(browser, sc);
+  const { ctx, page, errors } = await newPage(browser, sc, { pub: sc.state === "guest" ? null : cfg.pub });
   let release;
   R.hold = new Promise((r) => (release = r));
   const quiet = ["loading", "error", "offline"].includes(sc.state);
@@ -582,10 +586,14 @@ async function scenario(browser, AxeBuilder, sc, cfg) {
       const flash = (metrics.skeleton ?? []).filter((s) => s.ms < 300);
       if (flash.length) R.findings.push({ sev: "fail", rule: "skeleton-flash", sel: "", text: "", detail: `skeleton on screen for ${flash.map((f) => f.ms + " ms").join(", ")} (DESIGN: >= 300 ms once shown)` });
     }
-    if (!quiet) for (const e of errors.filter((x) => !/^Failed to load resource/.test(x) && !/^404 \/favicon/.test(x))) R.findings.push({ sev: /hydrat|pageerror/i.test(e) ? "fail" : "warn", rule: "console", sel: "", text: "", detail: e });
+    if (!quiet) for (const e of errors.filter((x) => !/^Failed to load resource/.test(x) && !/^404 \/favicon/.test(x) && !/_next\/(webpack-)?hmr/.test(x))) {
+      // the symbolon projection is merged after the tag: this service answering 404 for it is expected, the page then marks nothing sealed
+      if (/^404 \/api\/level1\/symbolon/.test(e)) { R.symbolon404 = true; continue; }
+      R.findings.push({ sev: /hydrat|pageerror/i.test(e) ? "fail" : "warn", rule: "console", sel: "", text: "", detail: e });
+    }
     if (cfg.shots) {
-      mkdirSync(cfg.proof, { recursive: true });
-      await page.screenshot({ path: join(cfg.proof, shotName(sc)), fullPage: true, animations: "disabled", caret: "hide" });
+      mkdirSync(cfg.shotsDir, { recursive: true });
+      await page.screenshot({ path: join(cfg.shotsDir, shotName(sc)), fullPage: true, animations: "disabled", caret: "hide" });
       R.shot = shotName(sc);
     }
   } catch (e) {
@@ -603,7 +611,7 @@ async function scenario(browser, AxeBuilder, sc, cfg) {
 // Tab through a page: every stop must show a ring (pixels differ with and without focus), in the accent, and every control must be a stop.
 async function focusWalk(browser, sc, cfg) {
   const R = { name: `focus/${sc.route}/${sc.view}/${sc.width}`, findings: [], stops: 0 };
-  const { ctx, page } = await newPage(browser, sc);
+  const { ctx, page } = await newPage(browser, sc, { pub: cfg.pub });
   try {
     await page.goto(cfg.url + ROUTES[sc.route].path(cfg.policy), { waitUntil: "domcontentloaded", timeout: 60000 });
     await settle(page);
@@ -612,7 +620,7 @@ async function focusWalk(browser, sc, cfg) {
     const want = await page.evaluate(interactive);
     const seen = new Set();
     let prevY = -1;
-    mkdirSync(join(cfg.proof, "focus"), { recursive: true });
+    mkdirSync(join(cfg.shotsDir, "focus"), { recursive: true });
     await page.evaluate(() => { document.activeElement?.blur?.(); window.scrollTo(0, 0); });
     for (let i = 0; i < 80; i++) {
       await page.keyboard.press("Tab");
@@ -633,14 +641,14 @@ async function focusWalk(browser, sc, cfg) {
       await el.evaluate((e) => e.blur());
       const off = await page.screenshot({ clip, animations: "disabled", caret: "hide" });
       await el.evaluate((e) => e.focus());
-      if (cfg.shots) writeFileSync(join(cfg.proof, "focus", `${sc.route}-${sc.view}-${sc.width}-${String(R.stops).padStart(2, "0")}.png`), on);
+      if (cfg.shots) writeFileSync(join(cfg.shotsDir, "focus", `${sc.route}-${sc.view}-${sc.width}-${String(R.stops).padStart(2, "0")}.png`), on);
       if (on.equals(off)) R.findings.push({ sev: "fail", rule: "focus-ring-missing", sel: info.sel, text: info.name, detail: `no visible change when focused (outline ${info.outline}; shadow ${info.shadow || "none"})` });
       else if (!(info.ow >= 2) && !info.shadow) R.findings.push({ sev: "warn", rule: "focus-ring-thin", sel: info.sel, text: info.name, detail: `outline ${info.outline}` });
       if (info.tab > 0) R.findings.push({ sev: "warn", rule: "tabindex-positive", sel: info.sel, text: info.name, detail: `tabindex=${info.tab} bends the order` });
       if (info.y < prevY - 40) R.findings.push({ sev: "warn", rule: "focus-order", sel: info.sel, text: info.name, detail: "focus jumped up the page" });
       prevY = info.y;
       if (cfg.shots && R.stops === 1) {
-        await page.screenshot({ path: join(cfg.proof, `focus-${sc.route}-${sc.view}-${sc.width}.png`), animations: "disabled", caret: "hide" });
+        await page.screenshot({ path: join(cfg.shotsDir, `focus-${sc.route}-${sc.view}-${sc.width}.png`), animations: "disabled", caret: "hide" });
       }
     }
     const missed = want.filter((k) => !seen.has(k));
@@ -658,7 +666,7 @@ async function motionAndShell(browser, sc, cfg) {
   const out = [];
   for (const reduced of [false, true]) {
     const R = { name: `motion/${reduced ? "reduced" : "normal"}/${sc.route}/${sc.width}`, findings: [] };
-    const { ctx, page } = await newPage(browser, { ...sc, view: "owner" }, { reduced });
+    const { ctx, page } = await newPage(browser, { ...sc, view: "owner" }, { reduced, pub: cfg.pub });
     try {
       await page.goto(cfg.url + ROUTES[sc.route].path(cfg.policy), { waitUntil: "domcontentloaded", timeout: 60000 });
       await settle(page);
@@ -708,7 +716,7 @@ async function motionAndShell(browser, sc, cfg) {
 // The sheet: opens at the right size, takes focus, keeps it, Esc closes it and gives focus back.
 async function sheetCheck(browser, sc, cfg) {
   const R = { name: `sheet/${sc.route}/${sc.view}/${sc.width}`, findings: [] };
-  const { ctx, page } = await newPage(browser, sc);
+  const { ctx, page } = await newPage(browser, sc, { pub: cfg.pub });
   try {
     await page.goto(cfg.url + ROUTES[sc.route].path(cfg.policy), { waitUntil: "domcontentloaded", timeout: 60000 });
     await settle(page);
@@ -831,7 +839,19 @@ const group = (arr) => {
   }
   return [...m.values()];
 };
-const showGroup = (g) => `  ${g.sev.toUpperCase().padEnd(4)} ${g.rule}  ${g.sel}${g.text ? ` "${g.text}"` : ""}  ${g.detail}\n       in ${g.names.length}: ${g.names.slice(0, 4).join(", ")}${g.names.length > 4 ? ", ..." : ""}`;
+const showGroup = (g) => `  ${g.sev.toUpperCase().padEnd(4)} ${g.rule}  ${g.sel}${g.text ? ` "${g.text}"` : ""}  ${g.detail.length > 230 ? g.detail.slice(0, 230) + "..." : g.detail}\n       in ${g.names.length}: ${g.names.slice(0, 4).join(", ")}${g.names.length > 4 ? ", ..." : ""}`;
+
+// The owner's browser keeps the passkey's public half in localStorage `tameion.pub`; the page compares it with the account's owner keys and shows
+// Stop / Approve / Decline only on a match. The public coordinates are in the inbox; seeding them signs nothing (the private half never leaves the phone).
+async function ownerPub(url, name) {
+  try {
+    const acct = (await (await fetch(`${url}/api/level1/name/${encodeURIComponent(name)}`)).json()).account;
+    const k = (await (await fetch(`${url}/api/level1/inbox?policy=${acct}`)).json()).owners?.keys?.[0];
+    return k?.qx && k?.qy ? { qx: k.qx, qy: k.qy, credentialId: "" } : null;
+  } catch {
+    return null;
+  }
+}
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
@@ -839,7 +859,7 @@ async function main() {
   const cfg = {
     url: (process.env.APP_URL ?? "http://localhost:3010").replace(/\/$/, ""),
     policy, policyEmpty: process.env.POLICY_EMPTY || undefined, policyNeeds: process.env.POLICY_NEEDS || undefined,
-    proof: proofDir(), shots: !!args.shots, strict: !!args.strict, noAxe: !!args["no-axe"], fast: !!args.fast,
+    proof: proofDir(), shotsDir: process.env.SHOTS_DIR ?? proofDir(), shots: !!args.shots, strict: !!args.strict, noAxe: !!args["no-axe"], fast: !!args.fast,
   };
   const plan = matrix(args, { policy: !!policy });
   if (args.dry) {
@@ -866,6 +886,8 @@ async function main() {
       const channel = process.env.PW_CHANNEL === undefined ? "chrome" : process.env.PW_CHANNEL;
       const browser = await chromium.launch({ headless: true, ...(channel ? { channel } : {}) });
       const AxeBuilder = await import("@axe-core/playwright").then((m) => m.AxeBuilder ?? m.default?.AxeBuilder ?? m.default);
+      cfg.pub = await ownerPub(cfg.url, cfg.policy);
+      if (!cfg.pub) steps.push({ name: "owner-mode", sev: "warn", lines: [`could not read ${cfg.policy}'s owner key through ${cfg.url}: every account page is rendered as a guest (read-only)`] });
       const c2 = { ...cfg, palette };
       const runnable = plan.filter((s) => !s.skip);
       if (plan.length > runnable.length) results.push({ name: "policy", findings: [{ sev: cfg.strict ? "fail" : "warn", rule: "no-policy", sel: "", text: "", detail: `POLICY is not set: ${plan.length - runnable.length} account scenarios were not run` }] });
@@ -894,14 +916,14 @@ async function main() {
   for (const s of steps) lines.push(`${s.sev.toUpperCase().padEnd(5)} ${s.name}${s.lines.length ? "  " + s.lines[0] : ""}${s.lines.slice(1, 8).map((l) => "\n        " + l).join("")}`);
   if (results.length) lines.push(`browser: ${results.length} checks, ${fails.length} FAIL, ${warns.length} WARN (${group(fails).length} + ${group(warns).length} distinct), ${notes.length} note`);
   lines.push(...group(fails).map(showGroup), ...group(warns).slice(0, 30).map(showGroup));
-  if (group(warns).length > 30) lines.push(`  ... ${group(warns).length - 30} more WARN in preflight-last.json`);
+  if (group(warns).length > 30) lines.push(`  ... ${group(warns).length - 30} more WARN in preflight-last-<port>.json`);
   lines.push(...group(notes).slice(0, 8).map(showGroup));
   const mocked = results.filter((R) => R.mocked).map((R) => R.name);
   if (mocked.length) lines.push(`  mocked replies (a fixture, not a real account): ${mocked.join(", ")}`);
   const measured = results.filter((R) => R.metrics && /\/rest\//.test(R.name)).map((R) => `  ${R.name}: h1 ${R.metrics.h1 ?? "none"}; main ${R.metrics.main ?? "none"}${R.metrics.gutter ? `; ${R.metrics.gutter}` : ""}${R.metrics.reds ? `; ${R.metrics.reds} element(s) in --red` : ""}`);
   if (measured.length) lines.push("measured:", ...measured);
   const keys = [...fails, ...warns].map((f) => keyOf(f.name, f));
-  const lastFile = join(cfg.proof, "preflight-last.json");
+  const lastFile = join(cfg.proof, `preflight-last-${new URL(cfg.url).port || "80"}.json`);
   if (args.log || args.shots) {
     mkdirSync(cfg.proof, { recursive: true });
     const prev = existsSync(lastFile) ? JSON.parse(readFileSync(lastFile, "utf8")).keys ?? [] : null;
