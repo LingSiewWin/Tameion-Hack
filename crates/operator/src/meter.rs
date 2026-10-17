@@ -403,6 +403,37 @@ pub struct Check {
     pub bucket: Option<[u8; 32]>,
 }
 
+impl Check {
+    /// The log's event for this check (`MeterCheck`, canonical tag 10, docs/117 §11).
+    pub fn event(&self) -> ledger::EventBody {
+        ledger::EventBody::MeterCheck {
+            from: self.from,
+            to: self.to,
+            model: self.model.clone(),
+            ours_in: self.ours_in,
+            ours_out: self.ours_out,
+            theirs_in: self.theirs_in,
+            theirs_out: self.theirs_out,
+            note: self.note.clone(),
+        }
+    }
+}
+
+/// The checks as a record in the audit format, `<dir>/<root>.events.jsonl`, whose root
+/// recomputes from the canonical bytes alone (`audit::load`, `audit::recompute`). Not
+/// anchored here: the record is written, the root is returned.
+pub fn write_record(
+    dir: &Path,
+    checks: &[Check],
+    at: i64,
+) -> io::Result<(PathBuf, ledger::log::Hash32)> {
+    let mut log = ledger::log::DecisionLog::new();
+    for c in checks {
+        log.append(ledger::Timestamp::from_unix(at), c.event());
+    }
+    Ok((crate::audit::persist(dir, &log)?, log.root()))
+}
+
 pub const MATCH: &str = "match";
 pub const SUMMARY: &str = "summary";
 pub const OURS_MISSING: &str = "ours missing";
@@ -632,14 +663,7 @@ fn scope<'k>(ours: &[Line], keys: &'k [Key]) -> (String, Option<BTreeSet<&'k str
 
 // --- the witness slot --------------------------------------------------------------------
 
-/// `ledger::symbolon::SlotSig`'s fields, until that type is on main (seat S20s).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Witness {
-    pub alg: String,
-    pub key_id: String,
-    pub sig: Vec<u8>,
-    pub at: i64,
-}
+pub use ledger::symbolon::SlotSig;
 
 pub const WITNESS_ALG: &str = "provider-report";
 pub const WITNESS_KEY: &str = "anthropic:usage_report";
@@ -663,7 +687,7 @@ pub fn witnesses(
     lines: &[Line],
     checks: &[Check],
     read_at: i64,
-) -> Vec<(u64, Witness)> {
+) -> Vec<(u64, SlotSig)> {
     let mut out = Vec::new();
     for e in events {
         let ledger::EventBody::Decision {
@@ -694,18 +718,30 @@ pub fn witnesses(
             .iter()
             .find(|c| c.class == MATCH && c.model == model && c.from <= call.at && call.at < c.to);
         if let Some(sig) = bucket.and_then(|c| c.bucket) {
-            out.push((
-                e.seq,
-                Witness {
-                    alg: WITNESS_ALG.into(),
-                    key_id: WITNESS_KEY.into(),
-                    sig: sig.to_vec(),
-                    at: read_at,
-                },
-            ));
+            out.push((e.seq, provider_slot(sig, read_at)));
         }
     }
     out
+}
+
+/// The witness of each per-bucket check in the record [`write_record`] writes, as
+/// `(event seq, slot)`: the provider's bucket it was compared with, read back. The summary
+/// spans every bucket and has none of its own.
+pub fn record_witnesses(checks: &[Check], read_at: i64) -> Vec<(u64, SlotSig)> {
+    checks
+        .iter()
+        .enumerate()
+        .filter_map(|(i, c)| Some((i as u64, provider_slot(c.bucket?, read_at))))
+        .collect()
+}
+
+fn provider_slot(bucket: [u8; 32], at: i64) -> SlotSig {
+    SlotSig {
+        alg: WITNESS_ALG.into(),
+        key_id: WITNESS_KEY.into(),
+        sig: bucket.to_vec(),
+        at,
+    }
 }
 
 #[cfg(test)]
@@ -1007,7 +1043,7 @@ mod tests {
             got,
             vec![(
                 1,
-                Witness {
+                SlotSig {
                     alg: "provider-report".into(),
                     key_id: "anthropic:usage_report".into(),
                     sig: buckets[0].sha256.to_vec(),
@@ -1015,6 +1051,23 @@ mod tests {
                 }
             )]
         );
+        // Into the projection (ledger::symbolon): that decision's symbolon carries the
+        // witness; the others carry none.
+        let mut extras = ledger::symbolon::Extras::default();
+        for (seq, slot) in &got {
+            let e = &log.events()[*seq as usize];
+            extras
+                .witness
+                .insert(ledger::symbolon::record_hash(e), slot.clone());
+        }
+        let projected = ledger::symbolon::project(log.events(), &extras);
+        let witnessed: Vec<usize> = projected
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.witness.is_some())
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(witnessed, [0], "the first decision symbolon only");
         // Another account's record, or the same payee twice in the pass: no witness.
         assert!(witnesses(log.events(), "0xother", &lines, &checks, read_at).is_empty());
         let twice = [lines[0].clone(), lines[0].clone()];
@@ -1115,6 +1168,29 @@ mod tests {
         assert_eq!(read(&path).unwrap()[0].pass, None);
         fs::write(&path, "{not a line}\n").unwrap();
         assert!(read(&path).unwrap_err().to_string().contains("line 1"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_checks_are_a_record_whose_root_recomputes() {
+        let ours: Vec<Line> = SYNTHETIC
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect();
+        let checks = reconcile(&ours, &report(), &keys()).unwrap();
+        let dir = std::env::temp_dir().join(format!("tameion-meter-record-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let (path, root) = write_record(&dir, &checks, T).unwrap();
+        let lines = crate::audit::load(&path).unwrap();
+        assert_eq!(crate::audit::recompute(&lines).1, root);
+        assert_eq!(crate::audit::root_from_filename(&path), Some(root));
+        assert_eq!(lines.len(), 3);
+        assert!(lines.iter().all(|l| l.kind == "METERCHECK"), "{lines:?}");
+        assert!(lines[0].note.starts_with(MATCH) && lines[1].note.starts_with(THEIRS_MISSING));
+        // Each per-bucket check carries the bucket it was compared with; the summary none.
+        let own = record_witnesses(&checks, T);
+        assert_eq!(own.iter().map(|(s, _)| *s).collect::<Vec<_>>(), [0, 1]);
+        assert_eq!(alloy::hex::encode(&own[0].1.sig), DOCS_BUCKET_SHA256);
         let _ = fs::remove_dir_all(&dir);
     }
 

@@ -12,7 +12,8 @@
 //! Live mode reads the Admin key from `TAMEION_ANTHROPIC_ADMIN_KEY_FILE` (default
 //! `~/.tameion/anthropic-admin.key`): the report is Admin API only, and a Messages key is
 //! refused. The meter is `<app dir>/meter.jsonl` (`TAMEION_APP_DIR`, default `runtime/app`)
-//! unless `--meter` names another file. `--probe` asks the decider about the first golden
+//! unless `--meter` names another file; the checks become a record in the audit format,
+//! `<out>/<root>.events.jsonl` (`--out`, default `<app dir>/meter/`). `--probe` asks the decider about the first golden
 //! scenario through a metered client and prints the line it wrote (never the key hint).
 //! Exit 0: every bucket agrees; 1: a bucket differs; 2: the run could not happen.
 
@@ -78,6 +79,14 @@ async fn main() {
             c.note
         );
     }
+    let out = flag("--out").map_or_else(|| app_dir.join("meter"), PathBuf::from);
+    let (path, root) = meter::write_record(&out, &checks, now())
+        .unwrap_or_else(|e| fail(&format!("{}: {e}", out.display())));
+    println!(
+        "record: {} ({} MeterCheck events, root {root})",
+        path.display(),
+        checks.len()
+    );
     let differs = checks
         .iter()
         .any(|c| c.class != meter::MATCH && c.class != meter::SUMMARY);
