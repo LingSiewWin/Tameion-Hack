@@ -62,6 +62,7 @@ pub mod recall;
 pub mod refusal;
 pub mod sig;
 pub mod statement;
+pub mod symbolon;
 pub mod watch;
 pub mod x402;
 

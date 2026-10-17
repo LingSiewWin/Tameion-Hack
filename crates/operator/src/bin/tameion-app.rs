@@ -141,6 +141,10 @@ struct App {
     /// What happened to which account, for `/api/level1/events` (policy in
     /// lowercase, `{event, data}`). Senders never wait; slow readers lag.
     events: tokio::sync::broadcast::Sender<(String, Value)>,
+    /// Anchorings read back on chain for `/api/level1/symbolon`: (tx, root).
+    /// A confirmed transaction stays confirmed, so each is read once per
+    /// process. ponytail: unbounded, one entry per anchored root.
+    witnessed: Mutex<std::collections::HashSet<(alloy::primitives::B256, alloy::primitives::B256)>>,
 }
 
 /// When an idempotent POST was first seen, its body's hash, and its reply.
@@ -6035,6 +6039,185 @@ impl App {
         )
     }
 
+    /// `GET /api/level1/symbolon?policy=0x…[&root=0x…]`: the account's records
+    /// (settlements, decisions, flow, meter and price checks), each with its
+    /// three slots, as `symbolon_count --show` prints them (`operator::symbolon`):
+    /// agent (none yet), counterparty (a payee-signed invoice the settlement
+    /// paid, its signature recovered) and witness (the root's anchoring, read
+    /// back on chain). A slot is there only when its check passed; a root whose
+    /// chain read failed is listed apart, never as not witnessed. Open like the
+    /// record: on a locked account an outsider gets each record's root, seq and
+    /// leaf, never its fields or slots, and no chain is read for them.
+    async fn level1_symbolon(&self, query: &str, raw: &str) -> Vec<u8> {
+        let get = |k: &str| {
+            query
+                .split('&')
+                .find_map(|kv| kv.strip_prefix(k).and_then(|v| v.strip_prefix('=')))
+                .map(str::trim)
+        };
+        let Some(policy) = get("policy").and_then(|x| Address::from_str(x).ok()) else {
+            return json_reply(
+                "400 Bad Request",
+                refused(
+                    "invalid_body",
+                    "policy (the account's 0x… address) is required",
+                ),
+            );
+        };
+        let root = match get("root") {
+            None | Some("") => None,
+            Some(r) => match ledger::log::Hash32::from_hex(r) {
+                Some(h) => Some(h),
+                None => {
+                    return json_reply(
+                        "400 Bad Request",
+                        refused("invalid_body", "root is a 0x… 32-byte root from records"),
+                    );
+                }
+            },
+        };
+        let Some(t) = level1::load(&self.dir, &format!("{policy:#x}")) else {
+            return json_reply(
+                "404 Not Found",
+                refused("not_found", "no such account on this service"),
+            );
+        };
+        let open = t.agent_tokens.is_empty() || self.reads_account(&t, raw, query);
+        let chain = operator::watch::chain(&t.chain).filter(|_| open);
+        let chain_id = chain.map_or(0, |c| c.chain_id);
+        let invoices = chain.map_or_else(Vec::new, |c| {
+            operator::symbolon::signed_invoices(&self.dir, policy, c.chain_id)
+        });
+        let client = chain.map(level1::quick_client);
+        let log = level1::tenants_dir(&self.dir)
+            .join(format!("{policy:#x}"))
+            .join("log");
+        // Locked to this caller: no chain is read, no slot is shown.
+        let mut read = Vec::new();
+        if open {
+            let list = match operator::symbolon::anchorings(&log, root) {
+                Ok(l) => l,
+                Err(e) => {
+                    return json_reply(
+                        "500 Internal Server Error",
+                        refused(
+                            "service_error",
+                            format!("the anchors index could not be read: {e}"),
+                        ),
+                    );
+                }
+            };
+            for a in list {
+                let r = if self.witnessed.lock().await.contains(&(a.tx, a.root)) {
+                    Ok(true)
+                } else {
+                    match &client {
+                        Some(Ok(c)) => c
+                            .anchored_in(a.tx, a.anchor, a.agent, a.root)
+                            .await
+                            .map_err(|e| e.to_string()),
+                        Some(Err(e)) => Err(e.clone()),
+                        None => Err(format!("chain {} unknown", t.chain)),
+                    }
+                };
+                if r == Ok(true) {
+                    self.witnessed.lock().await.insert((a.tx, a.root));
+                }
+                read.push((a, r));
+            }
+        }
+        let acc = match operator::symbolon::account(&log, &invoices, chain_id, root, &read) {
+            Ok(a) => a,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return json_reply(
+                    "404 Not Found",
+                    refused("not_found", "no record of that root for that policy"),
+                );
+            }
+            Err(e) => {
+                return json_reply(
+                    "500 Internal Server Error",
+                    refused(
+                        "service_error",
+                        format!("the record could not be read: {e}"),
+                    ),
+                );
+            }
+        };
+        // root -> the last transaction the index says anchored it.
+        let anchor_tx: std::collections::BTreeMap<String, String> = read
+            .iter()
+            .map(|(a, _)| (format!("{:#x}", a.root), format!("{:#x}", a.tx)))
+            .collect();
+        let slot = |s: Option<&ledger::symbolon::SlotSig>| {
+            s.map_or(
+                Value::Null,
+                |s| json!({ "alg": s.alg, "keyId": s.key_id, "verified": true }),
+            )
+        };
+        let mut found: Vec<&operator::symbolon::Found> = acc.records.values().collect();
+        found.sort_by_key(|f| (f.at, f.root.to_hex(), f.seq));
+        let records: Vec<Value> = found
+            .into_iter()
+            .map(|f| {
+                let root = f.root.to_hex();
+                let mut v = json!({
+                    "root": root,
+                    "seq": f.seq,
+                    "leaf": format!("0x{}", alloy::hex::encode(f.symbolon.record_hash)),
+                });
+                if !open {
+                    return v;
+                }
+                // What the hashed bytes say (`recall::fields`), never the file's words.
+                let e = operator::recall::fields(&f.canonical).unwrap_or_default();
+                v["kind"] = e["kind"].clone();
+                v["at"] = json!(f.at);
+                for (to, from) in [
+                    ("counterparty", "payee"),
+                    ("amount", "amount"),
+                    ("minor", "minor"),
+                    ("decision", "decision"),
+                    ("tx", "tx"),
+                    ("note", "note"),
+                ] {
+                    if !e[from].is_null() {
+                        v[to] = e[from].clone();
+                    }
+                }
+                let s = &f.symbolon;
+                // The transaction that witnessed it, else the one the index names.
+                v["anchorTx"] = match &s.witness {
+                    Some(w) if w.sig.len() == 32 => {
+                        json!(format!("0x{}", alloy::hex::encode(&w.sig)))
+                    }
+                    _ => json!(anchor_tx.get(&root)),
+                };
+                v["agent"] = slot(s.agent.as_ref());
+                v["counterparty_slot"] = slot(s.counterparty.as_ref());
+                v["witness"] = slot(s.witness.as_ref());
+                v
+            })
+            .collect();
+        let c = acc.counts();
+        json_reply(
+            "200 OK",
+            operator::refusal::ok(json!({
+                "policy": format!("{policy:#x}"),
+                "chain": t.chain,
+                "explorer": chain.map(|c| c.explorer),
+                "locked": !open,
+                "counts": if open {
+                    json!({ "unsigned": c[0], "single": c[1], "double": c[2], "triple": c[3] })
+                } else {
+                    Value::Null
+                },
+                "records": records,
+                "chainReadFailed": acc.read_failed.iter().map(|(r, _)| r.to_hex()).collect::<Vec<_>>(),
+            })),
+        )
+    }
+
     /// `GET /api/level1/statement?policy=&week=YYYY-Www[&format=csv]` — the
     /// week's paid, refused and needs-you lines from the anchored record,
     /// signed EIP-712 by the statement key (docs/76 §1d, row 8). The week
@@ -8245,6 +8428,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         previews: Mutex::new(std::collections::HashSet::new()),
         names: Mutex::new(()),
         events: tokio::sync::broadcast::channel(256).0,
+        witnessed: Mutex::new(Default::default()),
         dir: dir.clone(),
         jobs: Mutex::new(HashMap::new()),
         slots: Arc::new(Semaphore::new(3)),
@@ -9129,6 +9313,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ("GET", "/api/level1/record") => app.level1_record(query, &req).await,
                     ("GET", "/api/level1/records") => app.level1_records(query).await,
                     ("GET", "/api/level1/recall") => app.level1_recall(query, &req).await,
+                    ("GET", "/api/level1/symbolon") => app.level1_symbolon(query, &req).await,
                     ("GET", "/api/level1/statement") => app.level1_statement(query).await,
                     ("POST", "/api/level1/run") => app.level1_run(&body).await,
                     ("POST", "/api/level1/mode") => app.level1_mode(&body).await,
