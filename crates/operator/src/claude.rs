@@ -138,8 +138,8 @@ pub struct ClaudeReasoner {
     /// never from the environment, for the reason [`MODEL`] gives.
     model: &'static str,
     /// Where each reply's token usage goes (`crate::meter`); none unless a
-    /// caller names a file.
-    meter: Option<crate::meter::Meter>,
+    /// caller names a file. Boxed: the decider's enum stays small.
+    meter: Option<Box<crate::meter::Meter>>,
 }
 
 impl ClaudeReasoner {
@@ -180,10 +180,10 @@ impl ClaudeReasoner {
         self
     }
 
-    /// Append each successful reply's `usage` to `path` as `purpose`
-    /// (`crate::meter`), so our count can be held against Anthropic's report.
-    pub fn with_meter(mut self, path: std::path::PathBuf, purpose: &'static str) -> Self {
-        self.meter = Some(crate::meter::Meter { path, purpose });
+    /// Append each successful reply's `usage` to the meter (`crate::meter`), so
+    /// our count can be held against Anthropic's report.
+    pub fn with_meter(mut self, meter: crate::meter::Meter) -> Self {
+        self.meter = Some(Box::new(meter));
         self
     }
 
@@ -236,6 +236,29 @@ impl ClaudeReasoner {
         user: String,
         schema: serde_json::Value,
     ) -> Result<String, ReasonerError> {
+        self.ask(None, system, user, schema).await
+    }
+
+    /// [`ClaudeReasoner::ask_structured`], with the meter line naming what was
+    /// asked about (`subject`: the decider passes the payee's label), so a
+    /// record can find the call behind it (`meter::witnesses`).
+    pub async fn ask_structured_about(
+        &self,
+        subject: &str,
+        system: &str,
+        user: String,
+        schema: serde_json::Value,
+    ) -> Result<String, ReasonerError> {
+        self.ask(Some(subject), system, user, schema).await
+    }
+
+    async fn ask(
+        &self,
+        subject: Option<&str>,
+        system: &str,
+        user: String,
+        schema: serde_json::Value,
+    ) -> Result<String, ReasonerError> {
         let mut req = self
             .http
             .post(&self.url)
@@ -281,7 +304,7 @@ impl ClaudeReasoner {
         // Metered before the reply is read: a refusal or a truncated reply is
         // billed all the same.
         if let Some(m) = &self.meter {
-            m.record(&raw, self.model, self.auth.hint(), request_id);
+            m.record(&raw, self.model, self.auth.hint(), request_id, subject);
         }
         extract_text(&raw)
     }

@@ -253,7 +253,11 @@ async fn each_reply_is_metered_with_its_usage_and_request_id() {
     let key = "sk-ant-api03-R2D.not-a-real-key";
     ClaudeReasoner::new(Auth::ApiKey(key.into()))
         .with_url(url)
-        .with_meter(meter.clone(), "order")
+        .with_meter(operator::meter::Meter {
+            path: meter.clone(),
+            purpose: "order",
+            pass: None,
+        })
         .prioritise(&obs, Money::minor(3_000_000, Currency::Usdc), NOW)
         .await
         .unwrap();

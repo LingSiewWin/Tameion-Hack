@@ -14,6 +14,10 @@
 //!
 //! What a line never holds: the reply's words, and the credential (only its first
 //! [`HINT_LEN`] characters).
+//!
+//! A bucket and model where both sides agree is a witness (founder's ruling, docs/117
+//! addendum of 2026-10-17): [`witnesses`] gives each decision the model made in it the
+//! slot `provider-report` / `anthropic:usage_report` / SHA-256 of the bucket's JSON.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -45,13 +49,21 @@ pub struct Line {
     pub request_id: Option<String>,
     /// Which caller spent it: `decide` or `order`.
     pub purpose: String,
+    /// The pass the call was made in, `<account>@<pass time>`: the time every event of that
+    /// pass carries, so a decision finds its call ([`witnesses`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pass: Option<String>,
+    /// What the caller asked about: for a decision, the payee's label (`decide::label`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject: Option<String>,
 }
 
-/// Where a client writes its usage, and for which caller.
+/// Where a client writes its usage, for which caller, and in which pass.
 #[derive(Debug, Clone)]
 pub struct Meter {
     pub path: PathBuf,
     pub purpose: &'static str,
+    pub pass: Option<String>,
 }
 
 impl Meter {
@@ -63,14 +75,21 @@ impl Meter {
         requested_model: &str,
         key_hint: String,
         request_id: Option<String>,
+        subject: Option<&str>,
     ) {
         let at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_secs() as i64);
-        let Some(line) =
-            line_from_reply(raw, requested_model, key_hint, request_id, self.purpose, at)
-        else {
+        let Some(usage) = line_from_reply(raw, requested_model, at) else {
             return;
+        };
+        let line = Line {
+            key_hint,
+            request_id,
+            purpose: self.purpose.to_string(),
+            pass: self.pass.clone(),
+            subject: subject.map(str::to_string),
+            ..usage
         };
         if let Err(e) = append(&self.path, &line) {
             eprintln!("meter: {}: {e}", self.path.display());
@@ -78,16 +97,9 @@ impl Meter {
     }
 }
 
-/// A reply's `usage` (and the model it names) as a line; `None` when the reply carries no
-/// `usage` (a stub or a proxy), so nothing is invented.
-pub fn line_from_reply(
-    raw: &str,
-    requested_model: &str,
-    key_hint: String,
-    request_id: Option<String>,
-    purpose: &str,
-    at: i64,
-) -> Option<Line> {
+/// A reply's `usage` and the model it names, as a line whose caller fields are empty;
+/// `None` when the reply carries no `usage` (a stub or a proxy), so nothing is invented.
+pub fn line_from_reply(raw: &str, requested_model: &str, at: i64) -> Option<Line> {
     #[derive(Deserialize)]
     struct Reply {
         model: Option<String>,
@@ -111,13 +123,15 @@ pub fn line_from_reply(
             .model
             .filter(|m| !m.is_empty())
             .unwrap_or_else(|| requested_model.to_string()),
-        key_hint,
+        key_hint: String::new(),
         uncached_in: u.input_tokens,
         cache_read: u.cache_read_input_tokens.unwrap_or(0),
         cache_create: u.cache_creation_input_tokens.unwrap_or(0),
         out: u.output_tokens,
-        request_id,
-        purpose: purpose.to_string(),
+        request_id: None,
+        purpose: String::new(),
+        pass: None,
+        subject: None,
     })
 }
 
@@ -172,12 +186,38 @@ pub struct Report {
 }
 
 /// One time bucket, `[starting_at, ending_at)` in RFC 3339.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Bucket {
     pub starting_at: String,
     pub ending_at: String,
-    #[serde(default)]
     pub results: Vec<Row>,
+    /// SHA-256 of the bucket's JSON as Anthropic returned it, in `serde_json`'s form (keys
+    /// sorted, no whitespace): what a witness slot cites. Recomputable from a fresh read of
+    /// the same minute with the same grouping.
+    pub sha256: [u8; 32],
+}
+
+impl<'de> Deserialize<'de> for Bucket {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+        use sha2::Digest;
+        #[derive(Deserialize)]
+        struct Shape {
+            starting_at: String,
+            ending_at: String,
+            #[serde(default)]
+            results: Vec<Row>,
+        }
+        let v = serde_json::Value::deserialize(d)?;
+        let bytes = serde_json::to_vec(&v).map_err(D::Error::custom)?;
+        let s: Shape = serde_json::from_value(v).map_err(D::Error::custom)?;
+        Ok(Bucket {
+            starting_at: s.starting_at,
+            ending_at: s.ending_at,
+            results: s.results,
+            sha256: sha2::Sha256::digest(bytes).into(),
+        })
+    }
 }
 
 /// One row of a bucket: one (key, model) group when grouped by both; `None` where the
@@ -344,9 +384,9 @@ pub fn unix_from_rfc3339(s: &str) -> Option<i64> {
 
 // --- the comparison ----------------------------------------------------------------------
 
-/// One bucket and model where the two sides disagree, or the summary of a run: the fields
-/// of the log's `MeterCheck`. `*_in` counts every input token (uncached, cache read, cache
-/// write); the note names the class and the split.
+/// One bucket and model, compared, or the summary of a run: the fields of the log's
+/// `MeterCheck` plus what the witness join needs. `*_in` counts every input token
+/// (uncached, cache read, cache write); the note names the class and the split.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Check {
     pub from: i64,
@@ -357,12 +397,19 @@ pub struct Check {
     pub theirs_in: u64,
     pub theirs_out: u64,
     pub note: String,
+    /// [`MATCH`], a difference class, or [`SUMMARY`].
+    pub class: &'static str,
+    /// The bucket's [`Bucket::sha256`]; `None` on the summary.
+    pub bucket: Option<[u8; 32]>,
 }
 
+pub const MATCH: &str = "match";
+pub const SUMMARY: &str = "summary";
 pub const OURS_MISSING: &str = "ours missing";
 pub const THEIRS_MISSING: &str = "theirs missing";
 pub const CACHE_CLASS: &str = "cache class mismatch";
 pub const CLOCK_SKEW: &str = "clock skew ±1 min";
+pub const CLOCK_SKEW_BUCKET: &str = "clock skew ±1 bucket";
 pub const COUNT_DIFFERS: &str = "count differs";
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -397,8 +444,8 @@ impl fmt::Display for Tally {
 }
 
 /// Our lines against the report, in the report's buckets: one [`Check`] per bucket and
-/// model where anything differs (the totals or the cache split), then one summary. A report
-/// that agrees with us everywhere gives the summary alone.
+/// model with usage on either side, [`MATCH`] where both sides agree to the token (totals
+/// and cache split), a difference class where they do not; then one summary.
 ///
 /// Classes, first match wins: the opposite difference in the neighbouring bucket for the
 /// same model (clock skew: a reply at 12:00:59 on our clock, 12:01:00 on theirs); nothing on
@@ -470,24 +517,27 @@ pub fn reconcile(ours: &[Line], buckets: &[Bucket], keys: &[Key]) -> Result<Vec<
     for ((i, model), (o, t)) in &pairs {
         ours_all.add(*o);
         theirs_all.add(*t);
-        if o == t {
-            continue;
+        if o == t && *o == Tally::default() {
+            continue; // a row of zeros: nothing to compare
         }
         let (from, to) = edges[*i];
-        let skewed = [i.checked_sub(1), Some(i + 1)]
-            .into_iter()
-            .flatten()
-            .any(|j| {
-                pairs.get(&(j, model.clone())).is_some_and(|(o2, t2)| {
-                    o2 != t2
-                        && o.input() + o2.input() == t.input() + t2.input()
-                        && o.out + o2.out == t.out + t2.out
-                })
-            });
-        let class = if skewed && to - from == 60 {
+        let skewed = o != t
+            && [i.checked_sub(1), Some(i + 1)]
+                .into_iter()
+                .flatten()
+                .any(|j| {
+                    pairs.get(&(j, model.clone())).is_some_and(|(o2, t2)| {
+                        o2 != t2
+                            && o.input() + o2.input() == t.input() + t2.input()
+                            && o.out + o2.out == t.out + t2.out
+                    })
+                });
+        let class = if o == t {
+            MATCH
+        } else if skewed && to - from == 60 {
             CLOCK_SKEW
         } else if skewed {
-            "clock skew ±1 bucket"
+            CLOCK_SKEW_BUCKET
         } else if *o == Tally::default() {
             OURS_MISSING
         } else if *t == Tally::default() {
@@ -498,6 +548,11 @@ pub fn reconcile(ours: &[Line], buckets: &[Bucket], keys: &[Key]) -> Result<Vec<
             COUNT_DIFFERS
         };
         *classes.entry(class).or_default() += 1;
+        let note = if class == MATCH {
+            format!("{MATCH}. {o} on both sides; scope: {scope}")
+        } else {
+            format!("{class}. ours: {o}; theirs: {t}; scope: {scope}")
+        };
         checks.push(Check {
             from,
             to,
@@ -506,9 +561,13 @@ pub fn reconcile(ours: &[Line], buckets: &[Bucket], keys: &[Key]) -> Result<Vec<
             ours_out: o.out,
             theirs_in: t.input(),
             theirs_out: t.out,
-            note: format!("{class}. ours: {o}; theirs: {t}; scope: {scope}"),
+            note,
+            class,
+            bucket: Some(buckets[*i].sha256),
         });
     }
+    let matched = classes.remove(MATCH).unwrap_or(0);
+    let differ: usize = classes.values().sum();
     let listed: Vec<String> = classes.iter().map(|(c, n)| format!("{c} {n}")).collect();
     let listed = if listed.is_empty() {
         String::new()
@@ -524,13 +583,14 @@ pub fn reconcile(ours: &[Line], buckets: &[Bucket], keys: &[Key]) -> Result<Vec<
         theirs_in: theirs_all.input(),
         theirs_out: theirs_all.out,
         note: format!(
-            "summary: {} of {} bucket-model pairs differ{listed}; {outside} of our {} lines \
-             outside the report's {} buckets; scope: {scope}",
-            checks.len(),
-            pairs.len(),
+            "{SUMMARY}: {differ} of {} bucket-model pairs differ{listed}, {matched} match; \
+             {outside} of our {} lines outside the report's {} buckets; scope: {scope}",
+            differ + matched,
             ours.len(),
             buckets.len()
         ),
+        class: SUMMARY,
+        bucket: None,
     });
     Ok(checks)
 }
@@ -570,9 +630,90 @@ fn scope<'k>(ours: &[Line], keys: &'k [Key]) -> (String, Option<BTreeSet<&'k str
     }
 }
 
+// --- the witness slot --------------------------------------------------------------------
+
+/// `ledger::symbolon::SlotSig`'s fields, until that type is on main (seat S20s).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Witness {
+    pub alg: String,
+    pub key_id: String,
+    pub sig: Vec<u8>,
+    pub at: i64,
+}
+
+pub const WITNESS_ALG: &str = "provider-report";
+pub const WITNESS_KEY: &str = "anthropic:usage_report";
+
+/// The witness slots one reconcile gives one account's record, as `(event seq, slot)`:
+/// a decision the model made gets `provider-report` / `anthropic:usage_report` /
+/// SHA-256 of the bucket's JSON, `at` = `read_at` (when the report was read), when the one
+/// metered call behind it sits in a bucket and model that matched to the token.
+///
+/// The join, exactly. A `Decision` event whose line reads "Decided by model <m>" belongs to
+/// the pass `<account>@<event time>` (every event of a pass carries the pass's time, and
+/// the pass tags each of its meter lines with it, `level1::run`); its call is the one meter
+/// line with that pass, purpose `decide`, model <m>, and subject = the payee's label
+/// (`decide::label` of the event's counterparty, what the decider was asked about); its
+/// minute is the bucket holding that line's `at` (the reply's time, not the pass's).
+/// No line (answered from the decider's memory, or not metered), two lines (the same payee
+/// twice in one pass), or a bucket that differs: no witness.
+pub fn witnesses(
+    events: &[ledger::Event],
+    account: &str,
+    lines: &[Line],
+    checks: &[Check],
+    read_at: i64,
+) -> Vec<(u64, Witness)> {
+    let mut out = Vec::new();
+    for e in events {
+        let ledger::EventBody::Decision {
+            counterparty, note, ..
+        } = &e.body
+        else {
+            continue;
+        };
+        let Some(model) = note
+            .split("Decided by model ")
+            .nth(1)
+            .and_then(|rest| rest.split(':').next())
+        else {
+            continue;
+        };
+        let pass = format!("{account}@{}", e.at.as_unix());
+        let subject = crate::decide::label(counterparty.as_str());
+        let mut calls = lines.iter().filter(|l| {
+            l.purpose == "decide"
+                && l.model == model
+                && l.pass.as_deref() == Some(pass.as_str())
+                && l.subject.as_deref() == Some(subject.as_str())
+        });
+        let (Some(call), None) = (calls.next(), calls.next()) else {
+            continue;
+        };
+        let bucket = checks
+            .iter()
+            .find(|c| c.class == MATCH && c.model == model && c.from <= call.at && call.at < c.to);
+        if let Some(sig) = bucket.and_then(|c| c.bucket) {
+            out.push((
+                e.seq,
+                Witness {
+                    alg: WITNESS_ALG.into(),
+                    key_id: WITNESS_KEY.into(),
+                    sig: sig.to_vec(),
+                    at: read_at,
+                },
+            ));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ledger::{
+        ActionHash, Confidence, Counterparty, Currency, DecisionLog, EventBody, Money, Timestamp,
+    };
 
     const REPORT: &str = include_str!("../tests/fixtures/anthropic-usage-report.json");
     const KEYS: &str = include_str!("../tests/fixtures/anthropic-api-keys.json");
@@ -582,6 +723,10 @@ mod tests {
     const HINT: &str = "sk-ant-api03-R2D";
     /// 2025-08-01T10:00:05Z, inside the docs' one bucket.
     const T: i64 = 1_754_042_405;
+    /// SHA-256 of the docs' bucket, keys sorted and no whitespace, computed outside Rust:
+    /// `json.dumps(bucket, sort_keys=True, separators=(',', ':'))` in Python.
+    const DOCS_BUCKET_SHA256: &str =
+        "7985dca6f706d55e759d0a6f92f8118cdfdab09f22e75014392f350f283c6165";
 
     fn report() -> Vec<Bucket> {
         serde_json::from_str::<Report>(REPORT).unwrap().data
@@ -602,12 +747,13 @@ mod tests {
             out,
             request_id: None,
             purpose: "decide".into(),
+            pass: None,
+            subject: None,
         }
     }
 
-    fn only_check(checks: &[Check]) -> &Check {
-        assert_eq!(checks.len(), 2, "one check and the summary: {checks:#?}");
-        &checks[0]
+    fn classes(checks: &[Check]) -> Vec<&'static str> {
+        checks.iter().map(|c| c.class).collect()
     }
 
     #[test]
@@ -635,6 +781,22 @@ mod tests {
     }
 
     #[test]
+    fn a_bucket_hash_is_its_json_with_keys_sorted_whatever_the_order_received() {
+        let docs = &report()[0];
+        assert_eq!(alloy::hex::encode(docs.sha256), DOCS_BUCKET_SHA256);
+        let a: Bucket = serde_json::from_str(
+            r#"{"starting_at":"2026-10-17T12:00:00Z","ending_at":"2026-10-17T12:01:00Z","results":[]}"#,
+        )
+        .unwrap();
+        let b: Bucket = serde_json::from_str(
+            r#"{ "results": [], "ending_at": "2026-10-17T12:01:00Z", "starting_at": "2026-10-17T12:00:00Z" }"#,
+        )
+        .unwrap();
+        assert_eq!(a.sha256, b.sha256);
+        assert_ne!(a.sha256, docs.sha256);
+    }
+
+    #[test]
     fn the_synthetic_meter_matches_opus_and_flags_the_rest() {
         // Two opus lines that sum to the docs' row, a sonnet line the report does not have,
         // and a line after the bucket.
@@ -643,62 +805,67 @@ mod tests {
             .map(|l| serde_json::from_str(l).unwrap())
             .collect();
         let checks = reconcile(&ours, &report(), &keys()).unwrap();
-        let c = only_check(&checks);
+        assert_eq!(classes(&checks), [MATCH, THEIRS_MISSING, SUMMARY]);
+        let m = &checks[0];
+        assert_eq!(m.model, "claude-opus-5-5");
+        assert_eq!(
+            (m.ours_in, m.ours_out, m.theirs_in, m.theirs_out),
+            (1700, 500, 1700, 500)
+        );
+        assert_eq!(alloy::hex::encode(m.bucket.unwrap()), DOCS_BUCKET_SHA256);
+        let c = &checks[1];
         assert_eq!(c.model, "claude-sonnet-5-5");
         assert_eq!(
             (c.ours_in, c.ours_out, c.theirs_in, c.theirs_out),
             (900, 100, 0, 0)
         );
-        assert!(c.note.starts_with(THEIRS_MISSING), "{}", c.note);
         assert!(
             c.note.contains(&format!("scope: key {DOCS_KEY}")),
             "{}",
             c.note
         );
-        let s = &checks[1];
-        assert_eq!(s.model, "*");
+        let s = &checks[2];
+        assert_eq!((s.model.as_str(), s.bucket), ("*", None));
         assert_eq!((s.from, s.to), (1_754_006_400, 1_754_092_800));
         assert_eq!(
             (s.ours_in, s.ours_out, s.theirs_in, s.theirs_out),
             (2600, 600, 1700, 500)
         );
         assert!(
-            s.note.starts_with("summary: 1 of 2 bucket-model pairs differ (theirs missing 1); 1 of our 4 lines outside"),
+            s.note.starts_with(
+                "summary: 1 of 2 bucket-model pairs differ (theirs missing 1), 1 match; 1 of our 4 lines outside"
+            ),
             "{}",
             s.note
         );
     }
 
     #[test]
-    fn a_meter_that_agrees_writes_the_summary_alone() {
+    fn each_class_is_named() {
+        let first = |ours: &[Line]| reconcile(ours, &report(), &keys()).unwrap()[0].clone();
+        // Agreement to the token, in two calls.
         let ours = [
             line(T, "claude-opus-5-5", 1000, 200, 0, 300),
             line(T + 35, "claude-opus-5-5", 500, 0, 0, 200),
         ];
-        let checks = reconcile(&ours, &report(), &keys()).unwrap();
-        assert_eq!(checks.len(), 1, "{checks:#?}");
-        assert!(
-            checks[0].note.starts_with("summary: 0 of 1"),
-            "{}",
-            checks[0].note
-        );
-    }
-
-    #[test]
-    fn each_class_is_named() {
-        let class = |ours: &[Line]| reconcile(ours, &report(), &keys()).unwrap()[0].note.clone();
+        assert_eq!(first(&ours).class, MATCH);
         // Nothing of ours: capture off, or another host on the key.
-        assert!(class(&[]).starts_with(OURS_MISSING));
+        assert_eq!(first(&[]).class, OURS_MISSING);
         // Same 1,700 in and 500 out, but nothing read from the cache on our side.
-        let n = class(&[line(T, "claude-opus-5-5", 1700, 0, 0, 500)]);
-        assert!(n.starts_with(CACHE_CLASS), "{n}");
+        assert_eq!(
+            first(&[line(T, "claude-opus-5-5", 1700, 0, 0, 500)]).class,
+            CACHE_CLASS
+        );
         // One of the two calls missing.
-        let n = class(&[line(T, "claude-opus-5-5", 1000, 200, 0, 300)]);
-        assert!(n.starts_with(COUNT_DIFFERS), "{n}");
+        let c = first(&[line(T, "claude-opus-5-5", 1000, 200, 0, 300)]);
+        assert_eq!(c.class, COUNT_DIFFERS);
         assert!(
-            n.contains("ours: 1000 uncached + 200 cache read + 0 cache write in, 300 out")
-                && n.contains("theirs: 1500 uncached + 200 cache read + 0 cache write in, 500 out"),
-            "{n}"
+            c.note
+                .contains("ours: 1000 uncached + 200 cache read + 0 cache write in, 300 out")
+                && c.note
+                    .contains("theirs: 1500 uncached + 200 cache read + 0 cache write in, 500 out"),
+            "{}",
+            c.note
         );
     }
 
@@ -720,12 +887,9 @@ mod tests {
             &keys(),
         )
         .unwrap();
-        assert_eq!(checks.len(), 3, "{checks:#?}");
-        for c in &checks[..2] {
-            assert!(c.note.starts_with(CLOCK_SKEW), "{}", c.note);
-        }
+        assert_eq!(classes(&checks), [CLOCK_SKEW, CLOCK_SKEW, SUMMARY]);
         assert!(
-            checks[2].note.contains("(clock skew ±1 min 2)"),
+            checks[2].note.contains("(clock skew ±1 min 2), 0 match"),
             "{}",
             checks[2].note
         );
@@ -745,12 +909,116 @@ mod tests {
             line(T + 35, "claude-opus-5-5", 500, 0, 0, 200),
         ];
         // Our hint names the docs' key: the other key's 999 is not ours.
-        assert_eq!(reconcile(&ours, &buckets, &keys()).unwrap().len(), 1);
+        assert_eq!(
+            classes(&reconcile(&ours, &buckets, &keys()).unwrap()),
+            [MATCH, SUMMARY]
+        );
         // No key list: organisation-wide, and the 999 shows up on their side.
         let checks = reconcile(&ours, &buckets, &[]).unwrap();
-        let c = only_check(&checks);
-        assert_eq!((c.ours_in, c.theirs_in), (1700, 2699));
-        assert!(c.note.contains("scope: organisation-wide"), "{}", c.note);
+        assert_eq!(classes(&checks), [COUNT_DIFFERS, SUMMARY]);
+        assert_eq!((checks[0].ours_in, checks[0].theirs_in), (1700, 2699));
+        assert!(
+            checks[0].note.contains("scope: organisation-wide"),
+            "{}",
+            checks[0].note
+        );
+    }
+
+    #[test]
+    fn a_matched_minute_witnesses_the_model_decisions_whose_call_it_holds() {
+        // One pass at 12:00:30 on account 0xacc; its decider calls came back at 12:00:50
+        // (payee A) and 12:01:10 (payee D). Minute 12:00 matches; minute 12:01 does not.
+        let at = |s: &str| unix_from_rfc3339(s).unwrap();
+        let pass_at = at("2026-10-17T12:00:30Z");
+        let (a, b, c, d) = (
+            "0xaaaa00000000000000000000000000000000000a",
+            "0xbbbb00000000000000000000000000000000000b",
+            "0xcccc00000000000000000000000000000000000c",
+            "0xdddd00000000000000000000000000000000000d",
+        );
+        let mut log = DecisionLog::new();
+        let usdc = Money::minor(2_000, Currency::Usdc);
+        let decision = |who: &str, line: &str| EventBody::Decision {
+            counterparty: Counterparty::new(who),
+            amount: usdc,
+            decision: ledger::Decision::Allow,
+            action_hash: ActionHash::from_bytes([7u8; 32]),
+            confidence: Confidence::new(0.9).unwrap(),
+            balance_seen: usdc,
+            weakest_evidence: None,
+            evidence: vec![],
+            note: format!("Allow for {who}. Basis: monthly. {line}"),
+        };
+        let now = Timestamp::from_unix(pass_at);
+        log.append(
+            now,
+            EventBody::Skipped {
+                counterparty: Counterparty::new(a),
+                cycle_key: "k".into(),
+                note: "not a decision".into(),
+            },
+        );
+        // seq 1: a model decision whose one call sits in the matched minute -> witnessed.
+        log.append(
+            now,
+            decision(a, "Decided by model claude-sonnet-5-5: pay (usual). Due."),
+        );
+        // seq 2: a model decision answered from the decider's memory: no call, no witness.
+        log.append(
+            now,
+            decision(
+                b,
+                "Decided by model claude-sonnet-5-5: wait (usual). Later.",
+            ),
+        );
+        // seq 3: the rule decided: nothing for the provider to witness.
+        log.append(now, decision(c, "Decided by rule: pay (usual). Due."));
+        // seq 4: a model decision whose call sits in the minute that differs.
+        log.append(
+            now,
+            decision(d, "Decided by model claude-sonnet-5-5: pay (usual). Due."),
+        );
+
+        let pass = format!("0xacc@{pass_at}");
+        let call = |who: &str, when: i64, out: u64| Line {
+            pass: Some(pass.clone()),
+            subject: Some(crate::decide::label(who)),
+            ..line(when, "claude-sonnet-5-5", 1200, 0, 0, out)
+        };
+        let lines = [
+            call(a, at("2026-10-17T12:00:50Z"), 60),
+            call(d, at("2026-10-17T12:01:10Z"), 70),
+        ];
+        let row = |out: u64| {
+            serde_json::json!({ "api_key_id": DOCS_KEY, "model": "claude-sonnet-5-5",
+                "uncached_input_tokens": 1200, "output_tokens": out })
+        };
+        let buckets: Vec<Bucket> = serde_json::from_value(serde_json::json!([
+            { "starting_at": "2026-10-17T12:00:00Z", "ending_at": "2026-10-17T12:01:00Z", "results": [row(60)] },
+            { "starting_at": "2026-10-17T12:01:00Z", "ending_at": "2026-10-17T12:02:00Z", "results": [row(90)] }
+        ]))
+        .unwrap();
+        let checks = reconcile(&lines, &buckets, &keys()).unwrap();
+        assert_eq!(classes(&checks), [MATCH, COUNT_DIFFERS, SUMMARY]);
+
+        let read_at = at("2026-10-17T12:30:00Z");
+        let got = witnesses(log.events(), "0xacc", &lines, &checks, read_at);
+        assert_eq!(
+            got,
+            vec![(
+                1,
+                Witness {
+                    alg: "provider-report".into(),
+                    key_id: "anthropic:usage_report".into(),
+                    sig: buckets[0].sha256.to_vec(),
+                    at: read_at,
+                }
+            )]
+        );
+        // Another account's record, or the same payee twice in the pass: no witness.
+        assert!(witnesses(log.events(), "0xother", &lines, &checks, read_at).is_empty());
+        let twice = [lines[0].clone(), lines[0].clone()];
+        assert!(witnesses(log.events(), "0xacc", &twice, &checks, read_at).is_empty());
     }
 
     #[test]
@@ -771,28 +1039,17 @@ mod tests {
             }
         })
         .to_string();
-        let l = line_from_reply(
-            &raw,
-            "claude-sonnet-5-5",
-            HINT.into(),
-            Some("req_1".into()),
-            "order",
-            7,
-        )
-        .unwrap();
+        let l = line_from_reply(&raw, "claude-sonnet-5-5", 7).unwrap();
         assert_eq!(
             (
                 l.model.as_str(),
                 l.uncached_in,
                 l.cache_read,
                 l.cache_create,
-                l.out
+                l.out,
+                l.at
             ),
-            ("claude-opus-5-5", 2095, 2051, 2051, 503)
-        );
-        assert_eq!(
-            (l.request_id.as_deref(), l.purpose.as_str(), l.at),
-            (Some("req_1"), "order", 7)
+            ("claude-opus-5-5", 2095, 2051, 2051, 503, 7)
         );
         assert!(
             !serde_json::to_string(&l).unwrap().contains("Claude."),
@@ -800,14 +1057,12 @@ mod tests {
         );
         // Null cache counts are zero; a reply without usage writes nothing.
         let nulls = r#"{"usage":{"input_tokens":5,"output_tokens":1,"cache_creation_input_tokens":null,"cache_read_input_tokens":null}}"#;
-        let l = line_from_reply(nulls, "m", String::new(), None, "decide", 0).unwrap();
+        let l = line_from_reply(nulls, "m", 0).unwrap();
         assert_eq!(
             (l.model.as_str(), l.cache_read, l.cache_create),
             ("m", 0, 0)
         );
-        assert!(
-            line_from_reply(r#"{"content":[]}"#, "m", String::new(), None, "decide", 0).is_none()
-        );
+        assert!(line_from_reply(r#"{"content":[]}"#, "m", 0).is_none());
     }
 
     #[test]
@@ -820,14 +1075,44 @@ mod tests {
             read(&path).unwrap().is_empty(),
             "no file yet is no usage yet"
         );
-        let a = line(T, "claude-opus-5-5", 1, 2, 3, 4);
-        append(&path, &a).unwrap();
-        append(&path, &a).unwrap();
-        assert_eq!(read(&path).unwrap(), vec![a.clone(), a]);
+        let meter = Meter {
+            path: path.clone(),
+            purpose: "decide",
+            pass: Some("0xacc@1".into()),
+        };
+        let raw = r#"{"model":"claude-sonnet-5-5","usage":{"input_tokens":3,"output_tokens":4}}"#;
+        meter.record(
+            raw,
+            "x",
+            HINT.into(),
+            Some("req_1".into()),
+            Some("0xaaaa…000a"),
+        );
+        meter.record(raw, "x", HINT.into(), None, None);
+        let got = read(&path).unwrap();
+        assert_eq!(got.len(), 2);
+        assert_eq!(
+            (
+                got[0].purpose.as_str(),
+                got[0].pass.as_deref(),
+                got[0].subject.as_deref(),
+                got[0].request_id.as_deref()
+            ),
+            (
+                "decide",
+                Some("0xacc@1"),
+                Some("0xaaaa…000a"),
+                Some("req_1")
+            )
+        );
+        assert_eq!((got[1].subject.as_deref(), got[1].uncached_in), (None, 3));
         assert_eq!(
             fs::metadata(&path).unwrap().permissions().mode() & 0o777,
             0o600
         );
+        // A line from before `pass` and `subject` existed still reads.
+        fs::write(&path, SYNTHETIC.lines().next().unwrap()).unwrap();
+        assert_eq!(read(&path).unwrap()[0].pass, None);
         fs::write(&path, "{not a line}\n").unwrap();
         assert!(read(&path).unwrap_err().to_string().contains("line 1"));
         let _ = fs::remove_dir_all(&dir);

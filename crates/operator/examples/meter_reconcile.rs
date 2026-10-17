@@ -148,7 +148,7 @@ async fn probe(meter_path: &Path) {
     let case: Case = serde_json::from_value(golden["scenarios"][0]["case"].clone())
         .unwrap_or_else(|e| fail(&format!("first golden scenario: {e}")));
     let before = meter::read(meter_path).map_or(0, |l| l.len());
-    let decider = ModelDecider::new(cloud).with_meter(meter_path.to_path_buf());
+    let decider = ModelDecider::new(cloud).with_meter(meter_path.to_path_buf(), None);
     match decider.decide(&case).await {
         Ok(d) => println!(
             "decided {} ({}) by {}: {}",

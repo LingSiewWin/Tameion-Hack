@@ -248,13 +248,18 @@ pub enum Choice {
 }
 
 impl Choice {
-    /// A cloud choice writes each reply's token usage to `path` as `order`
-    /// (`crate::meter`); a local model and the rule spend none.
-    pub fn with_meter(self, path: std::path::PathBuf) -> Self {
+    /// A cloud choice writes each reply's token usage to `path` as `order`,
+    /// tagged with the pass (`crate::meter`); a local model and the rule spend none.
+    pub fn with_meter(self, path: std::path::PathBuf, pass: Option<String>) -> Self {
+        let meter = crate::meter::Meter {
+            path,
+            purpose: "order",
+            pass,
+        };
         match self {
-            Choice::Cloud(c) => Choice::Cloud(c.with_meter(path, "order")),
+            Choice::Cloud(c) => Choice::Cloud(c.with_meter(meter)),
             Choice::CloudRedacted(r) => Choice::CloudRedacted(RedactedCloud {
-                cloud: r.cloud.with_meter(path, "order"),
+                cloud: r.cloud.with_meter(meter),
                 name: r.name,
             }),
             other => other,

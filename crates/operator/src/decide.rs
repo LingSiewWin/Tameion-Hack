@@ -920,9 +920,14 @@ impl ModelDecider {
         self
     }
 
-    /// Write each reply's token usage to `path` as `decide` (`crate::meter`).
-    pub fn with_meter(mut self, path: PathBuf) -> Self {
-        self.cloud = self.cloud.with_meter(path, "decide");
+    /// Write each reply's token usage to `path` as `decide`, tagged with the
+    /// pass and the payee asked about (`crate::meter`).
+    pub fn with_meter(mut self, path: PathBuf, pass: Option<String>) -> Self {
+        self.cloud = self.cloud.with_meter(crate::meter::Meter {
+            path,
+            purpose: "decide",
+            pass,
+        });
         self
     }
 
@@ -1128,7 +1133,7 @@ impl Decider for ModelDecider {
         let text = tokio::time::timeout(
             self.timeout,
             self.cloud
-                .ask_structured(SYSTEM, user, schema(&offered(case))),
+                .ask_structured_about(&case.payee, SYSTEM, user, schema(&offered(case))),
         )
         .await
         .map_err(|_| {
@@ -1190,9 +1195,9 @@ impl Configured {
         }
     }
 
-    pub fn with_meter(self, path: PathBuf) -> Self {
+    pub fn with_meter(self, path: PathBuf, pass: Option<String>) -> Self {
         match self {
-            Configured::Model(m) => Configured::Model(m.with_meter(path)),
+            Configured::Model(m) => Configured::Model(m.with_meter(path, pass)),
             Configured::Rule => Configured::Rule,
         }
     }
@@ -1730,7 +1735,7 @@ mod tests {
         let refusal = json!({ "model": MODEL, "stop_reason": "refusal", "stop_details": { "category": "cyber" }, "content": [],
             "usage": { "input_tokens": 1200, "output_tokens": 40, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0 } });
         let (url, _h) = stub(Some(refusal)).await;
-        let d = Configured::Model(decider(&url)).with_meter(meter.clone());
+        let d = Configured::Model(decider(&url)).with_meter(meter.clone(), Some("0xacc@7".into()));
         assert!(d.decide(&case()).await.is_err());
         let lines = crate::meter::read(&meter).unwrap();
         assert_eq!(lines.len(), 1, "{lines:?}");
@@ -1738,6 +1743,12 @@ mod tests {
         assert_eq!(
             (l.purpose.as_str(), l.model.as_str(), l.uncached_in, l.out),
             ("decide", MODEL, 1200, 40)
+        );
+        // The pass and the payee asked about, so the record finds its call.
+        let c = case();
+        assert_eq!(
+            (l.pass.as_deref(), l.subject.as_deref()),
+            (Some("0xacc@7"), Some(c.payee.as_str()))
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
