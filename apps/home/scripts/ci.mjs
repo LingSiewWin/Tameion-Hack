@@ -15,6 +15,7 @@
 //      POLICY_NEEDS      an account with a waiting item  } log says "mocked"; the screenshot is then a fixture, not a real account
 //      PROOF_DIR         default <main checkout>/proof/home-2026-10-18      PW_CHANNEL  default chrome (PW_CHANNEL= for bundled chromium)
 //      APP_TREE          where the server runs, when lsof cannot say (only for the commit line in the log)
+//      APP_DIR           check another tree (a seat's apps/home) instead of this one: its tokens, contrast, test, literals
 //
 // Read-only: it loads pages, flips the capsule, presses Tab, opens a row. It never presses Stop, Approve, Decline or Raise.
 import { execFileSync, spawnSync } from "node:child_process";
@@ -22,7 +23,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, write
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const APP = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const APP = process.env.APP_DIR ? resolve(process.env.APP_DIR) : resolve(dirname(fileURLToPath(import.meta.url)), ".."); // APP_DIR: run the gate on another seat's tree
 
 // ---------------------------------------------------------------------------------------------------------------- pure helpers
 export const HASH = /0x[0-9a-fA-F]{8,}/;
@@ -149,7 +150,7 @@ function run(name, args, missing) {
   const r = spawnSync(process.execPath, args, { cwd: APP, encoding: "utf8" });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim().split("\n");
   if (r.status === 0) return { name, sev: "pass", lines: [out.filter((l) => /^(ℹ (tests|pass|fail)|contrast\/tokens)/.test(l)).join("  ")].filter(Boolean) };
-  return { name, sev: "fail", lines: out.slice(-14) };
+  return { name, sev: "fail", lines: out.filter((l) => l.trim() && !/^ℹ /.test(l)).slice(-12) };
 }
 
 function stepZeroHash() {
@@ -157,7 +158,7 @@ function stepZeroHash() {
   if (pkg.scripts?.["test:zero-hash"]) {
     const r = spawnSync("npm", ["run", "--silent", "test:zero-hash"], { cwd: APP, encoding: "utf8" });
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim().split("\n");
-    return { name: "zero-hash", sev: r.status === 0 ? "pass" : "fail", lines: r.status === 0 ? [out.filter((l) => /^ℹ (tests|pass|fail)/.test(l)).join("  ")] : out.slice(-14) };
+    return { name: "zero-hash", sev: r.status === 0 ? "pass" : "fail", lines: r.status === 0 ? [out.filter((l) => /^ℹ (tests|pass|fail)/.test(l)).join("  ")] : out.filter((l) => l.trim() && !/^ℹ /.test(l)).slice(-12) };
   }
   return run("zero-hash", ["--test", "test/owner-no-hash.test.mts"], "test/owner-no-hash.test.mts is missing (H2: DESIGN Rule 1, a seeded Owner page with no /0x[0-9a-fA-F]{8,}/ in the DOM)");
 }
@@ -443,11 +444,12 @@ const DENY = /^\s*(stop|approve|decline|raise|pay now|send|sign|confirm|delete|r
 
 async function newPage(browser, sc, { reduced = false, seed = true } = {}) {
   const ctx = await browser.newContext({
-    viewport: { width: sc.width, height: HEIGHT[sc.width] ?? 800 }, deviceScaleFactor: 1, isMobile: sc.width < 768, hasTouch: sc.width < 768,
+    viewport: { width: sc.width, height: sc.height ?? HEIGHT[sc.width] ?? 800 }, deviceScaleFactor: 1, isMobile: sc.width < 768, hasTouch: sc.width < 768,
     reducedMotion: reduced ? "reduce" : "no-preference", colorScheme: "light", locale: "en-GB", timezoneId: "Asia/Kuala_Lumpur",
   });
   await ctx.addInitScript(install, { key: VIEW_KEY, view: seed ? sc.view : "owner" });
   const page = await ctx.newPage();
+  page.setDefaultTimeout(15000);
   const errors = [];
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text().replace(/\s+/g, " ").slice(0, 160)); });
   page.on("pageerror", (e) => errors.push(`pageerror: ${String(e.message).slice(0, 160)}`));
@@ -460,7 +462,7 @@ async function settle(page, quick = false) {
   if (quick) return;
   await page.evaluate(() => document.fonts?.ready).catch(() => {});
   await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
-  await page.waitForFunction(() => !document.querySelector('[aria-busy="true"],[data-skeleton],.skeleton'), null, { timeout: 3000 }).catch(() => {});
+  await page.waitForFunction(() => !document.querySelector('[aria-busy="true"],[data-skeleton],.skeleton'), null, { timeout: 1500 }).catch(() => {});
   await page.waitForTimeout(300);
 }
 
@@ -748,6 +750,37 @@ function treeInfo(url) {
 }
 const clock = () => `${new Date().toLocaleString("sv-SE", { timeZone: "Asia/Kuala_Lumpur" })} +08`;
 
+// Inputs and the CTA fit 375 x 812 with the keyboard open (about 336 px of the height gone): both stay on screen while the field has focus.
+async function keyboardFit(browser, route, cfg) {
+  const R = { name: `keyboard/${route}/375`, findings: [] };
+  const { ctx, page } = await newPage(browser, { route, state: "rest", view: "owner", width: 375, height: 812 - 336 });
+  try {
+    await page.goto(cfg.url + ROUTES[route].path(cfg.policy), { waitUntil: "domcontentloaded", timeout: 60000 });
+    await settle(page);
+    const input = await page.$("main input:not([type=hidden]):not([type=radio]):not([type=checkbox]), main textarea");
+    if (!input) { R.findings.push({ sev: cfg.strict ? "fail" : "note", rule: "not-built-yet", sel: "", text: "", detail: `no text input on /${route} yet` }); return R; }
+    await input.focus();
+    const m = await page.evaluate(() => {
+      const h = window.__h6, a = document.activeElement.getBoundingClientRect();
+      const area = (b) => b.getBoundingClientRect().width * b.getBoundingClientRect().height;
+      const cta = [...document.querySelectorAll("main button, main [type=submit], main a[role=button]")].filter((b) => h.vis(b) && !b.closest("dialog")).sort((x, y) => area(y) - area(x))[0];
+      const c = cta?.getBoundingClientRect();
+      return { h: innerHeight, input: { top: a.top, bottom: a.bottom }, cta: c ? { top: c.top, bottom: c.bottom, w: c.width, hgt: c.height, text: cta.innerText.replace(/\s+/g, " ").trim().slice(0, 30) } : null };
+    });
+    if (m.input.bottom > m.h + 0.5 || m.input.top < -0.5) R.findings.push({ sev: "fail", rule: "keyboard-input", sel: "input", text: "", detail: `input spans ${Math.round(m.input.top)}..${Math.round(m.input.bottom)} of ${m.h} px with the keyboard open` });
+    if (!m.cta) R.findings.push({ sev: "warn", rule: "keyboard-cta", sel: "", text: "", detail: "no CTA button found on the page" });
+    else {
+      if (m.cta.bottom > m.h + 0.5) R.findings.push({ sev: "fail", rule: "keyboard-cta", sel: "button", text: m.cta.text, detail: `CTA spans ${Math.round(m.cta.top)}..${Math.round(m.cta.bottom)} of ${m.h} px with the keyboard open` });
+      if (Math.abs(m.cta.hgt - 56) > 0.6 || m.cta.w < 375 - 32 - 1) R.findings.push({ sev: "warn", rule: "cta-plate", sel: "button", text: m.cta.text, detail: `CTA is ${Math.round(m.cta.w)}x${Math.round(m.cta.hgt)} px; DESIGN: a 56 px plate, full width` });
+    }
+  } catch (e) {
+    R.findings.push({ sev: "fail", rule: "scenario-error", sel: "", text: "", detail: String(e.message).split("\n")[0].slice(0, 160) });
+  } finally {
+    await ctx.close().catch(() => {});
+  }
+  return R;
+}
+
 // `v` flips the view, but not while someone is typing.
 async function typingV(browser, cfg) {
   const sc = { route: "new", state: "rest", view: "owner", width: 390 };
@@ -836,6 +869,7 @@ async function main() {
           for (const R of await motionAndShell(browser, sc, c2)) { results.push(R); say(R, R.crossfade ? "  " + R.crossfade : ""); }
         for (const sc of runnable.filter((s) => s.route === "account" && s.state === "detail")) { const R = await sheetCheck(browser, sc, c2); results.push(R); say(R); }
         if (runnable.some((s) => s.route === "new")) { const R = await typingV(browser, c2); results.push(R); say(R); }
+        for (const route of ["new", "add"]) if (runnable.some((s) => s.route === route)) { const R = await keyboardFit(browser, route, c2); results.push(R); say(R); }
       }
       await browser.close();
     }
