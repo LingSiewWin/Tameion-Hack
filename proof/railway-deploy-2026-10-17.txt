@@ -2217,3 +2217,10 @@ https://tameion-agents-production-064a.up.railway.app
 GET https://tameion-agents-production-064a.up.railway.app/healthz -> 200 ok
 operator (relayer): 0x5f3f40daa525230289af8d40746dd12d10a151d6 | invite needed: True | publicUrl: https://tameion-agents-production-064a.up.railway.app
 exit=0
+
+## 4. Redeploy with the P-293 console fix (df1cee5), 2026-10-17 22:18 +0800 — rerun 4
+    Finished `release` profile [optimized] target(s) in 2m 03s
+Deploy complete
+GET https://tameion-agents-production-064a.up.railway.app/healthz -> 200 ok
+operator (relayer): 0x5f3f40daa525230289af8d40746dd12d10a151d6 | invite needed: True | publicUrl: https://tameion-agents-production-064a.up.railway.app
+exit=0
