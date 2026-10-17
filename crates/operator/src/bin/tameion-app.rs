@@ -217,12 +217,43 @@ impl App {
                 json!({ "error": "unknown chain" }),
             ));
         };
+        let Ok(policy) = Address::from_str(&tenant.policy) else {
+            return Err(json_reply(
+                "500 Internal Server Error",
+                json!({ "error": "tenant addresses" }),
+            ));
+        };
+        let issued = v["issued"].as_u64().unwrap_or(0);
+        let ch = level1::invoice_decide_challenge(c.chain_id, policy, id, accept, issued);
+        self.owner_signed(
+            tenant,
+            v,
+            ch,
+            json!({ "error": "accepting or declining an invoice needs the owner's passkey", "challenge": "keccak256(\"tameion.invoice-decide.v1\" ‖ chainId u64 ‖ policy ‖ id ‖ accept u8 ‖ issued u64)" }),
+        )
+        .await
+    }
+
+    /// The owner's passkey signed `ch` over the request's `issued` and `auth`,
+    /// fresh and unused: the shared check behind the owner's signed decisions —
+    /// an invoice (P-73) and a bill import only the owner's device opened
+    /// (docs/60 P-226). `missing` is the 401 when no signature came.
+    async fn owner_signed(
+        &self,
+        tenant: &level1::Tenant,
+        v: &Value,
+        ch: alloy::primitives::B256,
+        missing: Value,
+    ) -> Result<(), Vec<u8>> {
+        let Some(c) = chain(&tenant.chain) else {
+            return Err(json_reply(
+                "400 Bad Request",
+                json!({ "error": "unknown chain" }),
+            ));
+        };
         let (Some(issued), Ok(auth)) = (v["issued"].as_u64(), level1::auth_from_json(&v["auth"]))
         else {
-            return Err(json_reply(
-                "401 Unauthorized",
-                json!({ "error": "accepting or declining an invoice needs the owner's passkey", "challenge": "keccak256(\"tameion.invoice-decide.v1\" ‖ chainId u64 ‖ policy ‖ id ‖ accept u8 ‖ issued u64)" }),
-            ));
+            return Err(json_reply("401 Unauthorized", missing));
         };
         let now = now_secs();
         if issued > now + 60 || now.saturating_sub(issued) > 600 {
@@ -231,22 +262,12 @@ impl App {
                 json!({ "error": "the challenge is stale; ask for a new one" }),
             ));
         }
-        let (Ok(policy), Ok(owner)) = (
-            Address::from_str(&tenant.policy),
-            Address::from_str(&tenant.owner),
-        ) else {
+        let Ok(owner) = Address::from_str(&tenant.owner) else {
             return Err(json_reply(
                 "500 Internal Server Error",
                 json!({ "error": "tenant addresses" }),
             ));
         };
-        let ch = level1::invoice_decide_challenge(c.chain_id, policy, id, accept, issued);
-        if !self.notify_used.lock().await.insert(ch) {
-            return Err(json_reply(
-                "400 Bad Request",
-                json!({ "error": "that challenge was already used" }),
-            ));
-        }
         let keys = tenant_keys(c, tenant, owner).await.map_err(|e| {
             json_reply(
                 "502 Bad Gateway",
@@ -254,7 +275,16 @@ impl App {
             )
         })?;
         verify_any_owner(&keys, ch, &auth)
-            .map_err(|e| json_reply("403 Forbidden", json!({ "error": e })))
+            .map_err(|e| json_reply("403 Forbidden", json!({ "error": e })))?;
+        // Spent only once it verified: a forged signature over the same challenge
+        // must not use up the owner's own.
+        if !self.notify_used.lock().await.insert(ch) {
+            return Err(json_reply(
+                "400 Bad Request",
+                json!({ "error": "that challenge was already used" }),
+            ));
+        }
+        Ok(())
     }
 
     /// Tell the account's open event streams that something happened.
@@ -663,6 +693,24 @@ fn next_unpaid_due(
         due += every;
     }
     due
+}
+
+/// Why an import may not move this payee's bill to start at `wanted`, if it may
+/// not (docs/60 P-227): the bill typed for `typed` is paid up to `next_unpaid`,
+/// and a start before that re-opens a paid cycle. A bill with nothing paid yet
+/// may move freely.
+fn reopens_paid_cycle(
+    payee: &str,
+    typed: u64,
+    next_unpaid: Option<u64>,
+    wanted: u64,
+) -> Option<String> {
+    let n = next_unpaid?;
+    (n > typed && wanted < n).then(|| {
+        format!(
+            "the bill to {payee} is paid up to its cycle due {n} (unix); a schedule starting {wanted} would ask for a paid period again. Start it at or after {n}, nothing was saved"
+        )
+    })
 }
 
 /// Why a standing order may not start at `first_due`, if it may not: a date
@@ -6340,6 +6388,84 @@ impl App {
                 early_days: b["earlyDays"].as_u64().unwrap_or(0).min(u32::MAX as u64) as u32,
             })
             .collect();
+        // docs/60 P-226: on an account with agent keys, an import only the owner's
+        // device opened (no `import` agent key) carries the owner's passkey
+        // signature over exactly these bills: a device token alone could make or
+        // replace bills the agent then pays on Autopilot.
+        let by_key =
+            level1::token_allows(&tenant, bearer_of(raw, "").as_deref(), "import", now_secs())
+                .is_ok();
+        if !tenant.agent_tokens.is_empty() && !by_key {
+            let ch = chain(&tenant.chain)
+                .zip(Address::from_str(&tenant.policy).ok())
+                .and_then(|(c, p)| {
+                    level1::bills_challenge(
+                        c.chain_id,
+                        p,
+                        &bills,
+                        v["issued"].as_u64().unwrap_or(0),
+                    )
+                });
+            let Some(ch) = ch else {
+                return json_reply(
+                    "400 Bad Request",
+                    json!({ "error": "a bill's payee is not an address or its amount is not USDC" }),
+                );
+            };
+            if let Err(refused) = self
+                .owner_signed(
+                    &tenant,
+                    &v,
+                    ch,
+                    json!({ "error": "saving bills from this device needs the owner's passkey: sign exactly these bills", "challenge": "keccak256(\"tameion.bills.v1\" ‖ chainId u64 ‖ policy ‖ per bill: payee ‖ amount minor u256 ‖ everyDays u32 ‖ nextDue u64 ‖ discountBps u16 ‖ earlyDays u32 ‖ issued u64)" }),
+                )
+                .await
+            {
+                return refused;
+            }
+        }
+        // docs/60 P-227: no import, whoever sends it, moves a bill whose current
+        // cycle is paid to a start that re-opens a paid cycle (its cycle keys
+        // would change, and a paid period would be asked or paid again).
+        let retyped: Vec<(String, u64, u64)> = bills
+            .iter()
+            .filter_map(|b| {
+                let old = tenant
+                    .bills
+                    .iter()
+                    .find(|o| o.payee.eq_ignore_ascii_case(&b.payee))?;
+                Some((b.payee.to_lowercase(), old.next_due, b.next_due))
+            })
+            .collect();
+        if tenant.deployed && !retyped.is_empty() {
+            let plan = match level1::plan(&self.dir, &tenant).await {
+                Ok(p) => p,
+                Err(e) => {
+                    return json_reply(
+                        "503 Service Unavailable",
+                        json!({ "error": format!("could not read which cycles of these bills are paid ({e}); nothing was saved, try again") }),
+                    );
+                }
+            };
+            for (payee, typed, wanted) in &retyped {
+                let next_unpaid = plan["obligations"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .find(|o| {
+                        o["cycleKey"]
+                            .as_str()
+                            .is_some_and(|k| k.starts_with(&format!("{payee}@")))
+                    })
+                    .and_then(|o| o["nextDue"].as_u64());
+                if let Some(w) = reopens_paid_cycle(payee, *typed, next_unpaid, *wanted) {
+                    return json_reply(
+                        "409 Conflict",
+                        json!({ "error": w, "nextUnpaid": next_unpaid }),
+                    );
+                }
+            }
+        }
         // F10 (PLAN 5.47): a frozen payee never becomes a bill.
         let addrs: Vec<Address> = bills
             .iter()
@@ -8497,6 +8623,33 @@ mod settle_key_tests {
     use super::*;
     use alloy::primitives::B256;
     use ledger::{Currency, Money};
+
+    /// docs/60 P-227: an import may not move a bill whose cycle is paid to a
+    /// start before its next unpaid cycle; a bill with nothing paid moves freely.
+    #[test]
+    fn a_reschedule_never_reopens_a_paid_cycle() {
+        let payee = "0x179dca89f69faef5765d2e7445aa5452b8159520";
+        let (d0, month) = (1_792_156_029u64, 2_592_000u64);
+        let w = reopens_paid_cycle(payee, d0, Some(d0 + month), d0 + 5 * 86_400).unwrap();
+        assert!(
+            w.contains("paid up to") && w.contains(&(d0 + month).to_string()),
+            "{w}"
+        );
+        assert_eq!(
+            reopens_paid_cycle(payee, d0, Some(d0 + month), d0 + month),
+            None
+        );
+        assert_eq!(
+            reopens_paid_cycle(payee, d0, Some(d0), d0 - 86_400),
+            None,
+            "nothing paid yet"
+        );
+        assert_eq!(
+            reopens_paid_cycle(payee, d0, None, 1),
+            None,
+            "no bill found by the plan"
+        );
+    }
 
     /// docs/60 P-217: a priced-out purchase waits as one row per seller until a
     /// later paid purchase from that seller answers it, for a day at most.

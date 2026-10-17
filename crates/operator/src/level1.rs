@@ -428,6 +428,37 @@ pub fn invoice_decide_challenge(
     alloy::primitives::keccak256(m)
 }
 
+/// The 32 bytes the owner's passkey signs to save exactly these bills when only
+/// the owner's device opened the import (docs/60 P-226):
+/// keccak256("tameion.bills.v1" ‖ chainId u64 ‖ policy ‖ for each bill: payee ‖
+/// amount in USDC minor units u256 ‖ everyDays u32 ‖ nextDue u64 ‖ discountBps u16 ‖
+/// earlyDays u32 ‖ issued u64), as `lib/guard.ts` `billsChallenge` packs it.
+/// `None` when a payee is not an address or an amount is not USDC.
+pub fn bills_challenge(
+    chain_id: u64,
+    policy: Address,
+    bills: &[SeededBill],
+    issued: u64,
+) -> Option<B256> {
+    let mut m = b"tameion.bills.v1".to_vec();
+    m.extend_from_slice(&chain_id.to_be_bytes());
+    m.extend_from_slice(policy.as_slice());
+    for b in bills {
+        let payee = Address::from_str(b.payee.trim()).ok()?;
+        let minor = Money::parse(b.amount.trim(), Currency::Usdc)
+            .ok()?
+            .to_minor();
+        m.extend_from_slice(payee.as_slice());
+        m.extend_from_slice(&U256::from(u128::try_from(minor).ok()?).to_be_bytes::<32>());
+        m.extend_from_slice(&b.every_days.to_be_bytes());
+        m.extend_from_slice(&b.next_due.to_be_bytes());
+        m.extend_from_slice(&b.discount_bps.to_be_bytes());
+        m.extend_from_slice(&b.early_days.to_be_bytes());
+    }
+    m.extend_from_slice(&issued.to_be_bytes());
+    Some(alloy::primitives::keccak256(m))
+}
+
 /// The 32 bytes the passkey signs to revoke token `id`.
 pub fn token_revoke_challenge(chain_id: u64, policy: Address, id: &str, issued: u64) -> B256 {
     let mut m = b"tameion.token-revoke.v1".to_vec();
@@ -3693,6 +3724,42 @@ mod tests {
         assert!(load(&dir, "../tenants/x").is_none());
         assert_eq!(list(&dir).len(), 1);
         let _ = fs::remove_dir_all(dir);
+    }
+}
+
+#[cfg(test)]
+mod bills_challenge_tests {
+    use super::*;
+
+    /// docs/60 P-226: the bytes the page signs and the bytes the service checks
+    /// are one thing; `apps/console/test/guard.test.mts` asserts the same hex.
+    #[test]
+    fn the_bills_challenge_matches_the_pages() {
+        let bill = SeededBill {
+            payee: "0x179dCA89F69FAEF5765D2E7445aa5452B8159520".into(),
+            amount: "0.05".into(),
+            every_days: 30,
+            next_due: 1_792_156_029,
+            discount_bps: 0,
+            early_days: 0,
+        };
+        let policy = Address::from_str("0x42463b314d392fe34abe1854b925f0f6e55fa555").unwrap();
+        let ch =
+            bills_challenge(421_614, policy, std::slice::from_ref(&bill), 1_792_216_000).unwrap();
+        assert_eq!(
+            format!("{ch:#x}"),
+            "0x6d37a6d579dd8a3f43b1a55f3735445329134b69101a8efc5ac1719f1e7a9838",
+            "the vector the page's test asserts"
+        );
+        let mut other = bill.clone();
+        other.amount = "0.06".into();
+        assert_ne!(
+            bills_challenge(421_614, policy, &[other], 1_792_216_000),
+            Some(ch)
+        );
+        let mut bad = bill;
+        bad.payee = "alice".into();
+        assert_eq!(bills_challenge(421_614, policy, &[bad], 1), None);
     }
 }
 
