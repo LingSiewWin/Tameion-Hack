@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {WebAuthn} from "@openzeppelin/contracts/utils/cryptography/WebAuthn.sol";
+import {IPrincipalVerifier} from "./verifiers/IPrincipalVerifier.sol";
 
 /// @title  PasskeyPrincipal
 /// @notice An account whose only key is a passkey on the owner's phone.
@@ -21,9 +22,13 @@ import {WebAuthn} from "@openzeppelin/contracts/utils/cryptography/WebAuthn.sol"
 ///
 ///         Verification is OpenZeppelin's `WebAuthn` (v5.7.0), which uses the
 ///         P-256 precompile at 0x100 where the chain has one (Arbitrum: RIP-7212;
-///         Ethereum: EIP-7951) and falls back to Solidity where it does not
-///         (Arc lists no P-256 precompile). User verification (the UV flag:
-///         biometric or PIN, not just presence) is required.
+///         Ethereum: EIP-7951; Arc testnet answers it too, probed 2026-10-17)
+///         and falls back to Solidity where it does not. User verification
+///         (the UV flag: biometric or PIN, not just presence) is required.
+///
+///         Which algorithm approvals are in is state, not code (`activeAlg`,
+///         "Signature agility" below): the owner can move the account to a
+///         registered verifier through the same delay as a key recovery.
 contract PasskeyPrincipal {
     /// @notice The passkey's public key. Storage, not immutable, because a
     ///         lost phone must not mean a frozen treasury (docs/46 "after",
@@ -96,12 +101,14 @@ contract PasskeyPrincipal {
         qy = _qy;
         recovery = _recovery;
         recoveryDelay = _recoveryDelay;
+        activeAlg = P256_WEBAUTHN;
         emit RecoverySet(address(0), _recovery);
     }
 
     /// @notice Propose a replacement passkey. Recovery address only. Applies
     ///         after `recoveryDelay` unless the passkey cancels it.
     function proposeRecovery(bytes32 _qx, bytes32 _qy) external {
+        _requireP256();
         if (msg.sender != recovery || recovery == address(0)) revert NotRecovery();
         if (_qx == bytes32(0) && _qy == bytes32(0)) revert ZeroKey();
         _requireOnCurve(_qx, _qy);
@@ -125,6 +132,7 @@ contract PasskeyPrincipal {
     /// @notice Make the pending replacement the passkey, once its delay has
     ///         passed. Anyone may call; nothing else changes (the nonce goes on).
     function applyRecovery() external {
+        _requireP256();
         PendingKey memory p = pendingKey;
         if (p.eta == 0) revert NothingPending();
         if (block.timestamp < p.eta) revert TooEarly(p.eta);
@@ -207,6 +215,7 @@ contract PasskeyPrincipal {
     ///         The threshold-th agreement makes it pending, exactly as the
     ///         recovery address would; the passkey may cancel it until `eta`.
     function approveRecovery(bytes32 _qx, bytes32 _qy) external {
+        _requireP256();
         if (!isGuardian(msg.sender)) revert NotGuardian();
         if (_qx == bytes32(0) && _qy == bytes32(0)) revert ZeroKey();
         _requireOnCurve(_qx, _qy);
@@ -250,6 +259,7 @@ contract PasskeyPrincipal {
         external
         returns (bytes memory)
     {
+        _requireP256();
         uint8 need = _need();
         if (need > 1) revert NeedsMoreApprovals(1, need);
         uint256 n = nonce;
@@ -314,6 +324,7 @@ contract PasskeyPrincipal {
     ///         device needs the approvals the account needs today.
     function setCoOwners(bytes32[] calldata xs, bytes32[] calldata ys, uint8 threshold) external {
         if (msg.sender != address(this)) revert NotPasskeyOrRecovery();
+        _requireP256(); // co-owners are passkeys
         uint256 n = xs.length;
         if (n != ys.length || n > MAX_CO_OWNERS) revert BadCoOwners();
         if (threshold == 0 || threshold > n + 1) revert BadCoOwners();
@@ -341,6 +352,7 @@ contract PasskeyPrincipal {
         bytes calldata data,
         WebAuthn.WebAuthnAuth calldata auth
     ) external returns (bytes memory) {
+        _requireP256();
         uint8 need = _need();
         if (need > 1) revert NeedsMoreApprovals(1, need);
         (bytes32 x, bytes32 y) = keyAt(keyIndex);
@@ -360,6 +372,7 @@ contract PasskeyPrincipal {
         uint256[] calldata keyIndexes,
         WebAuthn.WebAuthnAuth[] calldata auths
     ) external returns (bytes memory) {
+        _requireP256();
         uint8 need = _need();
         uint256 k = keyIndexes.length;
         if (k != auths.length) revert BadCoOwners();
@@ -372,6 +385,131 @@ contract PasskeyPrincipal {
             (bytes32 x, bytes32 y) = keyAt(keyIndexes[i]);
             if (!WebAuthn.verify(challenge, auths[i], x, y, true)) revert BadPasskeySignature();
         }
+        return _run(target, value, data, n);
+    }
+
+    // ------------------------------------------------------------------
+    // Signature agility (docs/117 §3): the account starts on the built-in
+    // passkey check (`P256_WEBAUTHN`: `execute`, `executeAs`, `executeWith`,
+    // unchanged). Moving the owner's key to another algorithm is a verifier
+    // and a key, proposed by the current key (an approved call), waiting
+    // `recoveryDelay` while the current key or the recovery address can
+    // cancel, then applied by anyone. Applying retires the algorithm it
+    // replaces for good: a retired algorithm can never be proposed again,
+    // so a key in a broken algorithm cannot be brought back.
+    // ponytail: retirement is by id; the same math under a new id is a new
+    // registration that pays the full delay in the open. Retire by verifier
+    // code hash too if owners pick verifiers from an open list.
+
+    /// @notice The built-in algorithm: a P-256 WebAuthn assertion with user
+    ///         verification, by `qx/qy` and the co-owners.
+    bytes32 public constant P256_WEBAUTHN = keccak256("p256-webauthn");
+
+    /// @notice The one algorithm approvals must be in now.
+    bytes32 public activeAlg;
+    /// @notice The owner's key in a registered algorithm's encoding (a
+    ///         passkey's stays in `qx/qy`).
+    bytes public activeKey;
+    /// @notice The verifier each applied algorithm checks with.
+    mapping(bytes32 => address) public verifiers;
+    /// @notice Algorithms this account moved away from; never active again.
+    mapping(bytes32 => bool) public retired;
+
+    struct PendingAlg {
+        bytes32 algId;
+        address verifier;
+        uint64 eta;
+        bytes key;
+    }
+
+    /// @notice The algorithm change waiting out the delay, if any.
+    PendingAlg public pendingAlg;
+
+    event VerifierProposed(bytes32 indexed algId, address verifier, bytes key, uint64 eta);
+    event VerifierCancelled(bytes32 indexed algId, address indexed by);
+    event VerifierApplied(bytes32 indexed algId, address verifier, bytes32 indexed retiredAlg);
+
+    error AlgRetired(bytes32 algId);
+    error AlgNotActive(bytes32 activeAlg);
+    error BadVerifier();
+
+    function _requireP256() internal view {
+        if (activeAlg != P256_WEBAUTHN) revert AlgNotActive(activeAlg);
+    }
+
+    /// @notice Propose moving the owner's key to `algId`, checked by
+    ///         `verifier`, as `key`. Only through an approved call: the
+    ///         current key signs this. A retired algorithm is refused; so is
+    ///         the built-in id and an address with no code.
+    function proposeVerifier(bytes32 algId, address verifier, bytes calldata key) external {
+        if (msg.sender != address(this)) revert NotPasskeyOrRecovery();
+        if (retired[algId]) revert AlgRetired(algId);
+        if (algId == P256_WEBAUTHN || verifier.code.length == 0) revert BadVerifier();
+        // forge-lint: disable-next-line(unsafe-typecast)
+        uint64 eta = uint64(block.timestamp + recoveryDelay);
+        pendingAlg = PendingAlg({algId: algId, verifier: verifier, eta: eta, key: key});
+        emit VerifierProposed(algId, verifier, key, eta);
+    }
+
+    /// @notice Drop the pending algorithm change: the current key (through
+    ///         an approved call) or the recovery address, the pair that can
+    ///         stop a key recovery.
+    function cancelVerifier() external {
+        if (msg.sender != address(this) && msg.sender != recovery) revert NotPasskeyOrRecovery();
+        if (pendingAlg.eta == 0) revert NothingPending();
+        bytes32 algId = pendingAlg.algId;
+        delete pendingAlg;
+        emit VerifierCancelled(algId, msg.sender);
+    }
+
+    /// @notice Make the pending algorithm active once its delay has passed.
+    ///         Anyone may call. The algorithm it replaces is retired; the
+    ///         nonce goes on.
+    function applyVerifier() external {
+        PendingAlg memory p = pendingAlg;
+        if (p.eta == 0) revert NothingPending();
+        if (block.timestamp < p.eta) revert TooEarly(p.eta);
+        delete pendingAlg;
+        bytes32 previous = activeAlg;
+        if (p.algId != previous) {
+            retired[previous] = true;
+            activeAlg = p.algId;
+            // Co-owners are passkeys and cannot sign in the new algorithm:
+            // the account returns to its one key, as after a recovery.
+            if (coQx.length > 0 || approvalThreshold > 1) {
+                delete coQx;
+                delete coQy;
+                approvalThreshold = 0;
+                emit CoOwnersSet(0, 1);
+            }
+        }
+        verifiers[p.algId] = p.verifier;
+        activeKey = p.key;
+        emit VerifierApplied(p.algId, p.verifier, p.algId == previous ? bytes32(0) : previous);
+    }
+
+    /// @notice Run `target.call{value}(data)` if `sig` approves exactly this
+    ///         call as the next approval, in the active algorithm: the
+    ///         abi-encoded `WebAuthnAuth` fields while the passkey is active,
+    ///         else what the registered verifier reads. One key; a call that
+    ///         needs several approvals goes through `executeWith`.
+    function executeSigned(address target, uint256 value, bytes calldata data, bytes calldata sig)
+        external
+        returns (bytes memory)
+    {
+        uint8 need = _need();
+        if (need > 1) revert NeedsMoreApprovals(1, need);
+        uint256 n = nonce;
+        bytes32 challenge = challengeFor(target, value, data, n);
+        bytes32 alg = activeAlg;
+        bool ok;
+        if (alg == P256_WEBAUTHN) {
+            (bool decoded, WebAuthn.WebAuthnAuth calldata auth) = WebAuthn.tryDecodeAuth(sig);
+            ok = decoded && WebAuthn.verify(abi.encodePacked(challenge), auth, qx, qy, true);
+        } else {
+            ok = IPrincipalVerifier(verifiers[alg]).verify(challenge, activeKey, sig);
+        }
+        if (!ok) revert BadPasskeySignature();
         return _run(target, value, data, n);
     }
 }
