@@ -1,5 +1,5 @@
 // The shell renders: the header (name, network word, capsule) around the page, and no hash anywhere (DESIGN Rule 1).
-import "./tsx.mjs";
+import "../scripts/tsx.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createElement } from "react";
