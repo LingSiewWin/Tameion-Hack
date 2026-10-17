@@ -22,6 +22,7 @@
 //! (`TAMEION_RPC_ARC`, `TAMEION_RPC_ARBITRUM_SEPOLIA` override them).
 
 use alloy::primitives::{Address, B256};
+use arc::ArcError;
 use ledger::symbolon::{Extras, SlotSig, Symbolon, SymbolonKind, project, record_hash};
 use ledger::{Currency, Decision, Event, EventBody, Money};
 use operator::{audit, invoice, statement, watch};
@@ -65,13 +66,22 @@ fn usdc(m: Money) -> Option<u128> {
         .flatten()
 }
 
+/// Chain read-backs: tried, held, and failed (the node did not answer, twice).
+/// A failed read is counted apart, never as "not witnessed": a row with one
+/// is a lower bound.
+#[derive(Debug, Default, Clone, Copy)]
+struct Reads {
+    tried: usize,
+    held: usize,
+    failed: usize,
+}
+
 fn read_json(path: &Path) -> Option<Value> {
     serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()
 }
 
-/// One account's records with their slots filled, and how many chain
-/// read-backs were tried and how many held.
-async fn records_of(tenants: &Path, policy: &str) -> Result<(Vec<Record>, usize, usize), String> {
+/// One account's records with their slots filled, and its chain read-backs.
+async fn records_of(tenants: &Path, policy: &str) -> Result<(Vec<Record>, Reads), String> {
     let account = read_json(&tenants.join(format!("{policy}.json"))).ok_or("no account file")?;
     let chain = account["chain"].as_str().unwrap_or("arc-testnet");
     let preset = watch::chain(chain).ok_or_else(|| format!("unknown chain {chain}"))?;
@@ -83,8 +93,9 @@ async fn records_of(tenants: &Path, policy: &str) -> Result<(Vec<Record>, usize,
         sig: tx.to_vec(),
         at,
     };
-    let (mut tried, mut held) = (0, 0);
+    let mut reads = Reads::default();
     let mut records = Vec::new();
+    let pause = std::time::Duration::from_secs(2);
 
     // Invoices the payee signed, checked as of their issue date: claims.
     let mut invoices: Vec<Signed> = Vec::new();
@@ -154,13 +165,20 @@ async fn records_of(tenants: &Path, policy: &str) -> Result<(Vec<Record>, usize,
                 Address::from_str(field("anchor")),
                 Address::from_str(field("agent")),
             ) {
-                tried += 1;
-                if let Ok(true) = client
-                    .anchored_in(tx, anchor, sender, B256::from(*root.as_bytes()))
-                    .await
-                {
-                    held += 1;
-                    extras.anchored = Some(read_back(tx, a["at"].as_i64().unwrap_or_default()));
+                reads.tried += 1;
+                let root = B256::from(*root.as_bytes());
+                let mut read = client.anchored_in(tx, anchor, sender, root).await;
+                if matches!(read, Err(ArcError::Transport(_))) {
+                    tokio::time::sleep(pause).await;
+                    read = client.anchored_in(tx, anchor, sender, root).await;
+                }
+                match read {
+                    Ok(true) => {
+                        reads.held += 1;
+                        extras.anchored = Some(read_back(tx, a["at"].as_i64().unwrap_or_default()));
+                    }
+                    Err(ArcError::Transport(_)) => reads.failed += 1,
+                    _ => {}
                 }
             }
         }
@@ -184,15 +202,20 @@ async fn records_of(tenants: &Path, policy: &str) -> Result<(Vec<Record>, usize,
                 B256::from_str(tx_hash),
                 Address::from_str(counterparty.as_str()),
             ) {
-                tried += 1;
+                reads.tried += 1;
                 let key = B256::from(*settlement_key.as_bytes());
-                if client
-                    .confirm_paid(tx, policy_addr, to, *amount, key)
-                    .await
-                    .is_ok()
-                {
-                    held += 1;
-                    extras.witness.insert(h, read_back(tx, e.at.as_unix()));
+                let mut read = client.confirm_paid(tx, policy_addr, to, *amount, key).await;
+                if matches!(read, Err(ArcError::Transport(_))) {
+                    tokio::time::sleep(pause).await;
+                    read = client.confirm_paid(tx, policy_addr, to, *amount, key).await;
+                }
+                match read {
+                    Ok(()) => {
+                        reads.held += 1;
+                        extras.witness.insert(h, read_back(tx, e.at.as_unix()));
+                    }
+                    Err(ArcError::Transport(_)) => reads.failed += 1,
+                    Err(_) => {}
                 }
             }
         }
@@ -273,7 +296,7 @@ async fn records_of(tenants: &Path, policy: &str) -> Result<(Vec<Record>, usize,
             });
         }
     }
-    Ok((records, tried, held))
+    Ok((records, reads))
 }
 
 #[tokio::main]
@@ -301,7 +324,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         p.half_life_days
     );
     println!(
-        "{:<13} {:<16} {:>5} {:>8} {:>6} {:>6} {:>6} {:>8} {:>8} {:>8} {:>5}  read-backs held/tried",
+        "{:<13} {:<16} {:>5} {:>8} {:>6} {:>6} {:>6} {:>8} {:>8} {:>8} {:>5}  read-backs held/tried (failed)",
         "account",
         "chain",
         "recs",
@@ -316,18 +339,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let mut buckets = [0usize; 10];
     let mut total = [0usize; 4];
-    let (mut tried, mut held, mut scored) = (0, 0, 0);
+    let (mut reads, mut scored) = (Reads::default(), 0);
     for policy in &accounts {
         let chain = read_json(&tenants.join(format!("{policy}.json")))
             .and_then(|v| v["chain"].as_str().map(str::to_string))
             .unwrap_or_default();
         let short = format!("{}…{}", &policy[..6], &policy[38..]);
         match records_of(&tenants, policy).await {
-            Ok((records, t, h)) => {
+            Ok((records, r)) => {
                 let s = pistis::score(&records, now, &p);
                 let counts = [s.n_unsigned, s.n_single, s.n_double, s.n_triple];
                 println!(
-                    "{short:<13} {chain:<16} {:>5} {:>8} {:>6} {:>6} {:>6} {:>8.3} {:>8.3} {:>8.3} {:>5}  {h}/{t}",
+                    "{short:<13} {chain:<16} {:>5} {:>8} {:>6} {:>6} {:>6} {:>8.3} {:>8.3} {:>8.3} {:>5}  {}/{}{}",
                     counts.iter().sum::<usize>(),
                     s.n_unsigned,
                     s.n_single,
@@ -336,25 +359,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     s.survival,
                     s.independence,
                     s.recency,
-                    s.bps
+                    s.bps,
+                    r.held,
+                    r.tried,
+                    if r.failed > 0 {
+                        format!(" ({} failed: a lower bound)", r.failed)
+                    } else {
+                        String::new()
+                    }
                 );
                 buckets[usize::from(s.bps / 1000).min(9)] += 1;
                 for (t, c) in total.iter_mut().zip(counts) {
                     *t += c;
                 }
-                (tried, held, scored) = (tried + t, held + h, scored + 1);
+                reads.tried += r.tried;
+                reads.held += r.held;
+                reads.failed += r.failed;
+                scored += 1;
             }
             Err(e) => println!("{short:<13} {chain:<16} not scored: {e}"),
         }
     }
     println!(
-        "\ntotal: {scored} of {} accounts scored, {} records (each once): {} unsigned, {} single, {} double, {} triple-signed; chain read-backs {held}/{tried} held",
+        "\ntotal: {scored} of {} accounts scored, {} records (each once): {} unsigned, {} single, {} double, {} triple-signed; chain read-backs {}/{} held, {} failed",
         accounts.len(),
         total.iter().sum::<usize>(),
         total[0],
         total[1],
         total[2],
-        total[3]
+        total[3],
+        reads.held,
+        reads.tried,
+        reads.failed
     );
     println!("\nbps histogram ({scored} accounts):");
     for (i, n) in buckets.iter().enumerate() {
