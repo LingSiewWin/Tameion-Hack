@@ -79,6 +79,7 @@ pub mod log;
 pub mod money;
 pub mod obligations;
 pub mod reason;
+pub mod symbolon;
 pub mod time;
 pub mod verify;
 
