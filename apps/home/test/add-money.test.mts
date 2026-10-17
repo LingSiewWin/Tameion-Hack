@@ -93,6 +93,7 @@ test("an address grouped by four, unchanged when joined back", () => {
   const a = "0xa098da51ae720e6e46b991723b362e0fcddfea1e";
   assert.equal(grouped(a), "0xa098 da51 ae72 0e6e 46b9 9172 3b36 2e0f cddf ea1e");
   assert.equal(grouped(a).replaceAll(" ", ""), a);
+  assert.doesNotMatch(grouped(a), /0x[0-9a-fA-F]{8,}/, "the form the Owner view carries is not machine hex (DESIGN, zero-hash)");
 });
 
 test("a kept move is read back only when every field has its shape", () => {
