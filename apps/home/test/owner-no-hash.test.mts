@@ -27,7 +27,7 @@ const render = (over: Record<string, unknown> = {}) =>
 const sealedHalves = () => {
   const p = inbox.paid[0];
   const slot = { alg: "secp256k1", keyId: "0x" + "ab".repeat(20), verified: true };
-  return halvesByPayment([{ root: "0x" + "cd".repeat(32), seq: 2, leaf: "0x" + "ef".repeat(32), kind: "SETTLEMENT", at: p.at, tx: p.tx, agent: slot, counterparty_slot: slot, witness: slot }]);
+  return halvesByPayment([{ root: "0x" + "cd".repeat(32), seq: 2, leaf: "0x" + "ef".repeat(32), kind: "SETTLEMENT", at: p.at, tx: p.tx, agent: slot, counterpartySlot: slot, witness: slot }]);
 };
 
 const cases: [string, string][] = [

@@ -74,10 +74,10 @@ test("rows name the payee, never an address, and say the state in words", () => 
 test("sealed only when all three halves verify on the settlement's record; the sheet says which are there", () => {
   const p = inbox.paid[0];
   const slot = { alg: "secp256k1", keyId: "k", verified: true };
-  const record = { root: "r", seq: 2, leaf: "l", kind: "SETTLEMENT", at: p.at, tx: p.tx!.toUpperCase(), agent: slot, counterparty_slot: slot, witness: slot };
+  const record = { root: "r", seq: 2, leaf: "l", kind: "SETTLEMENT", at: p.at, tx: p.tx!.toUpperCase(), agent: slot, counterpartySlot: slot, witness: slot };
   assert.equal(lines(inbox, 1792276548, halvesByPayment([record]))[0].state, "Paid and sealed");
   assert.equal(lines(inbox, 1792276548, halvesByPayment([{ ...record, witness: null }]))[0].sealed, false, "two of three: not sealed");
-  assert.equal(lines(inbox, 1792276548, halvesByPayment([record, { ...record, seq: 3, counterparty_slot: null }]))[0].sealed, false, "every record naming it must have all three");
+  assert.equal(lines(inbox, 1792276548, halvesByPayment([record, { ...record, seq: 3, counterpartySlot: null }]))[0].sealed, false, "every record naming it must have all three");
   assert.equal(lines(inbox, 1792276548, halvesByPayment([{ ...record, tx: undefined }]))[0].sealed, false, "no transaction named: never guessed");
   const h = { agent: true, payee: true, witness: true };
   assert.equal(halvesWords({ ...h, payee: false, witness: false }, "Demo Vendor"), "Signed by the agent. Not yet signed by Demo Vendor or the witness.");

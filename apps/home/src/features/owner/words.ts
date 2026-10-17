@@ -153,7 +153,7 @@ export function halvesByPayment(records: readonly SymbolonRecord[] | null | unde
   for (const r of records ?? []) {
     if (!r.tx) continue;
     const k = r.tx.toLowerCase();
-    const h = { agent: !!r.agent?.verified, payee: !!r.counterparty_slot?.verified, witness: !!r.witness?.verified, at: r.at };
+    const h = { agent: !!r.agent?.verified, payee: !!r.counterpartySlot?.verified, witness: !!r.witness?.verified, at: r.at };
     const was = out.get(k);
     out.set(k, was ? { ...was, agent: was.agent && h.agent, payee: was.payee && h.payee, witness: was.witness && h.witness } : h);
   }
