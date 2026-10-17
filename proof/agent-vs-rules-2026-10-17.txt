@@ -247,3 +247,132 @@ Graded code (appended 2026-10-17 00:15:17 +0800, unchanged since before both run
   dcb145b95a04a6cec4967876fbf924c92d686af9b7d8ce7550c4ff339357b40a  2026-10-17 00:11:31  crates/operator/tests/decide_eval.rs
   100d63e467cf6a2ac7fa07330a993473d58a341becf6a0b7b2c47a560c83c24d  2026-10-17 00:10:45  crates/operator/examples/decide_eval.rs
   8f385472397885f7c8fc695281a10a939c4a8a06c9c4fe4c78abf597676538e3  2026-10-17 00:08:03  crates/operator/tests/fixtures/decide-scenarios.json
+
+======== RE-RUN 2, 2026-10-17 13:11:34 +0800 to 2026-10-17 13:13:48 +0800, seat S10, after docs/60 P-215 (guard: an empty allowed falls back to the rule, then to ask) and
+P-216 (a model's refusal of an invoice becomes ask unless the basis is look_alike; the model is offered refuse on an invoice only for a
+look-alike). decide.rs sha256 4a3ce0a9b2404c521cb04166620b476f9066199fc2450d893073a5d03b26c43a, modified 2026-10-17 13:10:47 +0800 (before the runs). Same commands; S11's fixture has no kind, so P-216 does not
+reach its invoice cases (s03-s05). The key is read inside the command and never printed. ========
+
+== rule baseline (re-run 2) ==
+fixture  sha256 8f385472397885f7c8fc695281a10a939c4a8a06c9c4fe4c78abf597676538e3
+decider  rule-based (rule), model -; 14 scenarios x 1 rep(s)
+action   12/14 = 86%  (correct per rep: 12; always-ask would score 5/14)
+basis    13/14 = 93%
+ask      7/14 = 50%  (golden 5/14)
+against the label: paid where it holds 0, held where it pays 1
+guard    illegal action 0, invented number 0
+own answers 14/14  (errors, the rule decided: 0; answered as another kind: 0)
+latency  p50 0 ms, p90 0 ms (n=14)
+
+per scenario: golden | rule-based (each rep)
+s01 recurring bill due today  [bill:northwind-hosting:2026-10]
+    pay/due_now | pay/due_now ok
+    why: Paying Northwind Hosting 49 USDC, due today: the usual 49 USDC after 6 payments.
+s02 recurring bill due in 9 days, no early terms  [bill:contoso-search:2026-10]
+    wait/usual | wait/usual ok
+    why: Waiting on Contoso Search API: due in 9 days, and nothing is gained by paying earlier.
+s03 invoice four times the payee's usual  [invoice:fabrikam-data:INV-2291]
+    ask/amount_deviates | ask/amount_deviates ok
+    why: Asking the owner about Fabrikam Data: it asks 1000 USDC, 4× the usual 250 USDC.
+s04 first invoice from a payee approved an hour ago  [invoice:tailspin-labeling:TL-0001]
+    ask/new_payee | ask/new_payee ok
+    why: Asking the owner about Tailspin Labeling: approved 0 days ago, 0 payments before; it asks 300 USDC.
+s05 address that looks like a known payee's  [invoice:0x1f9a-c3d7:2026-10]  (decided by code: one action allowed)
+    refuse/look_alike | refuse/look_alike ok
+    why: Refused 0x1f9a…c3d7: it imitates Northwind Hosting.
+s06 2% early-payment discount, last day to take it, long runway  [bill:wingtip-compute:2026-10]
+    pay_early/discount_worth_it | pay_early/discount_worth_it ok
+    why: Paying Wingtip Compute early: its terms take 2% off 2000 USDC and the balance still covers every bill ahead.
+s07 the same discount, runway 5 days, a larger bill due first  [bill:wingtip-compute:2026-11]
+    wait/runway_short | wait/runway_short ok
+    why: Waiting on Wingtip Compute (due in 10 days): the balance runs short in 5 days, so the earlier bill comes first.
+s08 bill inferred with low confidence  [bill:adatum-monitoring:2026-10]
+    ask/low_confidence | ask/low_confidence ok
+    why: Asking the owner about Adatum Monitoring: the schedule behind it is weak (confidence 0.55 from 3 payments).
+s09 x402 call inside the cap, approved seller  [x402:pay_5be17c0d]
+    pay/usual | pay/usual ok
+    why: Paying Litware Search 0.01 USDC, due today: the usual 0.01 USDC after 2226 payments.
+s10 x402 call above the cap  [x402:pay_c09e44a1]
+    refuse/amount_deviates | ask/amount_deviates MISS
+    why: Asking the owner about Litware Search: it asks 25 USDC, 2500× the usual 0.01 USDC.
+s11 one-off x402 buy from a seller approved a month ago (most common rhythm)  [x402:pay_7d2a90f3]
+    pay/usual | pay/usual ok
+    why: Paying Proseware Datasets 0.25 USDC, due today.
+s12 busy x402 seller raises its price tenfold, still inside the cap  [x402:pay_e41b07c6]
+    ask/amount_deviates | ask/amount_deviates ok
+    why: Asking the owner about Woodgrove Geocode: it asks 0.02 USDC, 10× the usual 0.002 USDC.
+s13 busy x402 seller halves its price  [x402:pay_19c3f5d8]
+    pay/usual | ask/amount_deviates MISS
+    why: Asking the owner about Woodgrove Geocode: it asks 0.001 USDC, 0.5× the usual 0.002 USDC.
+s14 x402 seller nobody approved, not a look-alike  [x402:pay_a3f0b2e9]
+    ask/new_payee | ask/new_payee ok
+    why: Asking the owner about Lucerne Weather: not an approved payee; it asks 0.05 USDC.
+
+
+== model decider (re-run 2) ==
+fixture  sha256 8f385472397885f7c8fc695281a10a939c4a8a06c9c4fe4c78abf597676538e3
+decider  claude-sonnet-5-5 (model), model claude-sonnet-5-5; 14 scenarios x 3 rep(s)
+action   39/42 = 93%  (correct per rep: 13 13 13; always-ask would score 5/14)
+basis    40/42 = 95%
+ask      18/42 = 43%  (golden 5/14)
+against the label: paid where it holds 0, held where it pays 0
+guard    illegal action 0, invented number 0
+own answers 36/42  (errors, the rule decided: 6; answered as another kind: 0)
+same action in every rep: 14/14 scenarios
+latency  p50 2067 ms, p90 8002 ms (n=42)
+
+per scenario: golden | rule | claude-sonnet-5-5 (each rep)
+s01 recurring bill due today  [bill:northwind-hosting:2026-10]
+    pay/due_now | pay/due_now ok | pay/due_now ok, pay/usual ok(basis differs), pay/usual ok(basis differs)
+    why: Paying Northwind Hosting 49 USDC, due today: the usual 49 USDC after 6 payments.
+    rep 1: claude-sonnet-5-5 failed [reasoner-transient]: reasoner temporarily unavailable: no answer within 8.0 s; the rule decided
+s02 recurring bill due in 9 days, no early terms  [bill:contoso-search:2026-10]
+    wait/usual | wait/usual ok | wait/usual ok, wait/usual ok, wait/usual ok
+    why: Contoso Search API bill of 120 USDC matches the usual amount and 30 day cadence, but it is due in 9 days, so paying now gains nothing.
+s03 invoice four times the payee's usual  [invoice:fabrikam-data:INV-2291]
+    ask/amount_deviates | ask/amount_deviates ok | ask/amount_deviates ok, ask/amount_deviates ok, ask/amount_deviates ok
+    why: Fabrikam Data is a regular payee paid 7 times, but this 1000 USDC bill is 4 times the usual 250 USDC, so please review it.
+s04 first invoice from a payee approved an hour ago  [invoice:tailspin-labeling:TL-0001]
+    ask/new_payee | ask/new_payee ok | ask/new_payee ok, ask/new_payee ok, ask/new_payee ok
+    why: Asking the owner about Tailspin Labeling: approved 0 days ago, 0 payments before; it asks 300 USDC.
+    rep 1: claude-sonnet-5-5 failed [reasoner-transient]: reasoner temporarily unavailable: no answer within 8.0 s; the rule decided
+    rep 2: claude-sonnet-5-5 failed [reasoner-transient]: reasoner temporarily unavailable: no answer within 8.0 s; the rule decided
+    rep 3: claude-sonnet-5-5 failed [reasoner-transient]: reasoner temporarily unavailable: no answer within 8.0 s; the rule decided
+s05 address that looks like a known payee's  [invoice:0x1f9a-c3d7:2026-10]  (decided by code: one action allowed)
+    refuse/look_alike | refuse/look_alike ok | refuse/look_alike ok, refuse/look_alike ok, refuse/look_alike ok
+    why: Refused 0x1f9a…c3d7: it imitates Northwind Hosting.
+    rep 1: claude-sonnet-5-5 failed [reasoner-transient]: reasoner temporarily unavailable: no answer within 8.0 s; the rule decided
+s06 2% early-payment discount, last day to take it, long runway  [bill:wingtip-compute:2026-10]
+    pay_early/discount_worth_it | pay_early/discount_worth_it ok | pay_early/discount_worth_it ok, pay_early/discount_worth_it ok, pay_early/discount_worth_it ok
+    why: Paying 10 days early saves 40 USDC (2%) on 2000 USDC, and the 120-day runway still covers every bill ahead of this one.
+s07 the same discount, runway 5 days, a larger bill due first  [bill:wingtip-compute:2026-11]
+    wait/runway_short | wait/runway_short ok | wait/runway_short ok, wait/runway_short ok, wait/runway_short ok
+    why: Wingtip Compute's bill is not due for 10 days and the runway is only 5 days, so paying now could leave an earlier bill uncovered.
+s08 bill inferred with low confidence  [bill:adatum-monitoring:2026-10]
+    ask/low_confidence | ask/low_confidence ok | ask/low_confidence ok, ask/low_confidence ok, ask/low_confidence ok
+    why: The 30 USDC amount matches Adatum Monitoring's usual payment, but the schedule is only weakly evidenced at 0.55 confidence after 3 payments, so please review it first.
+s09 x402 call inside the cap, approved seller  [x402:pay_5be17c0d]
+    pay/usual | pay/usual ok | pay/usual ok, pay/usual ok, pay/usual ok
+    why: Litware Search has been paid 2226 times, this 0.01 USDC matches the usual amount, it is due now, and the 64 day runway covers it.
+s10 x402 call above the cap  [x402:pay_c09e44a1]
+    refuse/amount_deviates | ask/amount_deviates MISS | ask/amount_deviates MISS, ask/amount_deviates MISS, ask/amount_deviates MISS
+    why: Litware Search usually receives 0.01 USDC, but this payment is 25 USDC, far above the usual, so you should see it first.
+s11 one-off x402 buy from a seller approved a month ago (most common rhythm)  [x402:pay_7d2a90f3]
+    pay/usual | pay/usual ok | pay/usual ok, pay/usual ok, pay/usual ok
+    why: Proseware Datasets was approved 30 days ago, the 0.25 USDC is due now, and the runway of 64 days still covers every bill ahead.
+s12 busy x402 seller raises its price tenfold, still inside the cap  [x402:pay_e41b07c6]
+    ask/amount_deviates | ask/amount_deviates ok | ask/amount_deviates ok, ask/amount_deviates ok, ask/amount_deviates ok
+    why: Asking the owner about Woodgrove Geocode: it asks 0.02 USDC, 10× the usual 0.002 USDC.
+    rep 1: claude-sonnet-5-5 failed [reasoner-transient]: reasoner temporarily unavailable: no answer within 8.0 s; the rule decided
+s13 busy x402 seller halves its price  [x402:pay_19c3f5d8]
+    pay/usual | ask/amount_deviates MISS | pay/usual ok, pay/usual ok, pay/usual ok
+    why: Woodgrove Geocode has been paid 2226 times, was approved 55 days ago, and this 0.001 USDC is due now with 64 days of runway left.
+s14 x402 seller nobody approved, not a look-alike  [x402:pay_a3f0b2e9]
+    ask/new_payee | ask/new_payee ok | ask/new_payee ok, ask/new_payee ok, ask/new_payee ok
+    why: Lucerne Weather is not approved for the agent and has never been paid, so the owner should see this 0.05 USDC payment first.
+
+
+Note on re-run 2 (written 2026-10-17 13:16 +0800): 6 of 42 model calls ran past the 8 s budget (s01 rep 1, s04 reps 1-3, s05 rep 1, s12 rep 1) and
+the rule decided each — the kill switch, recorded as a fallback ("own answers 36/42"); the scores held because the rule's answers matched.
+The same request sent by curl right after took 30 s (cut by curl), 3.2 s and 2.0 s: the API was slow at this hour, not the code (re-run 1
+at 00:30: p90 2.6 s, 0 fallbacks).
