@@ -1,5 +1,8 @@
 // The page's only way to the service (DESIGN §Data): /api/* here is /api/* on TAMEION_URL, GET and POST, so the
-// browser never needs CORS. Forwards only Authorization, Idempotency-Key and Content-Type; never logs a body.
+// browser never needs CORS. Forwards only Authorization, Idempotency-Key and Content-Type; never logs a body. The owner's
+// device token travels only in the httpOnly cookie `tameion.home.device` (set by this app after the stepper opens an
+// account) and reaches the service here as X-Tameion-Device (the owner's names, docs/81; the prepare-* gate); a page
+// script can neither read it nor send its own (ruled 2026-10-18).
 // The page names accounts by NAME; a `policy` that is a name (query, `/level1/tenant/<x>`, or `"policy":"<name>"` in a
 // JSON body) becomes the address here, on the server, so the page never needs it (DESIGN §Page grammar, routes).
 import { isAddress, resolveAccount } from "../../../lib/api.ts";
@@ -7,6 +10,7 @@ import type { Refusal } from "../../../lib/types.ts";
 
 const SERVICE = (process.env.TAMEION_URL ?? "http://127.0.0.1:7890").replace(/\/+$/, "");
 const FORWARD = ["authorization", "idempotency-key", "content-type"] as const;
+const DEVICE_COOKIE = "tameion.home.device";
 // Node's fetch has already decoded and framed the body; these would describe the wrong bytes.
 const DROP = new Set(["content-encoding", "content-length", "transfer-encoding", "connection", "keep-alive"]);
 const BODY_POLICY = /("policy"\s*:\s*")([^"\\]+)(")/g;
@@ -48,6 +52,8 @@ async function proxy(req: Request, { params }: Ctx): Promise<Response> {
     const v = req.headers.get(h);
     if (v) headers.set(h, v);
   }
+  const device = deviceToken(req.headers.get("cookie"));
+  if (device) headers.set("x-tameion-device", device);
   let r: Response;
   try {
     r = await fetch(target, {
@@ -71,6 +77,21 @@ async function proxy(req: Request, { params }: Ctx): Promise<Response> {
   // A proxied event stream must not be compressed and held back (docs/60 P-152): no-transform keeps it frame by frame.
   if (out.get("content-type")?.startsWith("text/event-stream")) out.set("cache-control", "no-cache, no-transform");
   return new Response(r.body, { status: r.status, statusText: r.statusText, headers: out });
+}
+
+/** The owner's device token from the `tameion.home.device` cookie, or null. */
+function deviceToken(cookie: string | null): string | null {
+  for (const part of (cookie ?? "").split(";")) {
+    const at = part.indexOf("=");
+    if (at > 0 && part.slice(0, at).trim() === DEVICE_COOKIE) {
+      try {
+        return decodeURIComponent(part.slice(at + 1).trim()) || null;
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
 }
 
 function refusal(

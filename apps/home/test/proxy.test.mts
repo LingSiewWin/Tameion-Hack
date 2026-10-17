@@ -78,6 +78,14 @@ test("forwards the path, the query, the body and only Authorization, Idempotency
   for (const h of ["cookie", "x-tameion-device", "x-forwarded-for"]) assert.equal(seen.headers[h], undefined, `${h} is not forwarded`);
 });
 
+test("the owner's device token goes to the service only from its httpOnly cookie, never the raw cookie", async () => {
+  await call("GET", ["level1", "inbox"], `?policy=${ACME}`, { cookie: "a=1; tameion.home.device=tok%2Fen; b=2", "x-tameion-device": "from-a-script" });
+  assert.equal(seen.headers["x-tameion-device"], "tok/en");
+  assert.equal(seen.headers.cookie, undefined);
+  await call("GET", ["level1", "inbox"], `?policy=${ACME}`, { "x-tameion-device": "from-a-script" });
+  assert.equal(seen.headers["x-tameion-device"], undefined, "a header a page script sets is not the cookie");
+});
+
 test("passes the service's refusal through unchanged", async () => {
   const r = await call("GET", ["level1", "inbox"], `?policy=${ACME}`);
   assert.equal(r.status, 404);
