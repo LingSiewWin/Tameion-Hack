@@ -8,7 +8,14 @@ body {
   background: var(--paper);
   color: var(--ink);
   font: 400 16px/24px var(--font-sans);
+  font-variant-numeric: tabular-nums lining-nums;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Money and time are tabular wherever Plex Sans carries them. Each type role's `font` shorthand resets the figures,
+   so the roles set them again here (this file loads after tokens.css). */
+:is(.hero-statement, .authority, .sheet-title, .row-title, .row, .meta) {
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 :focus-visible {
@@ -86,6 +93,10 @@ button:active {
   background: var(--plate-2);
   color: var(--ink);
   font-weight: 600;
+}
+/* Plex Mono is loaded at 400 / 500 only (DESIGN): the Agent view marks the chosen side at 500, never a synthesised bold. */
+:root[data-view="agent"] .capsule > button[aria-pressed="true"] {
+  font-weight: 500;
 }
 
 /* The sheet: the only raised thing. Bottom sheet at content size on mobile, a 400 px right drawer from 1024 px;
