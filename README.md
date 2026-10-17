@@ -158,7 +158,7 @@ Each row ran against a real chain; the file in `proof/` holds the requests, answ
 No key, no service of ours, no trust. From a clone (Rust installed; the events behind the Arc roots are committed):
 
 ```bash
-git clone --recurse-submodules https://github.com/LingSiewWin/Tameion-Hack && cd Tameion-Hack
+git clone --recurse-submodules --branch submission-2026-10-18 https://github.com/LingSiewWin/Tameion-Hack && cd Tameion-Hack   # the submission tag; drop --branch for main
 R=0xb30efdbd0171ecbbd9daeac83d5ddd090a096440c2a6df47dadf402b0d986b70
 AUDIT_EVENTS=proof/arc-log-2026-10-13/$R.events.jsonl TAMEION_LOG_DIR=proof/arc-log-2026-10-13 \
 AGENT=0x80c195BE650FBfD55a9ffe059f397Db39f2fe881 RPC_URL=https://explorer.testnet.arc.io/api/eth-rpc \
@@ -169,13 +169,20 @@ AGENT=0x80c195BE650FBfD55a9ffe059f397Db39f2fe881 RPC_URL=https://explorer.testne
 The default public Arc node rate-limits and can answer "Max retries exceeded": set `RPC_URL` to the second node as above.
 Against a running service, `scripts/verify_tenant.sh <host> <policy>` downloads the events behind an account's latest anchored root,
 recomputes it, and compares it with two nodes. `POLICY=0x… scripts/max_loss.sh` (needs `cast`) reads an Arc testnet policy's caps, floor and payee list off the contract and prints what each key can lose (`proof/max-loss-2026-10-13.txt`).
-`scripts/test_all.sh` runs every offline suite (forge, Rust with clippy and fmt, Python, Node, ERC-7730, the console);
-`scripts/acceptance.sh` runs 94 end-to-end checks against a local chain. Last full run: forge 187, Rust 420, acceptance 94 of 94
-(gate 2026-10-16 20:23, acceptance 20:21); the fixes made since then have their own tests, and a full re-run is on the board.
+`scripts/test_all.sh` runs every offline suite (forge, Rust with clippy and fmt, Python, Node, ERC-7730, the console, the SDK, the audit pack);
+`scripts/acceptance.sh` runs 117 end-to-end checks against a local chain. Last full run on the submission tag: gate 18 of 18 (forge 228,
+Rust 591, console 64, SDK 24; 2026-10-18 06:12), acceptance 117 of 117 (06:14). A seat that wrote none of it cloned the tag fresh and ran the
+same commands: red once without `npm ci` (the line above), then 18 of 18 and the three tests 3 of 3 (`proof/clean-clone-submission-2026-10-18.txt`).
 
 ## Run it
 
+Needs: Rust (stable, with clippy and rustfmt), Foundry (`forge`, `anvil`), Node 20+ with npm, Python 3 with `jsonschema` (for the ERC-7730 check),
+`bean-check` (Beancount 3; `uv tool install beancount`; without it the audit-pack step prints "skipped" and the gate still passes).
+
 ```bash
+(cd apps/console && npm ci) && (cd apps/sdk && npm ci)        # once; the gate stops with "run: npm ci" without them
+PATH=/opt/homebrew/bin:$PATH scripts/test_all.sh                 # the gate: forge, Rust, Python, Node, ERC-7730, console, SDK — 18 steps
+cargo test --locked -p operator --test organiser -- --nocapture --test-threads=1   # the three named tests, on anvil (skipped without it)
 scripts/dev.sh            # builds and starts the service (:7880, the account page and API) and the console
 scripts/dev.sh status     # what is up;  scripts/dev.sh stop
 ```
