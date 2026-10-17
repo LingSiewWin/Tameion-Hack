@@ -353,13 +353,28 @@ impl App {
         m.retain(|_, v| now.saturating_sub(v.0) < 86_400);
         let slot = format!("{path}\n{key}");
         match m.get(&slot) {
+            // docs/115 §2: this request did nothing either way (`executed: no`).
             Some((_, h, _)) if *h != hash => Some(json_reply(
                 "422 Unprocessable Entity",
-                json!({ "error": "this Idempotency-Key was used with a different body" }),
+                operator::refusal::refuse(
+                    "idempotency_conflict",
+                    operator::refusal::Executed::No,
+                    "",
+                    "",
+                    "this Idempotency-Key was used with a different body",
+                    None,
+                ),
             )),
             Some((_, _, r)) if r.is_empty() => Some(json_reply(
                 "409 Conflict",
-                json!({ "error": "a request with this Idempotency-Key is still running" }),
+                operator::refusal::refuse(
+                    "idempotency_pending",
+                    operator::refusal::Executed::No,
+                    "",
+                    "",
+                    "a request with this Idempotency-Key is still running",
+                    Some(2),
+                ),
             )),
             Some((_, _, r)) => {
                 // The first reply, marked as a replay after its status line.
@@ -1308,6 +1323,98 @@ async fn serve_events(app: Arc<App>, sock: &mut tokio::net::TcpStream, query: &s
 
 fn json_reply(status: &str, v: Value) -> Vec<u8> {
     respond(status, "application/json", v.to_string().as_bytes())
+}
+
+/// A refusal before anything was done (`executed: no`), with the catalogue's
+/// meaning and next step (docs/115 §2).
+fn refused(code: &str, words: impl Into<String>) -> Value {
+    operator::refusal::refuse(code, operator::refusal::Executed::No, "", "", words, None)
+}
+
+/// docs/115 §2: an agent route's reply in the agent envelope
+/// (`operator::refusal::envelope`: `ok`, `contractVersion`, a refusal as one
+/// object with its code), headers and status kept. A page — a browser says
+/// `Sec-Fetch-Mode` on every request — keeps `error` as the sentence it shows,
+/// so the console and the classic pages read what they always read.
+/// ponytail: Safari before 16.4 sends no `Sec-Fetch-Mode` and gets the agent's
+/// shape; a header from the console if those browsers matter.
+fn shaped(reply: Vec<u8>, method: &str, path: &str, raw: &str) -> Vec<u8> {
+    if !operator::refusal::agent_route(method, path) {
+        return reply;
+    }
+    let Some(i) = reply.windows(4).position(|w| w == b"\r\n\r\n") else {
+        return reply;
+    };
+    let head = String::from_utf8_lossy(&reply[..i]).to_string();
+    if !head
+        .to_ascii_lowercase()
+        .contains("content-type: application/json")
+    {
+        return reply;
+    }
+    let Ok(v) = serde_json::from_slice::<Value>(&reply[i + 4..]) else {
+        return reply;
+    };
+    let status = head
+        .split_whitespace()
+        .nth(1)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    let out = if header(raw, "sec-fetch-mode").is_some() {
+        operator::refusal::for_page(&v)
+    } else {
+        operator::refusal::envelope(status, &v, operator::refusal::moves_money(path))
+    };
+    let Some(v) = out else {
+        return reply;
+    };
+    let body = v.to_string();
+    let mut out = String::with_capacity(head.len() + 2);
+    for line in head.split("\r\n") {
+        if line.to_ascii_lowercase().starts_with("content-length:") {
+            out.push_str(&format!("Content-Length: {}", body.len()));
+        } else {
+            out.push_str(line);
+        }
+        out.push_str("\r\n");
+    }
+    out.push_str("\r\n");
+    out.push_str(&body);
+    out.into_bytes()
+}
+
+/// `GET /api/level1/status[?policy=0x…]` (docs/115 §2): the contract's date,
+/// what changed, and with a policy the kill switches as they stand — `paused`
+/// (the contract on Watch, read from the chain; null when that read fails)
+/// and `halt` (a read-back mismatch only a human clears). Open: the mode is
+/// on chain and the HALT file says nothing about money.
+async fn agent_status(dir: &std::path::Path, query: &str) -> Vec<u8> {
+    let mut v = json!({ "recentUpdates": operator::refusal::recent_updates(), "codes": "/api/level1/codes" });
+    if let Some(p) = query.split('&').find_map(|kv| kv.strip_prefix("policy=")) {
+        let Some((a, t)) = Address::from_str(p.trim())
+            .ok()
+            .and_then(|a| level1::load(dir, &format!("{a:#x}")).map(|t| (a, t)))
+        else {
+            return json_reply(
+                "404 Not Found",
+                json!({ "error": "no such account on this service" }),
+            );
+        };
+        let mode = level1::mode_action(&t, "status")
+            .await
+            .ok()
+            .map(|s| s["mode"].clone());
+        let halt = dir
+            .join("tenants")
+            .join(format!("{a:#x}"))
+            .join("log")
+            .join("HALT");
+        v["policy"] = json!(t.policy);
+        v["paused"] = mode.as_ref().map_or(Value::Null, |m| json!(m == "Watch"));
+        v["mode"] = mode.unwrap_or(Value::Null);
+        v["halt"] = json!(halt.exists());
+    }
+    json_reply("200 OK", operator::refusal::ok(v))
 }
 
 /// The agent tells the treasurer what it did (docs/53 5.3): one JSON POST per
@@ -2292,7 +2399,10 @@ impl App {
             if !frozen.is_empty() {
                 return json_reply(
                     "422 Unprocessable Entity",
-                    json!({ "error": level1::frozen_words(&frozen), "frozen": frozen }),
+                    operator::refusal::with(
+                        refused("payee_frozen", level1::frozen_words(&frozen)),
+                        &[("frozen", json!(frozen))],
+                    ),
                 );
             }
         }
@@ -2746,7 +2856,10 @@ impl App {
         let Some(key) = level1::agent_key(&self.dir, owner).filter(|_| !t.keyless) else {
             return json_reply(
                 "409 Conflict",
-                json!({ "error": "this account has no agent key: nothing to register" }),
+                refused(
+                    "account_keyless",
+                    "this account has no agent key: nothing to register",
+                ),
             );
         };
         let public = std::env::var("TAMEION_PUBLIC_URL").ok();
@@ -4333,6 +4446,11 @@ impl App {
         tm("agent view and names");
         reply["parties"] =
             operator::parties::parties(&tenant, &reply, &invoices, &proved, private_ok, now_secs());
+        // docs/115 §2: the agent's status read — the kill switches as they stand
+        // (Watch is the contract's pause; HALT a human clears) and what changed.
+        reply["paused"] = json!(reply["mode"] == "Watch");
+        reply["halt"] = json!(!reply["halted"].is_null());
+        reply["recentUpdates"] = operator::refusal::recent_updates();
         json_reply("200 OK", reply)
     }
 
@@ -6077,7 +6195,10 @@ impl App {
             if level1::tenant_file_exists(&self.dir, &format!("{policy:#x}")) {
                 return Some(json_reply(
                     "503 Service Unavailable",
-                    json!({ "error": "this account could not be read just now; nothing was done, try again" }),
+                    refused(
+                        "service_unavailable",
+                        "this account could not be read just now; nothing was done, try again",
+                    ),
                 ));
             }
             return None;
@@ -6113,7 +6234,17 @@ impl App {
                 } else {
                     "403 Forbidden"
                 },
-                json!({ "error": e, "scope": scope }),
+                operator::refusal::with(
+                    operator::refusal::refuse(
+                        operator::refusal::token_code(e),
+                        operator::refusal::Executed::No,
+                        "",
+                        "",
+                        e,
+                        None,
+                    ),
+                    &[("scope", json!(scope))],
+                ),
             )),
         }
     }
@@ -6324,7 +6455,14 @@ impl App {
         {
             return json_reply(
                 "429 Too Many Requests",
-                json!({ "error": "five invoices from this payee are already waiting for the owner" }),
+                operator::refusal::refuse(
+                    "rate_limited",
+                    operator::refusal::Executed::No,
+                    "",
+                    "Send it after the owner answers the invoices that wait.",
+                    "five invoices from this payee are already waiting for the owner",
+                    None,
+                ),
             );
         }
         // What history says this payee usually costs: the last pass's bills.
@@ -6365,7 +6503,14 @@ impl App {
             if recent >= 20 {
                 return json_reply(
                     "429 Too Many Requests",
-                    json!({ "error": "twenty invoices an hour from new payees per account; try later" }),
+                    operator::refusal::refuse(
+                        "rate_limited",
+                        operator::refusal::Executed::No,
+                        "",
+                        "Send it again in an hour.",
+                        "twenty invoices an hour from new payees per account; try later",
+                        None,
+                    ),
                 );
             }
         }
@@ -6441,7 +6586,10 @@ impl App {
         if accept && line["frozen"] == true {
             return json_reply(
                 "422 Unprocessable Entity",
-                json!({ "error": "the stablecoin issuer has frozen this payee; it cannot be paid" }),
+                refused(
+                    "payee_frozen",
+                    "the stablecoin issuer has frozen this payee; it cannot be paid",
+                ),
             );
         }
         // A one-off invoice is "accepted" only once the chain shows the owner
@@ -6649,7 +6797,10 @@ impl App {
         if !frozen.is_empty() {
             return json_reply(
                 "422 Unprocessable Entity",
-                json!({ "error": level1::frozen_words(&frozen), "frozen": frozen }),
+                operator::refusal::with(
+                    refused("payee_frozen", level1::frozen_words(&frozen)),
+                    &[("frozen", json!(frozen))],
+                ),
             );
         }
         // docs/60 P-77: a reserved account has no contract to attest against
@@ -7236,7 +7387,10 @@ impl App {
         {
             return json_reply(
                 "409 Conflict",
-                json!({ "error": "this account has no agent key, so there is nothing to put on autopilot: you approve every payment (one tap pays all that wait), and standing orders pay themselves" }),
+                refused(
+                    "account_keyless",
+                    "this account has no agent key, so there is nothing to put on autopilot: you approve every payment (one tap pays all that wait), and standing orders pay themselves",
+                ),
             );
         }
         match level1::prepare_mode(policy, mode) {
@@ -8024,7 +8178,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if method == "GET" && path == "/api/level1/events" {
                 match app.token_gate(method, path, query, &req, &body).await {
                     Some(denied) => {
-                        let _ = sock.write_all(&denied).await;
+                        let _ = sock.write_all(&shaped(denied, method, path, &req)).await;
                     }
                     // HEAD: the stream's headers, never the stream (review 2026-10-15).
                     None if head_only => {
@@ -8147,6 +8301,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         "text/plain; charset=utf-8",
                         include_str!("../../../../apps/classic/llms.txt").as_bytes(),
                     ),
+                    // docs/115 §2: the refusal codes, the retry rules and what changed.
+                    ("GET", "/api/level1/codes") => {
+                        json_reply("200 OK", operator::refusal::catalogue())
+                    }
+                    ("GET", "/api/level1/status") => agent_status(&app.dir, query).await,
                     ("GET", "/api/openapi.json") => respond(
                         "200 OK",
                         "application/json",
@@ -8554,6 +8713,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     _ => respond("404 Not Found", "text/plain", b"not found"),
                 }
             };
+            let reply = shaped(reply, method, path, &req);
             if let (Some(k), true) = (&idem_key, first) {
                 app.idem_finish(path, k, &reply).await;
             }

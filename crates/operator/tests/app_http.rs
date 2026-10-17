@@ -1724,3 +1724,296 @@ fn a_device_bill_import_needs_the_owners_passkey_over_the_bills() {
     let (st, _, b) = http_with(p, "POST", "/api/level1/bills", &body(Some(&sk)), dev_a);
     assert_eq!(st, 400, "{b}");
 }
+
+/// One HTTP request's body from a socket (headers, then `Content-Length` bytes).
+fn request_body(s: &mut TcpStream) -> String {
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 4096];
+    loop {
+        let n = s.read(&mut chunk).unwrap_or(0);
+        if n == 0 {
+            break;
+        }
+        buf.extend_from_slice(&chunk[..n]);
+        let text = String::from_utf8_lossy(&buf).to_string();
+        if let Some((head, body)) = text.split_once("\r\n\r\n") {
+            let len = head
+                .lines()
+                .find_map(|l| {
+                    let (k, v) = l.split_once(':')?;
+                    k.eq_ignore_ascii_case("content-length")
+                        .then(|| v.trim().parse::<usize>().ok())?
+                })
+                .unwrap_or(0);
+            if body.len() >= len {
+                return body.to_string();
+            }
+        }
+    }
+    String::new()
+}
+
+/// A node for the buy path: `attestedPayee` true, `isBlacklisted` false, the
+/// purchase's simulation reverts `NotAutopilot(1)` (the account is on
+/// Propose), every other read zero. Returns its port.
+fn propose_node() -> u16 {
+    use std::io::Write;
+    let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = l.local_addr().unwrap().port();
+    let sel = |sig: &str| alloy::hex::encode(&alloy::primitives::keccak256(sig.as_bytes())[..4]);
+    let (attested, blacklisted) = (sel("attestedPayee(address)"), sel("isBlacklisted(address)"));
+    let not_autopilot = format!("0x{}{:064x}", sel("NotAutopilot(uint8)"), 1);
+    std::thread::spawn(move || {
+        for mut s in l.incoming().flatten() {
+            let body = request_body(&mut s);
+            let req: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();
+            let answer = |r: &serde_json::Value| {
+                let id = r["id"].clone();
+                let input = r["params"][0]["input"]
+                    .as_str()
+                    .or(r["params"][0]["data"].as_str())
+                    .unwrap_or("")
+                    .trim_start_matches("0x")
+                    .to_string();
+                let word = |v: u8| format!("0x{v:064x}");
+                match r["method"].as_str().unwrap_or("") {
+                    "eth_chainId" => {
+                        serde_json::json!({ "jsonrpc": "2.0", "id": id, "result": "0x66eee" })
+                    }
+                    "eth_blockNumber" => {
+                        serde_json::json!({ "jsonrpc": "2.0", "id": id, "result": "0x10" })
+                    }
+                    "eth_getLogs" => {
+                        serde_json::json!({ "jsonrpc": "2.0", "id": id, "result": [] })
+                    }
+                    "eth_call" if input.starts_with(&attested) => {
+                        serde_json::json!({ "jsonrpc": "2.0", "id": id, "result": word(1) })
+                    }
+                    "eth_call" if input.starts_with(&blacklisted) || input.len() < 300 => {
+                        serde_json::json!({ "jsonrpc": "2.0", "id": id, "result": word(0) })
+                    }
+                    "eth_call" => serde_json::json!({ "jsonrpc": "2.0", "id": id,
+                        "error": { "code": 3, "message": "execution reverted", "data": not_autopilot } }),
+                    _ => serde_json::json!({ "jsonrpc": "2.0", "id": id, "result": "0x0" }),
+                }
+            };
+            let out = match req.as_array() {
+                Some(batch) => serde_json::Value::Array(batch.iter().map(answer).collect()),
+                None => answer(&req),
+            }
+            .to_string();
+            let _ = write!(
+                s,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{out}",
+                out.len()
+            );
+        }
+    });
+    port
+}
+
+/// A paid API that asks 0.001 USDC on Arbitrum Sepolia from `pay_to`. Returns its port.
+fn paid_api(pay_to: &'static str) -> u16 {
+    use std::io::Write;
+    let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = l.local_addr().unwrap().port();
+    let c = operator::watch::chain("arbitrum-sepolia").unwrap();
+    let required = operator::x402::encode_header(&serde_json::json!({
+        "x402Version": 2,
+        "accepts": [{ "scheme": "exact", "network": format!("eip155:{}", c.chain_id), "amount": "1000",
+            "asset": c.usdc.unwrap(), "payTo": pay_to, "maxTimeoutSeconds": 60, "extra": {} }],
+    }));
+    std::thread::spawn(move || {
+        for mut s in l.incoming().flatten() {
+            let _ = request_body(&mut s);
+            let _ = write!(
+                s,
+                "HTTP/1.1 402 Payment Required\r\nPAYMENT-REQUIRED: {required}\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}"
+            );
+        }
+    });
+    port
+}
+
+/// docs/115 §2: every refusal an agent gets is one object with its code, who
+/// refused, whether anything was done and who must act; every answer carries
+/// `ok` and the contract's date. A page keeps the sentence it shows. The
+/// Propose refusal comes from the purchase's own simulation on a local node.
+#[test]
+fn the_agent_envelope_names_every_refusal() {
+    let node = propose_node();
+    let seller = "0x00000000000000000000000000000000005e11e2";
+    let api = paid_api(seller);
+    let srv = start_with(
+        41,
+        &[
+            (
+                "TAMEION_RPC_ARBITRUM_SEPOLIA",
+                &format!("http://127.0.0.1:{node}"),
+            ),
+            ("TAMEION_X402_ALLOW_LOCAL", "1"),
+        ],
+    );
+    let p = srv.port;
+    let dir = std::env::temp_dir().join(format!("tameion-app-test-{}-41", std::process::id()));
+    let (policy, owner) = (
+        "0x00000000000000000000000000000000000000f1",
+        "0x00000000000000000000000000000000000000a1",
+    );
+    std::fs::create_dir_all(dir.join("tenants").join(owner)).unwrap();
+    // A throwaway agent key for the simulation; it signs nothing that is sent.
+    std::fs::write(
+        dir.join("tenants").join(owner).join("agent.key"),
+        format!("0x{}", "11".repeat(32)),
+    )
+    .unwrap();
+    let (buy, read) = (
+        operator::level1::token_hash("k-buy"),
+        operator::level1::token_hash("k-read"),
+    );
+    let tenant = |deployed: bool| {
+        std::fs::write(
+            dir.join("tenants").join(format!("{policy}.json")),
+            format!(
+                r#"{{"chain":"arbitrum-sepolia","owner":"{owner}","policy":"{policy}","agent":"0x0000000000000000000000000000000000000003","operator":"0x0000000000000000000000000000000000000004","watched":"0x0000000000000000000000000000000000000005","recovery":"0x0000000000000000000000000000000000000000","per_action":"1","daily":"1","floor":"0","delay_secs":60,"mode":1,"created_block":0,"history_from_block":0,"created":0,"deployed":{deployed},"agent_tokens":[{{"id":"b1","label":"buyer","scopes":["buy"],"expires":4102444800,"issued":0,"hash":"{buy}"}},{{"id":"r1","label":"reader","scopes":["read"],"expires":4102444800,"issued":0,"hash":"{read}"}}]}}"#
+            ),
+        )
+        .unwrap();
+    };
+    tenant(true);
+    let json = |b: &str| serde_json::from_str::<serde_json::Value>(b).unwrap_or_default();
+    let inbox = format!("/api/level1/inbox?policy={policy}");
+
+    // A wrong agent key: the agent fixes it.
+    let (st, _, b) = http_with(p, "GET", &inbox, "", "Authorization: Bearer not-a-key\r\n");
+    assert_eq!(st, 403, "{b}");
+    let v = json(&b);
+    assert_eq!(v["ok"], false, "{b}");
+    assert_eq!(v["contractVersion"], operator::refusal::CONTRACT_VERSION);
+    assert_eq!(v["error"]["code"], "token_invalid", "{b}");
+    assert_eq!(v["error"]["audience"], "agent");
+    assert_eq!(v["error"]["by"], "auth");
+    assert_eq!(v["error"]["executed"], "no");
+    assert_eq!(v["error"]["words"], "unknown agent key");
+    assert_eq!(v["scope"], "read", "the fields beside the refusal stay");
+    // The same refusal to a page keeps the sentence the page shows.
+    let (st, _, b) = http_with(
+        p,
+        "GET",
+        &inbox,
+        "",
+        "Authorization: Bearer not-a-key\r\nSec-Fetch-Mode: cors\r\n",
+    );
+    assert_eq!(st, 403);
+    assert_eq!(json(&b)["error"], "unknown agent key", "{b}");
+    let (st, _, b) = http_with(p, "GET", &inbox, "", "");
+    assert_eq!(
+        (st, json(&b)["error"]["code"].clone()),
+        (401, "token_missing".into()),
+        "{b}"
+    );
+
+    // On Propose the agent buys nothing: the owner must turn Autopilot on.
+    let order = format!(
+        r#"{{"policy":"{policy}","url":"http://127.0.0.1:{api}/v1/mid","maxUsdc":"0.01","reason":"envelope test"}}"#
+    );
+    let (st, _, b) = http_with(
+        p,
+        "POST",
+        "/api/level1/buy",
+        &order,
+        "Authorization: Bearer k-buy\r\n",
+    );
+    assert_eq!(st, 409, "{b}");
+    let v = json(&b);
+    assert_eq!(v["error"]["code"], "mode_propose", "{b}");
+    assert_eq!(v["error"]["audience"], "user");
+    assert_eq!(v["error"]["by"], "mandate");
+    assert_eq!(
+        v["error"]["executed"], "no",
+        "refused before the seller saw a signature"
+    );
+    assert!(
+        v["error"]["words"]
+            .as_str()
+            .unwrap()
+            .contains("only on Autopilot"),
+        "{b}"
+    );
+    assert_eq!(
+        v["purchase"]["status"], "refused",
+        "the purchase line is kept beside it"
+    );
+
+    // The same Idempotency-Key with another body: this request did nothing.
+    let key = "Idempotency-Key: env-1\r\n";
+    let first = r#"{"policy":"0x1111111111111111111111111111111111111111","to":"0x2222222222222222222222222222222222222222","amount":"1"}"#;
+    let (st, _, b) = http_with(p, "POST", "/api/level1/prepare-withdraw", first, key);
+    assert_eq!(st, 200, "{b}");
+    assert_eq!(json(&b)["ok"], true, "{b}");
+    let other = first.replace("\"1\"", "\"2\"");
+    let (st, _, b) = http_with(p, "POST", "/api/level1/prepare-withdraw", &other, key);
+    assert_eq!(st, 422, "{b}");
+    let v = json(&b);
+    assert_eq!(v["error"]["code"], "idempotency_conflict", "{b}");
+    assert_eq!(v["error"]["executed"], "no");
+    assert_eq!(v["error"]["audience"], "agent");
+
+    // An answer: ok, the contract's date, and the account's switches.
+    tenant(false);
+    let (st, _, b) = http_with(p, "GET", &inbox, "", "Authorization: Bearer k-read\r\n");
+    assert_eq!(st, 200, "{b}");
+    let v = json(&b);
+    assert_eq!(v["ok"], true, "{b}");
+    assert_eq!(v["contractVersion"], operator::refusal::CONTRACT_VERSION);
+    assert_eq!(v["paused"], false, "Propose is not paused");
+    assert_eq!(v["halt"], false);
+    assert!(v["recentUpdates"].as_array().is_some_and(|u| !u.is_empty()));
+    assert!(v["policy"].is_string(), "the route's fields, unchanged");
+
+    // The catalogue, open to anyone.
+    let (st, _, b) = http_with(p, "GET", "/api/level1/codes", "", "");
+    assert_eq!(st, 200, "{b}");
+    let v = json(&b);
+    assert_eq!(v["ok"], true);
+    let codes = v["codes"].as_array().unwrap();
+    assert_eq!(codes.len(), operator::refusal::CODES.len());
+    assert!(
+        codes
+            .iter()
+            .any(|c| c["code"] == "mode_propose" && c["audience"] == "user")
+    );
+
+    // The status an SDK reads first: the date, what changed, the switches.
+    let (st, _, b) = http_with(p, "GET", "/api/level1/status", "", "");
+    assert_eq!(st, 200, "{b}");
+    let v = json(&b);
+    assert_eq!(v["contractVersion"], operator::refusal::CONTRACT_VERSION);
+    assert!(v["recentUpdates"][0]["note"].is_string(), "{b}");
+    let (st, _, b) = http_with(
+        p,
+        "GET",
+        &format!("/api/level1/status?policy={policy}"),
+        "",
+        "",
+    );
+    assert_eq!(st, 200, "{b}");
+    let v = json(&b);
+    assert_eq!(
+        (v["mode"].clone(), v["paused"].clone(), v["halt"].clone()),
+        ("Propose".into(), false.into(), false.into()),
+        "{b}"
+    );
+    let (st, _, b) = http_with(
+        p,
+        "GET",
+        "/api/level1/status?policy=0x00000000000000000000000000000000000000f2",
+        "",
+        "",
+    );
+    assert_eq!(
+        (st, json(&b)["error"]["code"].clone()),
+        (404, "not_found".into()),
+        "{b}"
+    );
+}
