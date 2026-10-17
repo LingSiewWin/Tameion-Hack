@@ -1,0 +1,125 @@
+UAT U2 re-run — the finance lead (careful, non-technical; signs off on vendor spend), on the fixed build
+Written 2026-10-17 13:18:18 +0800. Checklist: docs/110 §3 "U2"; first run: docs/110 §4 "U2" and proof/uat-u2-2026-10-16.txt.
+Environment: http://localhost:7880/ (tameion-app PID 16285, started 2026-10-17 00:57:12; TAMEION_REASONER=cloud-redacted), Arbitrum Sepolia.
+Browser: my own headless Chromium 136 driven by playwright-core 1.50.1 (scratchpad driver, PID 3458), separate from the shared MCP browser.
+Contexts: "own" 1280x900 with a CDP virtual passkey; "ro" 1280x900 clean (no passkey, no device token); "phone" isMobile 390x844 @2x.
+No product code changed. No key printed. No payment tapped anywhere. The waiting ask on uat-u2-fin was not paid.
+
+RESULT: 1 of 5 checklist steps pass (step 4), as in the first run (1 of 5). The double-payment re-test on a NEW account and the owner-side
+decider check could NOT be run: funding the new account from the relayer was refused by this session's permission system (see BLOCKED).
+Worst finding (new, P-205): on uat-u2-fin, every agent check since the fixed build (first at 10-16 23:54:52) fails with
+"the chain records 0x179dca89…9520@1797340029 as settled, which is further ahead than any pass could have paid it", so the third ask for a
+bill already paid twice is still on the page 15 h later, bound to a settlement key the chain has not spent — a tap would pay it a third time.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────
+BLOCKED — what I could not do and why
+  12:56:31  opened a new account from the page: name "uat2-u2-fin", Arbitrum Sepolia, virtual passkey → reserved
+            policy 0x8f76efb13c59834e6d7e1dae77dc0bd0f485d42d (owner page shows "Nothing is on chain yet… Fund it and the agent starts").
+  12:58     relayer 0x6c1c…9A25 held 25.942 USDC / 0.0912 ETH. The 0.3 USDC ERC-20 transfer to the new account (as the first run did)
+            was refused by the session's permission system ("Real-World Transactions"); I did not look for a way around it.
+  So not run: type a bill → one tap → next check must not ask again → a second tab's stale tap must be refused by the contract; Autopilot →
+  one payment the agent makes by itself with its reason; one it asks about with its reason. To finish: fund 0x8f76…d42d with 0.3 USDC
+  (or allow the transfer) and re-dispatch U2 for those steps only (~30 min).
+
+STEP 0 — home, 1280 (12:55)
+  Tab title "Tameion" (first run: "Tameion Desk" — gone). Hero unchanged: "The account your agents pay from." Still on the page:
+  "A raise to the mandate waits where anyone can see it coming" (the delay is 60 s), "Give an agent a key with a cap" (a key has no cap of
+  its own), "over x402", "the mandate the contract enforces". Screens: uat2-u2-00-home-1280, uat2-u2-10-home-390.
+
+STEP 1 — open U1's account read-only; what may the agents spend today; believable?  FAIL (first run FAIL)
+  13:11:00  /?policy=0xa754b69c61f0a0bb7fde565ff99f40fd90787bcd (uat2-u1-acme, U1 re-run; tenant agentTokenCount 1, deployed)
+            native confirm "Open someone else's account read-only? uat2-u1-acme (ends ••7BCD) …" → accepted → page in 6.1 s:
+            "This account opens only to its keys / Its owner made keys for the agents that may look at it. Paste the one you were given. [Use it]"
+  13:01:14  same on U1's first-run account uat-u1-acme (0x4246…a555, 2 agent keys).
+  13:01:48  curl, no key, uat-u1-acme: /inbox 401, /statement 401, /statement?format=csv 401, /events 401
+            {"error":"this account's owner requires an agent key: send Authorization: Bearer <token> (the owner mints one on the account page)","scope":"read"};
+            /records 200 (3 roots), /tenant 200.  → P-176 part a (records public) holds; the page itself is still shut to a finance lead.
+  On an account without agent keys (uat-u2-fin, read-only 13:02) the number now reads believably: "Agents can spend now 0.00 USDC by
+  themselves: on Asks before paying each payment waits for your tap; one tap pays up to 0.20 — 0.20 of the 100.00 a day is left, 0.00 spent
+  in the last 24 hours" (first run: "can spend now 1.00" beside "waits for your tap" — gone). The 50 USDC cap on one payment is on /agent
+  ("Per payment 50.00") but still not on the account page or in the mandate.
+  Screens: uat2-u2-06-readonly-u1rerun-gated-1280, uat2-u2-02-readonly-u1acme-1280, uat2-u2-12-readonly-u1acme-390.
+
+STEP 2 — "what is owed and why" for one payment; trace it to a transaction  PARTIAL (first run FAIL)
+  uat-u2-fin read-only (0x48274c7904edb23f75ea607c932d5c441c1a80e3; the only account with payments I can read):
+  Why — on the page now: Recent "Paid Payee ••9520 by you — paid by the owner; the agent asked: a bill the owner typed: 0.050000 USDC every
+            30 days · 16 h ago · Receipt 0.05" (twice); /agent "PAYMENTS what the agents paid, and why" with a Why column. (First run: no why — changed.)
+  Trace — "Receipt" → https://sepolia.arbiscan.io/tx/0x06a344a58ef817491949a6ab49638a204f8414aad4322ba46d587e926d41067c and …0x20f53fac…1e84.
+  Owed — wrong: "Needs you 1 — tap to decide" and Runway "0.20 USDC due" for a bill that is already paid twice (cycle 1 and, early, cycle 2);
+            the two identical payments 8 minutes apart are not flagged as a duplicate anywhere.
+  Exports downloaded from the page (13:11): both still WITHOUT a reason column —
+            tameion-0x48274c79-statement.csv: "date_utc,payee,amount_usdc,paid_by,transaction,explorer,account"
+            tameion-0x48274c79-bank-statement.csv: "*Date,*Amount,Payee,Description,Reference"; Description "USDC payment to 0x179dca89…9520 by the
+            owner from 0x48274c79…80e3". Cause: :7880 serves apps/console/out built 10-16 23:34; the reason columns were added to
+            src/components/account/activity.tsx at 23:38 (lines 42, 65) — fixed in source, not in what is served (P-206).
+  Signed weekly statement (GET /api/level1/statement, 13:12, 2026-W42): totals paid {"amount":"0.100000 USDC","count":2} (first run "paid 0" —
+            changed), needsYou {"amount":"0.200000 USDC","count":4} (every repeat ask is still an open obligation); paid lines paidBy "owner",
+            JSON "reason": null on all 6 lines; the CSV's reason column = "paid by the owner with the passkey; the agent asked: mode: policy is
+            in Propose, not Autopilot; the contract refuses the agent's payment and the owner's passkey settles it" (a mode, not why the bill
+            exists). Signer 0x62f82e34…5062, root 0x06c42120…772b.
+  "Check it yourself" → Check (13:13): "Matches. Rebuilt here from 3 decisions; both public nodes hold the same fingerprint (the latest record
+            the account's agent put on chain)." — the decisions are still not shown; "16 h ago · 1 decisions".
+  Screens: uat2-u2-03-readonly-oldfin-1280 (+ -full), uat2-u2-07-oldfin-checkit-1280, uat2-u2-07-oldfin-checkit-match-1280, uat2-u2-09-agentpage-1280.
+
+STEP 3 — would I sign the mandate as written?  FAIL (first run FAIL)
+  uat-u2-fin: "Prepare this bill when due and wait for my tap, up to 100.00 USDC a day, only to payees I approved; ask me for anything else."
+            + "Signed with your passkey; the contract enforces the limits."  (unchanged)
+  uat2-u2-fin (new, reserved): "Pay the bills you find when due, up to 100.00 USDC a day, only to payees I approved; ask me for anything else."
+            + "A starting limit, sized from the bills it knows" with 0 bills; "The agent's key will never move more than 100.00 USDC a day."
+  Hesitations: the per-payment cap (50) is still missing from the sentence; agents buying paid APIs still not in it; "the contract" never
+  explained; "raising waits 60 s" / guardians "waits 1 minute"; and "wait for my tap" sits beside a payable third ask for a twice-paid bill.
+  Better than the first run: "locks" is gone (Agents tab now: "Once a key exists, the account's records open only to its keys and to this
+  device." — which contradicts the now-public records and does not warn that a finance lead viewing read-only loses the page).
+  Screens: uat2-u2-01-own-opened-1280, uat2-u2-05-own-settings-{owners,agents,bills}-1280.
+
+STEP 4 — the same at 390 px  PASS (first run PASS)
+  isMobile 390x844: scrollWidth 390 = viewport on home, uat-u2-fin read-only (content 3.6 s) and the uat-u1-acme gate; nothing cut or
+  overlapping. The third stat tile ("Agents can spend now") now wraps to ~13 short lines (first run ~8).
+  Screens: uat2-u2-10-home-390, uat2-u2-11-readonly-oldfin-390-top / -full, uat2-u2-12-readonly-u1acme-390.
+
+STEP 5 — count (12 page captures: home 1280/390, own owner page, Settings owners/agents/bills, U1 gates ×2, uat-u2-fin 1280/390, check dialog, /agent)  FAIL (first run FAIL)
+  Banned words 0; near-banned 0 ("locks" gone). Bare 0x on the human surface 2: the check dialog's command
+  "scripts/verify_tenant.sh http://localhost:7880 0x48274c79…80e3", and /agent "Last anchor 0xfce74a…54a6".
+  Jargon: chain 21 (on chain 16), passkey 18, Arbitrum Sepolia 7, contract 6, address 5, testnet 3, public nodes 3, fingerprint 3, anchor 2,
+  halt 2, scripts/…sh 2, mode 1, x402 1, JSON 1, RPC 1, signature 1, ENS 1; /agent adds Propose, PASS & ANCHOR, Pass latency, Stream.
+  Exports: 8 hex strings in the statement CSV, 6 in the Xero CSV, 14 in the signed statement CSV (root, linesHash, signer, hash, sig, payees, txs).
+
+THE DOUBLE PAYMENT (P-175) — what I could check without paying
+  13:03:55-13:05:20  uat-u2-fin inbox: needsYou = [0.050000 USDC to ••9520, cycleKey 0x179dca89…9520@1792156029 (the cycle paid twice),
+            settlementKey 0xf39a6156a544af2b1965d16d1ce40bfb73b73ad47f192f60c2db0649d38f256f, reason "a bill the owner typed: 0.050000 USDC
+            every 30 days"], lastPass 10-16 22:19:59 (rule-based), paid 2.  The row's call data carries 0xf39a… (key-bound — the P-175 fix).
+  13:06:17  chain (sepolia-rollup.arbitrum.io): executed(0xf39a6156…) = false; executed(0x85dcc14b…) = true; executed(0xd160efea…) = true.
+            → nothing on chain refuses a tap on this row; it would be the third 0.05 payment for one 30-day bill.
+  Passes on this account (runtime/app/jobs):
+            10-16 21:05:31 … 22:19:59  done (5 passes; the last one asked the third time)
+            10-16 23:54:52  6ad248cc-0004  failed — first pass on the fixed build
+            10-17 12:50:51  6ad2feab-0000  failed (not me)
+            10-17 13:02:04  6ad3014c-0004  failed (3 s after my read-only page load)
+            10-17 13:06:48  6ad30268-0005  failed (3 s after my second load)
+            10-17 13:09:09  6ad302f5-0006  failed (my phone load)
+            10-17 13:11:30  6ad30382-0007  failed (my exports load)
+            every error: "the chain records 0x179dca89f69faef5765d2e7445aa5452b8159520@1797340029 as settled, which is further ahead than any
+            pass could have paid it: the settlement record and this obligation's schedule disagree"
+  Cause (code read): crates/operator/src/lib.rs:388-410 owner_paid_cycle counts the duplicate owner payment (t = due + 636 s) as cycle 2
+            "paid ahead" (its own test says so, lib.rs:672-675); step_past_settled (lib.rs:361-382) allows elapsed/interval + 2 = 2 steps at
+            now ≈ due, both cycles read settled, and it returns SettledAhead after the loop without checking cycle 3 — the pass fails before it
+            writes a record, so the 22:20 ask is never replaced. The page says nothing: "Last checked 15 h ago · 1 recurring bill found",
+            "Updating…"; the inbox has run = null, running = null.
+  The new-account test (one tap → no second ask; a second tab's tap refused) was not run: see BLOCKED.
+
+THE DECIDER (TAMEION_REASONER=cloud-redacted) — not checked from the owner's side (no funded account of mine).
+  runtime/app/jobs since 00:57: three passes with decider claude-sonnet-5-5 (uat2-u1-acme 0xa754…7bcd at 12:59:46; 0x35a2…, 0x7ebc… at
+  13:00:06), each with 0 decisions (no bill due). No payment on :7880 has yet been decided by the model. The S10 proof account (0xaf77…9ad4)
+  lives on S10's own instance: opening its link on :7880 kept showing the previous account ("Viewing uat-u2-fin") with "No such account on
+  this host." at the bottom (uat2-u2-04-unknown-account-link-1280).
+
+OTHER FIRST-RUN NOTES, NOW
+  Read-only voice: a banner now heads the page ("Read-only. This browser holds no owner key of this account, so nothing here can be paid,
+  funded or approved from it…") — but "Your instruction to the agent", "Signed with your passkey" and "Check now" remain, and a viewer's
+  page load starts the agent's check on someone else's account (apps/console/src/components/account/account.tsx:94-104 has no owns check;
+  "Check now" hero.tsx:49-53), which is how my four loads made four passes above.
+  Opening an account: filled page 2.6 s after the tap (shell 1.6 s) — the first run's 60 s blank was not reproduced (uat2-u2-08-open-timing-1280).
+  /agent: rebuilt for the account ("What the account's agents did, and what they may still spend") — the gold-desk view is gone; "Asked of
+  you" shows "Approve a payment the agent prepared" without a reason (inbox waiting[].why = "").
+
+USDC spent by U2 re-run: 0. Transactions sent: 0. Accounts made: uat2-u2-fin (0x8f76…d42d) and uat2-u2-open-timing, both reserved, nothing on chain.
