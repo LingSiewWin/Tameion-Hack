@@ -525,8 +525,8 @@ pub fn floor(inv: &Invoice, binding: Option<&KeyBinding>) -> Result<(), Refused>
         (Some(b), _) => Err(Refused {
             code: "sig_alg_missing",
             words: format!(
-                "this payee bound a {} key: its invoices carry version 3, alg {} and that key's signature",
-                b.alg, b.alg
+                "this payee bound an ML-DSA-65 key on this account: its invoices carry version 3, alg {} and that key's signature",
+                b.alg
             ),
         }),
         (None, Some(Alg::MlDsa65)) => Err(
