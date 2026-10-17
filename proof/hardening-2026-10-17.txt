@@ -1,0 +1,212 @@
+# S15 hardening proof — body cap, per-key stop, idempotent replay after a restart, scrub, key modes, retention
+# written 2026-10-17 16:21 +0800; service: seat build of branch seat/S15 on :7915, TAMEION_APP_DIR=runtime/seats/S15/app
+# account: desk-gold-2329 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308 (Arbitrum Sepolia; its tenant file copied into the seat dir; reads only, nothing sent)
+# secrets in this run: TAMEION_APP_ADMIN_TOKEN and a key in TAMEION_RPC_BASE (random, made for this run); the agent key and the device token
+# came from ~/.tameion/test-keys and were sent as headers read from mode-600 files; none of them appears below (leak checks at the end).
+# seeded before the first start: 5 job files (3 older than 30 days) and a tenant agent.key at mode 644.
+
+== 0. Before: the running :7880 build (single 64 KiB read) on the same 200 KiB Watch body ==
+HTTP/1.1 400 Bad Request
+{"error":"body is not JSON: EOF while parsing a string at line 1 column 65393"}
+
+== Start 1 (runtime/seats/S15/run1.log, whole) ==
+warning: /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/seats/S15/app/tenants/0x000000000000000000000000000000000000dead/agent.key has mode 644; group or others can read it: chmod 600 it
+retention: job files older than 30 days are deleted at start and daily (0 = kept); 2 deleted now
+Tameion Watch → http://127.0.0.1:7915  (runs in /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/seats/S15/app)
+  arc-testnet  Arc testnet  rpc https://rpc.testnet.arc.network (public; set TAMEION_RPC_ARC for a keyed one)
+  arbitrum     Arbitrum One  rpc https://arb1.arbitrum.io/rpc (public; set TAMEION_RPC_ARBITRUM for a keyed one)
+  ethereum     Ethereum  rpc https://ethereum-rpc.publicnode.com (public; set TAMEION_RPC_ETHEREUM for a keyed one)
+  base         Base  rpc [redacted]
+  arbitrum-sepolia Arbitrum Sepolia  rpc https://sepolia-rollup.arbitrum.io/rpc (public; set TAMEION_RPC_ARBITRUM_SEPOLIA for a keyed one)
+   job files left after start 1: seed-newest-pass-35d.json seed-old-pass-offered.json seed-recent-scan.json 
+   (seed-old-scan and seed-old-pass-plain deleted; seed-old-pass-offered kept: it offered a payment, P-210;
+    seed-newest-pass-35d kept: the account's newest finished pass; seed-recent-scan kept: 2 days old)
+
+== A. Body cap (TAMEION_MAX_BODY_BYTES default 1 MiB) ==
+-- A1. POST /api/level1/run with a 2 MiB body (curl sends Expect: 100-continue):
+HTTP/1.1 413 Payload Too Large
+Content-Length: 81
+{"error": "the request body is 2097152 bytes; this service takes at most 1048576"}
+real 0.01
+-- A2. the same, Expect turned off (the client streams all 2 MiB at once):
+HTTP/1.1 413 Payload Too Large
+Content-Length: 81
+{"error": "the request body is 2097152 bytes; this service takes at most 1048576"}
+-- A3. the invoice route keeps its own 4 KiB cap (a 5 KiB body):
+HTTP/1.1 413 Payload Too Large
+Content-Length: 37
+{"error": "an invoice is under 4 KiB"}
+-- A4. a 200 KiB body under the cap is read whole (the old single 64 KiB read cut it: "body is not JSON"); POST /api/watch with Idempotency-Key s15-watch-1:
+   body bytes:   204909
+HTTP/1.1 202 Accepted
+Content-Length: 40
+{"id": "6ad32f75-0000", "status": "queued"}
+
+== B. Per-token stop, no chain ==
+-- B1. GET /api/level1/inbox with the agent key tok-96a43298 (read, run):
+HTTP/1.1 200 OK
+Content-Length: 2882
+{"policy": "0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308", "gated": true, "stoppedTokens": []}
+-- B2. POST /api/level1/tokens/stop without the owner's device:
+HTTP/1.1 401 Unauthorized
+Content-Length: 57
+{"error": "only the owner's device can stop an agent key"}
+-- B3. POST /api/level1/tokens/stop from the owner's device, Idempotency-Key s15-stop-1:
+HTTP/1.1 200 OK
+Content-Length: 231
+{"policy": "0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308", "stopped": "tok-96a43298", "stoppedTokens": ["tok-96a43298"], "summary": "calls with this agent key are refused from now on; revoke it with your passkey to take it off the account"}
+-- B4. the same agent key on the inbox now:
+HTTP/1.1 403 Forbidden
+Content-Length: 59
+{"error": "the owner stopped this agent key", "scope": "read"}
+-- B5. the owner's device reads the inbox; stoppedTokens lists the key:
+HTTP/1.1 200 OK
+Content-Length: 2896
+{"policy": "0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308", "gated": true, "stoppedTokens": ["tok-96a43298"]}
+-- B6. the stop on disk, <TAMEION_APP_DIR>/tokens-stopped.json:
+{
+  "0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308": [
+    "tok-96a43298"
+  ]
+}
+   mode -rw-------@
+-- B7. idempotent replies kept on disk (mode 600):
+   -rw-------@ 18ef0d7ef75e5a4bd9332201467222c41c2e37a7af7b9f63a2bfa86079467e2e.json
+   -rw-------@ 29348b78b618c8a6829d6e43f4c357950ea7b0c067c8fb9c3cba2b08b05baed8.json
+
+== D. Scrub of a returned error string ==
+-- D1. GET /api/level1/resolve?q=<TAMEION_APP_ADMIN_TOKEN>.eth (the route repeats the name it was given):
+HTTP/1.1 404 Not Found
+Content-Length: 99
+{"error": "[redacted].eth is neither an ENS name nor a domain that lists an address for this chain"}
+
+== Restart: kill <pid of the seat service>, start again (runtime/seats/S15/run2.log, first lines) ==
+warning: /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/seats/S15/app/tenants/0x000000000000000000000000000000000000dead/agent.key has mode 644; group or others can read it: chmod 600 it
+retention: job files older than 30 days are deleted at start and daily (0 = kept); 0 deleted now
+Tameion Watch → http://127.0.0.1:7915  (runs in /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/seats/S15/app)
+
+== C. After the restart ==
+-- C1. the stopped agent key is still refused:
+HTTP/1.1 403 Forbidden
+Content-Length: 59
+{"error": "the owner stopped this agent key", "scope": "read"}
+-- C2. the stop replayed with Idempotency-Key s15-stop-1 and the same body: the first reply, marked
+HTTP/1.1 200 OK
+Idempotent-Replayed: true
+Content-Length: 231
+{"policy": "0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308", "stopped": "tok-96a43298", "stoppedTokens": ["tok-96a43298"], "summary": "calls with this agent key are refused from now on; revoke it with your passkey to take it off the account"}
+-- C3. the 200 KiB Watch request replayed with Idempotency-Key s15-watch-1: the same job id, no second scan
+HTTP/1.1 202 Accepted
+Idempotent-Replayed: true
+Content-Length: 40
+{"id": "6ad32f75-0000", "status": "queued"}
+   scans of 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308 on disk: 1
+-- C4. Idempotency-Key s15-stop-1 with a different body: refused
+HTTP/1.1 422 Unprocessable Entity
+Content-Length: 63
+{"error": "this Idempotency-Key was used with a different body"}
+-- C5. the scan the first request started (GET /api/watch/<id>), read from Arbitrum Sepolia:
+{"id": "6ad32f75-0000", "status": "done", "error": null, "transfers": 0, "obligations": 0}
+
+== Leak checks over this file (count of each secret's value) ==
+   admin.token: 0
+   rpckey: 0
+   agent key: 0
+   device token: 0
+   run1.log + run2.log, keyed RPC value: 0
+
+== E. docs/60 P-273: a replay goes only to the caller that made the first request (written 2026-10-17 16:29 +0800) ==
+# Parts A–D above ran on the first seat build; this part runs on the build with the P-273 change (token gate before any replay,
+# replay slot = route + key + a hash of the agent key and device token sent). Before: proof/sdk-cli-2026-10-17.txt "FINDING" (:7880, 16:16:29).
+# Start 3 (runtime/seats/S15/run3.log):
+#   warning: /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/seats/S15/app/tenants/0x000000000000000000000000000000000000dead/agent.key has mode 644; group or others can read it: chmod 600 it
+#   retention: job files older than 30 days are deleted at start and daily (0 = kept); 0 deleted now
+-- E1. POST /api/level1/prepare-mode with agent key tok-s15fix (prepare; a seat-only key added to the seat's copy of the tenant), Idempotency-Key s15-273:
+HTTP/1.1 200 OK
+Content-Length: 498
+{"summary": "Propose: the agent prepares each payment for your signature"}
+-- E2. the same key and body with NO Authorization header (the P-273 case; it answered the stored 200 before):
+HTTP/1.1 401 Unauthorized
+Content-Length: 150
+{"error": "this account's owner requires an agent key: send Authorization: Bearer <token> (the owner mints one on the account page)", "scope": "prepare"}
+-- E3. the same key and body with the stopped agent key tok-96a43298:
+HTTP/1.1 403 Forbidden
+Content-Length: 62
+{"error": "the owner stopped this agent key", "scope": "prepare"}
+-- E4. the same key, a different body, no Authorization (answered 422 before, which told an outsider the key exists):
+HTTP/1.1 401 Unauthorized
+Content-Length: 150
+{"error": "this account's owner requires an agent key: send Authorization: Bearer <token> (the owner mints one on the account page)", "scope": "prepare"}
+-- E5. the same key and body with tok-s15fix again: the stored reply
+HTTP/1.1 200 OK
+Idempotent-Replayed: true
+Content-Length: 498
+{"summary": "Propose: the agent prepares each payment for your signature"}
+-- E6. the same key and body from the owner's device (another caller, its own slot): a fresh prepare, not the stored reply
+HTTP/1.1 200 OK
+Content-Length: 396
+{"summary": "Propose: the agent prepares each payment for your signature"}
+-- restart (runtime/seats/S15/run4.log)
+-- E7. after a restart, the same key and body with tok-s15fix: the stored reply; with no header: 401
+HTTP/1.1 200 OK
+Idempotent-Replayed: true
+Content-Length: 498
+{"summary": "Propose: the agent prepares each payment for your signature"}
+HTTP/1.1 401 Unauthorized
+Content-Length: 150
+{"error": "this account's owner requires an agent key: send Authorization: Bearer <token> (the owner mints one on the account page)", "scope": "prepare"}
+
+== Leak checks over the whole file after part E ==
+   admin.token: 0
+   rpckey: 0
+   bearer.h value: 0
+   bearer2.h value: 0
+   device.h value: 0
+   run1–run4 logs, keyed RPC value: 0
+
+== F. The branch rebased on main (S13's envelope, 565c1f7), commit 59c3443; P-253 admin token header (written 2026-10-17 16:56 +0800) ==
+# built in the seat's own target dir (runtime/seats/S15/target, docs/60 P-238); start 6 (runtime/seats/S15/run6.log):
+#   warning: /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/seats/S15/app/tenants/0x000000000000000000000000000000000000dead/agent.key has mode 644; group or others can read it: chmod 600 it
+#   retention: job files older than 30 days are deleted at start and daily (0 = kept); 0 deleted now
+-- F1. GET /api/runs with Authorization: Bearer <admin token>:
+HTTP/1.1 200 OK
+{"runs (count)": 1}
+-- F2. the same without the header:
+HTTP/1.1 401 Unauthorized
+{"error": "this route needs the admin token: Authorization: Bearer <TAMEION_APP_ADMIN_TOKEN>"}
+-- F3. the token in the URL (?token=<admin token>), the form proxies log:
+HTTP/1.1 400 Bad Request
+{"error": "send the admin token as Authorization: Bearer <token>, never in the URL: proxies and access logs keep URLs"}
+-- F4. GET /api/level1/tenants with the header, then without:
+HTTP/1.1 200 OK
+{"tenants (count)": 1}
+HTTP/1.1 401 Unauthorized
+{"error": "this route needs the admin token: Authorization: Bearer <TAMEION_APP_ADMIN_TOKEN>"}
+-- F5. GET /api/level1/status?policy=… (S13's route) lists the stopped key:
+HTTP/1.1 200 OK
+{"ok": true, "policy": "0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308", "paused": false, "halt": false, "stoppedTokens": ["tok-96a43298"]}
+-- F6. the stopped key on the inbox, in the agent envelope:
+HTTP/1.1 403 Forbidden
+{"ok": false, "error.code": "token_stopped", "error.words": "the owner stopped this agent key", "scope": "read"}
+-- F7. a 2 MiB body, in the agent envelope:
+HTTP/1.1 413 Payload Too Large
+{"ok": false, "error.code": "body_too_large", "error.words": "the request body is 2097152 bytes; this service takes at most 1048576"}
+-- F8. P-273 on this build: the prepare replayed with no header, then with tok-s15fix:
+HTTP/1.1 401 Unauthorized
+{"ok": false, "error.code": "token_missing", "error.words": "this account's owner requires an agent key: send Authorization: Bearer <token> (the owner mints one on the account page)"}
+HTTP/1.1 200 OK
+Idempotent-Replayed: true
+{"ok": true, "summary": "Propose: the agent prepares each payment for your signature"}
+
+== Leak checks over the whole file after part F ==
+   admin.token: 0
+   rpckey: 0
+   bearer.h value: 0
+   bearer2.h value: 0
+   device.h value: 0
+   run1–run6 logs, keyed RPC value: 0; admin token: 0
+
+== G. Branch head 6b67772 (rebased on main bbabc05) running on :7915 since 2026-10-17 17:02 +0800 ==
+   /api/openapi.json describes POST /api/level1/tokens/stop: yes; the stopped key on the inbox: 403; the live inbox and status replies
+   validate against the branch's openapi.json with 0 errors (main's schema refused stoppedTokens as unevaluated, fixed in 6b67772).
+   cargo test -p operator (own target dir): 251 passed, 0 failed, 1 ignored; clippy -D warnings clean; rustfmt clean.
