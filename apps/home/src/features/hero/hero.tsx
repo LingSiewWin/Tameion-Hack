@@ -103,7 +103,7 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
     let L: Layout | null = null;
 
     const measure = () => {
-      // full bleed without 100vw (which counts a classic scrollbar and scrolls the page sideways)
+      // full bleed: the class places it for a page without a classic scrollbar; this corrects for one (100vw counts it)
       const parent = sec.parentElement!;
       const left = parent.getBoundingClientRect().left + parseFloat(getComputedStyle(parent).paddingLeft || "0");
       sec.style.width = `${document.documentElement.clientWidth}px`;
@@ -149,7 +149,11 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
     let cancelled = false;
     const start = async () => {
       monoFamily = getComputedStyle(document.documentElement).getPropertyValue("--font-mono").trim() || "monospace";
-      await document.fonts.load(`400 13px ${monoFamily}`).catch(() => null);
+      // the labels' face loads beside the picture, never before it; once it is in, labels are measured again
+      document.fonts.load(`400 13px ${monoFamily}`).then(() => {
+        if (!cancelled && L) stage.resize(L);
+        kick();
+      }, () => null);
       if (treatment !== "C" && !realScene?.src) {
         const coast = await fetch("/hero/coastline-hormuz.geojson").then((r) => r.json());
         if (cancelled) return;
@@ -205,7 +209,7 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
   const sortedIndex = (i: number) => [...portRows].map((r, j) => ({ ...r, j })).sort((a, b) => b.n - a.n || a.j - b.j).findIndex((r) => r.j === i);
 
   return (
-    <section ref={section} data-hero aria-label={HERO.canvasLabel} className="relative -mt-(--space-5) w-screen" style={{ height: reduced ? `${STILLS.length * 100}svh` : "500svh" }}>
+    <section ref={section} data-hero aria-label={HERO.canvasLabel} className="relative -mt-(--space-5) ml-[calc(50%-50vw)] w-screen" style={{ height: reduced ? `${STILLS.length * 100}svh` : "500svh" }}>
       <div ref={stageEl} className="sticky top-0 h-svh w-full overflow-hidden" data-treatment={treatment}>
         {treatment === "A" && realScene?.src ? (
           // eslint-disable-next-line @next/next/no-img-element -- the scene is the LCP image, sized and placed by the stage
@@ -213,12 +217,16 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
         ) : null}
         <canvas ref={canvas} aria-hidden className="absolute inset-0 h-full w-full" />
 
-        {treatment === "C" && latest ? (
-          <div ref={figs} className="absolute px-(--space-2)" style={{ left: layout?.rows.x ?? 0, top: wide ? (layout?.rows.y ?? 0) - 2 * MODULE : 2 * MODULE }}>
+        {treatment === "C" && latest && layout ? (
+          <div ref={figs} className="absolute px-(--space-2)" style={{ left: layout.rows.x, top: wide ? layout.rows.y - 2 * MODULE : 2 * MODULE }}>
             <p className="hero-figure m-0">{latest.total}</p>
             <p className="meta m-0 mb-(--space-5)">{FIGURES.transits(latest.date)}</p>
-            <p className="hero-figure m-0">{replay ? replay.vessels.length : ""}</p>
-            <p className="meta m-0">{replay ? FIGURES.window(replay.synthetic) : ""}</p>
+            {replay ? (
+              <>
+                <p className="hero-figure m-0">{replay.vessels.length}</p>
+                <p className="meta m-0">{FIGURES.window(replay.synthetic)}</p>
+              </>
+            ) : null}
           </div>
         ) : null}
 
