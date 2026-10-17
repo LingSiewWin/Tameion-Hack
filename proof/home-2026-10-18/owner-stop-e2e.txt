@@ -67,3 +67,26 @@ amount (checkSettle), then the recomputed challenge, then the passkey.
  "waitingAfter": 0,
  "paidAfter": 15
 }
+
+Needs you → "Raise the cap", pressed IN A BROWSER, 07:26 +08 (owner-click-e2e.mjs: the seat's own headless Chromium, the account's throwaway
+owner key in that browser's CDP virtual authenticator, rpId localhost; the production build of the home app on :3011, lane/home-h2).
+Setup: the account back on Autopilot (setMode 2 through the same flow, 07:12, tx 0x96ec7c43798d4e7ca9f8407c021db074235008f747bd62087f74ba8dcf5dc523),
+a 0.006 USDC / 2 min Demo Vendor bill saved at 07:13; at 07:14:28 the agent could not pay it (0.006 over the 0.005 cap) and it waited for the owner:
+"This bill of 0.006 USDC is over what the agent may pay at once, so the contract blocks it and only you can decide. · per-action-cap: …".
+The Owner home showed "0.006 USDC to Demo Vendor is more than one payment may be." with one action, "Raise the cap" (screenshots
+owner-home-needs-you-owner-1280.png / -390.png). The click: prepare-limits {perAction 0.006, daily 0.05, floor 0} → compared with setLimits(6000,
+50000, 0) built on the page → challenge recomputed → the browser's passkey → execute.
+{
+ "startedAt": "2026-10-17T23:26:38.827Z",
+ "pressed": "Raise the cap",
+ "pendingLine": ["At 07:28 the limits rise to 0.05 USDC a day, 0.006 at a time."],
+ "execute": [{ "status": 200,
+   "tx": "0xfd7f3b53099e4e751b0f21011c84e8b53850fe65354157974a132fa375633ea5",
+   "explorer": "https://sepolia.arbiscan.io/tx/0xfd7f3b53099e4e751b0f21011c84e8b53850fe65354157974a132fa375633ea5" }],
+ "hashesInOwnerDom": 0
+}
+Then, with no human: the raise applied at 07:28 (anyone could see it coming on the page), and the agent paid the 0.006 bill itself at 07:28:33,
+07:30:33 and 07:32:33 (inbox paid[], by the agent); waitingCount back to 0; the hero now reads "Your agents may spend 0.05 USDC a day, 0.006 at a
+time, only on Demo Vendor." (owner-home-rest-v2-owner-1280.png / -390.png).
+Known gap in that run: the success sentence was keyed to the Needs-you item, and the read after the tap replaced the item (a new cycle), so the page
+showed only the pending line; fixed in 5f21bce (success is a toast; a raise already asked answers its item with when, and offers no second ask).
