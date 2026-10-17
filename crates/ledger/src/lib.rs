@@ -76,6 +76,7 @@ pub mod canon;
 mod codec;
 pub mod entry;
 pub mod log;
+pub mod momentum;
 pub mod money;
 pub mod obligations;
 pub mod reason;
