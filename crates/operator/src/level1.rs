@@ -703,14 +703,37 @@ pub fn tenants_dir(app_dir: &Path) -> PathBuf {
     app_dir.join("tenants")
 }
 
+/// Write the tenant through a temporary file and a rename, so a reader sees
+/// the old file or the new one, never half of one (docs/60 P-221: a read that
+/// landed mid-write found no tenant, and the record route then served a locked
+/// account's events in full).
 pub fn save(app_dir: &Path, t: &Tenant) -> Result<(), String> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let d = tenants_dir(app_dir);
     fs::create_dir_all(&d).map_err(|e| e.to_string())?;
+    let file = d.join(format!("{}.json", t.policy.to_lowercase()));
+    let tmp = d.join(format!(
+        "{}.json.{}-{}.tmp",
+        t.policy.to_lowercase(),
+        std::process::id(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
     fs::write(
-        d.join(format!("{}.json", t.policy.to_lowercase())),
+        &tmp,
         serde_json::to_string_pretty(t).map_err(|e| e.to_string())?,
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+    fs::rename(&tmp, &file).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        e.to_string()
+    })
+}
+
+/// Whether this policy has a tenant file here, readable or not: a gate that
+/// finds the file but cannot read it refuses rather than opening (P-221).
+pub fn tenant_file_exists(app_dir: &Path, policy: &str) -> bool {
+    Address::from_str(policy.trim())
+        .is_ok_and(|a| tenants_dir(app_dir).join(format!("{a:#x}.json")).exists())
 }
 
 /// The tenant whose policy is `policy`. Only an address names a file: a
@@ -3670,6 +3693,58 @@ mod tests {
         assert!(load(&dir, "../tenants/x").is_none());
         assert_eq!(list(&dir).len(), 1);
         let _ = fs::remove_dir_all(dir);
+    }
+}
+
+#[cfg(test)]
+mod atomic_save_tests {
+    use super::*;
+
+    /// docs/60 P-221: a reader racing the writer sees a whole tenant every time.
+    #[test]
+    fn a_tenant_read_during_a_save_is_never_half_a_file() {
+        let dir = std::env::temp_dir().join(format!("tameion-atomic-{}", std::process::id()));
+        fs::create_dir_all(tenants_dir(&dir)).unwrap();
+        let policy = "0x00000000000000000000000000000000000000e1";
+        let mut t: Tenant = serde_json::from_value(json!({
+            "chain": "arc-testnet", "owner": "0x1", "policy": policy, "agent": "0x3", "operator": "0x4",
+            "watched": "0x5", "recovery": "0x0", "per_action": "1", "daily": "1", "floor": "0",
+            "delay_secs": 60, "mode": 1, "created_block": 0, "history_from_block": 0, "created": 0
+        }))
+        .unwrap();
+        // A big file, so a write takes long enough to be caught half done.
+        t.join_requests = (0..2000)
+            .map(|i| {
+                (
+                    format!("0x{i:064x}"),
+                    format!("0x{i:064x}"),
+                    "a device".repeat(8),
+                    i,
+                )
+            })
+            .collect();
+        save(&dir, &t).unwrap();
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let writer = {
+            let (dir, t, stop) = (dir.clone(), t.clone(), stop.clone());
+            std::thread::spawn(move || {
+                while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    save(&dir, &t).unwrap();
+                }
+            })
+        };
+        let mut misses = 0;
+        for _ in 0..300 {
+            if load(&dir, policy).is_none() {
+                misses += 1;
+            }
+        }
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        writer.join().unwrap();
+        let leftovers = fs::read_dir(tenants_dir(&dir)).unwrap().count();
+        let _ = fs::remove_dir_all(&dir);
+        assert_eq!(misses, 0, "a read saw a half-written tenant");
+        assert_eq!(leftovers, 1, "no temporary file left behind");
     }
 }
 
