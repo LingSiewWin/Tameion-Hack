@@ -86,7 +86,24 @@ where
     };
     let declared = content_length(&buf[..head]);
     if declared > cap {
-        let body = json!({ "error": format!("the request body is {declared} bytes; this service takes at most {cap}") }) // refusal: body_too_large
+        let words =
+            format!("the request body is {declared} bytes; this service takes at most {cap}");
+        let refusal = crate::refusal::refuse(
+            "body_too_large",
+            crate::refusal::Executed::No,
+            "",
+            "",
+            words,
+            None,
+        );
+        // A page (it says `Sec-Fetch-Mode`) reads `error` as the sentence, as `shaped` gives it.
+        let page = String::from_utf8_lossy(&buf[..head])
+            .to_ascii_lowercase()
+            .contains("\r\nsec-fetch-mode:");
+        let body = page
+            .then(|| crate::refusal::for_page(&refusal))
+            .flatten()
+            .unwrap_or(refusal)
             .to_string();
         let reply = format!(
             "HTTP/1.1 413 Payload Too Large\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\
@@ -340,7 +357,8 @@ pub fn stop_token(dir: &Path, policy: &str, id: &str) -> Result<(), String> {
 
 /// `POST /api/level1/tokens/stop` `{policy, id}` from the owner's device (`X-Tameion-Device`, or the body's
 /// `reserveToken`): agent key `id` is refused from now on, at once, with no chain and no passkey, because a
-/// stop only shrinks trust. Removing the key for good stays the passkey's (`token-revoke-signed`).
+/// stop only shrinks trust. Removing the key for good stays the passkey's (`token-revoke-signed`). An owner
+/// route: refusals keep the plain `{ "error" }` shape the pages read (docs/115 §2).
 pub fn stop_route(dir: &Path, device: Option<&str>, body: &str) -> (&'static str, Value) {
     let v: Value = serde_json::from_str(body).unwrap_or(Value::Null);
     let policy = v["policy"]
@@ -350,7 +368,7 @@ pub fn stop_route(dir: &Path, device: Option<&str>, body: &str) -> (&'static str
     let (Some(policy), Some(id)) = (policy, id) else {
         return (
             "400 Bad Request",
-            json!({ "error": "policy (the account's address) and id (the agent key's id) are required" }), // refusal: invalid_body
+            json!({ "error": "policy (the account's address) and id (the agent key's id) are required" }),
         );
     };
     let Some(t) = crate::level1::load(dir, &format!("{policy:#x}")) else {
@@ -359,7 +377,7 @@ pub fn stop_route(dir: &Path, device: Option<&str>, body: &str) -> (&'static str
     if !crate::level1::reserve_token_ok(&t, device.or(v["reserveToken"].as_str())) {
         return (
             "401 Unauthorized",
-            json!({ "error": "only the owner's device can stop an agent key" }), // refusal: needs_owner
+            json!({ "error": "only the owner's device can stop an agent key" }),
         );
     }
     if !t.agent_tokens.iter().any(|k| k.id == id) {
@@ -394,7 +412,7 @@ fn same_secret(a: &str, b: &str) -> bool {
 
 /// The operator's admin token on `GET /api/runs` and `GET /api/level1/tenants`: `Authorization: Bearer <token>`
 /// only, because a URL's query string lands in proxy and access logs. `None` lets the request through;
-/// otherwise the status and the refusal.
+/// otherwise the status and the refusal, in the plain `{ "error" }` shape of an operator route (docs/115 §2).
 pub fn admin_refusal(
     want: Option<&str>,
     authorization: Option<&str>,
@@ -403,7 +421,7 @@ pub fn admin_refusal(
     if query.split('&').any(|kv| kv.starts_with("token=")) {
         return Some((
             "400 Bad Request",
-            json!({ "error": "send the admin token as Authorization: Bearer <token>, never in the URL: proxies and access logs keep URLs" }), // refusal: token_in_query
+            json!({ "error": "send the admin token as Authorization: Bearer <token>, never in the URL: proxies and access logs keep URLs" }),
         ));
     }
     let given = authorization
@@ -413,12 +431,12 @@ pub fn admin_refusal(
     let Some(given) = given else {
         return Some((
             "401 Unauthorized",
-            json!({ "error": "this route needs the admin token: Authorization: Bearer <TAMEION_APP_ADMIN_TOKEN>" }), // refusal: token_missing
+            json!({ "error": "this route needs the admin token: Authorization: Bearer <TAMEION_APP_ADMIN_TOKEN>" }),
         ));
     };
     match want.map(str::trim).filter(|t| !t.is_empty()) {
         Some(w) if same_secret(w, given) => None,
-        _ => Some(("403 Forbidden", json!({ "error": "admin token" }))), // refusal: token_invalid
+        _ => Some(("403 Forbidden", json!({ "error": "admin token" }))),
     }
 }
 

@@ -91,7 +91,7 @@ pub const CODES: &[Code] = &[
         "auth",
         "user",
         "The owner stopped this agent key.",
-        "Stop calling; the owner starts it again or mints a new key.",
+        "Stop calling with this key: a stopped key stays stopped; ask the owner for a new one.",
     ),
     c(
         "needs_owner",
@@ -498,6 +498,8 @@ pub fn token_code(words: &str) -> &'static str {
         "token_missing"
     } else if words.contains("expired") {
         "token_expired"
+    } else if words.contains("stopped this agent key") {
+        "token_stopped"
     } else {
         "token_invalid"
     }
@@ -727,6 +729,14 @@ mod tests {
         assert_eq!(w(&t, Some("wrong"), "read"), "token_invalid");
         assert_eq!(w(&t, Some("old"), "read"), "token_expired");
         assert_eq!(w(&t, Some("good"), "buy"), "token_scope");
+        // docs/60 P-251: a key the owner's device stopped.
+        crate::guard::stop_token(
+            &std::env::temp_dir().join(format!("refusal-stop-{}", std::process::id())),
+            &t.policy,
+            "k2",
+        )
+        .unwrap();
+        assert_eq!(w(&t, Some("good"), "read"), "token_stopped");
     }
 
     /// Every code a site in this crate names literally is in the catalogue

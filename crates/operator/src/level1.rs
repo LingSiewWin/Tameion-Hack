@@ -500,7 +500,8 @@ pub fn token_allows(
     };
     // docs/60 P-251: the owner's device stopped it; no chain, no passkey.
     if crate::guard::is_stopped(&t.policy, &tok.id) {
-        return Err("the owner stopped this agent key"); // refusal: token_stopped
+        // `refusal::token_code` answers these words with `token_stopped`.
+        return Err("the owner stopped this agent key");
     }
     if now >= tok.expires {
         return Err("this agent key has expired; the owner can mint a new one");

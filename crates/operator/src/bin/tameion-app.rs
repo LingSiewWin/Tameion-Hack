@@ -1417,6 +1417,8 @@ async fn agent_status(dir: &std::path::Path, query: &str) -> Vec<u8> {
         v["paused"] = mode.as_ref().map_or(Value::Null, |m| json!(m == "Watch"));
         v["mode"] = mode.unwrap_or(Value::Null);
         v["halt"] = json!(halt.exists());
+        // docs/60 P-251: agent keys the owner's device stopped (no chain involved).
+        v["stoppedTokens"] = json!(operator::guard::stopped_tokens(&t.policy));
     }
     json_reply("200 OK", operator::refusal::ok(v))
 }
