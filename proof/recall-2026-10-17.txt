@@ -1,0 +1,157 @@
+# recall --verify and the one-way valve (docs/117 §8) — seat S29
+Written 2026-10-17 23:58 +0800. Branch seat/S29 at 122a5b0 (before the S20s scaffold rebase).
+
+What ran: the real tameion-app and tameion-mcp binaries built from seat/S29, against a local anvil chain
+(chain id 5042002, so the service's arc-testnet preset points at it), BudgetPolicy compiled from the branch's
+contracts/src/BudgetPolicy.sol and MemoryAnchor from contracts/lib/arc-agent-kit. One account in Propose mode with one
+bill the owner typed (0.01 USDC every 30 days to 0x5555…5555, an approved payee). Three passes, each anchoring its record.
+The model endpoint is a local stand-in for the Messages API (ANTHROPIC_BASE_URL) that answers the decider by a mode:
+pass 1 cites nothing, pass 2 cites evt:999 (an id it was never given: the forged recollection), pass 3 cites the first id
+it was offered. Everything else — evidence offered, citation check, rule fallback, records, anchors, recall — is the binary.
+Not a testnet: no Arbitrum Sepolia / Arc run was made (no spend); not the real Claude model (see 'Not shown').
+
+policy  0x5FbDB2315678afecb367f032d93F642f64180aa3
+anchor  0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 (MemoryAnchor)
+agent   0x976EA74026E726554dB657fA54763abd0C3a0aa9 (anvil's published key 6; anchors each record)
+
+## The three passes (GET /api/watch/<id>, report.decisions)
+pass (none) 6ad39aab-0000 done: decider claude-sonnet-5-5, fallbacks 0, root 0xdc76c709094387a5339154cca701486de3e90222a7a3e85f6fa3af6eb4f9d879, anchorTx 0x4375ccfa33053147686c6e1b991e7968c7ec6bbde6f01c4c76e0e0dfae749c46
+  ask (usual) by model claude-sonnet-5-5: 0x555555…555555 is due; the owner decides.
+  note: None
+  evidence offered: None
+pass (forge) 6ad39ab4-0000 done: decider claude-sonnet-5-5, fallbacks 1, root 0x6f6ff8d941af1b01190d1b58c1195099ebd3f7d7ea95540844583e5920b6381f, anchorTx 0x455a807adbe756f476cf601e6d9578ad971262755277018f1ccda8b9d30c8801
+  ask (new_payee) by rule: Asking the owner about 0x555555…555555: approved 0 days ago, 0 payments before; it asks 0.01 USDC.
+  note: recall_unknown: claude-sonnet-5-5 cited evt:999, which is not an event of the record it was given; the rule decided
+  evidence offered: [{'amount_minor': 10000, 'days_ago': 0, 'id': 'evt:2', 'kind': 'ESCALATION'}, {'amount_minor': 10000, 'days_ago': 0, 'id': 'evt:1', 'kind': 'DECISION'}]
+pass (cite) 6ad39abe-0000 done: decider claude-sonnet-5-5, fallbacks 0, root 0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b, anchorTx 0x2c843aa2d29d6a9a813d98880d182466a96f18f82aea533c36cafdbec943c672
+  ask (usual) by model claude-sonnet-5-5: The owner was already asked about 0x555555…555555 on the last pass [evt:2].
+  note: None
+  evidence offered: [{'amount_minor': 10000, 'days_ago': 0, 'id': 'evt:2', 'kind': 'ESCALATION'}, {'amount_minor': 10000, 'days_ago': 0, 'id': 'evt:1', 'kind': 'DECISION'}]
+
+## What the decider was sent and answered (the stand-in's log, one line per decider request)
+{"mode": "none", "offered": [], "allowed": ["ask", "refuse"], "system_mentions_evt": true, "reply": {"basis": "usual", "action": "ask", "why": "NAME_1 is due; the owner decides."}}
+{"mode": "forge", "offered": [{"amount": "0.01 USDC", "days_ago": 0, "id": "evt:2", "kind": "escalation"}, {"amount": "0.01 USDC", "days_ago": 0, "id": "evt:1", "kind": "decision"}], "allowed": ["ask", "refuse"], "system_mentions_evt": true, "reply": {"basis": "usual", "action": "ask", "why": "NAME_1 was paid this amount on the last pass [evt:999]."}}
+{"mode": "cite", "offered": [{"amount": "0.01 USDC", "days_ago": 0, "id": "evt:2", "kind": "escalation"}, {"amount": "0.01 USDC", "days_ago": 0, "id": "evt:1", "kind": "decision"}], "allowed": ["ask", "refuse"], "system_mentions_evt": true, "reply": {"basis": "usual", "action": "ask", "why": "The owner was already asked about NAME_1 on the last pass [evt:2]."}}
+
+## chain, read directly with cast (not through the service)
+rootOf(agent) on the anchor: 0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b
+latest anchored record (R3): 0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b
+record cited by pass 3 (R2): 0x6f6ff8d941af1b01190d1b58c1195099ebd3f7d7ea95540844583e5920b6381f, anchored in 0x455a807adbe756f476cf601e6d9578ad971262755277018f1ccda8b9d30c8801:
+  from                 0x976EA74026E726554dB657fA54763abd0C3a0aa9
+  input                0xeecdf9276f6ff8d941af1b01190d1b58c1195099ebd3f7d7ea95540844583e5920b6381f
+  to                   0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
+  receipt status: 1 (success)
+
+## 1. the decision of pass 3, recalled from the latest record (rootOf)
+record 0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b latest events 3 | chainRead {"agent": "0x976ea74026e726554db657fa54763abd0c3a0aa9", "anchor": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512", "chain": "arc-testnet", "how": "rootOf", "rootOf": "0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b"}
+  evt:1 verified   | DECISION 0.010000 USDC 0x5555555555555555555555555555555555555555 | ALLOW for 0x5555555555555555555555555555555555555555. only obligation due; no ordering decision to make Basis: 0x5555555555555555555555555555555555555555 has been paid 0 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 1.00). Decided by model claude-sonnet-5-5: ask (usual). The owner was already asked about 0x555555…555555 on the last p
+
+## 2. the event pass 3 cited: evt:2 of R2, an earlier record (its anchor transaction)
+record 0x6f6ff8d941af1b01190d1b58c1195099ebd3f7d7ea95540844583e5920b6381f earlier events 3 | chainRead {"agent": "0x976ea74026e726554db657fa54763abd0c3a0aa9", "anchor": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512", "chain": "arc-testnet", "how": "anchorTx", "tx": "0x455a807adbe756f476cf601e6d9578ad971262755277018f1ccda8b9d30c8801"}
+  evt:2 verified   | ESCALATION 0.010000 USDC 0x5555555555555555555555555555555555555555 | Prepared for the owner, not paid: mode: policy is in Propose, not Autopilot; the contract refuses the agent's payment and the owner's passkey settles it. Everything the verifier checked passed; only the autonomy level stops me.
+
+## 3. the id pass 2's model invented: evt:999
+record 0x6f6ff8d941af1b01190d1b58c1195099ebd3f7d7ea95540844583e5920b6381f earlier events 3 | chainRead {"agent": "0x976ea74026e726554db657fa54763abd0c3a0aa9", "anchor": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512", "chain": "arc-testnet", "how": "anchorTx", "tx": "0x455a807adbe756f476cf601e6d9578ad971262755277018f1ccda8b9d30c8801"}
+  evt:999 unknown record recall_unknown |    | the record 0x6f6ff8d941af1b01190d1b58c1195099ebd3f7d7ea95540844583e5920b6381f holds 3 events; evt:999 is not one of them
+
+## 4. CLI
+$ tameion recall evt:2 --root <R2>
+record 0x6f6f…381f (earlier, 3 events) · chain read: anchorTx on arc-testnet
+  evt:2 verified ESCALATION 0.010000 USDC to 0x5555…5555 — Prepared for the owner, not paid: mode: policy is in Propose, not Autopilot; the contract refuses the agent's payment and the owner's passkey settles it. Everything the verifier checked passed; only the autonomy level stops me.
+verified 1 · unverified 0 · unknown 0
+(exit 0)
+$ tameion recall evt:1 evt:999
+record 0xe386…763b (latest, 3 events) · chain read: rootOf on arc-testnet
+  evt:1 verified DECISION 0.010000 USDC to 0x5555…5555 — ALLOW for 0x5555555555555555555555555555555555555555. only obligation due; no ordering decision to make Basis: 0x5555555555555555555555555555555555555555 has been paid 0 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 1.00). Decided by model claude-sonnet-5-5: ask (usual). The owner was already asked about 0x555555…555555 on the last pass [evt:2]. Cited events are in the record anchored as 0x6f6ff8d941af1b01190d1b58c1195099ebd3f7d7ea95540844583e5920b6381f.
+  evt:999 unknown (recall_unknown, by record): the record 0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b holds 3 events; evt:999 is not one of them
+verified 1 · unverified 0 · unknown 1
+(exit 1)
+
+## 5. MCP (tameion-mcp over stdio, tool recall)
+isError False | ok True | verified 1 unknown 1
+  evt:1 verified  DECISION
+  evt:5 unknown recall_unknown 
+
+## 6. a forged record: one byte of pass 3's Decision amount edited on disk
+edited: evt:1 amount 0.01 -> 1.00 USDC in 0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b.events.jsonl
+record 0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b latest events 3 | chainRead {"agent": "0x976ea74026e726554db657fa54763abd0c3a0aa9", "anchor": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512", "chain": "arc-testnet", "how": "rootOf", "rootOf": "0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b"}
+  evt:0 unverified leaf  |    | the event's bytes, hashed with the rest of its record, do not reach the root the chain holds: the record changed after it was anchored
+  evt:1 unverified leaf  |    | the event's bytes, hashed with the rest of its record, do not reach the root the chain holds: the record changed after it was anchored
+restored; again:
+record 0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b latest events 3 | chainRead {"agent": "0x976ea74026e726554db657fa54763abd0c3a0aa9", "anchor": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512", "chain": "arc-testnet", "how": "rootOf", "rootOf": "0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b"}
+  evt:1 verified   | DECISION 0.010000 USDC 0x5555555555555555555555555555555555555555 | ALLOW for 0x5555555555555555555555555555555555555555. only obligation due; no ordering decision to make Basis: 0x5555555555555555555555555555555555555555 has been paid 0 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 1.00). Decided by model claude-sonnet-5-5: ask (usual). The owner was already asked about 0x555555…555555 on the last p
+
+## 7. no node to ask: the same service on a dead RPC
+record 0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b latest events 3 | chainRead {"agent": "0x976ea74026e726554db657fa54763abd0c3a0aa9", "anchor": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512", "chain": "arc-testnet", "error": "contract call: Max retries exceeded error sending request for url ([redacted]/)", "how": "rootOf"}
+  evt:1 unknown rpc chain_unavailable |    | the chain did not answer (contract call: Max retries exceeded error sending request for url ([redacted]/)); without its root nothing is verified
+
+## 8. an outsider (no key) on this locked account: the proof, not the event
+  evt:1 verified | event served: False | leaf 0x8a4ccbbd4112d40c… | path steps 2
+
+## 9. pass 2's own Decision, recalled from its record (R2): the refusal is in the anchored bytes
+record 0x6f6ff8d941af1b01190d1b58c1195099ebd3f7d7ea95540844583e5920b6381f | chainRead anchorTx 0x455a807adbe756f476cf601e6d9578ad971262755277018f1ccda8b9d30c8801
+  evt:1 verified | DECISION ALLOW 0.010000 USDC | ALLOW for 0x5555555555555555555555555555555555555555. only obligation due; no ordering decision to make Basis: 0x5555555555555555555555555555555555555555 has been paid 0 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 1.00). Decided by rule: ask (new_payee). Asking the owner about 0x555555…555555: approved 0 days ago, 0 payments before; it asks 0.01 USDC. [recall_unknown: claude-sonnet-5-5 cited evt:999, which is not an event of the record it was given; the rule decided]
+
+## Gate (seat/S29, `cargo test -p operator --no-fail-fast`, 2026-10-18 00:0x +08)
+lib 224 passed, 1 ignored · app_http 18 · claude_transport 4 · decide_eval 3 · hedge_advice 4 · mcp_http 2 · mcp_stdio 2 ·
+recall 2 · valve 3 — all ok. tameion-app.rs unit tests: 17 passed, 1 failed: settle_key_tests::the_next_cycle_gets_its_pass_after_the_one_that_paid
+(tameion-app.rs:9458), the wall-clock failure S21 reported on main (demo::ended reads the clock; not a file this seat changed).
+clippy -p operator --all-targets -D warnings: clean. fmt --check: clean. SDK (tsc + node --test): 23 passed.
+console check-types: 15 types, 0 drifts.
+
+## Remove the mechanism and the test fails (mutation runs, each reverted with git checkout)
+1. decide_or_rule without the unknown-citation check -> decide::tests::a_citation_of_an_event_the_case_was_not_given_refuses_the_model FAILED.
+2. lib.rs: the Decision's counterparty taken from an address in the model's sentence -> valve a_models_fake_payee_and_transaction_reach_only_the_words
+   FAILED (left: "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", right: "0x1111111111111111111111111111111111111111").
+3. A second fs::write of an events file in level1.rs -> valve the_only_writer_of_events_files_is_audit_persist FAILED
+   ("only audit.rs writes an events file: [operator/src/level1.rs:4334, operator/src/audit.rs:67, operator/src/audit.rs:80]").
+
+## Not shown
+- A testnet run. The route reads rootOf / the anchor transaction through the tenant's chain preset exactly as above;
+  on Arbitrum Sepolia it would be the same reads against the public RPC. Not run: no spend was needed for the claim, and
+  the brief allowed anvil.
+- The real Claude model citing an event. Pass 3's citation came from the stand-in. The prompt the real model gets
+  carries the evidence list and the citation rule (system_mentions_evt: true above); whether Sonnet cites well is untested.
+- The console still shows a model's why with its [evt:N] tags as written (DESIGN §4 wants names, not ids, on a page).
+
+## After the S20s scaffold rebase: the same checks, same chain and records, binary from seat/S29 at 32ea941 (2026-10-18 00:35 +0800)
+Recall now reads events with the scaffold's Event::decode and names them with Event::id(); /api/level1/recall is an agent route.
+record cited by pass 3 (R2): 0x6f6ff8d941af1b01190d1b58c1195099ebd3f7d7ea95540844583e5920b6381f, anchored in 0x455a807adbe756f476cf601e6d9578ad971262755277018f1ccda8b9d30c8801:
+## 1. the decision of pass 3, recalled from the latest record (rootOf)
+record 0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b latest events 3 | chainRead {"agent": "0x976ea74026e726554db657fa54763abd0c3a0aa9", "anchor": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512", "chain": "arc-testnet", "how": "rootOf", "rootOf": "0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b"}
+  evt:1 verified   | DECISION 0.010000 USDC 0x5555555555555555555555555555555555555555 | ALLOW for 0x5555555555555555555555555555555555555555. only obligation due; no ordering decision to make Basis: 0x5555555555555555555555555555555555555555 has been paid 0 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 1.00). Decided by model claude-sonnet-5-5: ask (usual). The owner was already asked about 0x555555…555555 on the last p
+## 2. the event pass 3 cited: evt:2 of R2, an earlier record (its anchor transaction)
+record 0x6f6ff8d941af1b01190d1b58c1195099ebd3f7d7ea95540844583e5920b6381f earlier events 3 | chainRead {"agent": "0x976ea74026e726554db657fa54763abd0c3a0aa9", "anchor": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512", "chain": "arc-testnet", "how": "anchorTx", "tx": "0x455a807adbe756f476cf601e6d9578ad971262755277018f1ccda8b9d30c8801"}
+  evt:2 verified   | ESCALATION 0.010000 USDC 0x5555555555555555555555555555555555555555 | Prepared for the owner, not paid: mode: policy is in Propose, not Autopilot; the contract refuses the agent's payment and the owner's passkey settles it. Everything the verifier checked passed; only the autonomy level stops me.
+## 3. the id pass 2's model invented: evt:999
+record 0x6f6ff8d941af1b01190d1b58c1195099ebd3f7d7ea95540844583e5920b6381f earlier events 3 | chainRead {"agent": "0x976ea74026e726554db657fa54763abd0c3a0aa9", "anchor": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512", "chain": "arc-testnet", "how": "anchorTx", "tx": "0x455a807adbe756f476cf601e6d9578ad971262755277018f1ccda8b9d30c8801"}
+  evt:999 unknown record recall_unknown |    | the record 0x6f6ff8d941af1b01190d1b58c1195099ebd3f7d7ea95540844583e5920b6381f holds 3 events; evt:999 is not one of them
+## 4. CLI
+record 0x6f6f…381f (earlier, 3 events) · chain read: anchorTx on arc-testnet
+  evt:2 verified ESCALATION 0.010000 USDC to 0x5555…5555 — Prepared for the owner, not paid: mode: policy is in Propose, not Autopilot; the contract refuses the agent's payment and the owner's passkey settles it. Everything the verifier checked passed; only the autonomy level stops me.
+verified 1 · unverified 0 · unknown 0
+(exit 0)
+record 0xe386…763b (latest, 3 events) · chain read: rootOf on arc-testnet
+  evt:1 verified DECISION 0.010000 USDC to 0x5555…5555 — ALLOW for 0x5555555555555555555555555555555555555555. only obligation due; no ordering decision to make Basis: 0x5555555555555555555555555555555555555555 has been paid 0 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 1.00). Decided by model claude-sonnet-5-5: ask (usual). The owner was already asked about 0x555555…555555 on the last pass [evt:2]. Cited events are in the record anchored as 0x6f6ff8d941af1b01190d1b58c1195099ebd3f7d7ea95540844583e5920b6381f.
+  evt:999 unknown (recall_unknown, by record): the record 0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b holds 3 events; evt:999 is not one of them
+verified 1 · unverified 0 · unknown 1
+(exit 1)
+## 5. MCP (tameion-mcp over stdio, tool recall)
+isError False | ok True | verified 1 unknown 1
+  evt:1 verified  DECISION
+  evt:5 unknown recall_unknown 
+## 6. a forged record: one byte of pass 3's Decision amount edited on disk
+record 0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b latest events 3 | chainRead {"agent": "0x976ea74026e726554db657fa54763abd0c3a0aa9", "anchor": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512", "chain": "arc-testnet", "how": "rootOf", "rootOf": "0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b"}
+  evt:0 unverified leaf  |    | the event's bytes, hashed with the rest of its record, do not reach the root the chain holds: the record changed after it was anchored
+  evt:1 unverified leaf  |    | the event's bytes, hashed with the rest of its record, do not reach the root the chain holds: the record changed after it was anchored
+record 0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b latest events 3 | chainRead {"agent": "0x976ea74026e726554db657fa54763abd0c3a0aa9", "anchor": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512", "chain": "arc-testnet", "how": "rootOf", "rootOf": "0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b"}
+  evt:1 verified   | DECISION 0.010000 USDC 0x5555555555555555555555555555555555555555 | ALLOW for 0x5555555555555555555555555555555555555555. only obligation due; no ordering decision to make Basis: 0x5555555555555555555555555555555555555555 has been paid 0 times every 30.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 1.00). Decided by model claude-sonnet-5-5: ask (usual). The owner was already asked about 0x555555…555555 on the last p
+## 7. no node to ask: the same service on a dead RPC
+record 0xe386ad4e258ff960961a1b06ac6763b1a5693dfe239c0e49462e25c225e4763b latest events 3 | chainRead {"agent": "0x976ea74026e726554db657fa54763abd0c3a0aa9", "anchor": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512", "chain": "arc-testnet", "error": "contract call: Max retries exceeded error sending request for url ([redacted]/)", "how": "rootOf"}
+  evt:1 unknown rpc chain_unavailable |    | the chain did not answer (contract call: Max retries exceeded error sending request for url ([redacted]/)); without its root nothing is verified
+## 8. an outsider (no key) on this locked account: the proof, not the event
+  evt:1 verified | event served: False | leaf 0x8a4ccbbd4112d40c… | path steps 2
+
+Gate after the rebase: cargo test -p operator --no-fail-fast all ok (lib 224, tameion-app 18, app_http 18, audit_kinds 1,
+claude_transport 4, decide_eval 3, hedge_advice 4, mcp_http 2, mcp_stdio 2, recall 2, valve 3); clippy -D warnings clean; fmt clean;
+SDK 23/23; check-types 0 drifts.
