@@ -27,8 +27,10 @@ test("DESIGN.md's palette table and tokens.css read to the same shape", () => {
     const p = designPalette(readFileSync(md, "utf8"));
     assert.equal(p.owner["--paper"], "#EEF2EA");
     assert.equal(p.agent["--paper"], "#0F1511");
-    assert.equal(p.agent["--down"], p.owner["--down"], '"same" takes the Owner value');
   }
+  const row = designPalette("| `--rule` | `#D5DCD2` | same | hairlines |\n| `--up` / `--down` | `#1E5F46` / `#7A4B1E` | `#7FD1A8` / `#D9A06A` | money |");
+  assert.equal(row.agent["--rule"], "#D5DCD2", '"same" takes the Owner value');
+  assert.deepEqual([row.agent["--up"], row.agent["--down"], row.owner["--down"]], ["#7FD1A8", "#D9A06A", "#7A4B1E"]);
   const t = cssTokens(':root, :root[data-view="owner"] { --paper: #eef2ea; } /* x */ :root[data-view="agent"] { --paper: #0F1511; }');
   assert.equal(t.owner["--paper"], "#eef2ea");
   assert.equal(t.agent["--paper"], "#0F1511");

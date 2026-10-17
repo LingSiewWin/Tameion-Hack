@@ -10,7 +10,7 @@
 //   npm run ci -- --dry                         list the matrix, run nothing
 //   npm run ci -- --strict                      a feature that is not built yet (no sheet, no account) counts as FAIL
 //
-// env: POLICY            an account with paid rows (its 0x address or its name)
+// env: POLICY            an account with paid rows, by NAME (routes are /a/<name>); default northwind-agents, the lane service's
 //      POLICY_EMPTY      an account with no bills        } without these the service reply is patched in the page and the
 //      POLICY_NEEDS      an account with a waiting item  } log says "mocked"; the screenshot is then a fixture, not a real account
 //      PROOF_DIR         default <main checkout>/proof/home-2026-10-18      PW_CHANNEL  default chrome (PW_CHANNEL= for bundled chromium)
@@ -240,8 +240,9 @@ function domRules({ view, width, route, palette }) {
       const v = e.getAttribute("href") ?? e.getAttribute("content");
       if (HASH.test(v)) add("warn", "zero-hash-head", e, v.slice(0, 40));
     }
-    if (HASH.test(location.pathname)) metrics.pathHasHash = true;
   }
+  // routes are by account name (ruled 2026-10-18 06:32): the 0x address lives in API calls, never in the URL
+  if (/0x[0-9a-fA-F]{8,}/.test(location.pathname)) add("fail", "route-has-hash", null, `the route ${location.pathname.slice(0, 30)}... carries a 0x address; routes are /a/<name>`);
 
   // Typography: no monospace in Owner; the Agent view is Plex Mono 13/20 throughout
   const mono = (e) => /mono|courier|consolas|menlo|monospace/i.test(st(e).fontFamily);
@@ -789,7 +790,7 @@ const showGroup = (g) => `  ${g.sev.toUpperCase().padEnd(4)} ${g.rule}  ${g.sel}
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const policy = process.env.POLICY || args.policy;
+  const policy = process.env.POLICY || args.policy || "northwind-agents"; // the lane's populated demo account, by name
   const cfg = {
     url: (process.env.APP_URL ?? "http://localhost:3010").replace(/\/$/, ""),
     policy, policyEmpty: process.env.POLICY_EMPTY || undefined, policyNeeds: process.env.POLICY_NEEDS || undefined,
@@ -851,7 +852,7 @@ async function main() {
   lines.push(...group(notes).slice(0, 8).map(showGroup));
   const mocked = results.filter((R) => R.mocked).map((R) => R.name);
   if (mocked.length) lines.push(`  mocked replies (a fixture, not a real account): ${mocked.join(", ")}`);
-  const measured = results.filter((R) => R.metrics && /\/rest\//.test(R.name)).map((R) => `  ${R.name}: h1 ${R.metrics.h1 ?? "none"}; main ${R.metrics.main ?? "none"}${R.metrics.gutter ? `; ${R.metrics.gutter}` : ""}${R.metrics.pathHasHash ? "; the URL path carries a 0x address" : ""}${R.metrics.reds ? `; ${R.metrics.reds} element(s) in --red` : ""}`);
+  const measured = results.filter((R) => R.metrics && /\/rest\//.test(R.name)).map((R) => `  ${R.name}: h1 ${R.metrics.h1 ?? "none"}; main ${R.metrics.main ?? "none"}${R.metrics.gutter ? `; ${R.metrics.gutter}` : ""}${R.metrics.reds ? `; ${R.metrics.reds} element(s) in --red` : ""}`);
   if (measured.length) lines.push("measured:", ...measured);
   const keys = [...fails, ...warns].map((f) => keyOf(f.name, f));
   const lastFile = join(cfg.proof, "preflight-last.json");
