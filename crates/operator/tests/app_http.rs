@@ -894,7 +894,8 @@ fn a_named_account_resolves_holds_its_name_and_connects_wallets() {
             r#"{{"type":"webauthn.get","challenge":"{}","origin":"http://localhost"}}"#,
             operator::level1::b64url(ch.as_slice())
         );
-        let ad = vec![0xaa; 37];
+        // rpIdHash = sha256("localhost"), flags UP|UV (WebAuthn §7.2; the service checks both).
+        let ad = [&Sha256::digest(b"localhost")[..], &[0x05, 0, 0, 0, 0]].concat();
         let mut h = Sha256::new();
         h.update(&ad);
         h.update(Sha256::digest(cd.as_bytes()));
@@ -1691,7 +1692,8 @@ fn a_device_bill_import_needs_the_owners_passkey_over_the_bills() {
                 r#"{{"type":"webauthn.get","challenge":"{}","origin":"http://localhost"}}"#,
                 operator::level1::b64url(ch.as_slice())
             );
-            let ad = vec![0xaa; 37];
+            // rpIdHash = sha256("localhost"), flags UP|UV (WebAuthn §7.2; the service checks both).
+            let ad = [&Sha256::digest(b"localhost")[..], &[0x05, 0, 0, 0, 0]].concat();
             let mut h = Sha256::new();
             h.update(&ad);
             h.update(Sha256::digest(cd.as_bytes()));

@@ -689,6 +689,7 @@ mod tests {
             expires: 1_000,
             issued: 1,
             hash: token_hash("s3cret-a"),
+            alg: crate::level1::owner_alg(),
         });
         assert_eq!(token_allows(&t, Some("s3cret-a"), "read", 100), Ok(()));
         stop_token(&tmp("stop-allows"), &t.policy, "tok-a").unwrap();

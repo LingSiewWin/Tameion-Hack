@@ -62,6 +62,10 @@ pub struct Tenant {
     pub owner: String,
     pub policy: String,
     pub agent: String,
+    /// The agent key's algorithm (docs/117 §2): an Ethereum key that signs
+    /// EIP-712 payments on chain.
+    #[serde(default = "agent_alg")]
+    pub agent_alg: String,
     pub operator: String,
     pub watched: String,
     pub recovery: String,
@@ -304,6 +308,21 @@ pub struct AgentToken {
     pub issued: u64,
     /// sha256 of the bearer secret, hex.
     pub hash: String,
+    /// The algorithm of the owner's signature that minted it (docs/117 §2):
+    /// the passkey's, `p256-webauthn`.
+    #[serde(default = "owner_alg")]
+    pub alg: String,
+}
+
+/// What a record written before `alg` (docs/117 §2) was signed with: the
+/// owner's passkey.
+pub fn owner_alg() -> String {
+    crate::sig::Alg::P256Webauthn.as_str().into()
+}
+
+/// The agent's on-chain key, for records written before `alg`.
+pub fn agent_alg() -> String {
+    crate::sig::Alg::Secp256k1Eip712.as_str().into()
 }
 
 /// The scopes a token may carry, and what each unlocks.
@@ -1237,6 +1256,7 @@ pub async fn reserve(app_dir: &Path, r: DeployRequest) -> Result<(Tenant, Option
         owner: format!("{owner:#x}"),
         policy: format!("{policy:#x}"),
         agent: format!("{agent_addr:#x}"),
+        agent_alg: agent_alg(),
         operator: format!("{operator:#x}"),
         watched: format!("{:#x}", r.watched),
         recovery: format!("{:#x}", r.recovery),
@@ -1496,6 +1516,9 @@ pub struct PendingApproval {
     pub created: u64,
     /// (key index, the assertion JSON as the page posted it)
     pub approvals: Vec<(u64, Value)>,
+    /// What every approval here is signed with: the owners' passkeys.
+    #[serde(default = "owner_alg")]
+    pub alg: String,
 }
 
 fn approvals_path(app_dir: &Path, owner: Address) -> PathBuf {
@@ -1940,6 +1963,7 @@ pub async fn execute_by_key(
                     .map(|d| d.as_secs())
                     .unwrap_or(0),
                 approvals: Vec::new(),
+                alg: owner_alg(),
             });
             list.len() - 1
         }
@@ -2102,17 +2126,22 @@ pub fn b64url(bytes: &[u8]) -> String {
     out
 }
 
-/// Check a WebAuthn assertion the way the contract would, off chain: the
-/// client data is a `webauthn.get` over exactly `challenge`, and the P-256
-/// signature over sha256(authenticatorData || sha256(clientDataJSON))
-/// verifies against (`qx`, `qy`). Returns why not, in words.
+/// Check a WebAuthn assertion the way the contract would, off chain, plus what
+/// only the server can check (WebAuthn §7.2 steps 9–17): the client data is a
+/// `webauthn.get` over exactly `challenge`, from this service's own origin
+/// (`TAMEION_PUBLIC_URL`, or this machine); the authenticator data names the
+/// RP id the page asked for (the origin's host, `rp.id = location.hostname`)
+/// and says the user was present and verified (UP and UV, as the contract's
+/// `requireUV`); and the P-256 signature over
+/// sha256(authenticatorData || sha256(clientDataJSON)) verifies against
+/// (`qx`, `qy`) through `sig::verify`. Returns why not, in words.
 pub fn verify_passkey_assertion(
     qx: B256,
     qy: B256,
     challenge: B256,
     auth: &PasskeyAuth,
 ) -> Result<(), String> {
-    use p256::ecdsa::signature::hazmat::PrehashVerifier;
+    use crate::sig::{Alg, KeyRef, SigRefusal};
     use sha2::{Digest, Sha256};
     let cd = &auth.client_data_json;
     if !cd.contains("\"type\":\"webauthn.get\"") {
@@ -2122,18 +2151,42 @@ pub fn verify_passkey_assertion(
     if !cd.contains(&want) {
         return Err("the assertion signs a different challenge".into());
     }
-    let cd_hash = Sha256::digest(cd.as_bytes());
+    let origin = serde_json::from_str::<Value>(cd)
+        .ok()
+        .and_then(|v| v["origin"].as_str().map(str::to_string))
+        .ok_or("the assertion names no origin")?;
+    if !crate::mcp::origin_allowed(Some(&origin)) {
+        return Err("the assertion comes from another site".into());
+    }
+    let authority = origin.split_once("://").map_or("", |(_, a)| a);
+    let rp_id = authority
+        .rsplit_once(':')
+        .filter(|(_, port)| port.bytes().all(|b| b.is_ascii_digit()))
+        .map_or(authority, |(host, _)| host);
+    let ad = &auth.authenticator_data;
+    if ad.len() < 37 {
+        return Err("the authenticator data is too short".into());
+    }
+    if ad[..32] != Sha256::digest(rp_id.as_bytes())[..] {
+        return Err("the passkey was made for another site".into());
+    }
+    if ad[32] & 0x05 != 0x05 {
+        return Err("the passkey did not confirm the person was present and verified".into());
+    }
     let mut h = Sha256::new();
-    h.update(&auth.authenticator_data);
-    h.update(cd_hash);
-    let msg = h.finalize();
-    let point = p256::EncodedPoint::from_affine_coordinates(&qx.0.into(), &qy.0.into(), false);
-    let key = p256::ecdsa::VerifyingKey::from_encoded_point(&point)
-        .map_err(|_| "the owner's key is not a point on P-256")?;
-    let sig = p256::ecdsa::Signature::from_scalars(auth.r.0, auth.s.0)
-        .map_err(|_| "the signature is not a pair of P-256 scalars")?;
-    key.verify_prehash(&msg, &sig)
-        .map_err(|_| "the signature does not verify against the owner's key".into())
+    h.update(ad);
+    h.update(Sha256::digest(cd.as_bytes()));
+    let sig = [auth.r.as_slice(), auth.s.as_slice()].concat();
+    crate::sig::verify(
+        Alg::P256Webauthn,
+        &KeyRef::P256 { x: qx, y: qy },
+        &h.finalize(),
+        &sig,
+    )
+    .map_err(|e| match e {
+        SigRefusal::BadKey(_) => "the owner's key is not a point on P-256".into(),
+        _ => "the signature does not verify against the owner's key".into(),
+    })
 }
 
 /// Store where the agent reports; a new URL gets a new secret, returned
@@ -3530,6 +3583,7 @@ mod tests {
             expires: 1_000,
             issued: 1,
             hash: token_hash("s3cret"),
+            alg: owner_alg(),
         });
         assert!(
             token_allows(&t, None, "read", 100).is_err(),
@@ -3680,21 +3734,48 @@ mod tests {
             "{{\"type\":\"webauthn.get\",\"challenge\":\"{}\",\"origin\":\"http://localhost:7880\"}}",
             b64url(ch.as_slice())
         );
-        let ad = vec![0xaa; 37];
-        let mut h = Sha256::new();
-        h.update(&ad);
-        h.update(Sha256::digest(cd.as_bytes()));
-        let sig: p256::ecdsa::Signature = sk.sign_prehash(&h.finalize()).unwrap();
-        let (r, s) = sig.split_bytes();
-        let auth = PasskeyAuth {
-            r: B256::from_slice(&r),
-            s: B256::from_slice(&s),
-            challenge_index: U256::from(cd.find("\"challenge\"").unwrap()),
-            type_index: U256::from(0),
-            authenticator_data: ad.clone(),
-            client_data_json: cd.clone(),
+        // rpIdHash = sha256("localhost") (the page's rp.id), flags UP|UV, signCount 0.
+        let ad = [&Sha256::digest(b"localhost")[..], &[0x05, 0, 0, 0, 0]].concat();
+        let assertion = |ad: &[u8], cd: &str| {
+            let mut h = Sha256::new();
+            h.update(ad);
+            h.update(Sha256::digest(cd.as_bytes()));
+            let sig: p256::ecdsa::Signature = sk.sign_prehash(&h.finalize()).unwrap();
+            let (r, s) = sig.split_bytes();
+            PasskeyAuth {
+                r: B256::from_slice(&r),
+                s: B256::from_slice(&s),
+                challenge_index: U256::from(cd.find("\"challenge\"").unwrap()),
+                type_index: U256::from(0),
+                authenticator_data: ad.to_vec(),
+                client_data_json: cd.to_string(),
+            }
         };
+        let auth = assertion(&ad, &cd);
         assert_eq!(verify_passkey_assertion(qx, qy, ch, &auth), Ok(()));
+        // WebAuthn §7.2, each signed correctly and still refused: a passkey made
+        // for another RP id, one that did not verify the person (UP only), and
+        // client data from another origin or none.
+        let mut other_rp = ad.clone();
+        other_rp[..32].copy_from_slice(&Sha256::digest(b"evil.example"));
+        let mut up_only = ad.clone();
+        up_only[32] = 0x01;
+        let evil_origin = cd.replace("http://localhost:7880", "https://evil.example");
+        let no_origin = cd.replace(",\"origin\":\"http://localhost:7880\"", "");
+        for (a, c, why) in [
+            (&other_rp, &cd, "another site"),
+            (&up_only, &cd, "present and verified"),
+            (&ad, &evil_origin, "another site"),
+            (&ad, &no_origin, "no origin"),
+        ] {
+            let e = verify_passkey_assertion(qx, qy, ch, &assertion(a, c)).unwrap_err();
+            assert!(e.contains(why), "{why}: {e}");
+        }
+        assert!(
+            verify_passkey_assertion(qx, qy, ch, &assertion(&ad[..36], &cd))
+                .unwrap_err()
+                .contains("too short")
+        );
         let other = notify_challenge(
             5_042_002,
             policy,
@@ -3708,7 +3789,7 @@ mod tests {
                 .contains("different challenge")
         );
         let mut bad = auth.clone();
-        bad.authenticator_data[0] ^= 1;
+        bad.authenticator_data[36] ^= 1;
         assert!(
             verify_passkey_assertion(qx, qy, ch, &bad)
                 .unwrap_err()
@@ -3806,6 +3887,7 @@ mod tests {
             label: "ops".into(),
             scopes: vec!["read".into()],
             hash: "ab".repeat(32),
+            alg: owner_alg(),
             issued: 0,
             expires: 1,
         });
@@ -3861,6 +3943,7 @@ mod tests {
             owner: "0x1".into(),
             policy: "0x00000000000000000000000000000000000AbCdE".into(),
             agent: "0x2".into(),
+            agent_alg: agent_alg(),
             operator: "0x3".into(),
             watched: "0x4".into(),
             recovery: "0x5".into(),

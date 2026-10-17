@@ -6347,6 +6347,7 @@ impl App {
             expires,
             issued: now,
             hash: level1::token_hash(&secret),
+            alg: level1::owner_alg(),
         });
         if let Err(e) = level1::save(&self.dir, &tenant) {
             return json_reply("500 Internal Server Error", json!({ "error": e }));

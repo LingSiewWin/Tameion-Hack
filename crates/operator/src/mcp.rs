@@ -675,8 +675,9 @@ fn self_base() -> String {
 }
 
 /// No `Origin` (an agent, not a browser), this machine, or the public copy's
-/// own origin (`TAMEION_PUBLIC_URL`).
-fn origin_allowed(origin: Option<&str>) -> bool {
+/// own origin (`TAMEION_PUBLIC_URL`). Also the origin a passkey assertion must
+/// come from (`level1::verify_passkey_assertion`).
+pub(crate) fn origin_allowed(origin: Option<&str>) -> bool {
     let Some(o) = origin.map(|o| o.trim().trim_end_matches('/')) else {
         return true;
     };
