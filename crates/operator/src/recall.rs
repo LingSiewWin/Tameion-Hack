@@ -16,7 +16,8 @@
 
 use crate::audit;
 use crate::decide::Evidence;
-use ledger::log::{Hash32, path_from_leaves, verify_inclusion};
+use ledger::log::{Event, EventBody, Hash32, path_from_leaves, verify_inclusion};
+use ledger::money::Money;
 use serde_json::{Value, json};
 use std::io;
 use std::path::Path;
@@ -79,6 +80,59 @@ pub fn without_citations(text: &str) -> String {
     out
 }
 
+/// What an event's canonical bytes say, read with [`Event::decode`] (the strict
+/// inverse of the bytes its leaf is hashed from): `id`, `kind`, `seq`, `at`, the
+/// `note`, and for an event about a payee its `payee` with the `amount` (and
+/// `minor`, its minor units), the verdict (`decision`), the settling
+/// transaction (`tx`) or the `reason` where the event has them; an
+/// observation's `balance`. `None` when the bytes are not exactly an event.
+pub fn fields(canonical: &[u8]) -> Option<Value> {
+    let e = Event::decode(canonical)?;
+    let mut v = json!({
+        "id": e.id(), "kind": e.body.kind(), "seq": e.seq, "at": e.at.as_unix(), "note": e.body.note(),
+    });
+    let money = |v: &mut Value, m: &Money| {
+        v["amount"] = json!(m.to_string());
+        v["minor"] = json!(m.to_minor().to_string());
+    };
+    match &e.body {
+        EventBody::Observation { balance, .. } => v["balance"] = json!(balance.to_string()),
+        EventBody::Decision {
+            counterparty,
+            amount,
+            decision,
+            ..
+        } => {
+            v["payee"] = json!(counterparty.as_str());
+            money(&mut v, amount);
+            v["decision"] = json!(decision.to_string());
+        }
+        EventBody::Settlement {
+            counterparty,
+            amount,
+            tx_hash,
+            ..
+        } => {
+            v["payee"] = json!(counterparty.as_str());
+            money(&mut v, amount);
+            v["tx"] = json!(tx_hash);
+        }
+        EventBody::Escalation {
+            counterparty,
+            amount,
+            reason,
+            ..
+        } => {
+            v["payee"] = json!(counterparty.as_str());
+            money(&mut v, amount);
+            v["reason"] = json!(reason);
+        }
+        EventBody::Skipped { counterparty, .. } => v["payee"] = json!(counterparty.as_str()),
+        _ => {}
+    }
+    Some(v)
+}
+
 /// One anchored record, read back.
 pub struct Record {
     pub root: Hash32,
@@ -127,7 +181,12 @@ pub type Attested = Result<Option<Hash32>, String>;
 /// caller may read the account; otherwise the leaf and path only, as the
 /// record route serves an outsider).
 pub fn check(id: &str, rec: &Record, chain: &Attested, open: bool) -> Value {
-    let unknown = |by: &str, code: &str, words: String| json!({ "id": id, "status": "unknown", "by": by, "code": code, "words": words });
+    // The catalogue's meaning and next step beside each code (docs/115 §2).
+    let unknown = |by: &str, code: &str, words: String| {
+        let entry = crate::refusal::code(code);
+        json!({ "id": id, "status": "unknown", "by": by, "code": code, "words": words,
+            "meaning": entry.map(|c| c.meaning), "nextStep": entry.map(|c| c.next_step) })
+    };
     let Some(seq) = parse_id(id) else {
         return unknown(
             "input",
@@ -188,14 +247,17 @@ pub fn check(id: &str, rec: &Record, chain: &Attested, open: bool) -> Value {
         v["by"] = json!(by);
     }
     if by == Some("rpc") {
+        let entry = crate::refusal::code("chain_unavailable");
         v["code"] = json!("chain_unavailable");
+        v["meaning"] = json!(entry.map(|c| c.meaning));
+        v["nextStep"] = json!(entry.map(|c| c.next_step));
     }
     if status == "verified" {
         if let Ok(Some(root)) = chain {
             v["root"] = json!(root.to_hex());
         }
         if open {
-            v["event"] = crate::statement::fields(&line.canonical).unwrap_or(Value::Null);
+            v["event"] = fields(&line.canonical).unwrap_or(Value::Null);
         }
     }
     v
@@ -216,12 +278,12 @@ pub fn evidence(log_dir: &Path, payee: &str, now: i64) -> (Option<String>, Vec<E
         .iter()
         .rev()
         .filter_map(|l| {
-            let f = crate::statement::fields(&l.canonical)?;
+            let f = fields(&l.canonical)?;
             f["payee"]
                 .as_str()
                 .is_some_and(|p| p.eq_ignore_ascii_case(payee))
                 .then(|| Evidence {
-                    id: format!("evt:{}", l.seq),
+                    id: f["id"].as_str().unwrap_or("").to_string(),
                     kind: f["kind"].as_str().unwrap_or("").to_string(),
                     amount_minor: f["minor"].as_str().and_then(|m| m.parse().ok()),
                     days_ago: (now - f["at"].as_i64().unwrap_or(now)).max(0) / 86_400,
@@ -348,6 +410,8 @@ mod tests {
         assert_eq!(v["status"], "verified", "{v}");
         assert_eq!(v["root"], root.to_hex());
         assert_eq!(v["event"]["kind"], "SETTLEMENT");
+        // The cited id is the event's own (`Event::id`, read back by `Event::decode`).
+        assert_eq!(v["event"]["id"], v["id"]);
         assert_eq!(v["event"]["payee"], PAYEE);
         assert_eq!(v["event"]["amount"], usdc("0.05").to_string());
         assert_eq!(v["event"]["tx"], "0xfeed");
@@ -374,6 +438,10 @@ mod tests {
         assert_eq!(
             (v["status"].as_str(), v["code"].as_str()),
             (Some("unknown"), Some("recall_unknown"))
+        );
+        assert_eq!(
+            v["nextStep"],
+            crate::refusal::code("recall_unknown").unwrap().next_step
         );
         let v = check("evt:1;rm", &rec, &Ok(Some(root)), true);
         assert_eq!(
