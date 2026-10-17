@@ -3,7 +3,8 @@
 // text only in the Agent view (DESIGN Rule 6); the Owner view reads the name.
 import { useState, useSyncExternalStore } from "react";
 import { useView } from "../../lib/view.ts";
-import { CTA, CTA_QUIET } from "./ui.tsx";
+import { receive as words } from "./copy.ts";
+import { CTA, CTA_QUIET, T } from "./ui.tsx";
 
 export function ReceiveButtons({ address, handle }: { address: string; handle: string }) {
   const view = useView();
@@ -24,14 +25,14 @@ export function ReceiveButtons({ address, handle }: { address: string; handle: s
   };
   return (
     <div className="flex w-full flex-col gap-(--space-3)">
-      {view === "agent" && <p className="mono break-all text-center">{address}</p>}
+      {view === "agent" && <p className={`${T.mono} break-all text-center`}>{address}</p>}
       <div className="flex w-full gap-(--space-3)">
         <button type="button" className={CTA} onClick={copy} aria-live="polite">
-          {copied ? "Copied" : "Copy"}
+          {copied ? words.copied : words.copy}
         </button>
         {canShare && (
           <button type="button" className={CTA_QUIET} onClick={() => navigator.share({ title: handle, text: address }).catch(() => undefined)}>
-            Share
+            {words.share}
           </button>
         )}
       </div>

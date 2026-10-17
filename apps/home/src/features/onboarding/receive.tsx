@@ -5,7 +5,9 @@
 import { encode } from "uqr";
 import { resolveAccount, type Account } from "../../lib/api.ts";
 import { palette } from "../../tokens.ts";
+import { receive as words } from "./copy.ts";
 import { ReceiveButtons } from "./receive-buttons.tsx";
+import { T } from "./ui.tsx";
 
 /** The chain after the `@` (apps/console/src/lib/names.ts `LABELS`; CAIP-350's `eip155:<id>` for any other). */
 const LABELS: Record<number, string> = { 421614: "arbitrum-sepolia", 5042002: "arc-testnet", 84532: "base-sepolia", 11155111: "sepolia", 42161: "arbitrum", 8453: "base", 1: "ethereum" };
@@ -31,31 +33,31 @@ export async function Receive({ name }: { name: string }) {
   const rec = await resolve(name);
   if (rec === "down")
     return (
-      <p role="alert" className="row text-(--red)">
-        The service did not answer, so the address cannot be shown. Reload the page to try again.
+      <p role="alert" className={T.attention}>
+        {words.down}
       </p>
     );
-  if (!rec) return <p className="row">No account has the name {name}. Check the name in the link you were sent.</p>;
+  if (!rec) return <p className={T.row}>{words.unknown(name)}</p>;
   const chain = rec.chains.find((c) => c.deployed) ?? rec.chains[0];
   const address = chain?.account ?? rec.policy;
   const qr = qrPath(address);
   const handle = chain ? nameAt(rec.name, chain.chainId) : rec.name;
   return (
     <div className="flex flex-col items-center gap-(--space-5)">
-      <h1 className="statement-line self-start">Receive</h1>
+      <h1 className={`${T.title} self-start`}>{words.title}</h1>
       <svg
         viewBox={`0 0 ${qr.size} ${qr.size}`}
         role="img"
-        aria-label={`QR code of ${handle}`}
+        aria-label={words.qr(handle)}
         shapeRendering="crispEdges"
-        className="size-60 rounded-(--radius-plate) border border-(--rule)"
+        className="size-60 rounded-(--radius-plate) p-(--space-3)"
         style={{ background: palette.owner.plate }}
       >
         <path d={qr.d} fill={palette.owner.ink} />
       </svg>
-      <p className="row-title text-center break-all">{handle}</p>
+      <p className={`${T.rowTitle} text-center break-all`}>{handle}</p>
       <ReceiveButtons address={address} handle={handle} />
-      {chain && <p className="row self-start">Any USDC on {chain.name} arrives here.</p>}
+      {chain && <p className={`${T.row} self-start`}>{words.arrives(chain.name)}</p>}
     </div>
   );
 }

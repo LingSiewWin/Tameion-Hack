@@ -8,6 +8,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { guest, server } from "./copy.ts";
 
 const SERVICE = () => (process.env.TAMEION_URL ?? "http://127.0.0.1:7890").replace(/\/+$/, "");
 const INVITE = "tameion.home.invite";
@@ -59,14 +60,14 @@ export type GuestState = { error?: string };
 /** `/`: the word from the judges' form opens the seeded demo account read-only, or starts the stepper. */
 export async function enterGuest(_prev: GuestState, form: FormData): Promise<GuestState> {
   const word = process.env.HOME_INVITE_WORD;
-  if (!word) return { error: "This host has no invite word set, so it opens nothing yet." };
+  if (!word) return { error: guest.noWord };
   const typed = String(form.get("word") ?? "").trim();
-  if (!typed || !sameWord(typed, word)) return { error: "That is not the word from the judges' form." };
+  if (!typed || !sameWord(typed, word)) return { error: guest.wrongWord };
   (await cookies()).set(INVITE, proof(word).toString("base64url"), { ...COOKIE, maxAge: 7 * 86400 });
   if (form.get("intent") === "new") redirect("/new");
   // The account is opened by its name (DESIGN §Routes, ruled 06:32): the address never rides in an href.
   const demo = process.env.HOME_DEMO_NAME?.trim().toLowerCase();
-  if (!isHandle(demo)) return { error: "The word is right, but this host names no demo account. Make your own instead." };
+  if (!isHandle(demo)) return { error: guest.noDemo };
   redirect(`/a/${demo}`);
 }
 
@@ -82,15 +83,15 @@ export type Opened = {
 /** Step 3: open the account on chain with the passkey made in step 2; the demo funds it (`POST /api/level1/deploy`). */
 export async function openAccount(input: { name: string; qx: string; qy: string; chain: string }): Promise<Opened | { error: string; taken?: boolean }> {
   const word = await invited();
-  if (!word) return { error: "Type the word from the judges' form on the first page, then open your account." };
-  if (!isHandle(input.name)) return { error: "Pick a name: 3 to 32 lowercase letters, numbers or dashes, not starting or ending with a dash." };
-  if (!isWord32(input.qx) || !isWord32(input.qy)) return { error: "The passkey's public key did not come through; make the passkey again." };
+  if (!word) return { error: server.noInvite };
+  if (!isHandle(input.name)) return { error: server.badName };
+  if (!isWord32(input.qx) || !isWord32(input.qy)) return { error: server.badKey };
   const r = await call("/api/level1/deploy", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ chain: input.chain, qx: input.qx, qy: input.qy, name: input.name, keyless: false, days: 90, invite: word, lazy: true, demo: true }),
   });
-  if (!r.ok) return { error: wordsOf(r.body, r.status === 502 ? "The service did not answer. Nothing was opened; try again." : `The service refused (${r.status}).`), taken: r.status === 409 };
+  if (!r.ok) return { error: wordsOf(r.body, r.status === 502 ? server.downOpen : server.refused(r.status)), taken: r.status === 409 };
   const d = r.body as { tenant: { policy: string; owner: string; chain: string; name?: string }; reserveToken?: string | null; demo?: { usdc?: string; tx?: string; error?: string } };
   // Shown once by the service; kept only here, as an httpOnly cookie this account's owner routes read.
   if (d.reserveToken) (await cookies()).set(DEVICE, d.reserveToken, { ...COOKIE, maxAge: 90 * 86400 });
@@ -108,7 +109,7 @@ const OWNER = new Set(["bills", "prepare-payees", "contacts"]);
 /** An owner route that takes this device's token, as the console sends it: the header on `bills` and `prepare-*`
  *  (lib/tameion.ts `ownerDevice`), `reserveToken` in the body on `bills` and `contacts`. */
 export async function ownerPost(policy: string, route: "bills" | "prepare-payees" | "contacts", body: Record<string, unknown>): Promise<{ ok: true; body: unknown } | { error: string; executed: "no" | "unknown" }> {
-  if (!isAddr(policy) || !OWNER.has(route)) return { error: "Not an owner route of this page.", executed: "no" };
+  if (!isAddr(policy) || !OWNER.has(route)) return { error: server.notOwnerRoute, executed: "no" };
   const tok = (await cookies()).get(DEVICE)?.value;
   const withToken = route === "prepare-payees" ? body : { ...body, reserveToken: tok };
   const r = await call(`/api/level1/${route}`, {
@@ -116,14 +117,14 @@ export async function ownerPost(policy: string, route: "bills" | "prepare-payees
     headers: { "content-type": "application/json", ...(tok && route !== "contacts" ? { "x-tameion-device": tok } : {}) },
     body: JSON.stringify({ ...withToken, policy }),
   });
-  if (!r.ok) return { error: wordsOf(r.body, r.status === 502 ? "The service did not answer." : `The service refused (${r.status}).`), executed: r.status === 502 ? "unknown" : "no" };
+  if (!r.ok) return { error: wordsOf(r.body, r.status === 502 ? server.down : server.refused(r.status)), executed: r.status === 502 ? "unknown" : "no" };
   return { ok: true, body: r.body };
 }
 
 /** The inbox with this device's token, so the owner's own names come back (docs/81). */
 export async function readInbox(policy: string): Promise<{ ok: true; inbox: unknown } | { error: string }> {
-  if (!isAddr(policy)) return { error: "Not an account address." };
+  if (!isAddr(policy)) return { error: server.notAddress };
   const tok = (await cookies()).get(DEVICE)?.value;
   const r = await call(`/api/level1/inbox?policy=${policy.toLowerCase()}`, { headers: tok ? { "x-tameion-device": tok } : {} });
-  return r.ok ? { ok: true, inbox: r.body } : { error: wordsOf(r.body, "The service did not answer.") };
+  return r.ok ? { ok: true, inbox: r.body } : { error: wordsOf(r.body, server.down) };
 }
