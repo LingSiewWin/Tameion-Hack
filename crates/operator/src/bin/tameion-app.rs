@@ -2201,9 +2201,11 @@ impl App {
         // balance, payees, amounts, purchase URLs and purposes stay with a read
         // key or the owner's device (docs/60 P-212). The root rebuilt from the
         // leaves is the same root, so "Check it yourself" still matches.
+        // A tenant that cannot be read is treated as locked: leaves are safe
+        // for anyone, events are not (docs/60 P-221).
         let open = match level1::load(&self.dir, &format!("{policy:#x}")) {
             Some(t) => t.agent_tokens.is_empty() || self.reads_account(&t, raw, query),
-            None => true,
+            None => false,
         };
         if open {
             return respond("200 OK", "application/x-ndjson; charset=utf-8", &bytes);
@@ -5862,7 +5864,17 @@ impl App {
             }
             None => return None,
         };
-        let tenant = level1::load(&self.dir, &format!("{policy:#x}"))?;
+        // A tenant file that exists but cannot be read refuses, never opens
+        // (docs/60 P-221); no file at all is the handler's 404.
+        let Some(tenant) = level1::load(&self.dir, &format!("{policy:#x}")) else {
+            if level1::tenant_file_exists(&self.dir, &format!("{policy:#x}")) {
+                return Some(json_reply(
+                    "503 Service Unavailable",
+                    json!({ "error": "this account could not be read just now; nothing was done, try again" }),
+                ));
+            }
+            return None;
+        };
         if tenant.agent_tokens.is_empty() && scope != "buy" {
             return None;
         }
@@ -5870,8 +5882,18 @@ impl App {
         // open to it (`desk_owner`), and an account is not locked against its owner. And it may `prepare` (docs/60 P-170: the
         // first agent key locked the owner out of every change on their own page): a prepare only builds calldata that
         // the owner's passkey must still sign, so it moves no authority. A run, an import or a buy still needs a key.
-        if matches!(scope, "read" | "prepare")
-            && level1::reserve_token_ok(&tenant, header(raw, "x-tameion-device"))
+        // And the owner's own check, bills and invoice decisions (docs/60 P-225: with an agent key, "Check now", "Save bill"
+        // and accept/decline answered "requires an agent key"): what the owner does on their own page. Never `buy`: buying is
+        // the agent's, inside the caps. The device token comes as a header, or as the `reserveToken` a bills import carries.
+        let device = header(raw, "x-tameion-device")
+            .map(String::from)
+            .or_else(|| {
+                serde_json::from_str::<Value>(body)
+                    .ok()
+                    .and_then(|v| v["reserveToken"].as_str().map(String::from))
+            });
+        if matches!(scope, "read" | "prepare" | "run" | "import")
+            && level1::reserve_token_ok(&tenant, device.as_deref())
         {
             return None;
         }
@@ -6165,7 +6187,7 @@ impl App {
     /// recurring invoice adds it as a bill (the payee must already be
     /// approved on chain — the page asks the passkey for that first, in the
     /// same tap); a one-off one is paid by the owner's tap on its row.
-    async fn level1_invoice_decide(&self, body: &str) -> Vec<u8> {
+    async fn level1_invoice_decide(&self, body: &str, raw: &str) -> Vec<u8> {
         let v: Value = match serde_json::from_str(body) {
             Ok(v) => v,
             Err(e) => return json_reply("400 Bad Request", json!({ "error": e.to_string() })),
@@ -6183,11 +6205,14 @@ impl App {
             return json_reply("400 Bad Request", json!({ "error": "id is required" }));
         };
         let accept = v["accept"].as_bool().unwrap_or(false);
-        // The owner's decision (audit 2026-10-15, docs/60 P-73): where the
-        // owner minted agent keys the gate already required an `import` key;
-        // on an open account the owner's passkey signs this exact decision.
-        if tenant.agent_tokens.is_empty()
-            && let Err(refused) = self.owner_signed_decision(&tenant, &v, key, accept).await
+        // The owner's decision (audit 2026-10-15, docs/60 P-73): an agent key
+        // with `import` decides; otherwise the owner's passkey signs this exact
+        // decision — on an open account, and when the owner's device passed the
+        // gate (P-225: the device opens the route; the passkey still decides).
+        let by_key = !tenant.agent_tokens.is_empty()
+            && level1::token_allows(&tenant, bearer_of(raw, "").as_deref(), "import", now_secs())
+                .is_ok();
+        if !by_key && let Err(refused) = self.owner_signed_decision(&tenant, &v, key, accept).await
         {
             return refused;
         }
@@ -6262,7 +6287,7 @@ impl App {
         }
     }
 
-    async fn level1_bills(&self, body: &str) -> Vec<u8> {
+    async fn level1_bills(&self, body: &str, raw: &str) -> Vec<u8> {
         let v: Value = match serde_json::from_str(body) {
             Ok(v) => v,
             Err(e) => return json_reply("400 Bad Request", json!({ "error": e.to_string() })),
@@ -6273,6 +6298,16 @@ impl App {
         let Some(tenant) = level1::load(&self.dir, policy) else {
             return json_reply("404 Not Found", json!({ "error": "no such tenant" }));
         };
+        // `check: true` asks only whether this caller may import here, before the
+        // page spends a passkey tap and a transaction approving the payee (docs/60
+        // P-225: "Save bill" signed first and was refused after). The gate already
+        // ran; nothing is saved.
+        if v["check"] == true {
+            return json_reply(
+                "200 OK",
+                json!({ "ok": true, "summary": "you may tell the agent about bills on this account; nothing was saved" }),
+            );
+        }
         let Some(items) = v["bills"].as_array() else {
             return json_reply(
                 "400 Bad Request",
@@ -6325,7 +6360,10 @@ impl App {
         // from it: the first pass puts the payee in Needs you with the attest
         // tap, and the policy refuses an unattested payee anyway.
         if !tenant.deployed {
-            if !level1::reserve_token_ok(&tenant, v["reserveToken"].as_str()) {
+            // The device token in the body, or as the header the page now sends (docs/60 P-225).
+            if !level1::reserve_token_ok(&tenant, v["reserveToken"].as_str())
+                && !level1::reserve_token_ok(&tenant, header(raw, "x-tameion-device"))
+            {
                 return json_reply(
                     "403 Forbidden",
                     json!({ "error": "this account is not on chain yet; only the device that opened it can add its first bill" }),
@@ -7821,7 +7859,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Ok(k) => json_reply("200 OK", json!({ "key": k })),
                         Err(e) => json_reply("500 Internal Server Error", json!({ "error": e })),
                     },
-                    ("POST", "/api/level1/bills") => app.level1_bills(&body).await,
+                    ("POST", "/api/level1/bills") => app.level1_bills(&body, &req).await,
                     ("POST", "/api/level1/wallets") => app.level1_wallets(&body, &req).await,
                     ("POST", "/api/level1/contacts") => app.level1_contacts(&body).await,
                     // docs/83 W5: the desk.
@@ -8020,7 +8058,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     ("POST", "/api/level1/invoice") => app.level1_invoice(&body).await,
                     ("POST", "/api/level1/invoice-decide") => {
-                        app.level1_invoice_decide(&body).await
+                        app.level1_invoice_decide(&body, &req).await
                     }
                     ("POST", "/api/level1/buy") => app.level1_buy(&body).await,
                     ("POST", "/api/level1/prepare-limits") => {
