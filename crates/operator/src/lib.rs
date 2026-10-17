@@ -567,6 +567,13 @@ fn conform(ranked: Vec<Prioritised>, due: &[Obligation]) -> Option<Vec<Prioritis
     Some(out)
 }
 
+/// Move `o` to its latest cycle due by `now`, past the cycles that fell due
+/// before it (docs/60 P-267): for a bill the owner typed, never a found one.
+fn skip_missed_cycles(o: &mut Obligation, now: Timestamp) {
+    let behind = i64::from(cycles_behind(o, now));
+    o.next_due = o.next_due + Seconds::new(o.interval.as_i64().saturating_mul(behind));
+}
+
 /// Later cycles of `o` that have also fallen due by `now`: zero for a bill
 /// that is current or overdue by less than one interval.
 fn cycles_behind(o: &Obligation, now: Timestamp) -> u32 {
@@ -727,6 +734,22 @@ mod stepping_tests {
         (0..n)
             .map(|k| weekly(start + k * WEEK).cycle_key())
             .collect()
+    }
+
+    /// docs/60 P-267, S17b's account on :7917: a typed 120 s bill eight cycles behind
+    /// is paid at its current cycle, not caught up from the oldest, and the cycles-behind
+    /// question no longer applies; a bill current or less than a cycle late stays put.
+    #[test]
+    fn a_typed_bill_behind_moves_to_its_current_cycle() {
+        let mut o = weekly(1_000_000);
+        o.interval = Seconds::new(120);
+        let now = Timestamp::from_unix(1_000_000 + 8 * 120 + 30);
+        skip_missed_cycles(&mut o, now);
+        assert_eq!(o.next_due.as_unix(), 1_000_000 + 8 * 120);
+        assert_eq!(cycles_behind(&o, now), 0);
+        let mut late = weekly(1_000_000);
+        skip_missed_cycles(&mut late, Timestamp::from_unix(1_000_000 + 5));
+        assert_eq!(late.next_due.as_unix(), 1_000_000, "less than a cycle late");
     }
 
     async fn step(
@@ -1537,11 +1560,25 @@ impl<R: Reasoner> Operator<R> {
         let orders = std::sync::Arc::new(self.client.schedules(self.config.policy).await?);
         // Bills' settled cycles eight bills at a time, not one bill after
         // another (docs/68 F4); within a bill the cycles stay in order.
+        // docs/60 P-267: a bill the owner typed is the owner's own schedule. Cycles that
+        // went by unpaid (before Autopilot, or while the owner was asked) are not caught
+        // up by inference: the agent pays the current cycle, and a found bill keeps the
+        // verifier's cycles-behind question.
+        let typed: std::sync::Arc<std::collections::BTreeSet<String>> = std::sync::Arc::new(
+            self.config
+                .seeded
+                .iter()
+                .map(|s| s.counterparty.as_str().to_string())
+                .collect(),
+        );
         let stepped = arc::eight_at_a_time(std::mem::take(&mut obligations), |mut o| {
             let (client, policy) = (self.client.clone(), self.config.policy);
             let scope = self.config.principal_id.clone();
             let (owner_paid, offered, orders) =
                 (owner_paid.clone(), offered.clone(), orders.clone());
+            if o.sample_count == 0 && typed.contains(o.counterparty.as_str()) {
+                skip_missed_cycles(&mut o, now);
+            }
             async move {
                 let r = step_past_settled(&mut o, now, |cycle| {
                     let key = B256::from(
