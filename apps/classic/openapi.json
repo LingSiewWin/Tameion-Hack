@@ -1046,7 +1046,7 @@
     },
     "/api/level1/symbolon": {
       "get": {
-        "summary": "Each record of the account (settlement, decision, flow, meter or price check) with its three slots, as `operator --example symbolon_count --show` prints them: agent (none yet: no record carries the agent's own signature), counterparty_slot (a payee-signed invoice whose EIP-712 or ML-DSA-65 signature recovers the payee, for the bill cycle the settlement paid) and witness (the root's anchoring transaction, read back on the account's chain: it succeeded, the agent sent it to the anchor, the root is in its calldata). A slot is present only when its check passed in this read, so a present slot is verified; null is none. A record persisted again in a later root counts once, with its best slots. `counts` says how many records stand behind none, one, two or three slots; `chainReadFailed` lists roots whose anchoring could not be read this time (their records show no witness, which is not the same as not witnessed). Open like /api/level1/record: on an account with agent keys, the fields and slots need a read key or the owner's device; anyone gets each record's root, seq and leaf (`locked: true`, `counts: null`).",
+        "summary": "Each record of the account (settlement, decision, flow, meter or price check) with its three slots, as `operator --example symbolon_count --show` prints them: agent (none yet: no record carries the agent's own signature), counterpartySlot (a payee-signed invoice whose EIP-712 or ML-DSA-65 signature recovers the payee, for the bill cycle the settlement paid) and witness (the root's anchoring transaction, read back on the account's chain: it succeeded, the agent sent it to the anchor, the root is in its calldata). A slot is present only when its check passed in this read, so a present slot is verified; null is none. A record persisted again in a later root counts once, with its best slots. `counts` says how many records stand behind none, one, two or three slots; `chainReadFailed` lists roots whose anchoring could not be read this time (their records show no witness, which is not the same as not witnessed). Open like /api/level1/record: on an account with agent keys, the fields and slots need a read key or the owner's device; anyone gets each record's root, seq and leaf (`locked: true`, `counts: null`).",
         "parameters": [
           {
             "name": "policy",
@@ -6905,7 +6905,7 @@
                     }
                   ]
                 },
-                "counterparty_slot": {
+                "counterpartySlot": {
                   "anyOf": [
                     {
                       "type": "object",

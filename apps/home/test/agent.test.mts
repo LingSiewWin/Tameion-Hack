@@ -54,7 +54,7 @@ const symbolon: Symbolon = {
   counts: { unsigned: 0, single: 2, double: 1, triple: 0 },
   chainReadFailed: [ROOT_B],
   records: [
-    { root: ROOT_A, seq: 0, leaf: `0x${"f1".repeat(32)}`, kind: "FLOWCHECK", at: 1792274100, anchorTx: `0x${"a0".repeat(32)}`, agent: null, counterparty_slot: null, witness },
+    { root: ROOT_A, seq: 0, leaf: `0x${"f1".repeat(32)}`, kind: "FLOWCHECK", at: 1792274100, anchorTx: `0x${"a0".repeat(32)}`, agent: null, counterpartySlot: null, witness },
     {
       root: ROOT_A,
       seq: 2,
@@ -68,10 +68,10 @@ const symbolon: Symbolon = {
       note: "paid",
       anchorTx: `0x${"66".repeat(32)}`,
       agent: null,
-      counterparty_slot: { alg: "secp256k1-eip712", keyId: VENDOR, verified: true },
+      counterpartySlot: { alg: "secp256k1-eip712", keyId: VENDOR, verified: true },
       witness,
     },
-    { root: ROOT_B, seq: 1, leaf: `0x${"7b".repeat(32)}`, kind: "DECISION", at: 1792274300, counterparty: VENDOR, amount: "0.500000 USDC", decision: "BLOCK", anchorTx: `0x${"ed".repeat(32)}`, agent: null, counterparty_slot: null, witness: null },
+    { root: ROOT_B, seq: 1, leaf: `0x${"7b".repeat(32)}`, kind: "DECISION", at: 1792274300, counterparty: VENDOR, amount: "0.500000 USDC", decision: "BLOCK", anchorTx: `0x${"ed".repeat(32)}`, agent: null, counterpartySlot: null, witness: null },
   ],
 };
 const status = { ok: true, contractVersion: "2026-10-18.1", recentUpdates: [], rate: "0.000428 USDC", windowDays: 7, runway: { byRateDays: 109, firstShortfallDays: null } } as Status;

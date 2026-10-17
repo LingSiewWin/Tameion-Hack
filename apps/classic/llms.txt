@@ -266,7 +266,7 @@ while on testnet); Tameion takes nothing per payment.
 - See who stands behind each record: `GET /api/level1/symbolon?policy=…[&root=…]`.
   Per record (settlement, decision, flow, meter or price check): its `root`,
   `seq`, `leaf`, `kind`, counterparty and amount, and three slots — `agent`,
-  `counterparty_slot`, `witness` — each `{alg, keyId, verified}` or null. A
+  `counterpartySlot`, `witness` — each `{alg, keyId, verified}` or null. A
   slot is there only when its check passed in this read: the witness is the
   root's anchoring transaction read back on chain, the counterparty a
   payee-signed invoice the settlement paid; no record carries the agent's own

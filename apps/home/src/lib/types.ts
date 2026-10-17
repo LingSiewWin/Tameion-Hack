@@ -340,7 +340,7 @@ export type SymbolonRecord = {
   note?: string;
   anchorTx?: string | null;
   agent?: Slot | null;
-  counterparty_slot?: Slot | null;
+  counterpartySlot?: Slot | null;
   witness?: Slot | null;
 };
 

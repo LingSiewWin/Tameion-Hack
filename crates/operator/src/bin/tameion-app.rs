@@ -6194,7 +6194,7 @@ impl App {
                     _ => json!(anchor_tx.get(&root)),
                 };
                 v["agent"] = slot(s.agent.as_ref());
-                v["counterparty_slot"] = slot(s.counterparty.as_ref());
+                v["counterpartySlot"] = slot(s.counterparty.as_ref());
                 v["witness"] = slot(s.witness.as_ref());
                 v
             })

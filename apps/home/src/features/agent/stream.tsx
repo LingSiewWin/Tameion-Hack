@@ -17,7 +17,7 @@ const KIND: Record<string, string> = {
 type SlotName = "agent" | "counterparty" | "witness";
 const SLOTS: { name: SlotName; label: string; of: (r: SymbolonRecord) => Slot | null | undefined }[] = [
   { name: "agent", label: "Agent", of: (r) => r.agent },
-  { name: "counterparty", label: "Seller", of: (r) => r.counterparty_slot },
+  { name: "counterparty", label: "Seller", of: (r) => r.counterpartySlot },
   { name: "witness", label: "Witness", of: (r) => r.witness },
 ];
 

@@ -2351,7 +2351,7 @@ fn the_symbolon_route_shows_each_records_slots_and_outsiders_only_leaves() {
     assert_eq!(r["anchorTx"].as_str(), Some(tx.as_str()));
     assert!(r["agent"].is_null() && r["witness"].is_null(), "{r}");
     assert_eq!(
-        r["counterparty_slot"],
+        r["counterpartySlot"],
         serde_json::json!({ "alg": "secp256k1-eip712", "keyId": payee, "verified": true })
     );
     let leaf = r["leaf"].as_str().unwrap().to_string();
@@ -2391,5 +2391,5 @@ fn the_symbolon_route_shows_each_records_slots_and_outsiders_only_leaves() {
     assert!(!v.to_string().contains("secret") && !v.to_string().contains(&payee));
     let (_, v) = get(&path, "Authorization: Bearer k-read\r\n");
     assert_eq!(v["locked"].as_bool(), Some(false), "{v}");
-    assert_eq!(v["records"][0]["counterparty_slot"]["verified"], true);
+    assert_eq!(v["records"][0]["counterpartySlot"]["verified"], true);
 }
