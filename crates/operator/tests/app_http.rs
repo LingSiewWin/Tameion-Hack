@@ -2087,6 +2087,37 @@ fn the_service_caps_bodies_binds_replays_to_their_caller_and_stops_one_key() {
     assert_eq!(st, 403, "{b}");
     assert!(b.contains("the owner stopped this agent key"), "{b}");
 
+    // P-252: a pass goes only to a caller that may read its account; to anyone else it is the
+    // 404 of an id that does not exist. A Watch scan stays open by id.
+    std::fs::create_dir_all(dir.join("jobs")).unwrap();
+    std::fs::write(
+        dir.join("jobs").join("6ad40000-0001.json"),
+        format!(
+            r#"{{"id":"6ad40000-0001","created":1,"status":"done","request":{{"level1":"run","policy":"{policy}"}},"report":{{"pendingSignature":[]}}}}"#
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("jobs").join("6ad40000-0002.json"),
+        r#"{"id":"6ad40000-0002","created":1,"status":"done","request":{"chain":"arc-testnet","address":"0x1"}}"#,
+    )
+    .unwrap();
+    let pass = "/api/watch/6ad40000-0001";
+    let (st, _, b) = http_with(p, "GET", pass, "", "");
+    assert_eq!(st, 404, "no credential: {b}");
+    assert!(!b.contains("pendingSignature"), "{b}");
+    let (st, _, _) = http_with(p, "GET", pass, "", "Authorization: Bearer not-a-key\r\n");
+    assert_eq!(st, 404);
+    let (st, _, b) = http_with(p, "GET", pass, "", "Authorization: Bearer k-prep\r\n");
+    assert_eq!(st, 200, "a read key: {b}");
+    assert!(b.contains("6ad40000-0001"), "{b}");
+    let (st, _, b) = http_with(p, "GET", pass, "", &device);
+    assert_eq!(st, 200, "the owner's device: {b}");
+    let (st, _, _) = http_with(p, "GET", pass, "", read);
+    assert_eq!(st, 404, "a stopped key reads nothing");
+    let (st, _, b) = http_with(p, "GET", "/api/watch/6ad40000-0002", "", "");
+    assert_eq!(st, 200, "a Watch scan stays open by id: {b}");
+
     // P-253: the admin token from the header only.
     let (st, _, b) = http_with(
         p,

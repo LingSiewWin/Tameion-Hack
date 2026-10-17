@@ -37,7 +37,11 @@ export function useAccountRecord(policy: string, lastEvent: number | undefined) 
   const passId = inbox.data?.lastPass?.id;
   const job = useQuery({
     queryKey: ["agent-job", passId],
-    queryFn: () => getJson<Job>(`/api/watch/${passId}`),
+    // A pass is served only to a caller that may read the account (docs/60 P-252): this device's token or the agent key.
+    queryFn: () => {
+      const device = reserveToken.get(policy);
+      return getJson<Job>(`/api/watch/${passId}`, policy, device ? { "x-tameion-device": device } : undefined);
+    },
     enabled: !!passId,
     // a finished pass does not change
     staleTime: 3_600_000,

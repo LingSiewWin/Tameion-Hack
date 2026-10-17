@@ -413,8 +413,10 @@ check "sha256 on the receipt is the hash of the bytes returned" "$(echo "$B1" | 
 for _ in 1 2 3; do sleep 3; buy >/dev/null; done
 RUN_STATUS=$(curl -s -o /tmp/acc-x402-run.json -w '%{http_code}' -X POST http://127.0.0.1:$PORT2/api/level1/run -H 'content-type: application/json' -H "Authorization: Bearer $TOK" -d "{\"policy\":\"$P2\"}")
 J=$(jq_ "d['id']" < /tmp/acc-x402-run.json)
-for _ in $(seq 1 180); do S=$(curl -s http://127.0.0.1:$PORT2/api/watch/$J | jq_ "d['status']"); { [ "$S" = done ] || [ "$S" = failed ]; } && break; sleep 1; done
-REP=$(curl -s http://127.0.0.1:$PORT2/api/watch/$J); echo "$REP" > /tmp/acc-x402-pass.json
+# A pass is served only to a caller that may read its account (docs/60 P-252): the agent key, scope read.
+for _ in $(seq 1 180); do S=$(curl -s -H "Authorization: Bearer $TOK" http://127.0.0.1:$PORT2/api/watch/$J | jq_ "d['status']"); { [ "$S" = done ] || [ "$S" = failed ]; } && break; sleep 1; done
+REP=$(curl -s -H "Authorization: Bearer $TOK" http://127.0.0.1:$PORT2/api/watch/$J); echo "$REP" > /tmp/acc-x402-pass.json
+check "the pass is 404 to a caller without the account's read key" "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$PORT2/api/watch/$J)" "404"
 check "the pass finished" "$(echo "$REP" | jq_ "d['status']")" "done"
 check "the pass lists the seller as a bill, provenance x402 receipt, four samples" "$(echo "$REP" | jq_ "[(o['provenance'], o['samples']) for o in d['report']['obligationsList'] if o['counterparty']=='$SELLER_LC'][0]")" "('x402 receipt', 4)"
 check "the pass paid nothing by itself (a per-call API is not paid unprompted)" "$(echo "$REP" | jq_ "len(d['report']['settled'])")" "0"

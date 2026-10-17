@@ -2043,11 +2043,18 @@ impl App {
             (o, _) => o,
         };
         match outcome {
-            Ok((t, tok)) => json_reply(
-                "200 OK",
-                // Shown once; the record keeps only its sha256.
-                json!({ "tenant": t.public(), "explorer": preset.explorer, "reserveToken": tok }),
-            ),
+            Ok((t, tok)) => {
+                let reply = json_reply(
+                    "200 OK",
+                    // Shown once; the record keeps only its sha256.
+                    json!({ "tenant": t.public(), "explorer": preset.explorer, "reserveToken": tok }),
+                );
+                // Shown once, above; scrubbed from every later line and reply (docs/60 P-250).
+                if let Some(tok) = &tok {
+                    operator::guard::remember(tok);
+                }
+                reply
+            }
             Err(e) => json_reply("500 Internal Server Error", json!({ "error": e })),
         }
     }
@@ -7025,7 +7032,10 @@ impl App {
         if let Err(e) = level1::save(&self.dir, &t) {
             return json_reply("500 Internal Server Error", json!({ "error": e }));
         }
-        json_reply("200 OK", json!({ "policy": t.policy, "reserveToken": tok }))
+        let reply = json_reply("200 OK", json!({ "policy": t.policy, "reserveToken": tok }));
+        // Shown once, above; scrubbed from every later line and reply (docs/60 P-250).
+        operator::guard::remember(&tok);
+        reply
     }
 
     /// Calldata for the owner's passkey to set a standing order (PLAN 5.25):
@@ -7679,27 +7689,47 @@ impl App {
         }
     }
 
-    async fn get(&self, id: &str) -> Vec<u8> {
+    /// A job by id. A pass (`request.level1 == "run"`) goes only to a caller
+    /// that may read its account (`reads_account`: the owner's device or a
+    /// `read` key; anyone, on an account without keys); anyone else gets the
+    /// 404 of an id that does not exist, because ids are time-ordered and can
+    /// be guessed (docs/60 P-252). A Watch scan reads public chain data and
+    /// stays open by id.
+    async fn get(&self, id: &str, raw: &str, query: &str) -> Vec<u8> {
+        let none = || json_reply("404 Not Found", json!({ "error": "no such run" }));
         // Only the shape this service gives its jobs (`<hex>-<4 hex>`): the id
         // is joined into a path, and `../tenants/0x…` read any account's file,
         // webhook secret included (audit 2026-10-15, docs/60 P-75).
         if !is_job_id(id) {
-            return json_reply("404 Not Found", json!({ "error": "no such run" }));
+            return none();
         }
-        if let Some(j) = self.jobs.lock().await.get(id) {
-            return json_reply("200 OK", j.json());
+        let in_memory = self.jobs.lock().await.get(id).map(Job::json);
+        let job = match in_memory {
+            Some(v) => v,
+            // A job from before a restart: read it back from disk.
+            None => {
+                let p = self.dir.join("jobs").join(format!("{id}.json"));
+                match tokio::fs::read_to_string(&p)
+                    .await
+                    .ok()
+                    .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                {
+                    Some(v) => v,
+                    None => return none(),
+                }
+            }
+        };
+        if job["request"]["level1"] == "run" {
+            let readable = job["request"]["policy"]
+                .as_str()
+                .and_then(|p| level1::load(&self.dir, p))
+                .is_some_and(|t| self.reads_account(&t, raw, query));
+            if !readable {
+                return none();
+            }
         }
-        // A job from before a restart: read it back from disk.
-        let p = self.dir.join("jobs").join(format!("{id}.json"));
-        match tokio::fs::read_to_string(&p).await {
-            // Scrubbed like every JSON reply: a pass's error may carry a keyed RPC URL (P-250).
-            Ok(s) => respond(
-                "200 OK",
-                "application/json",
-                operator::guard::scrub(&s).as_bytes(),
-            ),
-            Err(_) => json_reply("404 Not Found", json!({ "error": "no such run" })),
-        }
+        // Scrubbed like every JSON reply: a pass's error may carry a keyed RPC URL (P-250).
+        json_reply("200 OK", job)
     }
 
     async fn runs(&self, raw: &str, query: &str) -> Vec<u8> {
@@ -8720,7 +8750,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                     ("GET", p) if p.starts_with("/api/watch/") => {
-                        app.get(&p["/api/watch/".len()..]).await
+                        app.get(&p["/api/watch/".len()..], &req, query).await
                     }
                     ("GET", "/api/runs") => app.runs(&req, query).await,
                     ("POST", "/api/level1/identity") => app.level1_identity(&body).await,
