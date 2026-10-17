@@ -12,8 +12,10 @@
 //!   one matching `Paid`, `ArcClient::confirm_paid`), else the anchoring of
 //!   its record's root read back (`ArcClient::anchored_in`), which also
 //!   witnesses each decision;
-//! - counterparty: the payee-signed invoice (`invoice::verify`) of the bill
-//!   cycle a settlement paid; every such invoice is also a claim record;
+//! - counterparty: the payee-signed invoice (`invoice::verify`, its slot by
+//!   `sig::slot_sig` over the digest the payee signed) of the bill cycle a
+//!   settlement paid; every such invoice is also a claim record, keyed by
+//!   that digest;
 //! - agent: none; no existing record carries the agent's signature over it.
 //!
 //! Escalations are refusals, counted unsigned (`project` leaves them out).
@@ -25,6 +27,7 @@ use alloy::primitives::{Address, B256};
 use arc::ArcError;
 use ledger::symbolon::{Extras, SlotSig, Symbolon, SymbolonKind, project, record_hash};
 use ledger::{Currency, Decision, Event, EventBody, Money};
+use operator::sig::{self, Alg, KeyRef};
 use operator::{audit, invoice, statement, watch};
 use pistis::{Flow, Params, Record};
 use serde_json::Value;
@@ -81,7 +84,8 @@ fn read_json(path: &Path) -> Option<Value> {
 }
 
 /// One account's records with their slots filled, and its chain read-backs.
-async fn records_of(tenants: &Path, policy: &str) -> Result<(Vec<Record>, Reads), String> {
+async fn records_of(app: &Path, policy: &str) -> Result<(Vec<Record>, Reads), String> {
+    let tenants = &app.join("tenants");
     let account = read_json(&tenants.join(format!("{policy}.json"))).ok_or("no account file")?;
     let chain = account["chain"].as_str().unwrap_or("arc-testnet");
     let preset = watch::chain(chain).ok_or_else(|| format!("unknown chain {chain}"))?;
@@ -106,25 +110,39 @@ async fn records_of(tenants: &Path, policy: &str) -> Result<(Vec<Record>, Reads)
         .filter_map(|l| serde_json::from_str::<Value>(l).ok())
     {
         let issued = v["issuedAt"].as_u64().unwrap_or_default();
+        let hex = |k: &str| {
+            v[k].as_str()
+                .and_then(|s| alloy::hex::decode(s.trim_start_matches("0x")).ok())
+        };
         let (Ok(inv), Some(sig)) = (
             invoice::verify(preset.chain_id, policy_addr, &v, issued),
-            v["signature"]
-                .as_str()
-                .and_then(|s| alloy::hex::decode(s).ok()),
+            hex("signature"),
         ) else {
             continue;
         };
-        let payee = format!("{:#x}", inv.payee);
-        let slot = SlotSig {
-            alg: "secp256k1-eip712".into(),
-            key_id: payee.clone(),
-            sig,
-            at: issued as i64,
+        // The slot says how it was signed, as `symbolon_count` fills it: by the
+        // payee's address, or by the ML-DSA-65 key the payee bound here.
+        let pk = match inv.alg {
+            Some(Alg::MlDsa65) => {
+                let bound = invoice::binding_for(app, policy, inv.payee);
+                match (invoice::floor(&inv, bound.as_ref()), hex("publicKey")) {
+                    (Ok(()), Some(pk)) => Some(pk),
+                    _ => continue,
+                }
+            }
+            _ => None,
         };
-        let mut claim = unsigned(
-            invoice::id(inv.payee, inv.reference).0,
-            SymbolonKind::Invoice,
-        );
+        let key = match &pk {
+            Some(pk) => KeyRef::MlDsa65(pk),
+            None => KeyRef::Address(inv.payee),
+        };
+        let digest = invoice::digest(preset.chain_id, &inv).0;
+        let alg = inv.alg.unwrap_or(Alg::Secp256k1Eip712);
+        let Ok(slot) = sig::slot_sig(alg, &key, &digest, &sig, issued as i64) else {
+            continue;
+        };
+        let payee = format!("{:#x}", inv.payee);
+        let mut claim = unsigned(digest, SymbolonKind::Invoice);
         claim.counterparty = Some(slot.clone());
         records.push(Record {
             sym: claim,
@@ -345,7 +363,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .and_then(|v| v["chain"].as_str().map(str::to_string))
             .unwrap_or_default();
         let short = format!("{}…{}", &policy[..6], &policy[38..]);
-        match records_of(&tenants, policy).await {
+        match records_of(Path::new(&app), policy).await {
             Ok((records, r)) => {
                 let s = pistis::score(&records, now, &p);
                 let counts = [s.n_unsigned, s.n_single, s.n_double, s.n_triple];
