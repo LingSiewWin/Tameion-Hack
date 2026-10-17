@@ -1,0 +1,97 @@
+# Two-sided metering (docs/117 §6) — seat S27, branch seat/S27
+# Started 2026-10-17 23:55:57 +0800. Every number below is a command's output, pasted.
+
+## 1. The live reconciliation: blocked on the Admin key (checked 23:55:57 +0800)
+$ ls -l ~/.tameion/anthropic-admin.key
+ls: ~/.tameion/anthropic-admin.key: No such file or directory
+$ meter_reconcile            # live mode: the last 60 minutes from GET /v1/organizations/usage_report/messages
+framed-not-built — missing: an Anthropic Admin API key at ~/.tameion/anthropic-admin.key (Console → Organization → Admin keys; it reads usage and cost, never sends a message).
+Recommended with it: a separate Messages key for the public host, so the report's api_key_id tells its traffic from this Mac's.
+exit=2
+
+## 2. Capture, end to end: one real decider call through a metered client (Anthropic's reply, this Mac)
+# Code at commit 62ae290 (before the pass/subject fields of the addendum; re-run with the final code in section 4).
+2026-10-17 23:35:35 +0800
+$ ANTHROPIC_API_KEY="$(cat ~/.tameion/anthropic.key)" meter_reconcile --probe --meter ~/Documents/Github/Tameion-Hack/runtime/seats/S27/app/meter.jsonl
+decided pay (usual) by claude-sonnet-5-5: Northwind Hosting has been paid 6 times on a 30 day cycle, this 49 USDC matches the usual amount, it is due now, and the runway of 64 days is ample.
+meter line: at 2026-10-17T15:35:38Z model claude-sonnet-5-5 purpose decide uncached_in 1879 cache_read 0 cache_create 0 out 78 request_id req_011Cg84ArRpMLY8VjjNqEDPp
+exit=0
+$ ls -l ~/Documents/Github/Tameion-Hack/runtime/seats/S27/app/meter.jsonl
+-rw-------@ 199 ~/Documents/Github/Tameion-Hack/runtime/seats/S27/app/meter.jsonl
+
+## 3. The reconcile on the documented shapes, through the binary (code at 14d66e1, run 2026-10-18 00:33:15 +0800)
+# crates/operator/tests/fixtures/anthropic-usage-report.json and anthropic-api-keys.json are the reference pages' own examples, copied verbatim
+# (platform.claude.com/docs/en/api/admin-api/usage-cost/get-messages-usage-report, .../apikeys/list-api-keys).
+# crates/operator/tests/fixtures/meter-synthetic.jsonl: two opus lines summing to the docs' row, one sonnet line the report lacks, one line after the bucket.
+$ meter_reconcile --report crates/operator/tests/fixtures/anthropic-usage-report.json --keys crates/operator/tests/fixtures/anthropic-api-keys.json --meter crates/operator/tests/fixtures/meter-synthetic.jsonl --out <seat>/app/meter-record
+note: crates/operator/tests/fixtures/anthropic-usage-report.json is one page of several (has_more); only this page is compared
+meter crates/operator/tests/fixtures/meter-synthetic.jsonl (4 lines) against 1 report buckets
+2025-08-01T00:00:00Z .. 2025-08-02T00:00:00Z  claude-opus-5-5   ours   1700 in   500 out | theirs   1700 in   500 out | match. 1500 uncached + 200 cache read + 0 cache write in, 500 out on both sides; scope: key apikey_01Rj2N8SVvo6BePZj99NhmiT
+2025-08-01T00:00:00Z .. 2025-08-02T00:00:00Z  claude-sonnet-5-5 ours    900 in   100 out | theirs      0 in     0 out | theirs missing. ours: 900 uncached + 0 cache read + 0 cache write in, 100 out; theirs: 0 uncached + 0 cache read + 0 cache write in, 0 out; scope: key apikey_01Rj2N8SVvo6BePZj99NhmiT
+2025-08-01T00:00:00Z .. 2025-08-02T00:00:00Z  *                 ours   2600 in   600 out | theirs   1700 in   500 out | summary: 1 of 2 bucket-model pairs differ (theirs missing 1), 1 match; 1 of our 4 lines outside the report's 1 buckets; scope: key apikey_01Rj2N8SVvo6BePZj99NhmiT
+record: ~/Documents/Github/Tameion-Hack/runtime/seats/S27/app/meter-record/0xc6279fa40dd444731eed2109cf0a2ae75b0022898538e4e8a56ac4beb5823790.events.jsonl (3 MeterCheck events, root 0xc6279fa40dd444731eed2109cf0a2ae75b0022898538e4e8a56ac4beb5823790)
+witness evt:0: provider-report anthropic:usage_report sha256 7985dca6f706d55e759d0a6f92f8118cdfdab09f22e75014392f350f283c6165
+witness evt:1: provider-report anthropic:usage_report sha256 7985dca6f706d55e759d0a6f92f8118cdfdab09f22e75014392f350f283c6165
+exit=1   (1: a bucket differs — the sonnet line Anthropic never billed)
+
+# The same report against the two opus lines alone: every compared bucket agrees.
+$ meter_reconcile --report … --keys … --meter <the first two lines> --out <seat>/app/meter-record
+note: crates/operator/tests/fixtures/anthropic-usage-report.json is one page of several (has_more); only this page is compared
+meter <scratch>/agree.jsonl (2 lines) against 1 report buckets
+2025-08-01T00:00:00Z .. 2025-08-02T00:00:00Z  claude-opus-5-5   ours   1700 in   500 out | theirs   1700 in   500 out | match. 1500 uncached + 200 cache read + 0 cache write in, 500 out on both sides; scope: key apikey_01Rj2N8SVvo6BePZj99NhmiT
+2025-08-01T00:00:00Z .. 2025-08-02T00:00:00Z  *                 ours   1700 in   500 out | theirs   1700 in   500 out | summary: 0 of 1 bucket-model pairs differ, 1 match; 0 of our 2 lines outside the report's 1 buckets; scope: key apikey_01Rj2N8SVvo6BePZj99NhmiT
+record: ~/Documents/Github/Tameion-Hack/runtime/seats/S27/app/meter-record/0xd2a48184aeae0fcf3832f1a64a51da023d2503251c44a94a98c1d82199ba6d08.events.jsonl (2 MeterCheck events, root 0xd2a48184aeae0fcf3832f1a64a51da023d2503251c44a94a98c1d82199ba6d08)
+witness evt:0: provider-report anthropic:usage_report sha256 7985dca6f706d55e759d0a6f92f8118cdfdab09f22e75014392f350f283c6165
+exit=0
+
+# The bucket's SHA-256 (what the witness slot cites), recomputed outside Rust: keys sorted, no whitespace.
+$ python3 -c 'sha256(json.dumps(report["data"][0], sort_keys=True, separators=(",",":")))'
+7985dca6f706d55e759d0a6f92f8118cdfdab09f22e75014392f350f283c6165
+
+# The first record, recomputed by examples/audit.rs (written before this seat; it hashes the canonical bytes and asks the chain).
+# AGENT is the zero address on purpose: this record is not anchored, and the chain line says so.
+$ AUDIT_EVENTS=<seat>/app/meter-record/0xc6279fa4….events.jsonl ANCHOR=$(cat runtime/arc_anchor.addr) AGENT=0x0…0 audit
+# audit ~/Documents/Github/Tameion-Hack/runtime/seats/S27/app/meter-record/0xc6279fa40dd444731eed2109cf0a2ae75b0022898538e4e8a56ac4beb5823790.events.jsonl
+[0000] METERCHECK  match. 1500 uncached + 200 cache read + 0 cache write in, 500 out on both sides; scope: key apikey_01Rj2N8SVvo6BePZj99NhmiT
+[0001] METERCHECK  theirs missing. ours: 900 uncached + 0 cache read + 0 cache write in, 100 out; theirs: 0 uncached + 0 cache read + 0 cache write in, 0 out; scope: key apikey_01Rj2N8SVvo6BePZj99NhmiT
+[0002] METERCHECK  summary: 1 of 2 bucket-model pairs differ (theirs missing 1), 1 match; 1 of our 4 lines outside the report's 1 buckets; scope: key apikey_01Rj2N8SVvo6BePZj99NhmiT
+events          : 3
+recomputed root : 0xc6279fa40dd444731eed2109cf0a2ae75b0022898538e4e8a56ac4beb5823790
+file name       : 0xc6279fa40dd444731eed2109cf0a2ae75b0022898538e4e8a56ac4beb5823790   MATCH
+Error: Contract("Max retries exceeded error sending request for url (https://rpc.testnet.arc.network/)")
+exit=1
+# The chain line failed on the Arc public RPC (rate limit, docs/60 P-12/P-14). It has nothing to report here: the record is not anchored.
+
+## 4. Capture again with the final code (14d66e1, run 2026-10-18 00:34:16 +0800): one real decider call, metered
+$ ANTHROPIC_API_KEY="$(cat ~/.tameion/anthropic.key)" meter_reconcile --probe --meter <seat>/app/meter.jsonl
+decided pay (usual) by claude-sonnet-5-5: Northwind Hosting has been paid 6 times on a 30 day cycle, this 49 USDC matches the usual amount, and it is due now.
+meter line: at 2026-10-17T16:34:18Z model claude-sonnet-5-5 purpose decide uncached_in 1879 cache_read 0 cache_create 0 out 66 request_id req_011Cg88eP6FXSqynMWjf8Rzk
+exit=0
+# The file as written (key_hint shown only to its 13-character type prefix here; the file keeps 16 characters, never the key):
+$ sed -E 's/("key_hint":"sk-ant-[a-z0-9]+-)[^"]*/\1…/' <seat>/app/meter.jsonl; stat -f '%Sp %z' <seat>/app/meter.jsonl
+{"at":1792251338,"model":"claude-sonnet-5-5","key_hint":"sk-ant-api03-…","uncached_in":1879,"cache_read":0,"cache_create":0,"out":78,"request_id":"req_011Cg84ArRpMLY8VjjNqEDPp","purpose":"decide"}
+{"at":1792254858,"model":"claude-sonnet-5-5","key_hint":"sk-ant-api03-…","uncached_in":1879,"cache_read":0,"cache_create":0,"out":66,"request_id":"req_011Cg88eP6FXSqynMWjf8Rzk","purpose":"decide","subject":"Northwind Hosting"}
+-rw------- 428 bytes
+
+## 5. The gate at the last commit (run 2026-10-18 00:36:16 +0800, worktree runtime/wt/S27, own CARGO_TARGET_DIR)
+$ cargo clippy -p operator --all-targets -- -D warnings; cargo fmt -p operator -- --check; cargo test -p operator --no-fail-fast
+14d66e1 feat(operator): meter_reconcile prints each check's witness slot
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.86s
+fmt: clean
+test result: ok. 231 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.45s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.53s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.08s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+# 284 passed, 0 failed, 1 ignored (lib 231, tameion-app 18, app_http 18, claude_transport 5, hedge_advice 4, decide_eval 3, mcp_http 2, mcp_stdio 2, audit_kinds 1).
+
+## 6. What this proof does not show
+- A reconciliation against Anthropic's own report: no Admin API key on this Mac (section 1). Status: framed-not-built.
+- A witness slot on a real decision: the join (meter::witnesses) ran only on synthetic events in its test.
+- Anchoring: the meter records above are recomputable but were not anchored on chain.
