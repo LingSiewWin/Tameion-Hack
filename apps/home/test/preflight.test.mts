@@ -44,8 +44,8 @@ test("DESIGN.md's palette table (both formats) and tokens.css read to the same s
 
 test("the matrix: every state of a route in both views at both widths, filtered by flags", () => {
   const all = matrix({}, { policy: true });
-  // nine states in both views at both widths; the read-only guest page is the Owner view only
-  assert.equal(all.filter((s: { route: string }) => s.route === "account").length, (9 * 2 - 1) * 2);
+  // nine states in the Owner view, six in the Agent view (no guest, needs-you, empty), at both widths
+  assert.equal(all.filter((s: { route: string }) => s.route === "account").length, (9 + 6) * 2);
   const one = matrix(parseArgs(["--route", "account", "--state=loading,error", "--view", "owner", "--width", "390"]), { policy: true });
   assert.deepEqual(one.map(shotName), ["account-loading-owner-390.png", "account-error-owner-390.png"]);
   assert.ok(matrix({ route: "add" }, { policy: false }).every((s: { skip: boolean }) => s.skip), "no POLICY: account routes are skipped, not guessed");
