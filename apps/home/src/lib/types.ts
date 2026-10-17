@@ -1,4 +1,4 @@
-// The shapes the service answers with. Copied from apps/console/src/lib/types.ts (Tenant, Demo, Call, NeedRow, Invoice,
+// The shapes the service answers with. Copied from apps/console/src/lib/types.ts (Tenant, Demo, NameRecord, Call, NeedRow, Invoice,
 // Paid, Seller, Purchase, Runway, Momentum, Preview, Party, Inbox) without change; Status, Records, RecordEvent and
 // Recall are the service's own schemas in apps/classic/openapi.json (components.schemas.*), only the fields named there.
 // Amounts are the ledger's strings ("0.200000 USDC"); the page shows them, it never computes money (DESIGN Rule 3).
@@ -23,6 +23,9 @@ export type Tenant = {
 
 /** `GET /api/level1/demo` (docs/115 §3): the judge's five minutes, when the host runs demo mode. */
 export type Demo = { enabled: boolean; vendor: string; bill: { usdc: string; everySecs: number }; delaySecs: number };
+
+/** `GET /api/level1/name/<handle>` (docs/79 §6a Service 6). */
+export type NameRecord = { name: string; account: string; owner: string; chains: { key: string; name: string; chainId: number; deployed: boolean; account?: string }[] };
 
 export type Call = { to: string; data: string; summary?: string };
 

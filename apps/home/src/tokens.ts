@@ -30,8 +30,7 @@ export const palette = {
     rule: "#2A332C",
     red: "#E5534B",
     accent: "#7FD1A8",
-    // DESIGN gives --up/--down "same" for night; the day values read 2.4:1 on night paper, under the 4.5:1 rule,
-    // so night takes the night accent for up (as day up is the day accent) and day down's hue lifted to pass.
+    // night values lifted to >= 6:1 (DESIGN §Palette, H6 finding 2): the day values read 2.4:1 on night paper
     up: "#7FD1A8",
     down: "#D9A06A",
   },

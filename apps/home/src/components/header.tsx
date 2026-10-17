@@ -1,31 +1,32 @@
 "use client";
 // The header (DESIGN §Page grammar): the account's name on the left ("Tameion" when none), then the network word in
-// words and shape, then the capsule Owner | Agent — one tap, or `v`; remembered per device.
+// words and shape, then the capsule Owner | Agent — one tap, or `v`; remembered per device. The route carries the
+// name (`/a/<name>`); it shows only once the service resolves it to an account.
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { fetchTenant } from "../lib/api.ts";
+import { resolveAccount } from "../lib/api.ts";
 import { isViewKey, otherView, setView, useView } from "../lib/view.ts";
 import { VIEWS, type View } from "../tokens.ts";
 
 const LABEL: Record<View, string> = { owner: "Owner", agent: "Agent" };
 
 export function Header() {
-  const policy = useParams<{ policy?: string }>()?.policy;
+  const wanted = useParams<{ name?: string }>()?.name;
   const view = useView();
-  // undefined while the name is being read; null when the account has none (or the read failed)
-  const [name, setName] = useState<{ policy: string; name: string | null } | undefined>(undefined);
+  // the name as the service resolved it; null when no account has it (or the read failed)
+  const [resolved, setResolved] = useState<{ wanted: string; name: string | null } | undefined>(undefined);
 
   useEffect(() => {
-    if (!policy) return;
+    if (!wanted) return;
     let live = true;
-    fetchTenant(policy).then(
-      (t) => live && setName({ policy, name: t.name ?? null }),
-      () => live && setName({ policy, name: null }),
+    resolveAccount(wanted).then(
+      (r) => live && setResolved({ wanted, name: r?.name ?? null }),
+      () => live && setResolved({ wanted, name: null }),
     );
     return () => {
       live = false;
     };
-  }, [policy]);
+  }, [wanted]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -37,8 +38,8 @@ export function Header() {
     return () => window.removeEventListener("keydown", onKey);
   }, [view]);
 
-  const reading = policy !== undefined && name?.policy !== policy;
-  const title = policy && name?.policy === policy && name.name ? name.name : "Tameion";
+  const reading = wanted !== undefined && resolved?.wanted !== wanted;
+  const title = wanted && resolved?.wanted === wanted && resolved.name ? resolved.name : "Tameion";
 
   return (
     <header className="border-b border-(--rule)">
