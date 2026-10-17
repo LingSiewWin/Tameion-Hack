@@ -11,9 +11,12 @@ import {PasskeyPrincipal} from "../src/PasskeyPrincipal.sol";
 ///      WebAuthn assertions.
 contract PasskeyCoOwnersTest is Test {
     uint256 internal constant N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551;
-    uint256 internal constant KEY0 = 0x1d4bd2f8b1c2a3e4f5061728394a5b6c7d8e9fa0b1c2d3e4f50617283940abcd;
-    uint256 internal constant KEY1 = 0x2a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f70819;
-    uint256 internal constant KEY2 = 0x3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f80912;
+    uint256 internal constant KEY0 = uint256(keccak256("tameion test scalar PasskeyCoOwners.t.sol KEY0"))
+        % 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551; // derived, never a literal key
+    uint256 internal constant KEY1 = uint256(keccak256("tameion test scalar PasskeyCoOwners.t.sol KEY1"))
+        % 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551; // derived, never a literal key
+    uint256 internal constant KEY2 = uint256(keccak256("tameion test scalar PasskeyCoOwners.t.sol KEY2"))
+        % 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551; // derived, never a literal key
     uint256 internal constant USDC = 1_000000;
     bytes1 internal constant UP_UV = 0x05;
 

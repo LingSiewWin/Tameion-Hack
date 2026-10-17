@@ -24,8 +24,10 @@ contract Pokee {
 abstract contract AgilitySigner is Test {
     uint256 internal constant N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551;
     uint256 internal constant SECP_N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141;
-    uint256 internal constant PASSKEY = 0x1d4bd2f8b1c2a3e4f5061728394a5b6c7d8e9fa0b1c2d3e4f50617283940abcd;
-    uint256 internal constant PASSKEY2 = 0x2a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f70819;
+    uint256 internal constant PASSKEY = uint256(keccak256("tameion test scalar PasskeyAgility.t.sol PASSKEY"))
+        % 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551; // derived, never a literal key
+    uint256 internal constant PASSKEY2 = uint256(keccak256("tameion test scalar PasskeyAgility.t.sol PASSKEY2"))
+        % 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551; // derived, never a literal key
     bytes1 internal constant UP_UV = 0x05;
 
     bytes32 internal constant SECP = keccak256("secp256k1");
