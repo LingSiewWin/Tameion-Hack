@@ -145,6 +145,8 @@ export type Inbox = {
   /** Payees the contract attests, and from when the agent may pay each (the waiting period). */
   payees?: { address: string; approvedAt: number; payableFrom: number; payableNow: boolean }[];
   purchases?: Purchase[];
+  /** Purchases held because they cost more than 25 % above that seller's usual price: one owner tap lets one through. */
+  pricesToApprove?: { seller: string; host?: string; amount: string; minor?: string; usual?: string; reason?: string; url?: string; at?: number; why?: string }[];
   protectedPerDay: string;
   chosenDaily?: string;
   deployed?: boolean;

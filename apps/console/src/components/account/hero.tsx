@@ -95,7 +95,9 @@ export function Hero() {
   }
 
   // The service's own count of what waits for the owner (the list an agent reads too); the page's sum on an older service.
-  const waiting = inbox.waitingCount ?? inbox.needsYou.length + (inbox.sellersToApprove?.length ?? 0) + (inbox.invoices?.length ?? 0);
+  // Purchases held for a price above the seller's usual are not in the service's list yet: added, never counted twice.
+  const prices = Math.max(0, (inbox.pricesToApprove?.length ?? 0) - (inbox.waiting?.filter((w) => w.kind === "price").length ?? 0));
+  const waiting = (inbox.waitingCount ?? inbox.needsYou.length + (inbox.sellersToApprove?.length ?? 0) + (inbox.invoices?.length ?? 0)) + prices;
   const found = inbox.lastPass?.obligations ?? inbox.preview?.bills?.length ?? 0;
   const anchor = inbox.lastPass?.anchorTx;
 

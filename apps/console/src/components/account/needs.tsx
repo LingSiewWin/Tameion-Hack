@@ -4,8 +4,8 @@ import { Check, CheckCircle2, Inbox, Loader2 } from "lucide-react";
 import { EmptyState, Row as Line, Rows, Section, Why } from "@/components/layout/section";
 import { Button } from "@/components/ui/button";
 import { invoiceDecideChallenge, minor, PAY, PAYEES } from "@/lib/guard";
-import { dateText, everyText, num, passkeyAssert, plainWhy, pretty, TC, usd } from "@/lib/tameion";
-import type { Invoice, NeedRow, Seller } from "@/lib/types";
+import { dateText, everyText, num, passkeyAssert, plainWhy, pretty, raw, TC, usd } from "@/lib/tameion";
+import type { Inbox as InboxData, Invoice, NeedRow, Seller } from "@/lib/types";
 import { useConfirm } from "./confirm";
 import { Receipt, useAccount, useAction, type ActionState } from "./ctx";
 import { partyOf, Payee } from "./payee";
@@ -60,8 +60,9 @@ export function NeedsYou() {
   const { confirm, dialog } = useConfirm();
   if (!inbox) return null;
   const sellers = inbox.sellersToApprove ?? [];
+  const prices = inbox.pricesToApprove ?? [];
   const invoices = inbox.invoices ?? [];
-  const empty = !inbox.needsYou.length && !sellers.length && !invoices.length;
+  const empty = !inbox.needsYou.length && !sellers.length && !invoices.length && !prices.length;
   // P-59: a bill whose reference was used on chain without paying its payee is
   // refused, and the owner has something to do; say it in the service's words.
   const misused = (inbox.refused ?? []).filter((x) => /used on chain without paying/.test(x.why || ""));
@@ -75,6 +76,9 @@ export function NeedsYou() {
       ) : (
         <Rows>
           {inbox.run && inbox.needsYou.length >= 2 && <PayAll confirm={confirm} />}
+          {prices.map((x) => (
+            <PriceRow key={x.seller + x.amount} x={x} />
+          ))}
           {sellers.map((s) => (
             <SellerRow key={s.seller + s.host} s={s} confirm={confirm} />
           ))}
@@ -213,6 +217,45 @@ function NeedItem({ n }: { n: NeedRow }) {
         }
       >
         <Working state={pay.state} label={n.attest ? "Approve & pay" : "Pay"} />
+      </Button>
+    </Row>
+  );
+}
+
+/** A purchase held because it costs more than 25 % above what this seller usually charges: one tap lets one such purchase
+ *  through within ten minutes (`POST /api/level1/purchase-approve`, the owner's device only); the limits still bound it. */
+function PriceRow({ x }: { x: NonNullable<InboxData["pricesToApprove"]>[number] }) {
+  const { post, tenant, refresh } = useAccount();
+  const { state, run } = useAction();
+  const host = x.host || "this seller";
+  return (
+    <Row
+      state={state}
+      title={
+        <>
+          Let the agent buy from <span className="font-semibold">{host}</span> at <span className="figures">{usd(x.amount)} USDC</span>
+          {x.usual ? (
+            <>
+              {" "}
+              (usually <span className="figures">{usd(x.usual)}</span>)
+            </>
+          ) : null}
+        </>
+      }
+      why={`${x.reason ? `It wanted it for: ${x.reason}. ` : ""}It held this purchase because the price is more than a quarter above what ${host} usually charges. One tap lets one purchase through at up to this price within ten minutes; your limits still bound it.`}
+    >
+      <Button
+        disabled={state.kind === "working"}
+        onClick={() =>
+          run("Letting it through…", async () => {
+            const r = await post<{ until: number }>("/api/level1/purchase-approve", { policy: tenant.policy, seller: x.seller, amount: raw(x.amount) });
+            setTimeout(refresh, 3000);
+            const until = new Date(r.until * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+            return { text: `The agent may buy once from ${host} at up to ${usd(x.amount)} USDC until ${until}.` };
+          })
+        }
+      >
+        <Working state={state} label="Let it through" />
       </Button>
     </Row>
   );

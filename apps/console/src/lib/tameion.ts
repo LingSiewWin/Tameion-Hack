@@ -310,16 +310,21 @@ export const authHeaders = (policy?: string): Record<string, string> => {
 
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  /** The service's whole answer, for the fields beside `error` (e.g. a 409's `nextUnpaid`). */
+  data?: Record<string, unknown>;
+  constructor(message: string, status: number, data?: Record<string, unknown>) {
     super(message);
     this.status = status;
+    this.data = data;
   }
 }
 
-/** The owner's device token on the routes the service gates as `prepare` (`prepare-*`, `fund`; docs/60 P-170): once an
- *  agent key exists the gate asks for a credential, and the page that holds the owner's passkey has this one, not a key. */
+/** The owner's device token on the routes the service gates as `prepare` (`prepare-*`, `fund`; docs/60 P-170), and on
+ *  `purchase-approve`, which only the owner's device may call, and the owner's own check, bills and invoice decisions
+ *  (`run`, `bills`, `invoice-decide`; P-225; never `buy`): once an agent key exists the gate asks for a credential,
+ *  and the page that holds the owner's passkey has this one, not a key. */
 const ownerDevice = (path: string, policy?: string): Record<string, string> => {
-  const tok = policy && /^\/api\/level1\/(prepare-|fund$)/.test(path) ? reserveToken.get(policy) : null;
+  const tok = policy && /^\/api\/level1\/(prepare-|fund$|purchase-approve$|run$|bills$|invoice-decide$)/.test(path) ? reserveToken.get(policy) : null;
   return tok ? { "x-tameion-device": tok } : {};
 };
 
@@ -331,7 +336,7 @@ export async function post<T = Record<string, unknown>>(path: string, body: unkn
   });
   const d = await r.json().catch(() => ({}));
   if (r.status === 401 && policy && agentKey(policy)) forgetKey(policy);
-  if (!r.ok) throw new ApiError((d as { error?: string }).error || r.statusText, r.status);
+  if (!r.ok) throw new ApiError((d as { error?: string }).error || r.statusText, r.status, d as Record<string, unknown>);
   return d as T;
 }
 

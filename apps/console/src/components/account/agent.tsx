@@ -6,7 +6,7 @@ import { Section, Why } from "@/components/layout/section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { build, minor } from "@/lib/guard";
-import { everyText, fetchInbox, inText, raw, sentence, usd } from "@/lib/tameion";
+import { ApiError, dateText, everyText, fetchInbox, inText, raw, sentence, usd } from "@/lib/tameion";
 import type { Inbox } from "@/lib/types";
 import { Receipt, useAccount, useAction } from "./ctx";
 import { Payee } from "./payee";
@@ -177,8 +177,11 @@ export function Suggestions() {
   const cands = inbox.standingOrderCandidates ?? [];
   const any = sg || inbox.recommendAutopilot || aa?.renewSuggested || orders.length || cands.length;
   if (!any) return null;
+  // The step a tap is on shows too: "Make it standing" says there when it moves the first date (P-211).
   const out = (s: ReturnType<typeof useAction>["state"]) =>
-    s.kind === "error" ? (
+    s.kind === "working" ? (
+      <p className="mt-2 text-sm text-muted-foreground">{s.label}</p>
+    ) : s.kind === "error" ? (
       <p className="mt-2 text-sm text-destructive">{s.text}</p>
     ) : s.kind === "done" ? (
       <p className="mt-2 text-sm text-protect">
@@ -289,20 +292,38 @@ export function Suggestions() {
                 variant="outline"
                 disabled={so.state.kind === "working"}
                 onClick={() =>
-                  so.run("Setting…", async () => {
-                    const prep = await post<{ to: string; data: string }>("/api/level1/prepare-schedule", {
-                      policy: tenant.policy,
-                      payee: c.payee,
-                      amount: raw(c.amount),
-                      everySecs: c.everySecs,
-                      firstDue: c.nextDue,
-                    });
+                  so.run("Setting…", async (step) => {
+                    const ask = (firstDue: number) =>
+                      post<{ to: string; data: string }>("/api/level1/prepare-schedule", {
+                        policy: tenant.policy,
+                        payee: c.payee,
+                        amount: raw(c.amount),
+                        everySecs: c.everySecs,
+                        firstDue,
+                      });
+                    // A first due date already paid would pay that cycle twice: the service answers 409 with the next
+                    // unpaid one, and the same tap starts the order there, saying so (docs/60 P-211).
+                    let first = c.nextDue;
+                    let moved = "";
+                    let prep: { to: string; data: string };
+                    try {
+                      prep = await ask(first);
+                    } catch (e) {
+                      const next = e instanceof ApiError && e.status === 409 ? Number(e.data?.nextUnpaid) : NaN;
+                      if (!(next > first)) throw e;
+                      moved = `The ${dateText(first)} bill was already paid, so the order starts at the next unpaid one, ${dateText(next)}.`;
+                      step(`${moved} Setting…`);
+                      first = next;
+                      prep = await ask(first).catch((e2: Error) => {
+                        throw new Error(`${e2.message} (${moved})`);
+                      });
+                    }
                     const ex = await sign(prep.to, prep.data, {
                       fn: ["addSchedule"],
-                      data: build("addSchedule", [c.payee, minor(c.amount), BigInt(c.everySecs), BigInt(c.nextDue)]),
+                      data: build("addSchedule", [c.payee, minor(c.amount), BigInt(c.everySecs), BigInt(first)]),
                     });
                     setTimeout(refresh, 3000);
-                    return { text: "Standing order set.", href: ex.explorer };
+                    return { text: moved ? `Standing order set. ${moved}` : "Standing order set.", href: ex.explorer };
                   })
                 }
               >
