@@ -1107,6 +1107,10 @@
                         "everyDays": {
                           "type": "integer"
                         },
+                        "everySecs": {
+                          "type": "integer",
+                          "description": "Demo mode only: a cadence in seconds, at least 60 (outside demo mode refused: bills repeat every 1 to 366 days); the first cycle falls due one cadence after the save unless nextDue is given; such a bill ends after 15 cycles."
+                        },
                         "nextDue": {
                           "type": "integer",
                           "description": "unix seconds; default now"
@@ -1181,6 +1185,16 @@
         "responses": {
           "200": {
             "description": "config"
+          }
+        }
+      }
+    },
+    "/api/level1/demo": {
+      "get": {
+        "summary": "The judge's path on this host (docs/115 §3): enabled (TAMEION_DEMO=1, a demo vendor and an invite word), vendor (the demo payee's address), bill {usdc, everySecs, cycles} (the one-tap bill: 0.002 USDC every 120 s, ending after 15 cycles), delaySecs (a demo account's delay, 30).",
+        "responses": {
+          "200": {
+            "description": "{enabled, vendor, bill: {usdc, everySecs, cycles}, delaySecs}"
           }
         }
       }
@@ -1261,6 +1275,10 @@
                   "partner": {
                     "type": "string",
                     "description": "PLAN 5.45: the id of the partner whose link the client came from; ignored unless the partner exists. An attribution, not a permission."
+                  },
+                  "demo": {
+                    "type": "boolean",
+                    "description": "Demo mode only (GET /api/level1/demo enabled; the invite word required): the account lands on chain at once with a 30 s delay and the relayer sends it 0.05 USDC; the reply adds demo {usdc, tx, agentGasTx, at} or demo {error}. Refused while the relayer is under its floor (503, code service_paused)."
                   }
                 }
               }
@@ -1364,7 +1382,7 @@
         },
         "responses": {
           "200": {
-            "description": "tx, explorer"
+            "description": "tx, explorer; raiseCancelled (a setLimits that only lowers is a cut: the operator cancels the raise waiting before it, tx or null; docs/60 P-265)"
           },
           "502": {
             "description": "the chain refused the call (bad signature, revert)"
