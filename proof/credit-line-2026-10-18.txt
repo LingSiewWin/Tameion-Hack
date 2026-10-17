@@ -1,0 +1,310 @@
+Credit line on Arc testnet: VouchBond + CreditLine (seat S30b)
+No external lender; testnet; not a lending protocol.
+
+Written 2026-10-18 00:21:32 +0800. Branch seat/S30b: 2ee7188 contracts, 1b04240 tests, 02e2221 + c8bc916 scripts/prove_credit.sh.
+Rebased onto main 0a2e3e9 at 2026-10-18 00:24:29 +0800 with no content change (git diff c8bc916 20e4b3f -- contracts scripts/prove_credit.sh: 0 lines):
+2ee7188 -> 26e20fa contracts, 1b04240 -> beae7b8 tests, 02e2221 -> 1bba29c and c8bc916 -> 20e4b3f script, README row 269815f.
+Chain: Arc testnet, chain id 5042002, via https://rpc.testnet.arc.io. The repo's https://rpc.testnet.arc.network answered NXDOMAIN
+from the local resolver, Cloudflare DNS-over-HTTPS and Google DNS-over-HTTPS on 2026-10-17 at about 23:40 +08; rpc.testnet.arc.io
+answers eth_chainId 0x4cef52 (5042002), as does the explorer's own https://explorer.testnet.arc.io/api/eth-rpc.
+One funded key, the treasury relayer 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25, acts as the account, the scorer and the judge here;
+the forge tests below keep the three roles apart (NotScorer, NotJudge). Amounts are USDC minor units (6 decimals); native wei = units x 1e12.
+
+THE FOUR TRANSACTIONS (all status 1, all indexed by the explorer as success)
+  1. lock   0.010000  https://explorer.testnet.arc.io/tx/0xcc330476aa6dad1fa45d54f2b76070ea1fae391d8a54731337dab6ce8b120000
+  2. draw   0.005000  https://explorer.testnet.arc.io/tx/0x04a942a11f79459377fdcedc2aeebc4e9d8156351ad8e612c323359e126fff58
+  3. repay  0.005000  https://explorer.testnet.arc.io/tx/0x80ebc193122cb4fecf4b1c88518d60d1a55c56e6065511e665bfbc484744b541
+  4. slash  0.002000  https://explorer.testnet.arc.io/tx/0xb57599854f2f2d446809424b20fc441d94d1514c008aa910469dc11335ed08cc
+     (evidence hash 0x4c42fe61ac7b2ada9047a4ca628a9983fb9a7f41b85770163e4b79ee2b9dc57c = keccak256 of a dummy string, mandate rule id 1)
+  CreditLine  https://explorer.testnet.arc.io/address/0x865fd8C823B98c78475Ddb7E83cB7903969133b6
+  around them: deploy 0x43e6bb02…fa60, float 0xa3ae0380…b133, setScore 0x95398ef5…c437, setPolicy 0x23de821c…5a22, and a second draw
+  of 0.002000 (0x8907ef55…14ac), left unpaid so the slash had a debt to cover: after the full repay, min(debt, deposit) is 0 and
+  slash refuses (NothingToSlash), as the last eth_call below shows. Draws were paid into a retired BudgetPolicy the relayer is principal of
+  (0x54Fb9a179e62EB1F818eC9dd710B9499a8395c4b).
+
+====================================================================================================
+1. FORGE: unit tests and invariants (coverage lines are the last run of each 256-run campaign)
+====================================================================================================
+forge run 2026-10-18 00:17:55 +0800
+commit 02e2221 (contracts unchanged since 2ee7188, tests since 1b04240)
+forge Version: 1.5.1-stable
+Compiling 58 files with Solc 0.8.28
+Solc 0.8.28 finished in 108.29s
+Compiler run successful!
+
+Ran 17 tests for test/CreditLine.t.sol:CreditLineTest
+[PASS] test_a_deposit_stays_slashable_during_the_cooling_off() (gas: 244703)
+[PASS] test_a_failed_payment_leaves_no_debt() (gas: 222134)
+[PASS] test_a_policy_that_reenters_cannot_pass_the_limit() (gas: 367713)
+[PASS] test_a_score_older_than_max_age_gives_limit_zero() (gas: 156068)
+[PASS] test_deposits_are_never_lent_only_the_float() (gas: 925408)
+[PASS] test_draw_past_the_limit_is_refused_by_name() (gas: 208779)
+[PASS] test_draw_pays_the_policy_and_records_the_debt() (gas: 209521)
+[PASS] test_dust_and_zero_locks_are_refused() (gas: 21105)
+[PASS] test_limit_is_deposit_times_multiplier_capped() (gas: 156699)
+[PASS] test_no_policy_no_draw_and_the_policy_is_set_once() (gas: 99577)
+[PASS] test_only_the_scorer_scores_and_only_up_to_10000() (gas: 16763)
+[PASS] test_paused_refuses_draws_but_not_repayment() (gas: 224757)
+[PASS] test_repay_never_takes_more_than_owed_or_dust() (gas: 213366)
+[PASS] test_slash_covers_the_debt_and_names_only_hash_and_rule() (gas: 207613)
+[PASS] test_slash_takes_at_most_the_deposit_the_rest_stays_owed() (gas: 175200)
+[PASS] test_the_multiplier_steps_at_2000_5000_8000() (gas: 10221)
+[PASS] test_unlock_waits_the_delay_and_not_while_owed() (gas: 220472)
+Suite result: ok. 17 passed; 0 failed; 0 skipped; finished in 24.94s (9.00ms CPU time)
+
+Ran 6 tests for test/CreditInvariant.t.sol:CreditInvariantTest
+[PASS] invariant_a_stale_score_gives_limit_zero() (runs: 256, calls: 51200, reverts: 0)
+
+| CreditHandler | draw          | 5026  | 0       | 0        |
+| CreditHandler | fund          | 5148  | 0       | 0        |
+| CreditHandler | lock          | 5113  | 0       | 0        |
+| CreditHandler | pause         | 5155  | 0       | 0        |
+| CreditHandler | repay         | 5192  | 0       | 0        |
+| CreditHandler | requestUnlock | 5085  | 0       | 0        |
+| CreditHandler | score         | 5099  | 0       | 0        |
+| CreditHandler | slash         | 5101  | 0       | 0        |
+| CreditHandler | unlock        | 5203  | 0       | 0        |
+| CreditHandler | wait          | 5078  | 0       | 0        |
+
+Logs:
+  draw 3 repay 1
+  slash 2 unlock 0
+  refused paused 3 refused stale 5
+
+[PASS] invariant_debt_within_the_limit_at_draw_time() (runs: 256, calls: 51200, reverts: 0)
+
+| CreditHandler | draw          | 5152  | 0       | 0        |
+| CreditHandler | fund          | 5199  | 0       | 0        |
+| CreditHandler | lock          | 5106  | 0       | 0        |
+| CreditHandler | pause         | 5060  | 0       | 0        |
+| CreditHandler | repay         | 5176  | 0       | 0        |
+| CreditHandler | requestUnlock | 5067  | 0       | 0        |
+| CreditHandler | score         | 5110  | 0       | 0        |
+| CreditHandler | slash         | 5004  | 0       | 0        |
+| CreditHandler | unlock        | 5208  | 0       | 0        |
+| CreditHandler | wait          | 5118  | 0       | 0        |
+
+Logs:
+  draw 2 repay 2
+  slash 1 unlock 0
+  refused paused 5 refused stale 6
+
+[PASS] invariant_money_is_conserved() (runs: 256, calls: 51200, reverts: 0)
+
+| CreditHandler | draw          | 5095  | 0       | 0        |
+| CreditHandler | fund          | 5153  | 0       | 0        |
+| CreditHandler | lock          | 5080  | 0       | 0        |
+| CreditHandler | pause         | 5210  | 0       | 0        |
+| CreditHandler | repay         | 5179  | 0       | 0        |
+| CreditHandler | requestUnlock | 5106  | 0       | 0        |
+| CreditHandler | score         | 5202  | 0       | 0        |
+| CreditHandler | slash         | 5111  | 0       | 0        |
+| CreditHandler | unlock        | 5006  | 0       | 0        |
+| CreditHandler | wait          | 5058  | 0       | 0        |
+
+Logs:
+  draw 5 repay 4
+  slash 2 unlock 1
+  refused paused 3 refused stale 8
+
+[PASS] invariant_no_draw_while_paused() (runs: 256, calls: 51200, reverts: 0)
+
+| CreditHandler | draw          | 5113  | 0       | 0        |
+| CreditHandler | fund          | 5151  | 0       | 0        |
+| CreditHandler | lock          | 5146  | 0       | 0        |
+| CreditHandler | pause         | 5008  | 0       | 0        |
+| CreditHandler | repay         | 5001  | 0       | 0        |
+| CreditHandler | requestUnlock | 5106  | 0       | 0        |
+| CreditHandler | score         | 5186  | 0       | 0        |
+| CreditHandler | slash         | 5101  | 0       | 0        |
+| CreditHandler | unlock        | 5267  | 0       | 0        |
+| CreditHandler | wait          | 5121  | 0       | 0        |
+
+Logs:
+  draw 4 repay 7
+  slash 3 unlock 0
+  refused paused 7 refused stale 5
+
+[PASS] invariant_slash_never_exceeds_the_deposit() (runs: 256, calls: 51200, reverts: 0)
+
+| CreditHandler | draw          | 5133  | 0       | 0        |
+| CreditHandler | fund          | 5071  | 0       | 0        |
+| CreditHandler | lock          | 5100  | 0       | 0        |
+| CreditHandler | pause         | 5142  | 0       | 0        |
+| CreditHandler | repay         | 4976  | 0       | 0        |
+| CreditHandler | requestUnlock | 5122  | 0       | 0        |
+| CreditHandler | score         | 5102  | 0       | 0        |
+| CreditHandler | slash         | 5178  | 0       | 0        |
+| CreditHandler | unlock        | 5078  | 0       | 0        |
+| CreditHandler | wait          | 5298  | 0       | 0        |
+
+Logs:
+  draw 4 repay 4
+  slash 1 unlock 0
+  refused paused 8 refused stale 4
+
+[PASS] invariant_vault_covers_deposits_less_slashed() (runs: 256, calls: 51200, reverts: 0)
+
+| CreditHandler | draw          | 5226  | 0       | 0        |
+| CreditHandler | fund          | 5156  | 0       | 0        |
+| CreditHandler | lock          | 4979  | 0       | 0        |
+| CreditHandler | pause         | 4991  | 0       | 0        |
+| CreditHandler | repay         | 5060  | 0       | 0        |
+| CreditHandler | requestUnlock | 5192  | 0       | 0        |
+| CreditHandler | score         | 5198  | 0       | 0        |
+| CreditHandler | slash         | 5125  | 0       | 0        |
+| CreditHandler | unlock        | 5154  | 0       | 0        |
+| CreditHandler | wait          | 5119  | 0       | 0        |
+
+Logs:
+  draw 6 repay 2
+  slash 2 unlock 0
+  refused paused 13 refused stale 3
+
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 24.94s (112.09s CPU time)
+
+Ran 2 test suites in 24.95s (49.88s CPU time): 23 tests passed, 0 failed, 0 skipped (23 total tests)
+
+====================================================================================================
+2. GAS FOR THE RUN
+====================================================================================================
+The relayer held 0.001285 USDC on Arc at 23:44 +08 (balance read with cast). Before the run it withdrew its own testnet USDC
+from a retired BudgetPolicy it is principal of (agent42, 0x54Fb9a17…; not referenced by the service, the console or any script):
+  withdraw 0.053290  tx 0x9786c6a07b30f3b25d843e0b6ee94b30d1fedc728d4071a44d8167ca0342f0a6  status 1  gas 31307  price 25000000000 wei  block 67695307
+  https://explorer.testnet.arc.io/tx/0x9786c6a07b30f3b25d843e0b6ee94b30d1fedc728d4071a44d8167ca0342f0a6
+  relayer after: 0.053792 USDC; agent42 policy after: 0.000000 USDC
+A second withdrawal from another retired policy (pre-46) was refused by the session's permission system and was not retried;
+fees were fixed at 22 gwei (base fee 20 gwei + 2 gwei tip) so the run fit the 0.053792.
+
+USDC SPENT BY THE RELAYER IN THE RUN (gas price 22 gwei = 20 base + 2 tip; gas from the receipts above)
+  gas per tx: float 22479, lock 67639, score 68128, policy 45876, draw 70109, repay 23218, draw2 70109, slash 35640, deploy 860034
+  total gas 1263232 x 22 gwei = 0.027791 USDC in fees
+  value sent to the CreditLine: float 0.005000 + lock 0.010000 + repay 0.005000 = 0.020000 USDC
+  fees + value = 0.047791 USDC; relayer balance read before 0.053792, after 0.006001: difference 0.047791
+  where the value is now: 0.013000 in the CreditLine (0.008000 deposit the relayer can unlock after 3600 s; 0.005000 float,
+  which has no withdraw path), 0.007000 in the agent42 policy (relayer is principal, withdrawable). The funding withdraw cost
+  31307 gas x 25 gwei = 0.000783 USDC on top.
+
+====================================================================================================
+3. THE ARC RUN: scripts/prove_credit.sh output, verbatim
+   The first pass timed out at the lock (RPC 'operation timed out'). The pending nonce (366) and deposit (0) showed nothing had
+   left, so the lock was safe to send; the script was changed to resend only while the nonce shows nothing left (c8bc916) and
+   resumed on the deployed line with LINE=.
+====================================================================================================
+run started 2026-10-18 00:12:00 +0800
+
+== chain ==
+  Arc testnet 5042002 via https://rpc.testnet.arc.io
+  relayer 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25 holds 0.053792 USDC
+
+== deploy CreditLine (scorer = judge = 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25, cap 0.050000, maxAge 86400s, unlock delay 3600s) ==
+Compiling 2 files with Solc 0.8.28
+Solc 0.8.28 finished in 3.03s
+Compiler run successful!
+Deployer: 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25
+Deployed to: 0x865fd8C823B98c78475Ddb7E83cB7903969133b6
+Transaction hash: 0x43e6bb02da2296be02331a538b863395f7aa72e127bae7a44670469dc39dfa60
+  CreditLine 0x865fd8C823B98c78475Ddb7E83cB7903969133b6
+             https://explorer.testnet.arc.io/address/0x865fd8C823B98c78475Ddb7E83cB7903969133b6
+
+== float 0.005000 (anyone may send; never a deposit) ==
+  float    tx 0xa3ae038006ed3c351de37e248898b2cfa5276069185c15c04540e553395db133  status 1  gas 22479
+           https://explorer.testnet.arc.io/tx/0xa3ae038006ed3c351de37e248898b2cfa5276069185c15c04540e553395db133
+
+== 1. lock 0.010000 ==
+Error: error sending request for url (https://rpc.testnet.arc.io/)
+
+Context:
+- operation timed out
+run ended 2026-10-18 00:13:02 +0800
+pre-resume: nonce 366, deposit 0
+resume started 2026-10-18 00:14:22 +0800
+
+== chain ==
+  Arc testnet 5042002 via https://rpc.testnet.arc.io
+  relayer 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25 holds 0.029377 USDC
+
+== resume on CreditLine 0x865fd8C823B98c78475Ddb7E83cB7903969133b6 (deploy and float already sent) ==
+
+== 1. lock 0.010000 ==
+  lock     tx 0xcc330476aa6dad1fa45d54f2b76070ea1fae391d8a54731337dab6ce8b120000  status 1  gas 67639
+           https://explorer.testnet.arc.io/tx/0xcc330476aa6dad1fa45d54f2b76070ea1fae391d8a54731337dab6ce8b120000
+  deposit 0.010000  debt 0.000000  limit 0.000000  totalDeposits 0.010000  float 0.005000  vault 0.015000 USDC
+
+== scorer sets 8000 bps; account registers its policy 0x54Fb9a179e62EB1F818eC9dd710B9499a8395c4b ==
+  score    tx 0x95398ef520e035a1d5ac2bdbaf66e44515c88549d35a5b33af9939e7b649c437  status 1  gas 68128
+           https://explorer.testnet.arc.io/tx/0x95398ef520e035a1d5ac2bdbaf66e44515c88549d35a5b33af9939e7b649c437
+  policy   tx 0x23de821ce031887dbc79b4436b2b3403e684db53f1def1eccfdbce6b861a5a22  status 1  gas 45876
+           https://explorer.testnet.arc.io/tx/0x23de821ce031887dbc79b4436b2b3403e684db53f1def1eccfdbce6b861a5a22
+  deposit 0.010000  debt 0.000000  limit 0.015000  totalDeposits 0.010000  float 0.005000  vault 0.015000 USDC
+
+== 2. draw 0.005000 into the policy ==
+  draw     tx 0x04a942a11f79459377fdcedc2aeebc4e9d8156351ad8e612c323359e126fff58  status 1  gas 70109
+           https://explorer.testnet.arc.io/tx/0x04a942a11f79459377fdcedc2aeebc4e9d8156351ad8e612c323359e126fff58
+  deposit 0.010000  debt 0.005000  limit 0.015000  totalDeposits 0.010000  float 0.000000  vault 0.010000 USDC
+
+== 3. repay 0.005000 ==
+  repay    tx 0x80ebc193122cb4fecf4b1c88518d60d1a55c56e6065511e665bfbc484744b541  status 1  gas 23218
+           https://explorer.testnet.arc.io/tx/0x80ebc193122cb4fecf4b1c88518d60d1a55c56e6065511e665bfbc484744b541
+  deposit 0.010000  debt 0.000000  limit 0.015000  totalDeposits 0.010000  float 0.005000  vault 0.015000 USDC
+
+== draw 0.002000, left unpaid ==
+  draw2    tx 0x8907ef55d41d45f52598e89fd743eeb19ab3d1c182c40cb2ee00f022610b14ac  status 1  gas 70109
+           https://explorer.testnet.arc.io/tx/0x8907ef55d41d45f52598e89fd743eeb19ab3d1c182c40cb2ee00f022610b14ac
+  deposit 0.010000  debt 0.002000  limit 0.015000  totalDeposits 0.010000  float 0.003000  vault 0.013000 USDC
+
+== 4. slash: evidence 0x4c42fe61ac7b2ada9047a4ca628a9983fb9a7f41b85770163e4b79ee2b9dc57c, rule 1 ==
+  slash    tx 0xb57599854f2f2d446809424b20fc441d94d1514c008aa910469dc11335ed08cc  status 1  gas 35640
+           https://explorer.testnet.arc.io/tx/0xb57599854f2f2d446809424b20fc441d94d1514c008aa910469dc11335ed08cc
+  deposit 0.008000  debt 0.000000  limit 0.012000  totalDeposits 0.008000  float 0.005000  vault 0.013000 USDC
+  policy 0x54Fb9a179e62EB1F818eC9dd710B9499a8395c4b received 0.007000 USDC from the two draws
+
+== what the line refuses (eth_call, nothing sent) ==
+  selector 0xee707362  NotJudge()
+  selector 0xb751e655  OverLimit(uint256,uint256)
+  selector 0x38fbeb34  NothingToSlash()
+  a stranger slashes:
+  refused: 0xee707362
+  the account draws 0.020000, past its limit:
+  refused: 0xb751e6550000000000000000000000000000000000000000000000000000000000004e200000000000000000000000000000000000000000000000000000000000002ee0
+  the judge slashes again with nothing owed:
+  refused: 0x38fbeb34
+
+== done ==
+  relayer now holds 0.006001 USDC
+resume ended 2026-10-18 00:15:24 +0800
+
+====================================================================================================
+4. READ BACK FROM THE CHAIN
+====================================================================================================
+== read back from the chain (2026-10-18 00:15:42 +0800)
+  deploy tx 0x43e6bb02da2296be02331a538b863395f7aa72e127bae7a44670469dc39dfa60 status 1 gas 860034 block 67695813 contract 0x865fd8c823b98c78475ddb7e83cb7903969133b6
+  code at 0x865fd8C823B98c78475Ddb7E83cB7903969133b6: 3720 bytes
+  scorer 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25 judge 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25 cap 50000 [5e4] maxAge 86400 [8.64e4] delay 3600
+  scoreOf(relayer) 8000 policyOf(relayer) 0x54Fb9a179e62EB1F818eC9dd710B9499a8395c4b paused false
+== events emitted by the CreditLine (8 logs, decoded from eth_getLogs)
+  block 67695821 tx 0xa3ae0380…  Funded  from=0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25  weiAmount=5000000000000000
+  block 67696082 tx 0xcc330476…  Locked  account=0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25  usdcUnits=10000
+  block 67696097 tx 0x95398ef5…  ScoreSet  account=0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25  bps=8000
+  block 67696102 tx 0x23de821c…  PolicySet  account=0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25  policy=0x54fb9a179e62eb1f818ec9dd710b9499a8395c4b
+  block 67696120 tx 0x04a942a1…  Drawn  account=0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25  policy=0x54fb9a179e62eb1f818ec9dd710b9499a8395c4b  usdcUnits=5000
+  block 67696138 tx 0x80ebc193…  Repaid  account=0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25  usdcUnits=5000
+  block 67696155 tx 0x8907ef55…  Drawn  account=0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25  policy=0x54fb9a179e62eb1f818ec9dd710b9499a8395c4b  usdcUnits=2000
+  block 67696172 tx 0xb5759985…  Slashed  account=0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25  evidenceHash=0x4c42fe61ac7b2ada9047a4ca628a9983fb9a7f41b85770163e4b79ee2b9dc57c  usdcUnits=2000  ruleId=1
+  explorer API (api/v2/transactions/<hash>): lock() ok success; draw(uint256) ok success; repay() ok success;
+  slash(address,bytes32,uint8) ok success. Code at the line: 3720 bytes = the local build's runtime size (forge build --sizes).
+
+====================================================================================================
+5. THE FULL FORGE GATE (every contract suite, fmt, lint), verbatim
+====================================================================================================
+gate 2026-10-18 00:20:50 +0800
+commit c8bc916
+-- forge test
+Ran 21 test suites in 291.62s (1181.96s CPU time): 210 tests passed, 0 failed, 0 skipped (210 total tests)
+-- forge fmt --check
+clean
+-- forge lint src (findings)
+0
+-- forge lint on the new test files (findings)
+0
+gate end 00:29:39
