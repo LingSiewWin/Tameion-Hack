@@ -2,7 +2,7 @@
 // carrying the contract rule behind it (`data-rule`). One plate; sections apart by space, never a ruled divider.
 import { receipt as words } from "./copy.ts";
 import type { Receipt } from "./receipt.ts";
-import { PLATE, T } from "./ui.tsx";
+import { PLATE, T } from "./styles.ts";
 
 const SECTIONS = ["can", "never", "worst"] as const;
 

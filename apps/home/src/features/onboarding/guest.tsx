@@ -5,7 +5,7 @@
 import { useActionState } from "react";
 import { enterGuest, type GuestState } from "./actions.ts";
 import { guest } from "./copy.ts";
-import { CTA, CTA_QUIET, FIELD, PLATE, T } from "./ui.tsx";
+import { CTA, CTA_QUIET, FIELD, PLATE, T } from "./styles.ts";
 
 export function GuestCard() {
   const [state, act, pending] = useActionState<GuestState, FormData>(enterGuest, {});

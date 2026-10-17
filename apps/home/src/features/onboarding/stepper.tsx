@@ -12,7 +12,8 @@ import { assertKey, createKey, keyWords, remember, savedPub, type Pub } from "./
 import { receiptOf, spanWords, usdc } from "./receipt.ts";
 import { ReceiptView } from "./receipt-view.tsx";
 import { challengeFor, checkPayeesCall } from "./sign.ts";
-import { CTA, CTA_QUIET, FIELD, Failure, PLATE, Segments, T, useNow, Waited } from "./ui.tsx";
+import { CTA, CTA_QUIET, FIELD, PLATE, T } from "./styles.ts";
+import { Failure, Segments, useNow, Waited } from "./ui.tsx";
 
 type Chain = { key: string; name: string; chainId: number; anchor: string | null };
 type Cfg = { chains: Chain[] };

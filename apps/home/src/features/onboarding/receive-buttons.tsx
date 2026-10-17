@@ -4,7 +4,7 @@
 import { useState, useSyncExternalStore } from "react";
 import { useView } from "../../lib/view.ts";
 import { receive as words } from "./copy.ts";
-import { CTA, CTA_QUIET, T } from "./ui.tsx";
+import { CTA, CTA_QUIET, T } from "./styles.ts";
 
 export function ReceiveButtons({ address, handle }: { address: string; handle: string }) {
   const view = useView();

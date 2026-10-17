@@ -7,7 +7,7 @@ import { resolveAccount, type Account } from "../../lib/api.ts";
 import { palette } from "../../tokens.ts";
 import { receive as words } from "./copy.ts";
 import { ReceiveButtons } from "./receive-buttons.tsx";
-import { T } from "./ui.tsx";
+import { T } from "./styles.ts";
 
 /** The chain after the `@` (apps/console/src/lib/names.ts `LABELS`; CAIP-350's `eip155:<id>` for any other). */
 const LABELS: Record<number, string> = { 421614: "arbitrum-sepolia", 5042002: "arc-testnet", 84532: "base-sepolia", 11155111: "sepolia", 42161: "arbitrum", 8453: "base", 1: "ethereum" };
