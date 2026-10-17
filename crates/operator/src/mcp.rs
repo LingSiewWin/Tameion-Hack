@@ -97,6 +97,12 @@ pub fn tools() -> Vec<Value> {
             "inputSchema": { "type": "object", "required": ["policy"], "properties": { "policy": addr } }
         }),
         json!({
+            "name": "top",
+            "annotations": { "title": "Burn rate and runway", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true },
+            "description": "How fast the account spends and how long its money lasts: `rate` (USDC a day, from the payments settled in the last `windowDays` of the account's anchored record, never a forecast), `runway.byRateDays` (days until the balance reaches the floor the owner keeps, at that rate; null while nothing was spent) and `runway.firstShortfallDays` (days until the first bill, at its schedule, that the money above the floor cannot cover; null when it covers every bill in the next 90 days), and `forces`: the last ten events that moved the rate (bill_added, bill_removed, mode_changed, cap_changed, refused) with `deltaPerDay`. Quote these numbers; do not compute your own. Read-only.",
+            "inputSchema": { "type": "object", "required": ["policy"], "properties": { "policy": addr } }
+        }),
+        json!({
             "name": "run_pass",
             "annotations": { "title": "Run a pass", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true },
             "description": "Ask the agent to check the treasury's bills now (one pass per policy per ten minutes; a recent pass answers in between). Returns the job id; poll pass_status. Moves no money by itself in Propose mode; in Autopilot the agent pays approved payees inside the contract's caps, as always.",
@@ -258,6 +264,11 @@ pub async fn call(up: &Upstream, name: &str, args: &Value) -> Result<Value, Valu
         "treasury_inbox" => (
             "GET",
             format!("{b}/api/level1/inbox?policy={}", u("policy")),
+            None,
+        ),
+        "top" => (
+            "GET",
+            format!("{b}/api/level1/status?policy={}", u("policy")),
             None,
         ),
         "run_pass" => (
@@ -457,10 +468,13 @@ pub async fn call(up: &Upstream, name: &str, args: &Value) -> Result<Value, Valu
         v["replayed"] = json!(true);
     }
     // The inbox, narrowed to what the tool is about.
-    Ok(refusal::ok(if name == "invoices" {
-        json!({ "invoices": v["invoices"] })
-    } else {
-        v
+    Ok(refusal::ok(match name {
+        "invoices" => json!({ "invoices": v["invoices"] }),
+        "top" => json!({
+            "policy": v["policy"], "rate": v["rate"], "windowDays": v["windowDays"],
+            "runway": v["runway"], "forces": v["forces"],
+        }),
+        _ => v,
     }))
 }
 
@@ -718,6 +732,7 @@ mod tests {
                 || matches!(
                     name,
                     "treasury_inbox"
+                        | "top"
                         | "pass_status"
                         | "records"
                         | "record_events"
