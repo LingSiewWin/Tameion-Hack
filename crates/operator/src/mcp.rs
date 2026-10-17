@@ -401,6 +401,12 @@ pub async fn call(up: &Upstream, name: &str, args: &Value) -> Result<Value, Valu
     }
     let resp = req.send().await.map_err(|e| transport_refusal(&url, &e))?;
     let status = resp.status();
+    // A stored answer to a repeated request: the header does not reach an MCP
+    // client, so the result says it (docs/60 P-283).
+    let replayed = resp
+        .headers()
+        .get("idempotent-replayed")
+        .is_some_and(|v| v.as_bytes().eq_ignore_ascii_case(b"true"));
     let text = resp.text().await.map_err(|e| transport_refusal(&url, &e))?;
     if !status.is_success() {
         let code = status.as_u16();
@@ -417,7 +423,10 @@ pub async fn call(up: &Upstream, name: &str, args: &Value) -> Result<Value, Valu
             .collect();
         return Ok(refusal::ok(json!({ "purchases": lines })));
     }
-    let v = serde_json::from_str(&text).unwrap_or_else(|_| json!({ "text": text }));
+    let mut v: Value = serde_json::from_str(&text).unwrap_or_else(|_| json!({ "text": text }));
+    if replayed && v.is_object() {
+        v["replayed"] = json!(true);
+    }
     // The inbox, narrowed to what the tool is about.
     Ok(refusal::ok(if name == "invoices" {
         json!({ "invoices": v["invoices"] })
@@ -719,6 +728,39 @@ mod tests {
         assert!(!origin_allowed(Some("https://evil.example")));
         assert!(!origin_allowed(Some("http://localhost.evil.example")));
         assert!(!origin_allowed(Some("null")));
+    }
+
+    /// docs/60 P-283: a stored answer to a repeated pay says so in the result,
+    /// since the `Idempotent-Replayed` header never reaches an MCP client.
+    #[tokio::test]
+    async fn a_replayed_answer_says_so_in_the_result() {
+        use std::io::{Read, Write};
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        let seen = std::thread::spawn(move || {
+            let (mut s, _) = l.accept().unwrap();
+            let mut buf = [0u8; 4096];
+            let n = s.read(&mut buf).unwrap();
+            let body = r#"{"paid":true,"payment":{"tx":"0x01"}}"#;
+            let _ = write!(
+                s,
+                "HTTP/1.1 200 OK\r\nIdempotent-Replayed: true\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            String::from_utf8_lossy(&buf[..n]).to_string()
+        });
+        let up = Upstream {
+            http: client(),
+            base: format!("http://127.0.0.1:{port}"),
+            token: None,
+        };
+        let args = json!({ "policy": "0x01", "payee": "0x02", "amount": "0.001", "why": "rent", "operationId": "op_12345678" });
+        let v = call(&up, "pay", &args).await.unwrap();
+        assert_eq!(v["replayed"], true);
+        assert_eq!(v["payment"]["tx"], "0x01");
+        let req = seen.join().unwrap().to_ascii_lowercase();
+        assert!(req.starts_with("post /api/level1/pay "), "{req}");
+        assert!(req.contains("idempotency-key: op_12345678"), "{req}");
     }
 
     #[tokio::test]
