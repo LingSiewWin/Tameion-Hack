@@ -21,3 +21,8 @@ GET /api/level1/status?policy=0xb1da17cf2b327cacf2acd7418f3debb24ff4a795 -> {'co
 GET /api/level1/recall?policy=0xb1da17cf2b327cacf2acd7418f3debb24ff4a795&ids=evt:0 -> {"chain":"arbitrum-sepolia","chainRead":{"agent":"0x517272e09f6b40efca798d57483c00af6723e0e6","anchor":"0xe7c381aafa077cc99359e8b297d2125efd76b8f5","chain":"arbitrum-sepolia","how":"rootOf","rootOf":"0x1780f9300deded8eb5a308529740add999e1d70cea10ad1e8f93529b70
 
 Verdict: the host answers contractVersion 2026-10-18.1, 42 refusal codes (incl. recall_unknown, sig_alg_missing), three rails, the recall route, and the momentum fields — none of which the build deployed 2026-10-17 22:18 had. Live = tag.
+
+## Redeploy after the README-only re-tag (2026-10-18 06:56:08): tag now ac5b256; image rebuilt from it
+Deploy complete
+GET https://tameion-agents-production-064a.up.railway.app/healthz -> 200 ok
+GET /api/level1/status contractVersion: 2026-10-18.1
