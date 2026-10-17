@@ -8,7 +8,7 @@ import { fetchInbox } from "../../lib/api.ts";
 import type { Inbox } from "../../lib/types.ts";
 import { useView } from "../../lib/view.ts";
 import { CAPTION, FIGURES, HERO } from "./copy.ts";
-import { clamp01, COLUMN, MODULE, phases, placeholderScene, seg, windowWords, type PortWatch, type Replay, type Scene } from "./model.ts";
+import { clamp01, COLUMN, MODULE, phases, placeholderScene, seg, stillAt, STILLS, windowWords, type PortWatch, type Replay, type Scene } from "./model.ts";
 import { createStage, drawChart, drawPlaceholder, type Layout } from "./stage.ts";
 
 export type Treatment = "A" | "B" | "C";
@@ -116,7 +116,8 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
     const frame = () => {
       raf = 0;
       const r = sec.getBoundingClientRect();
-      const p = reduced ? Number(st.dataset.still ?? 0) : clamp01(-r.top / Math.max(1, r.height - window.innerHeight));
+      const raw = clamp01(-r.top / Math.max(1, r.height - window.innerHeight));
+      const p = reduced ? stillAt(raw) : raw;
       const ph = phases(p);
       const set = (el: HTMLElement | null, o: number) => el && (el.style.opacity = String(o));
       set(table.current, seg(ph.hand, 0.5, 1));
@@ -196,7 +197,7 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
   const sortedIndex = (i: number) => [...portRows].map((r, j) => ({ ...r, j })).sort((a, b) => b.n - a.n || a.j - b.j).findIndex((r) => r.j === i);
 
   return (
-    <section ref={section} data-hero aria-label={HERO.canvasLabel} className="relative -mt-(--space-5) w-screen" style={{ height: "500svh" }}>
+    <section ref={section} data-hero aria-label={HERO.canvasLabel} className="relative -mt-(--space-5) w-screen" style={{ height: reduced ? `${STILLS.length * 100}svh` : "500svh" }}>
       <div ref={stageEl} className="sticky top-0 h-svh w-full overflow-hidden" data-treatment={treatment}>
         {treatment === "A" && realScene?.src ? (
           // eslint-disable-next-line @next/next/no-img-element -- the scene is the LCP image, sized and placed by the stage

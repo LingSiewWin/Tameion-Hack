@@ -20,6 +20,10 @@ export function phases(p: number) {
   };
 }
 
+/** Reduced motion (DESIGN §Motion): three stills, the photograph, the grid and the book, that swap and never tween. */
+export const STILLS = [0, 0.2, 0.8] as const;
+export const stillAt = (raw: number) => STILLS[Math.min(STILLS.length - 1, Math.floor(raw * STILLS.length))];
+
 /** Which words the plate holds: 0 the statement (p 0 and .2), then one stage line each for .4, .6, .8, then the product. */
 export const stageOf = (p: number) => (p < 0.3 ? 0 : p < 0.5 ? 1 : p < 0.7 ? 2 : p < 0.9 ? 3 : 4);
 
