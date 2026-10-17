@@ -2170,3 +2170,54 @@ fn the_service_caps_bodies_binds_replays_to_their_caller_and_stops_one_key() {
     let (st, _, b) = http_with(p, "GET", &inbox, "", read);
     assert_eq!(st, 403, "{b}");
 }
+
+/// docs/121: the status lists each settlement rail with the finality it last
+/// measured, read per request from `<app_dir>/rails/`; StableFX is framed.
+#[test]
+fn the_status_lists_each_rail_with_its_last_measured_finality() {
+    let srv = start_with(171, &[]);
+    let dir = std::env::temp_dir().join(format!("tameion-app-test-{}-171", std::process::id()));
+    let rails =
+        |b: &str| serde_json::from_str::<serde_json::Value>(b).unwrap_or_default()["rails"].clone();
+    let (st, _, b) = http_with(srv.port, "GET", "/api/level1/status", "", "");
+    assert_eq!(st, 200, "{b}");
+    let r = rails(&b);
+    let ids: Vec<&str> = r
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| x["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        ids,
+        ["arc-native-usdc", "arbitrum-sepolia-usdc", "eurc-stablefx"],
+        "{b}"
+    );
+    assert!(
+        r[0]["finalitySecs"].is_null() && r[0]["finality"].is_null(),
+        "{b}"
+    );
+    assert_eq!(
+        (r[2]["currency"].as_str(), r[2]["finality"].as_str()),
+        (Some("EURC"), Some("not available"))
+    );
+
+    std::fs::create_dir_all(dir.join("rails")).unwrap();
+    std::fs::write(
+        dir.join("rails").join("arc-native-usdc.json"),
+        r#"{"id":"arc-native-usdc","currency":"USDC","sentAt":1760700000123,"includedSecs":0.6,"finalitySecs":0.9,"finality":"finalized-tag"}"#,
+    )
+    .unwrap();
+    let (_, _, b) = http_with(srv.port, "GET", "/api/level1/status", "", "");
+    let r = rails(&b);
+    assert_eq!(
+        (
+            r[0]["finalitySecs"].as_f64(),
+            r[0]["finality"].as_str(),
+            r[0]["measuredAt"].as_i64()
+        ),
+        (Some(0.9), Some("finalized-tag"), Some(1_760_700_000)),
+        "{b}"
+    );
+    assert!(r[1]["finalitySecs"].is_null(), "{b}");
+}

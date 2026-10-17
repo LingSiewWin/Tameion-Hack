@@ -1416,7 +1416,7 @@ fn shaped(reply: Vec<u8>, method: &str, path: &str, raw: &str) -> Vec<u8> {
 /// and `halt` (a read-back mismatch only a human clears). Open: the mode is
 /// on chain and the HALT file says nothing about money.
 async fn agent_status(dir: &std::path::Path, query: &str) -> Vec<u8> {
-    let mut v = json!({ "recentUpdates": operator::refusal::recent_updates(), "codes": "/api/level1/codes" });
+    let mut v = json!({ "recentUpdates": operator::refusal::recent_updates(), "codes": "/api/level1/codes", "rails": rails(dir) });
     if let Some(p) = query.split('&').find_map(|kv| kv.strip_prefix("policy=")) {
         let Some((a, t)) = Address::from_str(p.trim())
             .ok()
@@ -1444,6 +1444,34 @@ async fn agent_status(dir: &std::path::Path, query: &str) -> Vec<u8> {
         v["stoppedTokens"] = json!(operator::guard::stopped_tokens(&t.policy));
     }
     json_reply("200 OK", operator::refusal::ok(v))
+}
+
+/// The settlement rails and the finality each last measured (docs/121), from
+/// `<app_dir>/rails/<id>.json` as `cargo run -p arc --example rails` writes
+/// them; a rail not yet measured has nulls. StableFX is listed as framed.
+fn rails(dir: &std::path::Path) -> Value {
+    use arc::rail::{ArcNativeUsdc, Erc20Usdc, EurcStableFx, SettlementRail};
+    let measured = |id: &str, currency: &str| {
+        let v: Value = std::fs::read_to_string(dir.join("rails").join(format!("{id}.json")))
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or(Value::Null);
+        json!({
+            "id": id, "currency": currency, "finality": v["finality"], "finalitySecs": v["finalitySecs"],
+            "includedSecs": v["includedSecs"], "measuredAt": v["sentAt"].as_i64().map(|ms| ms / 1000),
+        })
+    };
+    let (a, b, fx) = (
+        ArcNativeUsdc::TESTNET,
+        Erc20Usdc::ARBITRUM_SEPOLIA,
+        EurcStableFx,
+    );
+    json!([
+        measured(a.id(), a.currency().code()),
+        measured(b.id(), b.currency().code()),
+        { "id": fx.id(), "currency": fx.currency().code(), "finality": "not available", "finalitySecs": null,
+          "includedSecs": null, "measuredAt": null },
+    ])
 }
 
 /// The agent tells the treasurer what it did (docs/53 5.3): one JSON POST per

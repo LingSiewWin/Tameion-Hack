@@ -4164,6 +4164,54 @@
           "stoppedTokens": {
             "type": "array",
             "items": {}
+          },
+          "rails": {
+            "type": "array",
+            "description": "the settlement rails and the finality each last measured (docs/121); a rail not yet measured has nulls",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "currency": {
+                  "type": "string"
+                },
+                "finality": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "finalized-tag, confirmations(n) when the chain's finalized tag had not reached the block within the 600 s cap, receipt, or not available"
+                },
+                "finalitySecs": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "seconds from the send to the chain's finalized tag covering the block"
+                },
+                "includedSecs": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "seconds from the send to the receipt"
+                },
+                "measuredAt": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "description": "unix seconds of the measured send"
+                }
+              },
+              "required": [
+                "id",
+                "currency",
+                "finalitySecs"
+              ]
+            }
           }
         },
         "required": [
