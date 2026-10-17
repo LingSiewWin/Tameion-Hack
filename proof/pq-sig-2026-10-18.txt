@@ -1,0 +1,93 @@
+# pq-sig — hash-first + alg agility, ML-DSA-65 invoices (docs/117 §2, seat S23)
+# written 2026-10-18 04:55 +0800; branch seat/S23 at 8db613e on main 83c913d; every number below is a command's output
+
+## 1. NIST ACVP vectors (FIPS 204), vendored unchanged at RustCrypto/signatures f75d5b829948988f18d9463f286805fb9410bcdd
+$ cargo test -p operator --test ml_dsa_acvp -- --nocapture
+sig-ver: 45 cases match NIST (9 valid, 36 invalid refused; ML-DSA-65: 15)
+key-gen: 75 seeds give NIST's public keys
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.77s
+$ shasum -a 256 crates/operator/tests/fixtures/ml-dsa/*.json
+2313cda283d8e7ebd196c04a211c30fd9c471f99ae7e1af844e75683071a4043  crates/operator/tests/fixtures/ml-dsa/key-gen.json
+033a8b8a5f45d7a9b158b493efa5502a1fa697b00ee66037e11d84d5a30ab93a  crates/operator/tests/fixtures/ml-dsa/sig-ver.json
+
+## 2. End to end on Arbitrum Sepolia (421614), seat service :7923 (TAMEION_REASONER=rule, no model), account s23-pq-0015
+account (policy) 0xd634b6e5be20d24fcc644795283e2f8ac4e9c888 owner 0x670bd16a99226a621a0c3c49e38a2ace18d4910c agent 0x0edac2ad5416a59af47660398e9c0bc5f3dfa7c4 agent_alg secp256k1-eip712 operator 0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25
+deploy: owner_tx 0xa4bbf1dc33f9b72ecead0e15d9d0f2140c88e483adef19842ceaf4f56c614f7c policy_tx 0x1a075ffb5e34794ba037fd0cc366cf583bb4ecb3f10957168bbbedde8d381fc0 agent_gas_tx 0x77787ecbe95a57f25fb22a5fe19f0636d2a255004886e609064344938ba42463
+payee address key and ML-DSA-65 seed: ~/.tameion/test-keys/S23-payee.key, S23-mldsa.key (mode 600, never printed)
+
+### 2a. POST /api/level1/key-binding (signed by the payee's address key; only sha256(pk) is kept)
+first post: HTTP 201 (00:15, pre-rebase binary); again: HTTP 200; another ML-DSA key by the same address key: HTTP 409. Re-run on the merged binary:
+bind2: HTTP 200 stored binding payee=0xd59fa0af942eb48849b3f043670dfad53cb21cc0 pkSha256=0x38cda425fb84b123d7c05b5ed657e56059867d042eebadf26e62db8a84693c56 boundAt=1792253750 contract=2026-10-18.1
+rebind: HTTP 409 code=state_conflict by=input words=this payee already bound another ML-DSA-65 key on this account; its address key alone cannot replace it
+
+### 2b. POST /api/level1/invoice, version 3, alg ml-dsa-65 (10874 bytes; publicKey 1,952 B and signature 3,309 B in hex)
+HTTP 201 {"id": "0xdbb54845e82d31a4353f679a260751033bfcc58ddd7c68dd68e30bd267d25ecf", "alg": "ml-dsa-65", "version": 3, "payee": "0xd59fa0af942eb48849b3f043670dfad53cb21cc0", "amountText": "0.150000 USDC", "everyDays": 30, "status": "received", "publicKey": "0x67d1a6fbf2cd72e4\u2026(3904 hex chars)", "signature": "0xaecb5e9c7cff7675\u2026(6618 hex chars)", "notes": ["Not one of your approved payees yet: accepting it approves this payee with your key.", "No payment to this payee in the history the agent read.", "Repeats every 30 days."]}
+(a first ML-DSA invoice, ref INV-S23-PQ-1, id 0x6e3e231d…, was stored too; curl reported HTTP 000 on that first post and a retry answered 'received already' — see the report, P-4)
+
+### 2c. the pass: POST /api/level1/run, job 6ad39ff3-0000
+status done; anchorTx 0xad48b516e8575192bcd64bae3626fc642c701882f511e3c4384896de024087f2; root 0x6fdda67e532129c5379b5254ea6107b5681172cccff930a1d48e4e9b446fa8aa; decider rule-based
+  decision: invoice 0xdbb54845e82d31a4353f679a260751033bfcc58ddd7c68dd68e30bd267d25ecf -> ask (new_payee)
+  decision: invoice 0x6e3e231db3b03405a7742ea745556e618fad51084d3c1180d9681ad077599efc -> ask (new_payee)
+$ cast receipt status / cast tx from (anchor tx)
+status: 1 (success)  block: 320127730  from: 0x0edaC2AD5416a59AF47660398e9C0bC5F3dFA7C4
+explorer: https://sepolia.arbiscan.io/tx/0xad48b516e8575192bcd64bae3626fc642c701882f511e3c4384896de024087f2
+
+### 2d. the ML-DSA invoices in events.jsonl, and the anchored root recomputed
+$ TAMEION_LOG_DIR=runtime/seats/S23/app/tenants/0xd634b6e5be20d24fcc644795283e2f8ac4e9c888/log RPC_URL=$RPC ANCHOR=$(cat runtime/arbitrum-sepolia_anchor.addr) AUDIT_SEQ=0 target/debug/examples/audit
+# audit runtime/seats/S23/app/tenants/0xd634b6e5be20d24fcc644795283e2f8ac4e9c888/log/0x6fdda67e532129c5379b5254ea6107b5681172cccff930a1d48e4e9b446fa8aa.events.jsonl
+[0000] ESCALATION  Invoice 0xdbb54845e82d31a4353f679a260751033bfcc58ddd7c68dd68e30bd267d25ecf is the owner's to accept or decline. Decided by rule: ask (new_payee). Asking the owner about 0xd59fa0…b21cc0: not an approved payee; it asks 0.15 USDC.
+[0001] ESCALATION  Invoice 0x6e3e231db3b03405a7742ea745556e618fad51084d3c1180d9681ad077599efc is the owner's to accept or decline. Decided by rule: ask (new_payee). Asking the owner about 0xd59fa0…b21cc0: not an approved payee; it asks 0.15 USDC.
+[0002] OBSERVATION Holding 0.000000 USDC. Read 0 transfers (0 of them my own payments, which are not evidence) and recovered 0 recurring obligations, of which 0 fall due within 30.0 days totalling 0.000000 USDC; 0 within 3.0 days (or a tenth of their interval), which is when I pay. Policy mode is Propose: the contract refuses my payments, so each one below is prepared for the owner's passkey instead of sent.
+events          : 3
+recomputed root : 0x6fdda67e532129c5379b5254ea6107b5681172cccff930a1d48e4e9b446fa8aa
+file name       : 0x6fdda67e532129c5379b5254ea6107b5681172cccff930a1d48e4e9b446fa8aa   MATCH
+chain rootOf    : 0x6fdda67e532129c5379b5254ea6107b5681172cccff930a1d48e4e9b446fa8aa   (anchor 0xe7C381AAFA077CC99359E8b297D2125efD76B8F5, agent 0x0edac2ad5416a59af47660398e9c0bc5f3dfa7c4)   MATCH
+inclusion [0000]: leaf 0x60516ca3c8120d18fc0ca9088fa0e40ad7931fdd380856d16b84eb75ac8e1285 path 2 steps   VERIFIED
+  0: right 0x93ab0b54fb6ae3d1e4e29ca4ab41e000d4f90dbb3d818baf65e8c5be66ccd187
+  1: right 0x46122b4487991f09f8d7538eca9f43e97b712bbcdb0f9418e3e105df70d6bbec
+RESULT          : PASS
+audit exit 0
+
+### 2e. hash first, live: the audit directory scanned for both invoices' ML-DSA public keys and signatures
+2 files (0x6fdda67e532129c5379b5254ea6107b5681172cccff930a1d48e4e9b446fa8aa.events.jsonl, anchors.jsonl); 12 needles (whole hex, first 32 bytes hex and raw); hits: 0
+
+## 3. Refusals, merged binary (contract 2026-10-18.1, catalogue codes by input / audience agent)
+v3-without-alg: HTTP 422 code=sig_alg_missing by=input audience=agent executed=no contract=2026-10-18.1
+    words: the signed object names no algorithm: add alg (p256-webauthn, secp256k1-eip712 or ml-dsa-65)
+    meaning: The signed object names no signature algorithm (`alg`), so it cannot be verified.
+unknown-alg: HTTP 422 code=sig_alg_unknown by=input audience=agent executed=no contract=2026-10-18.1
+    words: alg "ml-dsa-87" is not one of p256-webauthn, secp256k1-eip712, ml-dsa-65
+    meaning: The signed object's `alg` is not one this service verifies: p256-webauthn, secp256k1-eip712 or ml-dsa-65.
+bound-payee-v1: HTTP 422 code=sig_alg_missing by=input audience=agent executed=no contract=2026-10-18.1
+    words: this payee bound an ML-DSA-65 key on this account: its invoices carry version 3, alg ml-dsa-65 and that key's signature
+    meaning: This payee bound an ML-DSA-65 key on this account, so only that key's signature bills: a version 1, 2 or secp256k1 invoice from it is a downgrade.
+bound-payee-v3-secp256k1: HTTP 422 code=sig_alg_missing by=input audience=agent executed=no contract=2026-10-18.1
+    words: this payee bound an ML-DSA-65 key on this account: its invoices carry version 3, alg ml-dsa-65 and that key's signature
+    meaning: This payee bound an ML-DSA-65 key on this account, so only that key's signature bills: a version 1, 2 or secp256k1 invoice from it is a downgrade.
+unbound-payee-v1: HTTP 201 id=0xa45dc5aabe7a2e6fc719e82eb478dcd0923bc18a68261031cad8bdff3e5e9276 alg=None deprecated='alg is required from 2026-11-15' contract=2026-10-18.1
+
+## 4. Tests that are the attack (cargo test -p operator, merged)
+test invoice::tests::version_three_names_its_alg_and_a_missing_or_unknown_one_is_refused ... ok
+test level1::tests::a_passkey_assertion_verifies_against_the_contracts_key_and_only_that_challenge ... ok
+test sig::tests::a_slot_binds_its_record_and_key_and_a_bound_key_has_no_downgrade ... ok
+test invoice::tests::an_ml_dsa_invoice_is_accepted_only_under_its_payees_binding_and_the_binding_is_a_floor ... ok
+test decide_pass_tests::no_public_key_in_any_anchored_leaf ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 231 filtered out; finished in 0.10s
+mutation run (00:0x): the invoice escalation's note made to carry line["publicKey"] in a scratch edit -> no_public_key_in_any_anchored_leaf FAILED with 'event 0 (ESCALATION) carries key material'; the edit was reverted (git diff showed only the pub(crate) line afterwards).
+
+## 5. Key-role monitor, real output on this Mac
+$ python3 -I scripts/key_roles.py runtime/app
+key-roles: 67 keys, 69 accounts read from /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/app
+  keys per role: HALT clearer 1, Hyperliquid master 1, agent 57, bill wallet 1, guardian 1, invoice signer 8, relayer 1, statement signer 1
+CROSS-ROLE 0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25: HALT clearer, Hyperliquid master, bill wallet, guardian, relayer
+    operator of 69 accounts
+    ~/.tameion/treasury.key is the default HALT clearer key (crates/hedge/examples/unhalt.rs)
+    ~/.tameion/treasury.key is the default Hyperliquid master key (crates/hedge/examples/approve_agent.rs)
+    ~/.tameion/treasury.key is the default bill wallet key (scripts/gateway_fund.sh)
+    ~/.tameion/treasury.key is the default guardian key (scripts/guardian_approve.sh)
+    ~/.tameion/treasury.key is the default relayer key (crates/operator/src/level1.rs)
+1 key(s) sign in more than one role: give each role its own key
+exit 1
+
+## 6. Relayer spend for this proof (Arbitrum Sepolia ETH; no USDC moved)
+relayer 0x6c1ce01BfE3f834A5Fbfa0a9081d5d976b819A25: before 0.086497764837463617 ETH (00:05), now 0.086063615143466432 ETH
