@@ -152,7 +152,7 @@ export function Stepper() {
 
 function StepSkeleton() {
   return (
-    <div role="status" aria-busy="true" aria-label="Loading" className="flex max-w-[560px] flex-col gap-(--space-4)">
+    <div role="status" aria-busy="true" aria-label={copy.load.loading} className="flex max-w-[560px] flex-col gap-(--space-4)">
       <span aria-hidden className="skeleton block h-1 w-full" />
       <span aria-hidden className="skeleton block h-8 w-3/4" />
       <span aria-hidden className="skeleton block h-(--button) w-full" />
@@ -355,7 +355,10 @@ function AllowStep({ opened, inbox, pub, chain, demo, onDone }: { opened: Opened
     setPhase("Signing");
     setTappedAt(nowSecs());
     const policy = opened.policy;
-    let approved = (inbox.payees ?? []).some((p) => p.address.toLowerCase() === vendor);
+    // Read the account again first: a tap after a failure must not approve a payee the first tap already approved.
+    const fresh = await readInbox(policy);
+    const payees = ("inbox" in fresh ? (fresh.inbox as Inbox) : inbox).payees ?? [];
+    let approved = payees.some((p) => p.address.toLowerCase() === vendor);
     try {
       // Ask first whether this device may save bills here, so a refusal costs no passkey tap (docs/60 P-225).
       const check = await ownerPost(policy, "bills", { check: true });

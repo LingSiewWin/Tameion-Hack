@@ -15,6 +15,7 @@ export const steps = ["Name the account", "Your passkey", "Funded", "Allowance"]
 export const stepOf = (i: number, n: number, label: string) => `Step ${i + 1} of ${n}: ${label}`;
 
 export const load = {
+  loading: "Loading",
   down: "The service did not answer, so no account can open yet.",
   retry: "Try again",
   demoOff: "This host does not open demo accounts. The demo account on the first page still opens.",
