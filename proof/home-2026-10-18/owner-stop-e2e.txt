@@ -90,3 +90,20 @@ Then, with no human: the raise applied at 07:28 (anyone could see it coming on t
 time, only on Demo Vendor." (owner-home-rest-v2-owner-1280.png / -390.png).
 Known gap in that run: the success sentence was keyed to the Needs-you item, and the read after the tap replaced the item (a new cycle), so the page
 showed only the pending line; fixed in 5f21bce (success is a toast; a raise already asked answers its item with when, and offers no second ask).
+
+"Stop the agent", PRESSED IN A BROWSER, 07:40 +08 — the brief's own flow, end to end (owner-click-e2e.mjs "Stop the agent|Stop the agent":
+the control, then the question's confirm; the seat's own headless Chromium with the owner key in its CDP virtual authenticator; production build).
+The page asked once, in words: "Stop the agent now? Payments wait for your tap until you start it again." (owner-home-stop-click-390-asked.png),
+then prepare-mode {mode 0} → compared with setMode(0) → recomputed challenge → the browser's passkey → execute → toast "Stopped", hero
+"The agent is stopped. It pays nothing until you start it again." with "Start the agent" (owner-home-stop-click-390-after.png).
+{
+ "startedAt": "2026-10-17T23:40:55.448Z",
+ "pressed": "Stop the agent|Stop the agent",
+ "pageSaid": "Stopped",
+ "execute": [{ "status": 200,
+   "tx": "0x54e9cea0f5d4fea3c38c1da613b7bcb261a83b48d41de7b0085b7580de782200",
+   "explorer": "https://sepolia.arbiscan.io/tx/0x54e9cea0f5d4fea3c38c1da613b7bcb261a83b48d41de7b0085b7580de782200" }],
+ "hashesInOwnerDom": 0
+}
+The account is left stopped (balance 0.002 USDC; the agent's last check refused the 0.006 bill: "solvency … daily-cap …", shown on the page as a
+Refused line in the owner's words).
