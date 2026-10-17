@@ -37,7 +37,11 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 
 /// Arc testnet. Verified live: `eth_chainId` returns `0x4cef52`.
-pub const ARC_TESTNET_RPC: &str = "https://rpc.testnet.arc.network";
+///
+/// Moved from `rpc.testnet.arc.network`, which Cloudflare answers NXDOMAIN
+/// since 2026-10-17; the docs moved to docs.arc.io and list this host
+/// first (checked 2026-10-17, `cast chain-id` answers 5042002).
+pub const ARC_TESTNET_RPC: &str = "https://rpc.testnet.arc.io";
 pub const ARC_TESTNET_CHAIN_ID: u64 = 5_042_002;
 
 /// USDC on Arc: both the settlement asset and the gas token.
