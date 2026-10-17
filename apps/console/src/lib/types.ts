@@ -80,7 +80,15 @@ export type Paid = {
 };
 
 /** A seller to approve, or (`askedBy`) a payee an outside agent asked for: then `amount` is the per-payment limit, not a price. */
-export type Seller = Call & { host?: string; amount: string; seller: string; reason?: string; askedBy?: string };
+export type Seller = Call & {
+  host?: string;
+  amount: string;
+  seller: string;
+  reason?: string;
+  askedBy?: string;
+  /** a bill the agent found in the history, offered before it falls due (docs/60 P-228); `amount` is then the bill's */
+  bill?: { everySecs: number; nextDue: number; samples?: number };
+};
 
 /** One x402 purchase the agent tried, as the service recorded it (paid, refused, or waiting on the owner). */
 export type Purchase = { at: number; host?: string; seller?: string; amount: string; status: string; why?: string; reason?: string; tx?: string; url?: string };

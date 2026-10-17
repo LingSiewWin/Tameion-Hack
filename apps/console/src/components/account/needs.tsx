@@ -262,18 +262,26 @@ function PriceRow({ x }: { x: NonNullable<InboxData["pricesToApprove"]>[number] 
 }
 
 function SellerRow({ s, confirm }: { s: Seller; confirm: Confirm }) {
-  const { sign, refresh, inbox, cfg } = useAccount();
+  const { sign, refresh, inbox, cfg, post, tenant } = useAccount();
   const { state, run } = useAction();
   // An outside agent's request for a payee reads as a payee, not a seller (docs/110 row 9): its amount is the per-payment limit.
   const payee = !!s.askedBy;
   // x402 buying needs Autopilot (docs/60 P-174): on "Asks before paying" approving is not enough, and the row says so.
   const auto = inbox?.mode === "Autopilot";
-  const what = payee ? "pay it" : `buy from ${s.host}`;
+  // A bill the agent found in the history, offered before it falls due (docs/60 P-228): approved now, the agent pays that
+  // cycle itself on Autopilot; on "Asks before paying" it is one tap on the day.
+  const bill = s.bill;
+  const what = bill ? "pay this bill" : payee ? "pay it" : `buy from ${s.host}`;
   return (
     <Row
       state={state}
       title={
-        payee ? (
+        bill ? (
+          <>
+            Let the agent pay <Payee addr={s.seller} /> for its bill, <span className="figures">{usd(s.amount)} USDC</span> {everyText(bill.everySecs)}{" "}
+            <span className="text-muted-foreground">(next due {dateText(bill.nextDue)})</span>
+          </>
+        ) : payee ? (
           <>
             Let the agent pay <Payee addr={s.seller} /> — up to <span className="figures">{usd(s.amount)} USDC</span> a payment
           </>
@@ -284,31 +292,48 @@ function SellerRow({ s, confirm }: { s: Seller; confirm: Confirm }) {
           </>
         )
       }
-      why={`${payee ? `${s.askedBy} asked` : "It wanted it for"}: ${s.reason ?? "—"}. ${
-        auto
-          ? `After this it may ${what} by itself, never more than your limits.`
-          : `It may ${what} by itself only on Autopilot; you are on Asks before paying, so after you approve it still waits until you turn Autopilot on.`
-      }`}
+      why={
+        bill
+          ? `The agent found this bill in your history${bill.samples ? `, paid ${bill.samples} times` : ""}. ${
+              auto
+                ? `Approve it before ${dateText(bill.nextDue)} and the agent pays that cycle itself, never more than your limits.`
+                : `Approve it now and on ${dateText(bill.nextDue)} paying it is one tap here; on Autopilot the agent would pay it by itself.`
+            }`
+          : `${payee ? `${s.askedBy} asked` : "It wanted it for"}: ${s.reason ?? "—"}. ${
+              auto
+                ? `After this it may ${what} by itself, never more than your limits.`
+                : `It may ${what} by itself only on Autopilot; you are on Asks before paying, so after you approve it still waits until you turn Autopilot on.`
+            }`
+      }
     >
       <Button
         disabled={state.kind === "working"}
         onClick={() =>
           run("Approving…", async () => {
             const ok = await confirm({
-              title: payee ? "Let the agent pay this payee?" : `Let the agent buy from ${s.host}?`,
+              title: bill ? "Let the agent pay this bill?" : payee ? "Let the agent pay this payee?" : `Let the agent buy from ${s.host}?`,
               action: "Approve with passkey",
               body: (
                 <p>
                   Approves <Payee addr={s.seller} nameable={false} /> as a payee, so the agent may {what} inside your limits
-                  {auto ? "" : " once Autopilot is on"}. Valid for ten minutes, and only while the terms you see hold.
+                  {auto ? "" : " once Autopilot is on"}.{bill ? "" : " Valid for ten minutes, and only while the terms you see hold."}
                 </p>
               ),
             });
             if (!ok) throw new Error("cancelled");
-            const ex = await sign(s.to, s.data, { fn: PAYEES, attested: true, rows: [{ to: s.seller }] });
+            // A found bill's payee goes through prepare-payees at the tap, as an invoice's does; other rows carry their call.
+            const call = bill ? await post<{ to: string; data: string }>("/api/level1/prepare-payees", { policy: tenant.policy, payees: [s.seller] }) : s;
+            const ex = await sign(call.to, call.data, { fn: PAYEES, attested: true, rows: [{ to: s.seller }] });
             setTimeout(refresh, 4000);
             // The contract's waiting period, said as a time (docs/60 P-172 item 9).
             const from = new Date(Date.now() + cfg.delaySecs * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+            if (bill)
+              return {
+                text: auto
+                  ? `Approved. From about ${from}, after the ${cfg.delaySecs} s waiting period, the agent pays the ${dateText(bill.nextDue)} bill itself.`
+                  : `Approved. On ${dateText(bill.nextDue)} paying it is one tap here; on Autopilot the agent would pay it by itself.`,
+                href: ex.explorer,
+              };
             return {
               text: `Approved. The agent may ${what} from about ${from}, after the ${cfg.delaySecs} s waiting period${auto ? "" : ", and only once Autopilot is on"}.`,
               href: ex.explorer,
