@@ -2920,13 +2920,17 @@ pub async fn run(
     let receipt_bills = crate::x402::receipt_bills(&history, &receipts);
     // TAMEION_REASONER (docs/86); unset keeps Claude-if-keyed-else-rule. The
     // decider goes with it (docs/112): a cloud choice with a key gets the
-    // model, local or rule the rule; one memory file per account.
-    let choice = crate::local::choose();
-    let decider = Configured::for_choice(&choice).with_memory(
-        tenants_dir(app_dir)
-            .join(format!("{policy:#x}"))
-            .join("decisions.jsonl"),
-    );
+    // model, local or rule the rule; one memory file per account. Both write
+    // what each Claude reply cost to one meter for the service (docs/117 §6).
+    let meter = app_dir.join("meter.jsonl");
+    let choice = crate::local::choose().with_meter(meter.clone());
+    let decider = Configured::for_choice(&choice)
+        .with_memory(
+            tenants_dir(app_dir)
+                .join(format!("{policy:#x}"))
+                .join("decisions.jsonl"),
+        )
+        .with_meter(meter);
     // Invoices waiting for the owner are decision points too: decided here,
     // before the pass, so their records sit under this pass's root.
     let (invoice_events, invoice_records) = decide_invoices(

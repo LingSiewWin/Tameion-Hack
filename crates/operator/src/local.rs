@@ -247,6 +247,21 @@ pub enum Choice {
     Rule,
 }
 
+impl Choice {
+    /// A cloud choice writes each reply's token usage to `path` as `order`
+    /// (`crate::meter`); a local model and the rule spend none.
+    pub fn with_meter(self, path: std::path::PathBuf) -> Self {
+        match self {
+            Choice::Cloud(c) => Choice::Cloud(c.with_meter(path, "order")),
+            Choice::CloudRedacted(r) => Choice::CloudRedacted(RedactedCloud {
+                cloud: r.cloud.with_meter(path, "order"),
+                name: r.name,
+            }),
+            other => other,
+        }
+    }
+}
+
 /// Unset (or `claude`) keeps the behaviour from before this module: Claude
 /// when a key is present, else the rule. `local` never reaches the cloud,
 /// even when the local model is down (the rule takes over). An unknown value

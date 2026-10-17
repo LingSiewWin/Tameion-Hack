@@ -920,6 +920,12 @@ impl ModelDecider {
         self
     }
 
+    /// Write each reply's token usage to `path` as `decide` (`crate::meter`).
+    pub fn with_meter(mut self, path: PathBuf) -> Self {
+        self.cloud = self.cloud.with_meter(path, "decide");
+        self
+    }
+
     #[cfg(test)]
     fn with_timeout(mut self, t: Duration) -> Self {
         self.timeout = t;
@@ -1180,6 +1186,13 @@ impl Configured {
     pub fn with_memory(self, path: PathBuf) -> Self {
         match self {
             Configured::Model(m) => Configured::Model(m.with_memory(path)),
+            Configured::Rule => Configured::Rule,
+        }
+    }
+
+    pub fn with_meter(self, path: PathBuf) -> Self {
+        match self {
+            Configured::Model(m) => Configured::Model(m.with_meter(path)),
             Configured::Rule => Configured::Rule,
         }
     }
@@ -1705,6 +1718,28 @@ mod tests {
         let (d, note) = decide_or_rule(&decider(&url), &c).await;
         assert_eq!(d, RuleBased::decision(&c));
         assert!(note.unwrap().contains("does not allow"));
+    }
+
+    #[tokio::test]
+    async fn the_decider_meters_each_reply_even_a_refusal() {
+        // docs/117 §6: a refusal is billed, so it is metered, through the
+        // same `with_meter` the pass uses (level1.rs).
+        let dir = std::env::temp_dir().join(format!("decide-meter-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let meter = dir.join("meter.jsonl");
+        let refusal = json!({ "model": MODEL, "stop_reason": "refusal", "stop_details": { "category": "cyber" }, "content": [],
+            "usage": { "input_tokens": 1200, "output_tokens": 40, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0 } });
+        let (url, _h) = stub(Some(refusal)).await;
+        let d = Configured::Model(decider(&url)).with_meter(meter.clone());
+        assert!(d.decide(&case()).await.is_err());
+        let lines = crate::meter::read(&meter).unwrap();
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        let l = &lines[0];
+        assert_eq!(
+            (l.purpose.as_str(), l.model.as_str(), l.uncached_in, l.out),
+            ("decide", MODEL, 1200, 40)
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]
