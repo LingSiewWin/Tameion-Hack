@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { calls, challengeFor, checkSettle, hex, invoiceDecideChallenge, keccak256 } from "../src/features/owner/owner-call.ts";
-import { amount, authority, dateWords, facts, halvesWords, lines, minor, money, needs, payeesWords, plain } from "../src/features/owner/words.ts";
+import { amount, authority, dateWords, facts, halvesWords, lines, minor, money, needs, payeesWords, pendingWords, plain } from "../src/features/owner/words.ts";
 import type { Inbox, Status } from "../src/lib/types.ts";
 
 process.env.TZ = "Asia/Kuala_Lumpur";
@@ -30,6 +30,14 @@ test("the authority sentence is generated from the mandate", () => {
   assert.equal(payeesWords({ ...inbox, payees: [] }), "on no one yet");
   assert.equal(authority({ ...inbox, mode: "Propose" }), "Your agents may spend 0.05 USDC a day, 0.005 at a time, only on Demo Vendor, and each payment waits for your tap.");
   assert.equal(authority({ ...inbox, mode: "Watch" }), "The agent is stopped. It pays nothing until you start it again.");
+});
+
+test("a raise waiting out the delay says what applies and when", () => {
+  const eta = 1792276848; // 06:40:48 +08
+  assert.equal(pendingWords({ pending: { mode: "Autopilot", kinds: 2, eta } }), "At 06:40 Autopilot turns on.");
+  assert.equal(pendingWords({ pending: { mode: "Propose", kinds: 2, eta } }), "At 06:40 the agent starts again, asking before each payment.");
+  assert.equal(pendingWords({ pending: { kinds: 1, eta, dailyCap: "0.100000 USDC", perActionCap: "0.010000 USDC" } }), "At 06:40 the limits rise to 0.1 USDC a day, 0.01 at a time.");
+  assert.equal(pendingWords({ pending: null }), null);
 });
 
 test("dates in words, in the viewer's time", () => {

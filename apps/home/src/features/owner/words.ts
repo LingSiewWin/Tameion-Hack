@@ -76,6 +76,19 @@ export function authority(inbox: Pick<Inbox, "mode" | "caps" | "parties" | "paye
   return inbox.mode === "Propose" ? `${base}, and each payment waits for your tap.` : `${base}.`;
 }
 
+/** A trust-raising change waiting out the delay, in words, with when it applies (anyone can see it coming). */
+export function pendingWords(inbox: Pick<Inbox, "pending">): string | null {
+  const p = inbox.pending;
+  if (!p?.eta) return null;
+  const what: string[] = [];
+  if ((p.kinds ?? 0) & 2)
+    what.push(p.mode === "Autopilot" ? "Autopilot turns on" : p.mode === "Propose" ? "the agent starts again, asking before each payment" : `the agent's mode becomes ${p.mode}`);
+  const day = minor(p.dailyCap);
+  const once = minor(p.perActionCap);
+  if ((p.kinds ?? 0) & 1 && day !== null && once !== null) what.push(`the limits rise to ${amount(day)} USDC a day, ${amount(once)} at a time`);
+  return what.length ? `At ${hhmm(new Date(p.eta * 1000))} ${what.join(" and ")}.` : null;
+}
+
 const DAY = 86_400;
 const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

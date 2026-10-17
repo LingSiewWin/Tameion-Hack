@@ -4,7 +4,7 @@
 // so the zero-hash test can render it from a captured inbox (DESIGN Rule 1).
 import { Sheet } from "../../components/sheet.tsx";
 import type { Inbox } from "../../lib/types.ts";
-import { asOf, authority, facts, halvesWords, lines, needs, type Halves, type Line, type Need } from "./words.ts";
+import { asOf, authority, facts, halvesWords, lines, needs, pendingWords, type Halves, type Line, type Need } from "./words.ts";
 
 /** A control in flight names its phase and never looks disabled (DESIGN §Money lifecycle). */
 export type Phase = { label: string } | null;
@@ -53,12 +53,15 @@ function SealMark() {
 function Hero(p: OwnerViewProps) {
   const stopped = p.inbox.mode === "Watch";
   const verb = stopped ? "Start the agent" : "Stop the agent";
+  // A start already asked waits out its delay (the line above says when): no second ask. Stop is always there.
+  const control = !p.guest && !(stopped && (p.inbox.pending?.kinds ?? 0) & 2);
   return (
     <section aria-labelledby="authority" className="flex flex-col gap-(--space-5)">
       <h1 id="authority" className="statement-line">
         {authority(p.inbox)}
       </h1>
-      {!p.guest &&
+      {pendingWords(p.inbox) && <p className="row m-0">{pendingWords(p.inbox)}</p>}
+      {control &&
         (p.asking ? (
           <div className={`${plate} flex flex-col gap-(--space-3) p-(--space-4)`} role="group" aria-labelledby="stop-q">
             <p id="stop-q" className="row-title">
