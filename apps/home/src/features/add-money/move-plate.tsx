@@ -25,7 +25,7 @@ import {
   type Move,
 } from "./cctp.ts";
 import { ledgerText, parseUsdc, usdcText, whenText } from "./format.ts";
-import { cta, explorer, FAUCET, link, plate, quiet } from "./ui.ts";
+import { cta, explorer, FAUCET, inner, link, mark, plate, quiet } from "./ui.ts";
 import { allowed, codeOf, connect, gasHeld, injected, minted, receiptStatus, send, usdcHeld, type Phase } from "./wallet.ts";
 
 const KEY = (address: string) => `tameion.home.move.${address.toLowerCase()}`;
@@ -277,6 +277,7 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
         <ol className="flex flex-col" aria-label="The move">
           <Line
             title={track?.burn === "success" ? `Burned ${moved} on ${moveFrom.name}` : `Burn ${moved} on ${moveFrom.name}`}
+            step={track?.burn === "success" ? "done" : track?.burn === "reverted" ? "failed" : "transit"}
             state={
               track?.burn === "success" ? `Done ${whenText(move.at)}` : track?.burn === "reverted" ? "Failed: nothing moved" : "Still checking. It will not be sent twice."
             }
@@ -292,6 +293,7 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
             <>
               <Line
                 title={track?.att?.state === "signed" ? "Signed by Circle" : "Circle signs it"}
+                step={track?.att?.state === "signed" ? (forThisAccount ? "done" : "failed") : track?.burn === "success" ? "transit" : "next"}
                 state={
                   track?.att?.state === "signed"
                     ? forThisAccount
@@ -319,6 +321,7 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
               />
               <Line
                 title={`Arrives on ${dest.name}`}
+                step={track?.att?.state === "signed" && forThisAccount ? "transit" : "next"}
                 state={track?.att?.state === "signed" && forThisAccount ? (label ?? "Waits for the mint") : "Next"}
                 agent={
                   view === "agent" &&
@@ -363,7 +366,7 @@ export function MovePlate({ dest, account, inbox, onLanded }: { dest: CctpChain;
 
       {failure && (
         <div role="alert" className="flex flex-col gap-(--space-1)">
-          <p className="row text-(--red)">{failure.words}</p>
+          <p className="row text-(--attention)">{failure.words}</p>
           <p className="meta">{failure.moved}</p>
           <details className="meta">
             <summary className="cursor-pointer">What the wallet said</summary>
@@ -381,12 +384,15 @@ function minutesSince(at: number) {
   return m >= 1 ? `; ${m} min so far` : "";
 }
 
-function Line({ title, state, agent }: { title: string; state: string; agent?: React.ReactNode }) {
+function Line({ title, state, step, agent }: { title: string; state: string; step: keyof typeof mark; agent?: React.ReactNode }) {
   return (
-    <li className="flex flex-col gap-(--space-1) border-t border-(--rule) py-(--space-3) first:border-t-0 first:pt-0">
-      <span className="row">{title}</span>
-      <span className="meta">{state}</span>
-      {agent && <span className="break-all">{agent}</span>}
+    <li className="grid grid-cols-[12px_minmax(0,1fr)] gap-x-(--space-3) border-t border-(--rule) py-(--space-3) first:border-t-0 first:pt-0">
+      <span aria-hidden className={`mt-(--space-2) size-3 rounded-(--radius-mark) ${mark[step]}`} />
+      <span className="flex flex-col gap-(--space-1)">
+        <span className="row">{title}</span>
+        <span className="meta">{state}</span>
+        {agent && <span className="break-all">{agent}</span>}
+      </span>
     </li>
   );
 }
@@ -469,29 +475,25 @@ function MoveForm({
       <fieldset className="flex flex-col gap-(--space-2)">
         <legend className="row mb-(--space-2)">From</legend>
         <div className="flex flex-wrap gap-(--space-2)">
-          {sources.map((c) => (
-            <label
-              key={c.domain}
-              className="flex min-h-(--touch) cursor-pointer items-center gap-(--space-2) rounded-(--radius-plate) border border-(--rule) px-(--space-3) has-checked:border-(--ink)"
-            >
-              <input
-                type="radio"
-                name="from"
-                className="accent-(--accent)"
-                value={c.domain}
-                checked={c.domain === from.domain}
-                onChange={() => setFrom(c.domain)}
-              />
-              <span className="row">{c.name}</span>
-            </label>
-          ))}
+          {sources.map((c) => {
+            const chosen = c.domain === from.domain;
+            return (
+              <label
+                key={c.domain}
+                className={`flex min-h-(--touch) cursor-pointer items-center gap-(--space-2) rounded-(--radius-inner) px-(--space-3) ${chosen ? "bg-(--plate-2)" : ""}`}
+              >
+                <input type="radio" name="from" className="accent-(--ink)" value={c.domain} checked={chosen} onChange={() => setFrom(c.domain)} />
+                <span className={chosen ? "row-title" : "row"}>{c.name}</span>
+              </label>
+            );
+          })}
         </div>
       </fieldset>
       <label className="flex flex-col gap-(--space-2)">
         <span className="row">Amount in USDC</span>
         <input
           ref={input}
-          className="row money min-h-(--touch) rounded-(--radius-plate) border border-(--rule) bg-(--plate) px-(--space-3) text-(--ink)"
+          className="row money min-h-(--button-compact) rounded-(--radius-inner) bg-(--plate-2) px-(--space-3) text-(--ink)"
           inputMode="decimal"
           autoComplete="off"
           value={amountText}
@@ -540,7 +542,7 @@ function Witnesses({ dest, inbox }: { dest: CctpChain; inbox: Inbox | null }) {
   const view = useView();
   const g = inbox?.holdingsElsewhere as { total?: string; error?: string } | null | undefined;
   return (
-    <dl className="grid grid-cols-2 gap-(--space-3) border-t border-(--rule) pt-(--space-3)">
+    <dl className={`grid grid-cols-2 gap-(--space-3) ${inner}`}>
       <div className="flex flex-col gap-(--space-1)">
         <dt className="meta">The account on {dest.name}</dt>
         <dd className="row money m-0">{inbox ? ledgerText(inbox.balance) : "Not read"}</dd>
