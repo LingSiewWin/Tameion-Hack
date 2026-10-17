@@ -8,7 +8,7 @@
 // id, because the first one may have paid.
 
 /** The reply contract this SDK was written against (docs/115 §2). */
-export const EXPECTED_CONTRACT_VERSION = "2026-10-17.1";
+export const EXPECTED_CONTRACT_VERSION = "2026-10-18.1";
 
 export type Executed = "yes" | "no" | "unknown";
 

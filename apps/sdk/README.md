@@ -81,7 +81,7 @@ it is called wrongly: a bad `baseUrl`, or a spend with no valid `operationId`.
 | `rate_limited` or `idempotency_pending` with `executed: "no"` | The client resends once, after `retryAfterSecs` clamped to 1–60 s. If that is refused too, it returns the refusal. | Wait and call again with the same id. |
 | Any other refusal | It is returned as is and never resent. `audience: "user"` means a person must act: approve the payee, raise the limit, switch the mode. | Tell your user what `meaning` and `nextStep` say. Retrying will not help. |
 | A refusal without a code (services from before the envelope) | `meaning` is the service's `error` string. On a spend, a 5xx reply is `executed: "unknown"`, any other refusal is `"no"`. The client never resends it automatically. | Read `meaning`. On unknown, follow the lost-reply rule. |
-| `contractVersion` differs from `EXPECTED_CONTRACT_VERSION` (`2026-10-17.1`) | `onContractMismatch(got, expected)` is called once per client. By default it prints a warning. The call still goes ahead. | Upgrade the SDK. Codes added since this version arrive in `error.code` as plain strings. |
+| `contractVersion` differs from `EXPECTED_CONTRACT_VERSION` (`2026-10-18.1`) | `onContractMismatch(got, expected)` is called once per client. By default it prints a warning. The call still goes ahead. | Upgrade the SDK. Codes added since this version arrive in `error.code` as plain strings. |
 | The token comes from `TAMEION_TOKEN` or `--token-file`, never from argv | `--token` exits 2 without echoing the value. A token file that group or others can read gets a warning. | `chmod 600` the file. |
 | Every line the CLI prints is scrubbed: the token becomes `[token]` | — | — |
 | An unknown command gets a did-you-mean | It exits 2. The CLI never echoes the input, which could be a pasted secret. | Run `tameion help`. |
@@ -91,8 +91,8 @@ it is called wrongly: a bad `baseUrl`, or a spend with no valid `operationId`.
 Every reply an agent can get carries `ok` and `contractVersion`:
 
 ```json
-{ "ok": true,  "contractVersion": "2026-10-17.1", "...": "the route's fields, unchanged" }
-{ "ok": false, "contractVersion": "2026-10-17.1",
+{ "ok": true,  "contractVersion": "2026-10-18.1", "...": "the route's fields, unchanged" }
+{ "ok": false, "contractVersion": "2026-10-18.1",
   "error": { "code": "payee_not_approved", "by": "mandate", "executed": "no", "audience": "user",
              "meaning": "0x6a86…c8EE is not on the account's payee list.",
              "nextStep": "Ask the owner to approve the payee; the ask is in Needs you.",

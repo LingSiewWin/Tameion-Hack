@@ -41,13 +41,13 @@ them.
   say (400 bad input, 401/403 agent key, 404 no such account, 409, 422, 429,
   502/503 a dependency did not answer).
 
-## Every reply: the envelope (contract 2026-10-17.1)
+## Every reply: the envelope (contract 2026-10-18.1)
 
 Every route an agent calls (the MCP tools' routes and every route an agent key
 opens) answers in one shape:
 
-    { "ok": true,  "contractVersion": "2026-10-17.1", ...the route's fields }
-    { "ok": false, "contractVersion": "2026-10-17.1",
+    { "ok": true,  "contractVersion": "2026-10-18.1", ...the route's fields }
+    { "ok": false, "contractVersion": "2026-10-18.1",
       "error": { "code": "payee_not_approved", "by": "payee", "executed": "no",
                  "audience": "user", "meaning": "...", "nextStep": "...",
                  "retryAfterSecs": 0, "words": "the sentence for a person" } }
@@ -187,16 +187,27 @@ becomes a bill the agent pays inside the caps; a one-off one is paid by the
 owner's tap, once, keyed by the invoice's ref) or declines.
 
 - `POST /api/level1/invoice` with the signed body (open: the signature is the
-  authentication; twenty an hour per account; 4 KiB):
-  `{"policy","payee","amount":"150000","dueAt","everyDays","discountBps","earlyDays","ref","issuedAt","signature"}`
+  authentication; twenty an hour per account; 16 KiB):
+  `{"version":3,"alg":"secp256k1-eip712","policy","payee","amount":"150000","dueAt","everyDays","discountBps","earlyDays","ref","issuedAt","signature"}`
   — `amount` in USDC minor units (string), `everyDays` 0 = one payment,
   `discountBps` at most 1000 with `earlyDays` shorter than `everyDays`,
   `ref` 32 bytes unique per invoice (a ref already sent is refused).
   201 = received (with the agent's notes); 422 = refused, in words.
-- EIP-712: domain `{name: "Tameion Invoice", version: "1", chainId: <the
+- EIP-712: domain `{name: "Tameion Invoice", version: "3", chainId: <the
   account's chain>, verifyingContract: <the account>}`, primary type
-  `Invoice(address payee,address policy,uint256 amount,uint64 dueAt,uint32 everyDays,uint16 discountBps,uint16 earlyDays,bytes32 ref,uint64 issuedAt)`.
-  The signer must be `payee` — the address the money goes to.
+  `Invoice(address payee,address policy,uint256 amount,uint64 dueAt,uint32 everyDays,uint16 discountBps,uint16 earlyDays,bytes32 ref,uint64 issuedAt,string from,string domain)`
+  (`from` and `domain` may be empty). The signer must be `payee` — the address
+  the money goes to. `alg` sits beside the signature, outside the digest; a
+  version 3 body without it is `sig_alg_missing`, an unknown one
+  `sig_alg_unknown`. Versions 1 and 2 (domain version "1"/"2", no `alg`) are
+  accepted until 2026-11-15; the reply carries `deprecated`.
+- Post-quantum (FIPS 204 ML-DSA-65): bind the key once,
+  `POST /api/level1/key-binding` `{"policy","payee","alg":"ml-dsa-65","pkSha256","boundAt","signature"}`
+  signed by the payee's address key (EIP-712 `KeyBinding(address payee,address policy,string alg,bytes32 pkSha256,uint64 boundAt)`,
+  domain `{name: "Tameion KeyBinding", version: "1", chainId, verifyingContract}`); then send
+  invoices with `"alg":"ml-dsa-65"`, `publicKey` (0x…, 1,952 bytes) and an
+  ML-DSA-65 `signature` (3,309 bytes, empty context) over the same digest.
+  After binding, that payee's other invoices are refused (`sig_alg_missing`).
 - viem: `walletClient.signTypedData({ domain, types: { Invoice: [...] },
   primaryType: "Invoice", message })`; cast: `cast wallet sign --data
   --from-file invoice-typed.json` (the same typed data as JSON). MCP:

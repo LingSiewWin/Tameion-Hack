@@ -3,7 +3,7 @@
   "info": {
     "title": "Tameion Watch",
     "version": "0.1.0",
-    "description": "Level 0 of the trust ladder: read-only. Submit an address, poll the run, read what it owes, what the agent would pay or ask about, and the maximum a stolen key could lose under caps you choose. Nothing is signed or sent.\n\nIdempotency (PLAN 5.42): any POST may carry `Idempotency-Key` (1–255 chars). A retry with the same key and body returns the first 2xx answer with `Idempotent-Replayed: true`; the same key with a different body answers 422; a key still in flight answers 409; keys live 24 hours. Agent-readable summary: GET /llms.txt.\n\nThe agent envelope (contract `2026-10-17.1`, docs/115 §2). Every reply an agent can get — the routes the MCP tools call and every route that accepts an agent key — carries `ok` and `contractVersion`. `ok: true` adds them to the route's own fields, nothing removed. `ok: false` is a `Refusal`: `error.code` (one of `RefusalCode`, the catalogue at GET /api/level1/codes), `error.by`, `error.executed` (yes | no | unknown: whether money may have moved; read from the chain), `error.audience` (user = a human must act; agent = the caller may act), `error.meaning`, `error.nextStep`, `error.retryAfterSecs`, and `error.words`, the sentence the route already returned. HTTP status codes do not change. Never resend a spend when `executed` is yes or unknown; resend once after `retryAfterSecs` only on `rate_limited` or `idempotency_pending` with `executed: no`."
+    "description": "Level 0 of the trust ladder: read-only. Submit an address, poll the run, read what it owes, what the agent would pay or ask about, and the maximum a stolen key could lose under caps you choose. Nothing is signed or sent.\n\nIdempotency (PLAN 5.42): any POST may carry `Idempotency-Key` (1–255 chars). A retry with the same key and body returns the first 2xx answer with `Idempotent-Replayed: true`; the same key with a different body answers 422; a key still in flight answers 409; keys live 24 hours. Agent-readable summary: GET /llms.txt.\n\nThe agent envelope (contract `2026-10-18.1`, docs/115 §2). Every reply an agent can get — the routes the MCP tools call and every route that accepts an agent key — carries `ok` and `contractVersion`. `ok: true` adds them to the route's own fields, nothing removed. `ok: false` is a `Refusal`: `error.code` (one of `RefusalCode`, the catalogue at GET /api/level1/codes), `error.by`, `error.executed` (yes | no | unknown: whether money may have moved; read from the chain), `error.audience` (user = a human must act; agent = the caller may act), `error.meaning`, `error.nextStep`, `error.retryAfterSecs`, and `error.words`, the sentence the route already returned. HTTP status codes do not change. Never resend a spend when `executed` is yes or unknown; resend once after `retryAfterSecs` only on `rate_limited` or `idempotency_pending` with `executed: no`."
   },
   "servers": [
     {
@@ -2449,7 +2449,7 @@
     },
     "/api/level1/invoice": {
       "post": {
-        "summary": "Bill an account (PLAN 5.60): a vendor, or a vendor's agent, posts an invoice signed by the address to be paid. Open — the signature is the authentication. Nothing is paid on receipt: the account's agent checks it against its history and approved payees and puts it in the owner's Needs you with its notes; the owner accepts (a recurring invoice becomes a bill the agent pays inside the caps; a one-off one is paid by the owner's tap) or declines. Twenty invoices an hour per account; 4 KiB a body.",
+        "summary": "Bill an account (PLAN 5.60): a vendor, or a vendor's agent, posts an invoice signed by the address to be paid. Open — the signature is the authentication. Nothing is paid on receipt: the account's agent checks it against its history and approved payees and puts it in the owner's Needs you with its notes; the owner accepts (a recurring invoice becomes a bill the agent pays inside the caps; a one-off one is paid by the owner's tap) or declines. Twenty invoices an hour per account; 16 KiB a body (an ML-DSA-65 invoice in hex is about 11 KiB). Version 3 names its signature algorithm in `alg` beside the signature; versions 1 and 2 (no `alg`) are accepted until 2026-11-15 and the reply carries `deprecated`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2507,7 +2507,31 @@
                   },
                   "signature": {
                     "type": "string",
-                    "description": "0x… 65-byte EIP-712 signature by the payee over Invoice(address payee,address policy,uint256 amount,uint64 dueAt,uint32 everyDays,uint16 discountBps,uint16 earlyDays,bytes32 ref,uint64 issuedAt), domain {name \"Tameion Invoice\", version \"1\", chainId, verifyingContract = policy}"
+                    "description": "0x… the payee's signature over the EIP-712 digest. Version 1: Invoice(address payee,address policy,uint256 amount,uint64 dueAt,uint32 everyDays,uint16 discountBps,uint16 earlyDays,bytes32 ref,uint64 issuedAt), domain {name \"Tameion Invoice\", version \"1\", chainId, verifyingContract = policy}. Versions 2 and 3 add string from, string domain to the struct; domain version \"2\" or \"3\". secp256k1-eip712 (and versions 1, 2): 65 bytes, recovering the payee. ml-dsa-65: 3,309 bytes, FIPS 204 ML-DSA-65 with an empty context over the same 32-byte digest, by the key in publicKey"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "description": "3 (absent for a version 1 or 2 invoice); a body with alg is read as version 3"
+                  },
+                  "alg": {
+                    "type": "string",
+                    "enum": [
+                      "secp256k1-eip712",
+                      "ml-dsa-65"
+                    ],
+                    "description": "version 3: how the signature is made. Missing on a version 3 body: sig_alg_missing; outside the registry: sig_alg_unknown. Not part of the signed digest"
+                  },
+                  "publicKey": {
+                    "type": "string",
+                    "description": "alg ml-dsa-65: 0x… the 1,952-byte ML-DSA-65 public key; its sha256 must be the key the payee bound on this account (POST /api/level1/key-binding)"
+                  },
+                  "from": {
+                    "type": "string",
+                    "description": "versions 2 and 3: the name the payee signs for itself (at most 60 characters, not an address)"
+                  },
+                  "domain": {
+                    "type": "string",
+                    "description": "versions 2 and 3: the payee's web domain, lowercase"
                   }
                 }
               }
@@ -2516,7 +2540,7 @@
         },
         "responses": {
           "201": {
-            "description": "received: the body plus status \"received\", at, amountText, approvedPayee, frozen, notes (the agent's checks in words)",
+            "description": "received: the body plus status \"received\", at, amountText, approvedPayee, frozen, notes (the agent's checks in words); deprecated on a body without alg",
             "content": {
               "application/json": {
                 "schema": {
@@ -2543,7 +2567,7 @@
             }
           },
           "413": {
-            "description": "body over 4 KiB",
+            "description": "body over 16 KiB",
             "content": {
               "application/json": {
                 "schema": {
@@ -2553,7 +2577,7 @@
             }
           },
           "422": {
-            "description": "refused, in words: not signed by the payee, wrong account or chain, amount or dates out of range, discount over 10%, or a ref already received",
+            "description": "refused, in words: not signed by the payee, wrong account or chain, amount or dates out of range, discount over 10%, or a ref already received; sig_alg_missing (a version 3 body without alg, a body without alg from 2026-11-15, or anything but alg ml-dsa-65 and the bound key from a payee that bound one); sig_alg_unknown (alg outside the registry)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2564,6 +2588,110 @@
           },
           "429": {
             "description": "twenty invoices an hour per account; try later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/level1/key-binding": {
+      "post": {
+        "summary": "A payee binds an ML-DSA-65 key to its address on one account (docs/117 §2), once. Open: the payee's address key signs it (EIP-712 KeyBinding(address payee,address policy,string alg,bytes32 pkSha256,uint64 boundAt), domain {name \"Tameion KeyBinding\", version \"1\", chainId, verifyingContract = policy}). Only the key's sha256 is kept. From then on that payee's invoices to this account carry alg ml-dsa-65 and that key; its address key alone neither bills nor binds another key. The same binding again answers 200 with the stored one.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "policy",
+                  "payee",
+                  "alg",
+                  "pkSha256",
+                  "boundAt",
+                  "signature"
+                ],
+                "properties": {
+                  "policy": {
+                    "type": "string",
+                    "description": "the account; also the EIP-712 verifyingContract"
+                  },
+                  "payee": {
+                    "type": "string",
+                    "description": "the payee's address; it must be the signer"
+                  },
+                  "alg": {
+                    "type": "string",
+                    "enum": [
+                      "ml-dsa-65"
+                    ],
+                    "description": "the algorithm of the key being bound"
+                  },
+                  "pkSha256": {
+                    "type": "string",
+                    "description": "0x… sha256 of the 1,952-byte ML-DSA-65 public key"
+                  },
+                  "boundAt": {
+                    "type": "integer",
+                    "description": "unix seconds; not more than 300 s ahead, not older than a day"
+                  },
+                  "signature": {
+                    "type": "string",
+                    "description": "0x… 65-byte EIP-712 signature by the payee's address key"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "this binding was already stored; nothing new",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "bound: the body plus at",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "state_conflict: this payee already bound another key on this account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "refused, in words: not signed by the payee, another account or chain, boundAt out of range, or alg not ml-dsa-65 (sig_alg_missing, sig_alg_unknown)",
             "content": {
               "application/json": {
                 "schema": {
@@ -3952,7 +4080,7 @@
         "type": "string",
         "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}\\.[0-9]+$",
         "examples": [
-          "2026-10-17.1"
+          "2026-10-18.1"
         ],
         "description": "date-stamped; a client warns once when it differs from the one it was built for"
       },
@@ -6325,6 +6453,18 @@
         "properties": {
           "id": {
             "type": "string"
+          },
+          "alg": {
+            "type": "string",
+            "description": "version 3: secp256k1-eip712 or ml-dsa-65"
+          },
+          "publicKey": {
+            "type": "string",
+            "description": "ml-dsa-65: the key as sent, so anyone can check the signature"
+          },
+          "deprecated": {
+            "type": "string",
+            "description": "on a body without alg: \"alg is required from 2026-11-15\""
           },
           "status": {
             "type": "string"
