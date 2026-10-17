@@ -1,0 +1,253 @@
+Video preflight, seat E3 (the shot list is docs/120-video-shotlist.md, kept local). Written 2026-10-18 05:48:25 +0800, beat 3 updated 2026-10-18 06:06:53 +0800.
+Record settings: 1280 wide, screen only, no slides, no face; upload unlisted.
+Build: main 2c2a461 for beats 1, 2, 4, 5, 6 and the first count; main 4ce997c (E1's --show committed in c955099) for beat 3's --show run;
+  target/debug/tameion-app built 05:23 by the gate; service :7880 PID 29784, restarted by E1 at 05:31:24 from main.
+  GET /api/level1/status: contractVersion 2026-10-18.1 rails arc-native-usdc, arbitrum-sepolia-usdc, eurc-stablefx
+Tools: anvil 1.5.1-stable (~/.foundry/bin), rustc 1.99.1 (58cf8f9c3 2026-10-13) (Homebrew, /opt/homebrew/bin first on PATH), node v26.12.0.
+Times +08. Long cargo output is trimmed to the test lines; everything else is verbatim. Hashes appear only on terminal surfaces.
+
+VERDICTS
+  beat 1  0:00-0:20  READY
+  beat 2  0:20-1:00  READY  (3 passed, names on screen, 8.38 s; pre-build before recording)
+  beat 3  1:00-1:40  READY (06:06): the first double record exists (seat E1: account e1-seller-signed, settlement seq 2, Arbitrum
+                     Sepolia). --show <leaf> on main 4ce997c: agent none / counterparty secp256k1-eip712 verified yes / witness
+                     chain-receipt verified yes; total 237 = 236 single + 1 double, 0 triple. No triple: nothing signs a record
+                     with the agent key. The run takes 3 min (it reads every anchor on chain): pre-run it, show the output.
+  beat 4  1:40-2:20  READY, reduced, on a read-only demo account: allowance, runway and Needs you on the page, the burn rate in
+                     tameion top, zero hashes in the page text. Not on screen: a refusal in words, the Pause (Stop) button, and
+                     the page's own burn line (the served console export predates main a77f39b). Opening a new demo account
+                     (coordinator 05:50) was not done: the demo path on :7880 needs the invite word, and reading it was denied
+                     by the permission system.
+  beat 5  2:20-2:45  READY  (Gateway line = proof/audit-pack-2026-10-18.txt:59; four CreditLine txs status 1 on rpc and explorer)
+  beat 6  2:45-3:00  READY, with two sentence corrections (1,401 are payment options that do not name our method; the
+                     model scored below the rules on the blind set, it did not match them there)
+
+== beat 1: the organiser's sentence, full screen
+$ head -4 crates/operator/tests/organiser.rs
+//! The organiser's three sentences, as three tests. The hackathon brief
+//! (docs/04): "A ledger checks that debits equal credits. It does not check
+//! that the vendor was the right one, that the invoice was real, or that a
+//! retry didn't pay it twice."
+# exit: 0
+
+== beat 2: the three tests (anvil on PATH: ~/.foundry/bin/anvil)
+# started: 2026-10-18 05:31:59 +0800
+# commit: 2c2a461 docs(erc7730): clear-signing formats for the verifier registry and executeSigned
+$ cargo test --locked -p operator --test organiser -- --nocapture --test-threads=1
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 12.64s
+     Running tests/organiser.rs (target/debug/deps/organiser-231254efd4adad2e)
+
+running 3 tests
+test double_pay_on_retry ... double_pay_on_retry: operation op_organiser-retry-0001, action hash 0xac4819b77ff04ad83893cf32a429dabd867714709fbc946ae54d211a0c7ff8b7: first send abandoned; retry 200 replayed after 0 x 409 idempotency_pending; again 200 replayed; second service 200 replayed from executed(); Paid events for it: 1; tx 0xde5c210f83b6dd27fdc19a7624510f21faa9fc040ee487b5de36526a7346aa5a; executed: true
+ok
+test phantom_invoice ... phantom_invoice: real invoice 201; phantom 422 "not signed by the payee: the signature is 0x995e4009ce1c0d568bdadf9e1d1ca3f5e5ff71da's, the money would go to 0x0e48cb2ffe94ab5698dfd1c7f4b922a45d460d05"; invoices.jsonl lines 1; pass root 0x414c0c38ed24dc3b1253a84fba0cf5530c3986f1d3600620dee45b28eb719ad2 anchored by tx 0x1eb4acb182a4b143c23bcd3f12eaa5a3e7933690cecd8169e8f767173cb44eee at 0x5fbdb2315678afecb367f032d93f642f64180aa3; record lines 2, phantom in it: no
+ok
+test wrong_vendor ... wrong_vendor: approved payee paid 0.10 USDC, tx 0xb9fd84279da7fddb89e854a880039cd3bf9f37917896fdc4246caf2864e7b1a5; unapproved 0xac3f949f98abd35c98f635813d01f04d74b4e0c7 refused "payee_not_approved" (executed: "no"); Paid events on policy 0xe2a503658b0accad85e9cb833ca847279076ebf2: 1; unapproved balance 0 wei
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.38s
+
+# exit: 0
+# finished: 2026-10-18 05:32:56 +0800
+
+== beat 3: the symbolon count
+# started: 2026-10-18 05:34:17 +0800
+# commit: 2c2a461 docs(erc7730): clear-signing formats for the verifier registry and executeSigned
+$ TAMEION_RPC_ARC=https://rpc.testnet.arc.io cargo run --locked -q -p operator --example symbolon_count -- runtime/app
+account                                    records unsigned single double triple  chain
+0x075feefbcce89cc6b4ebae366d00b7ade3e27916      10        0     10      0      0  arc-testnet
+0x08db42e5d8af1cec6640d4e1f52b4b5acf6eee32       2        0      2      0      0  arbitrum-sepolia
+0x1645951793f7ca2ae36d7a3eeae90ef93e1932ab      53        0     53      0      0  arc-testnet
+0x1a5121dbabecd0abb8bc8cdb7916748a9a507b88       4        0      4      0      0  arbitrum-sepolia
+0x1ea18505a2b7be40def78d4b2ad53f2e004ce488       2        0      2      0      0  arc-testnet
+0x224fa9badcffb95fe41f3257cfb4f5e94436991a       2        0      2      0      0  arc-testnet
+0x26e6901e08b9928bbbc7d3523c9102da5e361e53      12        0     12      0      0  arbitrum-sepolia
+0x2ecdabed2b8c48a8ce37fcb56bfee94c4991e8a3       6        0      6      0      0  arc-testnet
+0x35a2e2701d4d72be257bf7708c67d1433c60342f      30        0     30      0      0  arbitrum-sepolia
+0x42463b314d392fe34abe1854b925f0f6e55fa555       2        0      2      0      0  arbitrum-sepolia
+0x48274c7904edb23f75ea607c932d5c441c1a80e3       4        0      4      0      0  arbitrum-sepolia
+0x489dbd3dfc2985a65c9b5d555e2b42986c151661       3        0      3      0      0  arc-testnet
+0x5d74363c6d599b334dfe3e601f576079436a4c37       6        0      6      0      0  arc-testnet
+0x727e659593e183a1a7ba663e2f44075fba8be5f3       5        0      5      0      0  arbitrum-sepolia
+0x74cf5962e9a316a0693afd04c244e6586b1b6be6       4        0      4      0      0  arbitrum-sepolia
+0x7839d74d424dd14ad7147d11bc26745a82ed0df9       8        0      8      0      0  arc-testnet
+0x7bae6c3e651355c0b8bd8810d8dabd9b8e4be6d2       2        0      2      0      0  arbitrum-sepolia
+0x7ebc3894ec793fa6c9225841992001e580da9273      16        0     16      0      0  arbitrum-sepolia
+0x800d8171813bcfff6fccd40bcd90656af6f4665c       0        0      0      0      0  arc-testnet
+0x818e56c043e052f1c7d8dc8c0f239ad6a1b9e58c       2        0      2      0      0  arbitrum-sepolia
+0xa754b69c61f0a0bb7fde565ff99f40fd90787bcd       3        0      3      0      0  arbitrum-sepolia
+0xaafa130bd044ec682df1a8846e0bb4d64f777679       0        0      0      0      0  arbitrum-sepolia
+0xb011f7e71ec90fcc7632e7e1f243853d0221b5b9       2        0      2      0      0  arc-testnet
+0xb19f130d30ab1cf00188bbc749bce1d7005474de       7        0      7      0      0  arc-testnet
+0xb32753851113869778fec66c51c3a13405edcfab       1        0      1      0      0  arbitrum-sepolia
+0xc0111f35f9a8faf4a19ded77c6f457a7afbbbe7c       2        0      2      0      0  arc-testnet
+0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1      14        0     14      0      0  arbitrum-sepolia
+0xf0ae90c66d410dc0cc3bc9e6a667af8c39fb6b85      11        0     11      0      0  arbitrum-sepolia
+0xf1c78d0b940ee10a683e3ba899c5a829890004a8      11        0     11      0      0  arbitrum-sepolia
+0xf69d65413cb255f2c409acd93579c6a58c8d26ae       0        0      0      0      0  arbitrum-sepolia
+0xf799a85496580af9a63c35223443688f8693635d       5        0      5      0      0  arc-testnet
+total                                          229        0    229      0      0
+events files 164: not witnessed 2, chain read failed 0; lines not decodable 0
+payee-signed invoices that verify 13; settlement lines of their bill cycles 0
+# exit: 0
+# finished: 2026-10-18 05:36:06 +0800
+# compared with proof/symbolon-count-2026-10-18.txt (00:09, 228): one more record on 0xf0ae90c66d410dc0cc3bc9e6a667af8c39fb6b85,
+#   the agent pass at 05:35:05 (anchor 05:35:43) nudged by this seat's read-only page view (account.tsx:107-119); it is single too.
+# that 05:36 run is on main 2c2a461, before the double record; the run that counts for the beat is the next one.
+
+== beat 3 (again, 06:02 on main 4ce997c): --show on the first double record (leaf from E1's report)
+# started: 2026-10-18 06:02:58 +0800
+# commit: 4ce997c docs(proof): pre-public scan of the repository: gitleaks, invite word, key files, screenshots
+$ TAMEION_RPC_ARC=https://rpc.testnet.arc.io cargo run --locked -q -p operator --example symbolon_count -- runtime/app --show 0x508d927c137efd782a16b3b22f78b14ce6383e24c33546b51c24f37ce793a968
+account                                    records unsigned single double triple  chain
+0x075feefbcce89cc6b4ebae366d00b7ade3e27916      10        0     10      0      0  arc-testnet
+0x08db42e5d8af1cec6640d4e1f52b4b5acf6eee32       2        0      2      0      0  arbitrum-sepolia
+0x1645951793f7ca2ae36d7a3eeae90ef93e1932ab      53        0     53      0      0  arc-testnet
+0x1a5121dbabecd0abb8bc8cdb7916748a9a507b88       5        0      5      0      0  arbitrum-sepolia
+0x1ea18505a2b7be40def78d4b2ad53f2e004ce488       2        0      2      0      0  arc-testnet
+0x224fa9badcffb95fe41f3257cfb4f5e94436991a       2        0      2      0      0  arc-testnet
+0x26e6901e08b9928bbbc7d3523c9102da5e361e53      13        0     13      0      0  arbitrum-sepolia
+0x2ecdabed2b8c48a8ce37fcb56bfee94c4991e8a3       6        0      6      0      0  arc-testnet
+0x35a2e2701d4d72be257bf7708c67d1433c60342f      31        0     31      0      0  arbitrum-sepolia
+0x42463b314d392fe34abe1854b925f0f6e55fa555       2        0      2      0      0  arbitrum-sepolia
+0x48274c7904edb23f75ea607c932d5c441c1a80e3       4        0      4      0      0  arbitrum-sepolia
+0x489dbd3dfc2985a65c9b5d555e2b42986c151661       3        0      3      0      0  arc-testnet
+0x5d74363c6d599b334dfe3e601f576079436a4c37       6        0      6      0      0  arc-testnet
+0x727e659593e183a1a7ba663e2f44075fba8be5f3       5        0      5      0      0  arbitrum-sepolia
+0x74cf5962e9a316a0693afd04c244e6586b1b6be6       4        0      4      0      0  arbitrum-sepolia
+0x7839d74d424dd14ad7147d11bc26745a82ed0df9       8        0      8      0      0  arc-testnet
+0x7bae6c3e651355c0b8bd8810d8dabd9b8e4be6d2       2        0      2      0      0  arbitrum-sepolia
+0x7ebc3894ec793fa6c9225841992001e580da9273      17        0     17      0      0  arbitrum-sepolia
+0x800d8171813bcfff6fccd40bcd90656af6f4665c       0        0      0      0      0  arc-testnet
+0x818e56c043e052f1c7d8dc8c0f239ad6a1b9e58c       2        0      2      0      0  arbitrum-sepolia
+0xa754b69c61f0a0bb7fde565ff99f40fd90787bcd       3        0      3      0      0  arbitrum-sepolia
+0xaafa130bd044ec682df1a8846e0bb4d64f777679       0        0      0      0      0  arbitrum-sepolia
+0xb011f7e71ec90fcc7632e7e1f243853d0221b5b9       2        0      2      0      0  arc-testnet
+0xb19f130d30ab1cf00188bbc749bce1d7005474de       7        0      7      0      0  arc-testnet
+0xb32753851113869778fec66c51c3a13405edcfab       1        0      1      0      0  arbitrum-sepolia
+0xc0111f35f9a8faf4a19ded77c6f457a7afbbbe7c       2        0      2      0      0  arc-testnet
+0xcf57c48b69104c89a462cdb68ddc3f4f0933e2e1       4        0      3      1      0  arbitrum-sepolia
+0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1      14        0     14      0      0  arbitrum-sepolia
+0xf0ae90c66d410dc0cc3bc9e6a667af8c39fb6b85      11        0     11      0      0  arbitrum-sepolia
+0xf1c78d0b940ee10a683e3ba899c5a829890004a8      11        0     11      0      0  arbitrum-sepolia
+0xf69d65413cb255f2c409acd93579c6a58c8d26ae       0        0      0      0      0  arbitrum-sepolia
+0xf799a85496580af9a63c35223443688f8693635d       5        0      5      0      0  arc-testnet
+total                                          237        0    236      1      0
+events files 172: not witnessed 2, chain read failed 0; lines not decodable 0
+payee-signed invoices that verify 14; settlement lines of their bill cycles 1
+record 0x508d927c137efd782a16b3b22f78b14ce6383e24c33546b51c24f37ce793a968 · Settlement · seq 2 · account 0xcf57c48b69104c89a462cdb68ddc3f4f0933e2e1 · Double
+  agent        none                verified no
+  counterparty secp256k1-eip712    verified yes  key 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854  sig 0xa890a268b8217d61… (65 bytes)  at 1792274085
+  witness      chain-receipt       verified yes  key chain:421614  tx 0x661aaac5503e616082b8becc0c57e407c5b4cd23e1b1bebd609abdbbea6cba87  at 1792274186
+# exit: 0
+# finished: 2026-10-18 06:05:57 +0800
+
+== beat 4: the account page and tameion top
+# page: Playwright Chromium, viewport 1280 x 800, http://127.0.0.1:7880/?policy=0xf0ae90c66d410dc0cc3bc9e6a667af8c39fb6b85
+#   (acme-agents-8433, Arbitrum Sepolia); the page asks 'Open someone else's account read-only?' -> OK; the URL becomes /.
+# screenshot: proof/video-page-1280-2026-10-18.png (full page, 1265 px content + scrollbar, 1324 px tall), 05:39
+# hash grep on document.body.innerText at 05:47:  /0x[0-9a-fA-F]{40,64}/ -> 0 matches;  /0x[0-9a-fA-F]+/ -> 0 matches
+#   6 links carry a tx hash in their href only (5 x Receipt, 1 x The last check's record): visible only if hovered (status bar).
+#   scrollWidth 1265 = clientWidth 1265 (no sideways scroll).
+# on the page, verbatim: 'Agents can spend now 0.002 USDC: the cap on one payment; 99.99 of the 100.00 a day is left, 0.01 spent in the
+#   last 24 hours' · 'Needs you 0 all clear' · '90 days of bills covered' · 'Runway: Every bill in the next 90 days is covered (0.00 USDC
+#   due); 0.04 USDC is not needed for those bills.' · 'The agent: Autopilot ... Pausing is instant; raising waits 30 s.'
+# not on the page: a refusal row (this account has none; the accounts with refused purchases open only to their agent keys:
+#   0xb32753851113869778fec66c51c3a13405edcfab, 0xf799a85496580af9a63c35223443688f8693635d), the Pause button (owner's device only),
+#   the line 'At this burn, the floor is N days away' (apps/console/out built 2026-10-17 22:14; main a77f39b 05:01:57 adds it;
+#   scripts/test_all.sh does not run next build).
+# /agent (the human watching the agent) shows a shortened anchor hash '0x117192…a220' in PASS & ANCHOR: not used in the video.
+# 2026-10-18 05:44:01 +0800
+$ cd apps/sdk && node dist/src/cli.js top --policy 0xf0ae90c66d410dc0cc3bc9e6a667af8c39fb6b85 --url http://127.0.0.1:7880
+at this burn (0.001428 USDC a day over the last 7 days), the floor is 28 days away
+every bill in the next 90 days is covered
+  2026-10-17T09:36Z bill_added 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854 0.001428 USDC a day
+# exit: 0
+$ node dist/cli.js top ...   # the path in the brief
+node:internal/modules/cjs/loader:1607
+  throw err;
+  ^
+# exit: 1
+# zero-hash variant: off camera `export TAMEION_URL=http://127.0.0.1:7880 TAMEION_POLICY=0xf0ae…6b85`, on camera:
+$ node dist/src/cli.js top | head -2
+at this burn (0.001428 USDC a day over the last 7 days), the floor is 28 days away
+every bill in the next 90 days is covered
+
+== beat 5: the audit pack's Gateway line, then the four CreditLine transactions
+$ sed -n '54,62p' proof/audit-pack-2026-10-18.txt        # line 59 = the Gateway balance line
+  ledger     5 payments, 0.008000 USDC; opening 0.000000, closing 0.092000 (the chain's, block 320124915)
+  payments   1 in the agent's anchored record, 2 by the owner's passkey, 2 flagged ! (on chain, not in the record)
+  records    10/10 recomputed and anchored by the account's key on both nodes; rootOf now: MATCH
+  invoices   2/2 payee signatures valid; payments countersigned 1/5
+  statements no --host given: weekly statements not checked
+  gateway    0.000000 USDC at Circle for the bill wallet 0x3c559e1152b109323eb70ad0fcf6d4e7aa9210f5 (second balance line)
+  bean-check passed (Beancount 3.2.3)
+audit pack: every check held
+exit=0
+# exit: 0
+# started: 2026-10-18 05:33:02 +0800
+$ cast receipt 0xcc330476aa6dad1fa45d54f2b76070ea1fae391d8a54731337dab6ce8b120000 status --rpc-url https://rpc.testnet.arc.io   # lock
+1 (success)
+$ curl -s https://explorer.testnet.arc.io/api/v2/transactions/0xcc330476aa6dad1fa45d54f2b76070ea1fae391d8a54731337dab6ce8b120000  (status, result, method)
+status=ok result=success method=lock block=67696082 to=0x865fd8C823B98c78475Ddb7E83cB7903969133b6
+$ curl -s -o /dev/null -w '%{http_code}' https://explorer.testnet.arc.io/tx/0xcc330476aa6dad1fa45d54f2b76070ea1fae391d8a54731337dab6ce8b120000
+200
+$ cast receipt 0x04a942a11f79459377fdcedc2aeebc4e9d8156351ad8e612c323359e126fff58 status --rpc-url https://rpc.testnet.arc.io   # draw
+1 (success)
+$ curl -s https://explorer.testnet.arc.io/api/v2/transactions/0x04a942a11f79459377fdcedc2aeebc4e9d8156351ad8e612c323359e126fff58  (status, result, method)
+status=ok result=success method=draw block=67696120 to=0x865fd8C823B98c78475Ddb7E83cB7903969133b6
+$ curl -s -o /dev/null -w '%{http_code}' https://explorer.testnet.arc.io/tx/0x04a942a11f79459377fdcedc2aeebc4e9d8156351ad8e612c323359e126fff58
+200
+$ cast receipt 0x80ebc193122cb4fecf4b1c88518d60d1a55c56e6065511e665bfbc484744b541 status --rpc-url https://rpc.testnet.arc.io   # repay
+1 (success)
+$ curl -s https://explorer.testnet.arc.io/api/v2/transactions/0x80ebc193122cb4fecf4b1c88518d60d1a55c56e6065511e665bfbc484744b541  (status, result, method)
+status=ok result=success method=repay block=67696138 to=0x865fd8C823B98c78475Ddb7E83cB7903969133b6
+$ curl -s -o /dev/null -w '%{http_code}' https://explorer.testnet.arc.io/tx/0x80ebc193122cb4fecf4b1c88518d60d1a55c56e6065511e665bfbc484744b541
+200
+$ cast receipt 0xb57599854f2f2d446809424b20fc441d94d1514c008aa910469dc11335ed08cc status --rpc-url https://rpc.testnet.arc.io   # slash
+1 (success)
+$ curl -s https://explorer.testnet.arc.io/api/v2/transactions/0xb57599854f2f2d446809424b20fc441d94d1514c008aa910469dc11335ed08cc  (status, result, method)
+status=ok result=success method=slash block=67696172 to=0x865fd8C823B98c78475Ddb7E83cB7903969133b6
+$ curl -s -o /dev/null -w '%{http_code}' https://explorer.testnet.arc.io/tx/0xb57599854f2f2d446809424b20fc441d94d1514c008aa910469dc11335ed08cc
+200
+# finished: 2026-10-18 05:33:13 +0800
+
+== beat 6: README, The honest state
+$ grep -n '^## The honest state' README.md; sed -n '124,147p' README.md   # (README at 2c2a461)
+124:## The honest state
+## The honest state
+
+- **No customers.** 60 test accounts (Arbitrum Sepolia 36, Arc testnet 24); 122 agent passes, 91 finished; 7 bills paid by the agent itself (0.117 USDC); 19 x402 purchase attempts: 6 paid (0.007 USDC), 9 refused by the checks, 4 waiting for the owner; 11 signed invoices received, 7 accepted; 92 roots anchored across 25 accounts, 467 decisions under them. (Payments the owners made with their own passkey are on chain only and are not in these counts.) All accounts are the team's; the money moved is cents. (`proof/metrics-2026-10-16.txt`)
+- **User test, 2026-10-16: it failed first, then we fixed it.** Three testers (an operator, a finance lead, an outside agent) walked the
+  product from a clean browser: 6 of 11, 1 of 5 and 3 of 6 steps passed on the first build
+  (`proof/uat-u1-2026-10-16.txt`, `proof/uat-u2-2026-10-16.txt`, `proof/uat-u3-2026-10-16.txt`).
+- **It found a double payment.** One owner tap paid the same 30-day bill twice: two transactions of 0.05 USDC to one payee
+  ([first](https://sepolia.arbiscan.io/tx/0x06a344a58ef817491949a6ab49638a204f8414aad4322ba46d587e926d41067c),
+  [second](https://sepolia.arbiscan.io/tx/0x20f53fac615b6b15007c5d7e8a9a65507cbeeaf43cb0fd4d94dd99f1e74f1e84)). The tap was bound to a hash that changes on every check. **Fixed** in `1227bff`: the tap is now bound to the
+  bill-cycle's own key, so a second tap makes the same call and the contract refuses it (`AlreadyExecuted`), shown by simulation against
+  the chain in `proof/uat-wave2-2026-10-16.txt`. **Still to come:** a reviewer who did not write the fix re-runs it live, and the tests are
+  re-run on the fixed build; that is in progress, not done.
+- **The agent decides little today.** In the service's own records, 90 of 91 finished passes were decided by the rule baseline and the other
+  by that baseline after a model call failed; a model decided none (`proof/metrics-2026-10-16.txt`). The model's one job is ordering obligations when
+  money is short. **In progress, not claimed:** three bounded model decisions, each with the reason shown on the row — an unusual payment
+  (pay, ask or refuse), timing (now, early or wait), and the "why" line of every payment — graded against the rule baseline on fixed
+  scenarios. The limit stays in the contract whatever the model says.
+- **Open:** as of the last user test the signed mandate sentence does not name the cap on one payment; a finance lead cannot yet hold a read-only seat once the
+  operator mints an agent key (the records are open, a viewer seat is not built); the passkey can withdraw everything at once, by design
+  (a withdrawal delay is not built); no mainnet; the contracts are unaudited; no person has yet signed with real Touch ID on this build
+  (the tests used a virtual authenticator); the public copy runs on Railway (https://tameion-agents-production-064a.up.railway.app, `scripts/deploy_railway.sh`; `fly.toml` + `scripts/deploy_fly.sh` build the same image elsewhere) and holds only demo accounts on testnet.
+- **x402 compatibility is narrow.** The account pays by x402's ERC-7710 method so that the cap stays on chain. The only seller it has paid is our own test seller
+  (`scripts/x402_seller.py`); no third-party seller has been paid. None of the 1,401 payment options in the first 600 Bazaar listings names ERC-7710 (they name EIP-3009 or Permit2: `proof/x402-bazaar-payment-methods-2026-10-17.txt`), so
+  whether an outside seller's facilitator accepts our method is untested — and is the first thing an outside operator's agent will meet.
+# exit: 0
+$ sed -n '21,22p' README.md      # testnet only; no outside operator; every claim names a file in proof/
+**State, 2026-10-17 00:05 +08:** testnet only (Arc testnet and Arbitrum Sepolia). Every account so far was made by the team; **no outside operator
+has used it yet.** Each claim below names the file in `proof/` that holds its run.
+$ sed -n '10p;61p' proof/agent-vs-rules-heldout-2026-10-17.txt   # the blind set: rules 10/12, model 9, 9, 8 of 12
+action   10/12 = 83%  (correct per rep: 10; always-pay would score 5/12)
+action   26/36 = 72%  (correct per rep: 9 9 8; always-pay would score 5/12)
+$ grep -c 'matched' README.md   # the 'matched' sentence is not in README at 2c2a461
+0
+
+# finished: 2026-10-18 05:48:25 +0800
+# updated: 2026-10-18 06:06:53 +0800 (beat 3: the --show run on the first double record, main 4ce997c)
