@@ -3637,6 +3637,7 @@ dependencies = [
  "ledger",
  "ml-dsa",
  "p256",
+ "pistis",
  "reqwest 0.13.5",
  "ring",
  "rust_decimal",

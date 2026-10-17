@@ -48,6 +48,8 @@ dev-anvil = ["arc/dev-anvil"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+# The score every account's record earns (examples/score_all.rs, docs/117 §13).
+pistis.workspace = true
 
 # These two build history on a local anvil chain through `arc::dev` (docs/60 P-109).
 [[example]]

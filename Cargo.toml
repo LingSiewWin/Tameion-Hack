@@ -24,6 +24,7 @@ ledger = { path = "crates/ledger" }
 arc = { path = "crates/arc" }
 hedge = { path = "crates/hedge" }
 desk = { path = "crates/desk" }
+pistis = { path = "crates/pistis" }
 # default-features = false, then only what is actually used. `provider-http`
 # supplies the transport; `reqwest` and `reqwest-rustls-tls` supply the HTTP
 # client and TLS underneath it, which the Arc endpoint needs since it is https.
