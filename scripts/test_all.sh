@@ -38,6 +38,10 @@ step "audit pack: python unittest (offline)" run 'python3 -m unittest scripts/te
 step "audit pack: bean-check on the fixture's ledger" run 'f=crates/operator/tests/fixtures/audit-pack; a="file://$PWD/$f/answers.json"; out=$(mktemp -d); trap "rm -rf \"$out\"" EXIT; python3 scripts/audit_pack.py "$f" 0xdaf055fff0ad86f112a5f7f9055eee4e5a9ad4c1 2026-10-16 2026-10-17 --rpc "$a" --rpc2 "$a" --gateway "$a" --block 320121361 --out "$out" >/dev/null || exit 1; if command -v bean-check >/dev/null; then bean-check "$out"/*/*/ledger.beancount && echo "  bean-check $(bean-check --version | head -1): exit 0"; else printf "  \033[31mskipped: bean-check not installed\033[0m\n"; fi'
 step "passkey page: node --test" run 'node --test apps/classic/passkey/call.test.mjs 2>&1 | grep -E "^ℹ (pass|fail)"'
 step "chip bridge: python unittest" run 'python3 -m unittest scripts/test_desk_se_bridge.py 2>&1 | tail -3'
+step "key roles: python unittest" run 'python3 -I scripts/test_key_roles.py 2>&1 | tail -3'
+# docs/117 §2: one role per key, from the code's defaults and runtime/app. Fails while one key holds two roles
+# (today ~/.tameion/treasury.key: relayer, Hyperliquid master, HALT clearer, bill wallet, guardian) — a founder decision.
+step "key roles: one role per key" run 'python3 -I scripts/key_roles.py runtime/app'
 # The descriptor check validates against the ERC-7730 JSON schema: run it with a Python that has `jsonschema`
 # (Homebrew's python3 can move ahead of the one it is installed for — docs/60).
 step "clear-signing descriptors: ERC-7730" run 'py=$(for p in python3 python3.14 python3.13; do command -v "$p" >/dev/null && "$p" -c "import jsonschema" 2>/dev/null && { echo "$p"; break; }; done); [ -n "$py" ] || { echo "  no python with jsonschema (pip install jsonschema)"; exit 1; }; "$py" scripts/check_erc7730.py'
