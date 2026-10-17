@@ -1,0 +1,54 @@
+UAT fix wave 3, page items (seat S2) — written 2026-10-17 14:30 +0800
+
+What: (1) Needs you shows each inbox pricesToApprove row, "Let the agent buy from <host> at <price> USDC (usually <usual>)",
+with the agent's reason and one tap, "Let it through", that calls POST /api/level1/purchase-approve with the owner's device
+header; (2) "Make it standing" answered 409 with nextUnpaid says the next unpaid date in words and starts the order there
+in the same tap.
+Where: a dev page of this tree (next dev :3003, TAMEION_SERVICE=http://127.0.0.1:7903) against S3's service :7903
+(runtime/seat-S3/tameion-app). Clean browser context, virtual passkey, a fresh account opened through Start.
+Files: apps/console/src/components/account/{needs,agent,hero}.tsx, apps/console/src/lib/{tameion,types}.ts.
+
+1. The real 409 from :7903 (curl, 2026-10-17 14:24:58 +08), uat-u2-fin's imported bill whose 10-16 cycle was paid:
+   POST /api/level1/prepare-schedule {"policy":"0x48274c7904edb23f75ea607c932d5c441c1a80e3","payee":"0x179dca89f69faef5765d2e7445aa5452b8159520","amount":"0.05","everySecs":2592000,"firstDue":1792156029}
+   HTTP 409 {"error":"the bill-cycle due 1792156029 (unix) is already paid; this bill's next unpaid cycle is due 1794748029. Start the order then, or it pays a cycle twice","nextUnpaid":1794748029}
+   (1792156029 = 2026-10-16 21:07 +08, 1794748029 = 2026-11-15 21:07 +08)
+
+2. The page run (.playwright-mcp/s2-fix4.js), verbatim result:
+   log:
+   [06:28:33Z] fresh account 0x21796a290b849389ff1bb9dafb2002de85c5d358 opened on S3's service :7903
+   [06:28:35Z] the row: "Let the agent buy from 127.0.0.1 at 0.004 USDC (usually 0.001) It wanted it for: ETH price for the weekly research report. It held this purchase because the price is more than a quarter above what 127.0.0.1 usually charges. One tap lets one purchase through at up to this price within ten minutes; your limits still bound it. Let it through"
+   [06:28:35Z] after one tap: "The agent may buy once from 127.0.0.1 at up to 0.004 USDC until 02:38 PM."
+   [06:28:37Z] while the same tap asks again: "The Oct 16 bill was already paid, so the order starts at the next unpaid one, Nov 15. Setting…"
+   [06:28:50Z] then the page shows: "Proof run: stopped before execute, nothing was sent to the chain."
+   calls (the device token itself is not logged; deviceHeader = the header was present):
+   ask    /api/level1/purchase-approve deviceHeader=true {"policy":"0x21796a290b849389ff1bb9dafb2002de85c5d358","seller":"0xe7d8d72abade89be5309a6f55031079f0cf62990","amount":"0.004000"}
+   answer /api/level1/purchase-approve 200 {"max":"0.004000 USDC","seller":"0xe7d8d72abade89be5309a6f55031079f0cf62990","summary":"the agent may buy once from 0xe7d8d72abade89be5309a6f55031079f0cf62990 at up to 0.004000 USDC until unix 1792219115; your limits still bound it","until":1792219115}
+   ask    /api/level1/prepare-schedule deviceHeader=true {"policy":"0x21796a290b849389ff1bb9dafb2002de85c5d358","payee":"0x179dca89f69faef5765d2e7445aa5452b8159520","amount":"0.050000","everySecs":2592000,"firstDue":1792156029}
+   answer /api/level1/prepare-schedule 409 (the body of step 1, replayed byte for byte)
+   ask    /api/level1/prepare-schedule deviceHeader=true {"policy":"0x21796a290b849389ff1bb9dafb2002de85c5d358","payee":"0x179dca89f69faef5765d2e7445aa5452b8159520","amount":"0.050000","everySecs":2592000,"firstDue":1794748029}
+   answer /api/level1/prepare-schedule 200 (from :7903) {"data":"0x8d938516…179dca89f69faef5765d2e7445aa5452b8159520…c350…278d00…6af9ae7d","summary":"standing order: 0.050000 USDC to 0x179dca89f69faef5765d2e7445aa5452b8159520 every 30.0 days, first on unix 17947…"}
+   ask    /api/level1/challenge {"chain":"arbitrum-sepolia","owner":"0xf013ad0ef1931f599a48b83bfb8638ef0321e0a0","target":"0x21796a290b849389ff1bb9dafb2002de85c5d358","data":"<the same calldata>"}
+   answer /api/level1/challenge 200 {"chainId":421614,"challenge":"0x137c1e33913de6aa5d879cfd2ea766627781d3eb036c2196858b279c1fcba36d","nonce":"0"}
+   ask    /api/level1/execute (passkey assertion, not logged)
+   answer /api/level1/execute 418 (stopped by the run, see below)
+   Read: the second ask carries firstDue = nextUnpaid; :7903's calldata ends 6af9ae7d = 1794748029, which the page's own
+   addSchedule build matched (checkCall passes before any challenge is asked), the page's challenge matched the service's,
+   and the passkey signed.
+
+What was injected, and why:
+- The pricesToApprove row: a fresh account has bought nothing, so the inbox has none. Shape of S3's prices_to_approve
+  (tameion-app.rs), with S3's UAT seller 0xe7d8…2990, its real paid price 0.001 and a real purpose from its purchases log.
+  The tap's call went to :7903 unchanged and was answered 200.
+- The standing candidate and the first answer: :7903 checks paid cycles only for a deployed account; a fresh account has
+  none. The candidate is uat-u2-fin's real bill at its paid date; the first answer is step 1's real 409. The second ask
+  went to :7903 unchanged.
+- /api/level1/execute was answered 418 by the run so that no standing order reached the chain.
+
+Not validated: a held purchase produced by a real agent purchase on an Autopilot account, then let through and bought; a
+real 409 for an account this browser owns; the order on chain (execute stopped).
+
+Screenshots: proof/uat-fix4-price-1280.png (Needs you 1, the row), proof/uat-fix4-price-390.png,
+proof/uat-fix4-price-done-1280.png, proof/uat-fix4-standing-1280.png (the moved date while the tap asks again),
+proof/uat-fix4-standing-end-1280.png. At 390 wide (mobile context) scrollWidth = clientWidth = 390 with and without the row.
+
+Gates: tsc 0 errors; eslint src test 0 problems; node --test test/*.mts pass 58, fail 0. Dev server on :3003 stopped by PID.

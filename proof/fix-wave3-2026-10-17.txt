@@ -56,3 +56,16 @@ P-220, live: scripts/verify_tenant.sh http://127.0.0.1:7903 0x42463b314d392fe34a
 P-219, live regression: uat-u2-fin's read-only plan with the orders now read (14:01:53): due [], aside [], next cycle …@1794748029 (unchanged).
 P-218 and P-219, pass tests on a fake chain: a_model_refusal_of_a_bill_asks_the_owner_unless_a_look_alike, a_cycle_a_standing_order_paid_is_not_asked_again — ok. Not run live (no model on a real pass; no real order).
 Gate: fmt clean; clippy -p operator --lib --tests --bins --examples -D warnings clean; cargo test -p operator: lib 178, tameion-app 14, mcp 1, app_http, claude_transport, decide_eval, hedge_advice, mcp_stdio all ok, 0 failed.
+
+## Fix wave 3b (P-221…P-225) — 2026-10-17 14:32:55 +0800, my instance :7903 (rebuilt 14:30:35); :7880 not touched
+P-221: uat-u1-acme's tenant file on :7903 cut to 120 bytes (half a file), 14:30:49:
+  record (no key) -> 200, first line {"leaf":"0xfe5c4f0f36fd8ca8e6f9878f746eb9075511861936fce357b1564e80b75fb7b5","seq":0}; lines naming canonical / x402 / Holding: 0
+  inbox (no key) -> 503 {"error":"this account could not be read just now; nothing was done, try again"}
+  file restored (identical) -> inbox (no key) 401, as before
+P-225: desk-gold-2329 0xcd8d71d97c3a946a14ac3fb92db4fb86e2974308 (agent key 'desk agent' [read, run]), its owner's device token from ~/.tameion/test-keys (not printed), 14:31:01:
+  POST bills {check:true} with the device -> 200 {"ok":true,"summary":"you may tell the agent about bills on this account; nothing was saved"}
+  the same with no credential -> 401 'this account's owner requires an agent key …', scope import
+  POST invoice-decide with the device, no passkey signature -> the handler's 'accepting or declining an invoice needs the owner's passkey' (past the gate)
+  POST buy with the device -> 401, scope buy (buying stays the agent's)
+Tests (no money moved): level1 a_tenant_read_during_a_save_is_never_half_a_file; app_http an_unreadable_tenant_shows_no_events_and_opens_no_gate, the_owners_device_runs_checks_saves_bills_and_decides_invoices; x402 one_price_approval_lets_one_of_two_concurrent_buys_through, a_stalled_purchase_answers_at_the_cap_and_frees_the_lock, two_concurrent_buys_from_one_seller_sign_once; lib a_model_refusal_of_a_bill_asks_the_owner_unless_a_look_alike (P-223).
+Gate: fmt clean; clippy -p operator --lib --tests --bins --examples -D warnings clean; cargo test -p operator: 224 passed, 0 failed (lib 181, tameion-app 14, mcp 1, app_http 15, claude_transport 4, decide_eval 3, hedge_advice 4, mcp_stdio 2); console tsc + eslint (tameion.ts, owe.tsx) clean, node --test 58 pass.
