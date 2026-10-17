@@ -320,3 +320,40 @@ export type Recall = {
     event?: unknown;
   }[];
 };
+
+/** One filled slot of a record. A slot is present only after its check passed, so `verified` is true when it is there. */
+export type Slot = { alg: string; keyId: string; verified: boolean };
+
+/** One record of `GET /api/level1/symbolon`. A locked account gives an outsider `root`, `seq` and `leaf` only. */
+export type SymbolonRecord = {
+  root: string;
+  seq: number;
+  leaf: string;
+  kind?: string;
+  at?: number;
+  counterparty?: string;
+  amount?: string;
+  minor?: string;
+  /** a decision's verdict: ALLOW, REVIEW, or BLOCK (a refusal) */
+  decision?: string;
+  tx?: string;
+  note?: string;
+  anchorTx?: string | null;
+  agent?: Slot | null;
+  counterparty_slot?: Slot | null;
+  witness?: Slot | null;
+};
+
+/** `Ok` + `Symbolon` (`GET /api/level1/symbolon?policy=`): the records oldest first, how many stand behind 0-3 slots, and the
+ *  roots whose anchoring could not be read this time (their records show no witness; that is not "not witnessed"). */
+export type Symbolon = {
+  ok: true;
+  contractVersion: string;
+  policy: string;
+  chain: string;
+  explorer?: string | null;
+  locked: boolean;
+  counts: { unsigned: number; single: number; double: number; triple: number } | null;
+  records: SymbolonRecord[];
+  chainReadFailed: string[];
+};

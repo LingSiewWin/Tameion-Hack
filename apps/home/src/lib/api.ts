@@ -4,7 +4,7 @@
 // Accounts are addressed by NAME (`/a/<name>`, DESIGN §Page grammar): every fetcher takes the account's name (an address
 // works too). The name becomes the address only on the server — here when running there, in the proxy for the browser —
 // so the page never needs the address and it never reaches an href or the Owner view's DOM.
-import type { Demo, Inbox, NameRecord, Recall, RecordEvent, Records, Refusal, RefusalError, Status, Tenant } from "./types.ts";
+import type { Demo, Inbox, NameRecord, Recall, RecordEvent, Records, Refusal, RefusalError, Status, Symbolon, Tenant } from "./types.ts";
 
 const base = () => (typeof window === "undefined" ? (process.env.TAMEION_URL ?? "http://127.0.0.1:7890").replace(/\/+$/, "") : "");
 
@@ -79,6 +79,9 @@ export const fetchRecords = async (account: string, headers?: HeadersInit) =>
   json<Records>(`/api/level1/records?${q({ policy: await policyOf(account) })}`, headers);
 export const fetchRecall = async (account: string, ids: string[], root?: string, headers?: HeadersInit) =>
   json<Recall>(`/api/level1/recall?${q({ policy: await policyOf(account), ids: ids.join(","), root })}`, headers);
+/** Each record with its three slots (agent, counterparty, witness), every root or one: this lane's read-only route. */
+export const fetchSymbolon = async (account: string, root?: string, headers?: HeadersInit) =>
+  json<Symbolon>(`/api/level1/symbolon?${q({ policy: await policyOf(account), root })}`, headers);
 export const fetchDemo = () => json<Demo>("/api/level1/demo");
 /** The tenant as the service keeps it, without keys; the route wraps it as `{ tenant }`. */
 export const fetchTenant = async (account: string) =>
