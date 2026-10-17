@@ -10,6 +10,7 @@
 //! or the hash a WebAuthn assertion signs): hash first, then sign.
 
 use alloy::primitives::{Address, B256, Signature};
+use ledger::symbolon::SlotSig;
 use ml_dsa::{EncodedVerifyingKey, MlDsa65, VerifyingKey};
 use std::fmt;
 use std::str::FromStr;
@@ -171,6 +172,58 @@ pub fn key_hash(pk: &[u8]) -> B256 {
     B256::from_slice(&Sha256::digest(pk))
 }
 
+/// The key id a slot names (`ledger::symbolon::SlotSig::key_id`): the address
+/// for secp256k1, the sha256 of the encoded key for ML-DSA-65 and of the
+/// uncompressed point for P-256. Hash first: a slot never carries a key.
+pub fn key_id(key: &KeyRef) -> String {
+    match key {
+        KeyRef::Address(a) => format!("{a:#x}"),
+        KeyRef::MlDsa65(pk) => format!("{:#x}", key_hash(pk)),
+        KeyRef::P256 { x, y } => format!("{:#x}", key_hash(&[&[4u8][..], &x[..], &y[..]].concat())),
+    }
+}
+
+/// A filled slot of a symbolon (docs/117 §2 addendum): `sig` by `key` over the
+/// record's own hash, checked under `alg` before it is written. The message is
+/// the record hash itself, so a slot moved to another record no longer
+/// verifies. `key` is the key, not its id, because an ML-DSA signature is
+/// checked against the whole public key; the slot keeps only its id.
+pub fn slot_sig(
+    alg: Alg,
+    key: &KeyRef,
+    record_hash: &[u8; 32],
+    sig: &[u8],
+    at: i64,
+) -> Result<SlotSig, SigRefusal> {
+    verify(alg, key, record_hash, sig)?;
+    Ok(SlotSig {
+        alg: alg.as_str().into(),
+        key_id: key_id(key),
+        sig: sig.to_vec(),
+        at,
+    })
+}
+
+/// Check a filled slot again, against the record it sits in and the key it
+/// names. The registry binds a key id to one algorithm (`bound`, from a key
+/// binding): a slot under any other algorithm for that key is a downgrade and
+/// is refused as missing the bound one, never accepted.
+pub fn check_slot(
+    slot: &SlotSig,
+    key: &KeyRef,
+    record_hash: &[u8; 32],
+    bound: Option<Alg>,
+) -> Result<(), SigRefusal> {
+    let alg = Alg::parse(Some(&slot.alg))?;
+    if bound.is_some_and(|b| b != alg) {
+        return Err(SigRefusal::Missing);
+    }
+    if slot.key_id != key_id(key) {
+        return Err(SigRefusal::BadKey("the slot names another key"));
+    }
+    verify(alg, key, record_hash, &slot.sig)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -265,5 +318,104 @@ mod tests {
         assert!(vk.verify_with_context(m, &[], &sig));
         assert!(vk.verify_internal(&[&[0u8, 0u8][..], m].concat(), &sig));
         assert!(!vk.verify_internal(m, &sig));
+    }
+
+    /// The founder's test (docs/117 §2 addendum): the envelope binds the key
+    /// id and the record (a slot moved to another record fails), the registry
+    /// binds key id to alg (a key bound as ml-dsa-65 presented with a
+    /// secp256k1 signature is refused), and after a binding there is no
+    /// downgrade (a lower alg is `sig_alg_missing`, never accepted).
+    #[test]
+    fn a_slot_binds_its_record_and_key_and_a_bound_key_has_no_downgrade() {
+        let record = alloy::primitives::keccak256("record A").0;
+        let other = alloy::primitives::keccak256("record B").0;
+        let sk = ml_dsa::SigningKey::<MlDsa65>::from_seed(&[11u8; 32].into());
+        let pk = sk.verifying_key().to_bytes();
+        let ml = KeyRef::MlDsa65(pk.as_slice());
+        let slot = slot_sig(Alg::MlDsa65, &ml, &record, &sk.sign(&record).to_bytes(), 7).unwrap();
+        assert_eq!(slot.alg, "ml-dsa-65");
+        assert_eq!(
+            slot.key_id,
+            format!("{:#x}", key_hash(&pk)),
+            "the id, never the key"
+        );
+        assert_eq!(check_slot(&slot, &ml, &record, Some(Alg::MlDsa65)), Ok(()));
+        // Moved to another record's slot: the message is the record hash.
+        assert!(check_slot(&slot, &ml, &other, Some(Alg::MlDsa65)).is_err());
+        assert!(slot_sig(Alg::MlDsa65, &ml, &other, &slot.sig, 7).is_err());
+        // Relabelled with another key id, or checked against another key.
+        let mut relabelled = slot.clone();
+        relabelled.key_id = format!("{:#x}", key_hash(b"someone else"));
+        assert!(check_slot(&relabelled, &ml, &record, None).is_err());
+        let sk2 = ml_dsa::SigningKey::<MlDsa65>::from_seed(&[12u8; 32].into());
+        let pk2 = sk2.verifying_key().to_bytes();
+        assert!(check_slot(&slot, &KeyRef::MlDsa65(pk2.as_slice()), &record, None).is_err());
+        // The registry: the payee bound ml-dsa-65. Its address key signs the same
+        // record correctly, and the slot is still refused as missing the bound alg.
+        let payee = PrivateKeySigner::random();
+        let addr = KeyRef::Address(payee.address());
+        let s = payee
+            .sign_hash_sync(&B256::from(record))
+            .unwrap()
+            .as_bytes();
+        let secp = slot_sig(Alg::Secp256k1Eip712, &addr, &record, &s, 7).unwrap();
+        assert_eq!(
+            check_slot(&secp, &addr, &record, None),
+            Ok(()),
+            "valid on its own"
+        );
+        assert_eq!(
+            check_slot(&secp, &addr, &record, Some(Alg::MlDsa65)),
+            Err(SigRefusal::Missing)
+        );
+        assert_eq!(SigRefusal::Missing.code(), "sig_alg_missing");
+        // A slot naming an alg outside the registry: sig_alg_unknown.
+        let mut unknown = secp.clone();
+        unknown.alg = "ml-dsa-44".into();
+        assert_eq!(
+            check_slot(&unknown, &addr, &record, None)
+                .unwrap_err()
+                .code(),
+            "sig_alg_unknown"
+        );
+        // The same floor on the invoice path: after the payee bound its key, its
+        // version 1 and secp256k1 version 3 invoices are refused, sig_alg_missing.
+        use crate::invoice::{self, Invoice, KeyBinding};
+        let policy = Address::repeat_byte(0x26);
+        let binding = KeyBinding {
+            payee: payee.address(),
+            policy,
+            alg: Alg::MlDsa65,
+            pk_sha256: key_hash(&pk),
+            bound_at: 1_792_000_000,
+        };
+        for alg in [None, Some(Alg::Secp256k1Eip712)] {
+            let inv = Invoice {
+                payee: payee.address(),
+                policy,
+                amount: 150_000,
+                due_at: 1_792_864_000,
+                every_days: 30,
+                discount_bps: 0,
+                early_days: 0,
+                reference: alloy::primitives::keccak256("INV-floor"),
+                issued_at: 1_791_999_940,
+                issuer: None,
+                alg,
+                key_hash: None,
+            };
+            let d = invoice::digest(421_614, &inv);
+            let body = invoice::to_json(&inv, &payee.sign_hash_sync(&d).unwrap().as_bytes());
+            let ok = invoice::verify(421_614, policy, &body, 1_792_000_000).unwrap();
+            assert_eq!(
+                invoice::floor(&ok, Some(&binding)).unwrap_err().code,
+                "sig_alg_missing"
+            );
+            assert_eq!(
+                invoice::floor(&ok, None),
+                Ok(()),
+                "unbound, the same invoice bills"
+            );
+        }
     }
 }
