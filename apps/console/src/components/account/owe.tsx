@@ -314,6 +314,8 @@ function TypeBill() {
                 );
               const bill = { payee, amount: row.amount.trim(), everyDays };
               let href: string | undefined;
+              // Ask first whether this page may save bills here, so a refusal costs no passkey tap (docs/60 P-225).
+              await post("/api/level1/bills", { policy: tenant.policy, check: true, reserveToken: reserveToken.get(tenant.policy) ?? undefined });
               // A live account pays only payees it approved: the passkey approves this one first.
               if (inbox?.deployed) {
                 const prep = await post<{ to: string; data: string }>("/api/level1/prepare-payees", { policy: tenant.policy, payees: [payee.toLowerCase()] });
