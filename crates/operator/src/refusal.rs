@@ -444,7 +444,11 @@ pub fn agent_route(method: &str, path: &str) -> bool {
 pub fn moves_money(path: &str) -> bool {
     matches!(
         path,
-        "/api/level1/buy" | "/api/level1/fund" | "/api/level1/run" | "/api/level1/identity"
+        "/api/level1/buy"
+            | "/api/level1/pay"
+            | "/api/level1/fund"
+            | "/api/level1/run"
+            | "/api/level1/identity"
     )
 }
 
@@ -753,7 +757,8 @@ mod tests {
         }
         let sources = [
             include_str!("bin/tameion-app.rs"),
-            include_str!("bin/tameion-mcp.rs"),
+            include_str!("mcp.rs"),
+            include_str!("pay.rs"),
             include_str!("x402.rs"),
         ];
         // The code is the first snake_case literal among a call's arguments

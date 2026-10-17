@@ -320,7 +320,7 @@ pub const TOKEN_SCOPES: &[(&str, &str)] = &[
     ("import", "tell the agent about bills"),
     (
         "buy",
-        "buy a paid API (x402) from a payee you approved, inside the caps",
+        "buy a paid API (x402) from a payee you approved, or pay an approved payee, inside the caps",
     ),
 ];
 
@@ -342,7 +342,7 @@ pub fn scope_for(method: &str, path: &str) -> Option<&'static str> {
         // `import` agent key, never open; docs/60 P-93), because this gate
         // would refuse a device-token holder on an account with agent keys.
         ("POST", "bills") | ("POST", "invoice-decide") => "import",
-        ("POST", "buy") => "buy",
+        ("POST", "buy") | ("POST", "pay") => "buy",
         ("POST", x)
             if x.starts_with("prepare-")
                 && !x.starts_with("prepare-token")
@@ -846,6 +846,19 @@ fn initcode_for(
 
 fn money_u256(m: Money) -> U256 {
     U256::from(m.to_minor().max(0) as u128)
+}
+
+/// The tenant's agent as a signing client, its key read from this host (the
+/// direct pay route, `crate::pay`).
+pub(crate) fn agent_client(
+    app_dir: &Path,
+    t: &Tenant,
+    c: &ChainPreset,
+) -> Result<ArcClient, String> {
+    let owner = Address::from_str(&t.owner).map_err(|e| e.to_string())?;
+    let key = fs::read_to_string(agent_key_path(app_dir, owner))
+        .map_err(|_| "the agent key for this account is not on this host".to_string())?;
+    signed_client(c, key.trim())
 }
 
 fn signed_client(c: &ChainPreset, key: &str) -> Result<ArcClient, String> {
@@ -2465,7 +2478,10 @@ pub fn relayer_floor_wei(c: &ChainPreset) -> U256 {
 /// Keep the agent able to pay and anchor: if its native balance is under
 /// the floor, the relayer sends it the usual amount first. Returns the
 /// top-up transaction, if one was needed.
-async fn top_up_agent_gas(c: &ChainPreset, agent: Address) -> Result<Option<B256>, String> {
+pub(crate) async fn top_up_agent_gas(
+    c: &ChainPreset,
+    agent: Address,
+) -> Result<Option<B256>, String> {
     let relayer = signed_client(c, &relayer_key()?)?;
     let have = relayer
         .native_wei(agent)
@@ -2819,6 +2835,9 @@ pub async fn run(
     // PLAN 5.54: what the agent bought since the last anchored record joins
     // this pass's record, so every purchase and its reason is under a root.
     let (mut bought, bought_upto) = crate::x402::unanchored_events(app_dir, &t.policy);
+    // docs/115 §7: the agent's direct payments and their reasons, the same way.
+    let (paid_direct, paid_upto) = crate::pay::unanchored_events(app_dir, &t.policy);
+    bought.extend(paid_direct);
     // Receipt v1 (docs/76 §6): settled purchases are bill evidence. They are
     // detected here, beside the pass, not inside it: the pass keeps the
     // agent's own payments out of what it learns schedules from (an agent
@@ -2860,6 +2879,7 @@ pub async fn run(
     };
     if !report["anchorTx"].is_null() {
         crate::x402::mark_anchored(app_dir, &t.policy, bought_upto);
+        crate::pay::mark_anchored(app_dir, &t.policy, paid_upto);
     }
     // The invoices' decisions hold once the pass that records them did: kept
     // (so the next pass does not decide them again), and a refused one is

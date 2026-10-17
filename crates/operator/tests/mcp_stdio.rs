@@ -48,6 +48,11 @@ fn the_mcp_server_lists_its_tools_and_says_which_one_spends() {
     out.read_line(&mut line).unwrap();
     let list: serde_json::Value = serde_json::from_str(&line).unwrap();
     assert_eq!(list["id"], 2);
+    // One table for both transports (the service's POST /mcp serves the same).
+    assert_eq!(
+        list["result"]["tools"],
+        serde_json::json!(operator::mcp::tools())
+    );
     let names: Vec<&str> = list["result"]["tools"]
         .as_array()
         .unwrap()
@@ -112,6 +117,7 @@ fn the_mcp_server_lists_its_tools_and_says_which_one_spends() {
         "invoices",
         "send_invoice",
         "purchases",
+        "pay",
     ] {
         assert!(names.contains(&want), "missing tool {want}: {names:?}");
     }

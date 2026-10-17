@@ -8629,6 +8629,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         app.level1_invoice_decide(&body, &req).await
                     }
                     ("POST", "/api/level1/buy") => app.level1_buy(&body).await,
+                    // docs/115 §7: the agent pays an approved payee inside the mandate.
+                    ("POST", "/api/level1/pay") => {
+                        let op = header(&req, "idempotency-key");
+                        let (status, v) = operator::pay::pay(&app.dir, &body, op).await;
+                        json_reply(status, v)
+                    }
+                    // The same tools as tameion-mcp, over Streamable HTTP (operator::mcp).
+                    ("POST" | "GET" | "DELETE", "/mcp") => {
+                        operator::mcp::http(method, &req, &body).await
+                    }
                     ("POST", "/api/level1/prepare-limits") => {
                         app.level1_prepare_limits(&body, &req).await
                     }

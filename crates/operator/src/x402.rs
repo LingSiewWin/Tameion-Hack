@@ -249,6 +249,12 @@ fn refusal_of(err: &str) -> Option<(&'static str, &'static str)> {
     })
 }
 
+/// The catalogue code of the policy's refusal in a node's revert message,
+/// found by selector (the direct pay route reads it, `crate::pay`).
+pub fn revert_code(err: &str) -> Option<&'static str> {
+    refusal_of(err).map(|(code, _)| code)
+}
+
 /// The policy's refusals, in the owner's words, found by selector in a
 /// node's revert message.
 pub fn refusal_words(err: &str) -> Option<&'static str> {
