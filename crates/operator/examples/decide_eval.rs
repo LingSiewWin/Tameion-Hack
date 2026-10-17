@@ -4,6 +4,10 @@
 //!     ANTHROPIC_API_KEY="$(cat ~/.tameion/anthropic.key)" \
 //!       cargo run -p operator --example decide_eval -- --decider model --reps 3
 //!
+//! Two columns by default: "as the system would act" (`allowed` recomputed from each case's
+//! facts with S10's own functions, the fixture's list ignored) and "raw judgment" (the
+//! fixture's list). `--raw` runs the raw column alone, as before docs/60 P-198.
+//!
 //! `--fixture <file>` grades your own cases instead (same JSON shape as
 //! `tests/fixtures/decide-scenarios.json`): the deciders were written after those labels
 //! were public, so cases they never saw are the fair test.
@@ -14,17 +18,26 @@
 #[path = "../tests/decide_eval.rs"]
 mod grader;
 
+use grader::{Mode, ModeRun};
 use operator::decide::{Decider, ModelDecider, RuleBased};
 
-async fn report<D: Decider + Sync>(decider: &D, fixture: &str, reps: usize) {
-    let all = grader::scenarios(fixture);
-    let mut runs = Vec::with_capacity(reps);
-    for _ in 0..reps {
-        runs.push(grader::run(decider, &all).await);
+async fn report<D: Decider + Sync>(decider: &D, fixture: &str, modes: &[Mode], reps: usize) {
+    let mut runs = Vec::with_capacity(modes.len());
+    for &mode in modes {
+        let all = grader::scenarios(fixture, mode);
+        let mut rows = Vec::with_capacity(reps);
+        for _ in 0..reps {
+            rows.push(grader::run(decider, &all).await);
+        }
+        runs.push(ModeRun {
+            mode,
+            all,
+            reps: rows,
+        });
     }
     println!(
         "{}",
-        grader::render(decider.name(), decider.kind(), fixture, &all, &runs)
+        grader::render(decider.name(), decider.kind(), fixture, &runs)
     );
 }
 
@@ -42,8 +55,13 @@ async fn main() {
         Some(path) => std::fs::read_to_string(path).expect("--fixture names a readable file"),
         None => grader::FIXTURE.to_string(),
     };
+    let modes: &[Mode] = if args.iter().any(|a| a == "--raw") {
+        &[Mode::Raw]
+    } else {
+        &[Mode::System, Mode::Raw]
+    };
     match flag("--decider") {
-        Some("rule") => report(&RuleBased, &fixture, 1).await,
+        Some("rule") => report(&RuleBased, &fixture, modes, 1).await,
         Some("model") => {
             let Some(model) = ModelDecider::from_env() else {
                 eprintln!(
@@ -51,10 +69,12 @@ async fn main() {
                 );
                 std::process::exit(2);
             };
-            report(&model, &fixture, reps).await
+            report(&model, &fixture, modes, reps).await
         }
         _ => {
-            eprintln!("usage: decide_eval --decider rule|model [--reps N] [--fixture FILE]");
+            eprintln!(
+                "usage: decide_eval --decider rule|model [--reps N] [--fixture FILE] [--raw]"
+            );
             std::process::exit(2);
         }
     }
