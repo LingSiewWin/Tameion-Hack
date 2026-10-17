@@ -10,7 +10,7 @@ import { CTA, CTA_QUIET, FIELD, PLATE, T } from "./ui.tsx";
 export function GuestCard() {
   const [state, act, pending] = useActionState<GuestState, FormData>(enterGuest, {});
   return (
-    <section id="guest" aria-labelledby="guest-title" className={`${PLATE} max-w-[560px]`}>
+    <section id="guest" aria-labelledby="guest-title" className={`${PLATE} max-w-(--measure)`}>
       <form action={act} className="flex flex-col gap-(--space-5)">
         <h2 id="guest-title" className={T.title}>
           {guest.title}

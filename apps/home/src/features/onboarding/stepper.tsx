@@ -96,7 +96,7 @@ export function Stepper() {
   if (!demo.enabled) return <p className={T.row}>{copy.load.demoOff}</p>;
 
   return (
-    <div className="flex max-w-[560px] flex-col gap-(--space-5)">
+    <div className="flex max-w-(--measure) flex-col gap-(--space-5)">
       {step !== 4 && <Segments labels={copy.steps} done={step + 1} current={step} label={copy.stepOf(step, copy.steps.length, copy.steps[step])} />}
       {step === 0 && <NameStep name={name} setName={setName} onDone={() => setStep(1)} />}
       {step === 1 && (
@@ -152,7 +152,7 @@ export function Stepper() {
 
 function StepSkeleton() {
   return (
-    <div role="status" aria-busy="true" aria-label={copy.load.loading} className="flex max-w-[560px] flex-col gap-(--space-4)">
+    <div role="status" aria-busy="true" aria-label={copy.load.loading} className="flex max-w-(--measure) flex-col gap-(--space-4)">
       <span aria-hidden className="skeleton block h-1 w-full" />
       <span aria-hidden className="skeleton block h-8 w-3/4" />
       <span aria-hidden className="skeleton block h-(--button) w-full" />
