@@ -23,6 +23,7 @@
 //! Claude Code: `claude mcp add tameion -- cargo run -q -p operator --bin tameion-mcp`
 //! (or the built binary), then ask it what the treasury owes.
 
+use operator::refusal::{self, Executed};
 use serde_json::{Value, json};
 use std::io::{BufRead, Write};
 
@@ -195,7 +196,9 @@ fn desk_tools() -> Vec<Value> {
     ]
 }
 
-async fn call(http: &reqwest::Client, name: &str, args: &Value) -> Result<Value, String> {
+/// One tool call: the service's reply in the agent envelope (docs/115 §2), or
+/// the refusal (`Err`), the whole reply with its `error` object.
+async fn call(http: &reqwest::Client, name: &str, args: &Value) -> Result<Value, Value> {
     let b = base();
     let s = |k: &str| args[k].as_str().unwrap_or("").to_string();
     let (method, url, body): (&str, String, Option<Value>) = match name {
@@ -319,7 +322,16 @@ async fn call(http: &reqwest::Client, name: &str, args: &Value) -> Result<Value,
                 json!({ "address": s("address"), "chain": args["chain"].as_str().unwrap_or("arc-testnet"), "days": args["days"].as_u64().unwrap_or(90) }),
             ),
         ),
-        other => return Err(format!("unknown tool {other}")),
+        other => {
+            return Err(refusal::refuse(
+                "invalid_body",
+                Executed::No,
+                "",
+                "Call one of the tools tools/list names.",
+                format!("unknown tool {other}"),
+                None,
+            ));
+        }
     };
     let mut req = match method {
         "GET" => http.get(&url),
@@ -332,11 +344,14 @@ async fn call(http: &reqwest::Client, name: &str, args: &Value) -> Result<Value,
     {
         req = req.bearer_auth(t.trim());
     }
-    let resp = req.send().await.map_err(|e| transport_words(&url, &e))?;
+    let resp = req.send().await.map_err(|e| transport_refusal(&url, &e))?;
     let status = resp.status();
-    let text = resp.text().await.map_err(|e| e.to_string())?;
+    let text = resp.text().await.map_err(|e| transport_refusal(&url, &e))?;
     if !status.is_success() {
-        return Err(format!("{status}: {text}"));
+        let code = status.as_u16();
+        let v = serde_json::from_str::<Value>(&text).unwrap_or_else(|_| json!({ "error": text }));
+        // A service older than the envelope answers the sentence alone.
+        return Err(refusal::envelope(code, &v, name == "buy_service").unwrap_or(v));
     }
     // Purchases come as NDJSON (one receipt per line): an array for the model.
     if name == "purchases" {
@@ -344,15 +359,27 @@ async fn call(http: &reqwest::Client, name: &str, args: &Value) -> Result<Value,
             .lines()
             .filter_map(|l| serde_json::from_str(l).ok())
             .collect();
-        return Ok(json!({ "purchases": lines }));
+        return Ok(refusal::ok(json!({ "purchases": lines })));
     }
     let v = serde_json::from_str(&text).unwrap_or_else(|_| json!({ "text": text }));
     // The inbox, narrowed to what the tool is about.
-    Ok(if name == "invoices" {
-        v["invoices"].clone()
+    Ok(refusal::ok(if name == "invoices" {
+        json!({ "invoices": v["invoices"] })
     } else {
         v
-    })
+    }))
+}
+
+/// The service did not answer: a refusal in the envelope, `words` as before.
+/// No answer in time may still complete (`executed: unknown`); a refused
+/// connection did nothing.
+fn transport_refusal(url: &str, e: &reqwest::Error) -> Value {
+    let (code, executed) = if e.is_timeout() {
+        ("upstream_unavailable", Executed::Unknown)
+    } else {
+        ("service_unavailable", Executed::No)
+    };
+    refusal::refuse(code, executed, "", "", transport_words(url, e), None)
 }
 
 /// What an agent reads when the service did not answer (docs/60 P-184): "error
@@ -417,7 +444,7 @@ async fn main() {
                 json!({
                     "protocolVersion": PROTOCOL,
                     "capabilities": { "tools": {} },
-                    "serverInfo": { "name": "tameion", "version": env!("CARGO_PKG_VERSION") },
+                    "serverInfo": { "name": "tameion", "version": refusal::CONTRACT_VERSION },
                     "instructions": "Tameion is the account an agent operator gives its agents: they pay in USDC (paid APIs over x402, bills and invoices) only to payees the owner approved and only up to the mandate one contract enforces; a raise waits a delay anyone can see, a cut is instant, and every payment lands in a book anchored on chain. These tools read the account, run a pass, and prepare changes the owner signs with a passkey; none of them can add a payee, raise a cap or withdraw. One spends: buy_service has the service pay a seller the owner already approved, inside the caps (it needs an agent key with the buy scope). Start with treasury_inbox; what waits for the owner is its `waiting` list."
                 }),
             ),
@@ -426,14 +453,16 @@ async fn main() {
             "tools/call" => {
                 let name = params["name"].as_str().unwrap_or("");
                 let args = params.get("arguments").cloned().unwrap_or(json!({}));
+                // docs/115 §2 (MCP 2025-06-18): the whole reply as structuredContent;
+                // a refusal's text is its `error` object.
                 match call(&http, name, &args).await {
                     Ok(v) => reply(
                         &id,
-                        json!({ "content": [{ "type": "text", "text": serde_json::to_string_pretty(&v).unwrap_or_default() }], "isError": false }),
+                        json!({ "content": [{ "type": "text", "text": serde_json::to_string_pretty(&v).unwrap_or_default() }], "structuredContent": v, "isError": false }),
                     ),
-                    Err(e) => reply(
+                    Err(v) => reply(
                         &id,
-                        json!({ "content": [{ "type": "text", "text": e }], "isError": true }),
+                        json!({ "content": [{ "type": "text", "text": v["error"].to_string() }], "structuredContent": v, "isError": true }),
                     ),
                 }
             }

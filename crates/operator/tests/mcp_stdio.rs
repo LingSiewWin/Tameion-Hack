@@ -22,6 +22,11 @@ fn the_mcp_server_lists_its_tools_and_says_which_one_spends() {
     let init: serde_json::Value = serde_json::from_str(&line).unwrap();
     assert_eq!(init["id"], 1);
     assert_eq!(init["result"]["serverInfo"]["name"], "tameion");
+    // docs/115 §2: the server's version is the contract's date.
+    assert_eq!(
+        init["result"]["serverInfo"]["version"],
+        operator::refusal::CONTRACT_VERSION
+    );
     // The instructions say what no tool can do, and name the one that spends
     // (corrected 2026-10-15, docs/60 P-75: "none can sign" was not true of
     // buy_service).
@@ -146,6 +151,12 @@ fn the_mcp_server_lists_its_tools_and_says_which_one_spends() {
         words.contains("is not reachable") && words.contains("TAMEION_URL"),
         "{words}"
     );
+    // docs/115 §2: the text is the error object; the whole reply is structured.
+    let error: serde_json::Value = serde_json::from_str(words).unwrap();
+    assert_eq!(error["code"], "service_unavailable");
+    assert_eq!(error["executed"], "no", "a refused connection did nothing");
+    assert_eq!(call["result"]["structuredContent"]["error"], error);
+    assert_eq!(call["result"]["structuredContent"]["ok"], false);
 
     writeln!(stdin, r#"{{"jsonrpc":"2.0","id":4,"method":"nope"}}"#).unwrap();
     line.clear();
@@ -191,6 +202,11 @@ fn a_call_with_no_answer_says_what_to_do() {
             && words.contains("may still complete")
             && words.contains("treasury_inbox"),
         "{words}"
+    );
+    let error: serde_json::Value = serde_json::from_str(words).unwrap();
+    assert_eq!(
+        error["executed"], "unknown",
+        "no answer in time may still complete"
     );
     drop(stdin);
     let _ = child.wait();
