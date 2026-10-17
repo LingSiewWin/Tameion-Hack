@@ -316,7 +316,8 @@ function FundStep({ name, pub, chain, onTaken, onDone }: { name: string; pub: Pu
     void run();
   }, [attempt]);
 
-  const at = phase === "opening" ? 0 : phase === "sent" ? 1 : 2;
+  // Filled only once true: "Sent" means the deploy answered with the funding confirmed, which also means "Opened".
+  const at: number = phase === "opening" ? -1 : phase === "sent" ? 1 : 2;
   const amount = opened?.funding.usdc ? usdc(opened.funding.usdc) : null;
   const sentence = {
     opening: `Opening ${name} on ${chain.name}.`,
@@ -328,7 +329,7 @@ function FundStep({ name, pub, chain, onTaken, onDone }: { name: string; pub: Pu
     <div className="flex flex-col gap-(--space-5)">
       <h1 className="statement-line">Funded on {chain.name}</h1>
       <div className={`${PLATE} flex flex-col gap-(--space-3)`}>
-        <Segments labels={FUND_STOPS} at={at} label={`Funding: ${FUND_STOPS[at]}`} show />
+        <Segments labels={FUND_STOPS} at={at} label={at < 0 ? "Funding: opening" : `Funding: ${FUND_STOPS[at] ?? ""}`} show />
         <p className="row money" aria-live="polite">
           {sentence}
         </p>
@@ -398,11 +399,11 @@ function AllowStep({ opened, inbox, pub, chain, demo, onDone }: { opened: Opened
       if (refused?.length) throw new Refused(refused[0].why, "no");
       await ownerPost(policy, "contacts", { address: vendor, name: "Demo Vendor" });
       setPhase("Confirmed");
-      // Read back until the account lists the payee and the bill (the receipt is built from what the chain says).
+      // Read back until the account lists the payee (the receipt is built from what the chain says).
       for (let i = 0; i < 30; i++) {
         const r = await readInbox(policy);
         const next = "inbox" in r ? (r.inbox as Inbox) : null;
-        if (next?.payees?.some((p) => p.address.toLowerCase() === vendor) && next.typedBills?.some((b) => b.payee.toLowerCase() === vendor)) return onDone(next);
+        if (next?.payees?.some((p) => p.address.toLowerCase() === vendor)) return onDone(next);
         await new Promise((ok) => setTimeout(ok, 2000));
       }
       throw new Refused("Demo Vendor is approved and the bill is saved, but the account has not read them back yet.", "yes");
