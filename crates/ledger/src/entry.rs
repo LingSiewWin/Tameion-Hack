@@ -49,6 +49,10 @@ pub enum DocumentKind {
     /// A logistics document that moves goods between stages: a bill of
     /// lading, an arrival notice. The id is the document's own number.
     Shipping,
+    /// A transferable reservation record: capacity an issuer sold in
+    /// advance, consumable only by whoever controls it now (docs/117 §4).
+    /// The id is the reservation's id.
+    Reservation,
 }
 
 impl fmt::Display for DocumentKind {
@@ -64,6 +68,7 @@ impl fmt::Display for DocumentKind {
             DocumentKind::Mark => "mark",
             DocumentKind::Contract => "contract",
             DocumentKind::Shipping => "shipping",
+            DocumentKind::Reservation => "reservation",
         })
     }
 }
