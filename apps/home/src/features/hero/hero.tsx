@@ -8,7 +8,7 @@ import { fetchInbox } from "../../lib/api.ts";
 import type { Inbox } from "../../lib/types.ts";
 import { useView } from "../../lib/view.ts";
 import { CAPTION, FIGURES, HERO } from "./copy.ts";
-import { clamp01, MODULE, phases, placeholderScene, seg, windowWords, type PortWatch, type Replay, type Scene } from "./model.ts";
+import { clamp01, COLUMN, MODULE, phases, placeholderScene, seg, windowWords, type PortWatch, type Replay, type Scene } from "./model.ts";
 import { createStage, drawChart, drawPlaceholder, type Layout } from "./stage.ts";
 
 export type Treatment = "A" | "B" | "C";
@@ -17,7 +17,7 @@ type Props = { treatment: Treatment; scene: Scene | null; replayUrl: string | nu
 
 /** Columns of the book on the grid, in px (multiples of 8; the row module is 40): date, who, amount, why, state. */
 const COLS_WIDE = [80, 160, 120, 240, 80];
-const COLS_NARROW = [80, 120, 80, 0, 80];
+const COLS_NARROW = [64, 112, 88, 0, 80];
 const HASH = /0x[0-9a-fA-F]{8,}/;
 
 const trimAmount = (a: string) => a.replace(/(\.\d*?[1-9])0+(?=\s|$)/, "$1").replace(/\.0+(?=\s|$)/, "");
@@ -106,8 +106,9 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
       const b = pl.getBoundingClientRect(), s = st.getBoundingClientRect();
       const plateRect = { x: b.left - s.left, y: b.top - s.top, w: b.width, h: b.height };
       const wide = W >= 640;
-      const x = wide ? Math.ceil((plateRect.x + plateRect.w + 32) / MODULE) * MODULE : 0;
-      const y = wide ? Math.round((H * 0.28) / MODULE) * MODULE : 2 * MODULE;
+      // the book's first column: right of the plate on a module column; on a phone two 8 px columns in, under the caption
+      const x = wide ? Math.ceil((plateRect.x + plateRect.w + 32) / MODULE) * MODULE : 2 * COLUMN;
+      const y = wide ? Math.round((H * 0.28) / MODULE) * MODULE : 3 * MODULE;
       L = { W, H, plate: plateRect, rows: { x, y } };
       stage.resize(L);
       setLayout(L);
@@ -204,7 +205,7 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
         <canvas ref={canvas} aria-hidden className="absolute inset-0 h-full w-full" />
 
         {treatment === "C" && latest ? (
-          <div ref={figs} className="absolute" style={{ left: layout?.rows.x ?? 0, top: wide ? (layout?.rows.y ?? 0) - 2 * MODULE : MODULE }}>
+          <div ref={figs} className="absolute px-(--space-2)" style={{ left: layout?.rows.x ?? 0, top: wide ? (layout?.rows.y ?? 0) - 2 * MODULE : 2 * MODULE }}>
             <p className="hero-figure m-0">{latest.total}</p>
             <p className="meta m-0 mb-(--space-5)">{FIGURES.transits(latest.date)}</p>
             <p className="hero-figure m-0">{replay ? replay.vessels.length : ""}</p>
