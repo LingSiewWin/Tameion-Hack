@@ -32,3 +32,19 @@ Earlier owner calls on the same account, signed the same way by the seat's harne
   ask Autopilot (setMode 2)        https://sepolia.arbiscan.io/tx/0x296aa340172662c18857d4097e5a5ea15c8dec1eb5ffb27103f9cc2fd617a5f3
   demo funding 0.05 USDC           https://sepolia.arbiscan.io/tx/0xfc3a9882ca8e722f0df0c3ae45d71cd6c245308ee9807780b7b2f0b8f2f5826a
   first agent payment 0.002 USDC   https://sepolia.arbiscan.io/tx/0xbd5bb78b3f5e7ed6bda96455a611844c2dbf27d77ab5ffd2a3a66c36c539d0f5
+
+"Start the agent" (setMode 1, a trust-raising change: it waits the account's 30 s delay), the same flow, 06:54 +08:
+{
+ "account": "northwind-agents",
+ "startedAt": "2026-10-17T22:54:12.365Z",
+ "modeBefore": "Watch",
+ "asked": 1,
+ "phases": ["Signing", "Sent"],
+ "executed": {
+  "explorer": "https://sepolia.arbiscan.io/tx/0xc316ee80492f74b1687ed582d357edfd7de4b60eda57deb5e73c6482324db937",
+  "tx": "0xc316ee80492f74b1687ed582d357edfd7de4b60eda57deb5e73c6482324db937"
+ },
+ "modeAfter": "Watch"
+}
+modeAfter is still Watch: the raise waits its delay, and the inbox carried pending {mode: Propose, eta 1792277686}; the Owner home showed
+"At 06:54 the agent starts again, asking before each payment." (owner-home-start-pending-owner-390.png) and no second Start.
