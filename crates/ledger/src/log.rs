@@ -385,6 +385,68 @@ pub enum EventBody {
         by: String,
         note: String,
     },
+    /// One period's flow check (docs/117 §1): the opening balance plus what
+    /// came in minus what went out, against the balance the chain reports at
+    /// the period's end. `diff` is `balance_end_chain - balance_end_book`, so
+    /// zero means the book and the chain agree. Times are unix seconds.
+    FlowCheck {
+        period_start: i64,
+        period_end: i64,
+        balance_start: Money,
+        inflows: Money,
+        outflows: Money,
+        balance_end_book: Money,
+        balance_end_chain: Money,
+        diff: Money,
+        note: String,
+    },
+    /// One step in the life of a transferable reservation record (docs/117
+    /// §4): who issued it, how much of what, who controls it now and who did
+    /// before this step.
+    Reservation {
+        reservation_id: String,
+        issuer: String,
+        unit: String,
+        qty: u64,
+        controller: String,
+        prev_controller: Option<String>,
+        action: ReservationAction,
+        note: String,
+    },
+    /// Our meter against the provider's usage report for one window and one
+    /// model (docs/117 §6), tokens in and out on each side. Times are unix
+    /// seconds.
+    MeterCheck {
+        from: i64,
+        to: i64,
+        model: String,
+        ours_in: u64,
+        ours_out: u64,
+        theirs_in: u64,
+        theirs_out: u64,
+        note: String,
+    },
+    /// A price table the agent priced against (docs/117 §7): where it came
+    /// from, when (unix seconds), the hash of its rows and how many there were.
+    PriceTable {
+        source: String,
+        fetched_at: i64,
+        table_hash: String,
+        rows: u32,
+        note: String,
+    },
+}
+
+/// What one [`EventBody::Reservation`] event did to the record. The
+/// discriminant is the canonical byte, so a variant's number never changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReservationAction {
+    Created = 0,
+    TransferProposed = 1,
+    TransferApplied = 2,
+    TransferCancelled = 3,
+    Consumed = 4,
+    Refused = 5,
 }
 
 impl EventBody {
@@ -397,6 +459,10 @@ impl EventBody {
             EventBody::Skipped { .. } => "SKIPPED",
             EventBody::Hedge { .. } => "HEDGE",
             EventBody::HedgeProposal { .. } => "PROPOSAL",
+            EventBody::FlowCheck { .. } => "FLOWCHECK",
+            EventBody::Reservation { .. } => "RESERVATION",
+            EventBody::MeterCheck { .. } => "METERCHECK",
+            EventBody::PriceTable { .. } => "PRICETABLE",
         }
     }
 
@@ -409,7 +475,11 @@ impl EventBody {
             | EventBody::Escalation { note, .. }
             | EventBody::Skipped { note, .. }
             | EventBody::Hedge { note, .. }
-            | EventBody::HedgeProposal { note, .. } => note,
+            | EventBody::HedgeProposal { note, .. }
+            | EventBody::FlowCheck { note, .. }
+            | EventBody::Reservation { note, .. }
+            | EventBody::MeterCheck { note, .. }
+            | EventBody::PriceTable { note, .. } => note,
         }
     }
 }
@@ -423,6 +493,11 @@ pub struct Event {
 }
 
 impl Event {
+    /// The id a model or a reader cites this event by: `evt:<seq>`.
+    pub fn id(&self) -> String {
+        format!("evt:{}", self.seq)
+    }
+
     /// Byte-exact serialisation, stable across processes and machines.
     pub fn canonical(&self) -> Vec<u8> {
         let mut e = Encoder::new();
@@ -560,6 +635,84 @@ impl Event {
                     }
                 }
                 e.str(reason).str(by).str(note);
+            }
+            // Unix seconds are written as their two's-complement u64, the
+            // way `at` is above.
+            EventBody::FlowCheck {
+                period_start,
+                period_end,
+                balance_start,
+                inflows,
+                outflows,
+                balance_end_book,
+                balance_end_chain,
+                diff,
+                note,
+            } => {
+                e.tag(8)
+                    .u64(*period_start as u64)
+                    .u64(*period_end as u64)
+                    .money(*balance_start)
+                    .money(*inflows)
+                    .money(*outflows)
+                    .money(*balance_end_book)
+                    .money(*balance_end_chain)
+                    .money(*diff)
+                    .str(note);
+            }
+            EventBody::Reservation {
+                reservation_id,
+                issuer,
+                unit,
+                qty,
+                controller,
+                prev_controller,
+                action,
+                note,
+            } => {
+                e.tag(9)
+                    .str(reservation_id)
+                    .str(issuer)
+                    .str(unit)
+                    .u64(*qty)
+                    .str(controller)
+                    .opt_str(prev_controller.as_deref())
+                    .tag(*action as u8)
+                    .str(note);
+            }
+            EventBody::MeterCheck {
+                from,
+                to,
+                model,
+                ours_in,
+                ours_out,
+                theirs_in,
+                theirs_out,
+                note,
+            } => {
+                e.tag(10)
+                    .u64(*from as u64)
+                    .u64(*to as u64)
+                    .str(model)
+                    .u64(*ours_in)
+                    .u64(*ours_out)
+                    .u64(*theirs_in)
+                    .u64(*theirs_out)
+                    .str(note);
+            }
+            EventBody::PriceTable {
+                source,
+                fetched_at,
+                table_hash,
+                rows,
+                note,
+            } => {
+                e.tag(11)
+                    .str(source)
+                    .u64(*fetched_at as u64)
+                    .str(table_hash)
+                    .u64(u64::from(*rows))
+                    .str(note);
             }
         }
         e.buf

@@ -1,6 +1,6 @@
 //! The decision log, and the Merkle vulnerability it was built to avoid.
 
-use ledger::log::{DecisionLog, EventBody, Hash32, verify_inclusion};
+use ledger::log::{DecisionLog, Event, EventBody, Hash32, ReservationAction, verify_inclusion};
 use ledger::{
     ActionHash, Confidence, Counterparty, Currency, Decision, Money, Provenance, Timestamp,
 };
@@ -335,4 +335,192 @@ proptest! {
             previous = now;
         }
     }
+}
+
+// ------------------------------- canonical bytes, pinned (tags 8 to 11)
+//
+// Each literal was computed from the field order alone, by a separate
+// encoder written from the spec (docs/117 §11): the tag byte, then the fields
+// as declared; u64 big-endian; strings with a u64 length first; money as i128
+// minor units then the currency byte (USDC = 1); an Option as 0, or 1 then the
+// value; an enum as one byte; i64 as its two's-complement u64; u32 widened to
+// u64. An encoder change that moves one byte fails here, before it moves a
+// root an auditor already holds.
+
+const FLOWCHECK_HEX: &str = concat!(
+    "000000000000000c6169722d6c6f672f76302e31", // air-log/v0.1
+    "0000000000000000",                         // seq 0
+    "000000006553f100",                         // at
+    "08",                                       // tag 8
+    "0000000068f18700",                         // period_start
+    "0000000068f2d880",                         // period_end
+    "00000000000000000000000005f5e10001",       // balance_start 100 USDC
+    "000000000000000000000000004c4b4001",       // inflows 5
+    "0000000000000000000000000185196001",       // outflows 25.5
+    "00000000000000000000000004bd12e001",       // balance_end_book 79.5
+    "00000000000000000000000004bd12df01",       // balance_end_chain 79.499999
+    "ffffffffffffffffffffffffffffffff01",       // diff -0.000001
+    "000000000000000e6f6e6520756e69742073686f7274", // note
+);
+const RESERVATION_HEX: &str = concat!(
+    "000000000000000c6169722d6c6f672f76302e31", // air-log/v0.1
+    "0000000000000000",                         // seq 0
+    "000000006553f100",                         // at
+    "09",                                       // tag 9
+    "00000000000000057265732d31",               // reservation_id
+    "000000000000000430786131",                 // issuer
+    "0000000000000006746f6b656e73",             // unit
+    "00000000000f4240",                         // qty 1000000
+    "000000000000000430786332",                 // controller
+    "01000000000000000430786331",               // prev_controller Some
+    "02",                                       // TransferApplied
+    "00000000000000056d6f766564",               // note
+);
+const RESERVATION_NONE_HEX: &str = concat!(
+    "000000000000000c6169722d6c6f672f76302e31", // air-log/v0.1
+    "0000000000000000",                         // seq 0
+    "000000006553f100",                         // at
+    "09",                                       // tag 9
+    "00000000000000057265732d31",               // reservation_id
+    "000000000000000430786131",                 // issuer
+    "0000000000000006746f6b656e73",             // unit
+    "00000000000f4240",                         // qty 1000000
+    "000000000000000430786331",                 // controller
+    "00",                                       // prev_controller None
+    "00",                                       // Created
+    "0000000000000006697373756564",             // note
+);
+const METERCHECK_HEX: &str = concat!(
+    "000000000000000c6169722d6c6f672f76302e31", // air-log/v0.1
+    "0000000000000000",                         // seq 0
+    "000000006553f100",                         // at
+    "0a",                                       // tag 10
+    "0000000068f18700",                         // from
+    "0000000068f1873c",                         // to
+    "0000000000000011636c617564652d736f6e6e65742d342d35", // model
+    "00000000000004b0",                         // ours_in 1200
+    "0000000000000154",                         // ours_out 340
+    "00000000000004b0",                         // theirs_in 1200
+    "0000000000000155",                         // theirs_out 341
+    "000000000000000f6f6e6520746f6b656e206170617274", // note
+);
+const PRICETABLE_HEX: &str = concat!(
+    "000000000000000c6169722d6c6f672f76302e31", // air-log/v0.1
+    "0000000000000000",                         // seq 0
+    "000000006553f100",                         // at
+    "0b",                                       // tag 11
+    "00000000000000076c6974656c6c6d",           // source
+    "0000000068f18700",                         // fetched_at
+    "00000000000000083078616263313233",         // table_hash
+    "000000000000002a",                         // rows 42
+    "0000000000000007343220726f7773",           // note
+);
+
+fn canonical_hex(body: EventBody) -> String {
+    Event {
+        seq: 0,
+        at: Timestamp::from_unix(T0),
+        body,
+    }
+    .canonical()
+    .iter()
+    .map(|b| format!("{b:02x}"))
+    .collect()
+}
+
+#[test]
+fn a_flow_check_encodes_to_its_pinned_bytes() {
+    let body = EventBody::FlowCheck {
+        period_start: 1_760_659_200,
+        period_end: 1_760_745_600,
+        balance_start: usdc("100.000000"),
+        inflows: usdc("5.000000"),
+        outflows: usdc("25.500000"),
+        balance_end_book: usdc("79.500000"),
+        balance_end_chain: usdc("79.499999"),
+        diff: usdc("-0.000001"),
+        note: "one unit short".into(),
+    };
+    assert_eq!(body.kind(), "FLOWCHECK");
+    assert_eq!(body.note(), "one unit short");
+    assert_eq!(canonical_hex(body), FLOWCHECK_HEX);
+}
+
+#[test]
+fn a_reservation_encodes_to_its_pinned_bytes() {
+    let moved = EventBody::Reservation {
+        reservation_id: "res-1".into(),
+        issuer: "0xa1".into(),
+        unit: "tokens".into(),
+        qty: 1_000_000,
+        controller: "0xc2".into(),
+        prev_controller: Some("0xc1".into()),
+        action: ReservationAction::TransferApplied,
+        note: "moved".into(),
+    };
+    assert_eq!(moved.kind(), "RESERVATION");
+    assert_eq!(canonical_hex(moved), RESERVATION_HEX);
+    let issued = EventBody::Reservation {
+        reservation_id: "res-1".into(),
+        issuer: "0xa1".into(),
+        unit: "tokens".into(),
+        qty: 1_000_000,
+        controller: "0xc1".into(),
+        prev_controller: None,
+        action: ReservationAction::Created,
+        note: "issued".into(),
+    };
+    assert_eq!(canonical_hex(issued), RESERVATION_NONE_HEX);
+    // The action byte is the declared discriminant, never the position.
+    let bytes: Vec<u8> = [
+        ReservationAction::Created,
+        ReservationAction::TransferProposed,
+        ReservationAction::TransferApplied,
+        ReservationAction::TransferCancelled,
+        ReservationAction::Consumed,
+        ReservationAction::Refused,
+    ]
+    .iter()
+    .map(|a| *a as u8)
+    .collect();
+    assert_eq!(bytes, [0, 1, 2, 3, 4, 5]);
+}
+
+#[test]
+fn a_meter_check_encodes_to_its_pinned_bytes() {
+    let body = EventBody::MeterCheck {
+        from: 1_760_659_200,
+        to: 1_760_659_260,
+        model: "claude-sonnet-4-5".into(),
+        ours_in: 1200,
+        ours_out: 340,
+        theirs_in: 1200,
+        theirs_out: 341,
+        note: "one token apart".into(),
+    };
+    assert_eq!(body.kind(), "METERCHECK");
+    assert_eq!(canonical_hex(body), METERCHECK_HEX);
+}
+
+#[test]
+fn a_price_table_encodes_to_its_pinned_bytes() {
+    let body = EventBody::PriceTable {
+        source: "litellm".into(),
+        fetched_at: 1_760_659_200,
+        table_hash: "0xabc123".into(),
+        rows: 42,
+        note: "42 rows".into(),
+    };
+    assert_eq!(body.kind(), "PRICETABLE");
+    assert_eq!(canonical_hex(body), PRICETABLE_HEX);
+}
+
+#[test]
+fn an_event_is_cited_by_its_sequence_number() {
+    let mut log = DecisionLog::new();
+    for i in 0..4i64 {
+        settlement(&mut log, "0xaaa", &format!("0xaaa@{i}"), "1.000000", i);
+    }
+    let ids: Vec<String> = log.events().iter().map(Event::id).collect();
+    assert_eq!(ids, ["evt:0", "evt:1", "evt:2", "evt:3"]);
 }

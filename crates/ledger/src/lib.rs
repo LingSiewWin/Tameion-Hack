@@ -92,7 +92,9 @@ pub use balance::{
 };
 pub use canon::{ActionHash, action_hash, canonicalize, settlement_key, settlement_key_for};
 pub use entry::{Credit, Debit, DocumentKind, DocumentRef, Entry, PostError};
-pub use log::{DecisionLog, Event, EventBody, Hash32, ProofStep, verify_inclusion};
+pub use log::{
+    DecisionLog, Event, EventBody, Hash32, ProofStep, ReservationAction, verify_inclusion,
+};
 pub use money::{Currency, Money, MoneyError};
 pub use obligations::{
     Confidence, Counterparty, DetectionConfig, Direction, Obligation, ObligationKind, Transfer,
