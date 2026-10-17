@@ -193,6 +193,12 @@ pub fn tools() -> Vec<Value> {
             "inputSchema": { "type": "object", "required": ["policy", "root"], "properties": { "policy": addr, "root": { "type": "string" } } }
         }),
         json!({
+            "name": "recall",
+            "annotations": { "title": "Check a recollection", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true },
+            "description": "Check events you remember about the account against its anchored record and the chain before you rely on them. Ids are evt:N, N being the event's seq in record_events, read in the account's latest anchored record unless you pass that record's root. Each comes back verified (its bytes hash into the root the chain holds: rootOf, or the transaction that anchored that record), unverified (the record changed after it was anchored, or its root is not on chain: do not rely on it) or unknown (code recall_unknown: no such event; by rpc: no chain to ask, so nothing is verified). A verified event carries its kind, time, payee, amount and note as recorded when your key may read the account. Read-only.",
+            "inputSchema": { "type": "object", "required": ["policy", "ids"], "properties": { "policy": addr, "ids": { "type": "array", "maxItems": 32, "items": { "type": "string", "pattern": "^evt:(0|[1-9][0-9]*)$" }, "description": "event ids, e.g. [\"evt:0\", \"evt:3\"]" }, "root": { "type": "string", "description": "0x… root of an earlier record (records lists them); default: the latest" } } }
+        }),
+        json!({
             "name": "watch_address",
             "annotations": { "title": "Watch an address", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true },
             "description": "Read-only report for any address (no key, nothing sent): recurring bills found in its USDC history with evidence, 30-day liquidity, its USDC in Circle Gateway on other chains, what the agent would pay vs ask under given caps, and the max loss. Returns a job id; poll pass_status. Chains: arc-testnet, arbitrum, base, ethereum.",
@@ -369,6 +375,29 @@ pub async fn call(up: &Upstream, name: &str, args: &Value) -> Result<Value, Valu
             ),
             None,
         ),
+        "recall" => {
+            // An array of ids, or one comma-separated string; each escaped, so
+            // an id cannot add a parameter to the route.
+            let ids: Vec<String> = match &args["ids"] {
+                Value::Array(a) => a
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect(),
+                Value::String(x) => x.split(',').map(str::to_string).collect(),
+                _ => Vec::new(),
+            };
+            let ids: Vec<String> = ids.iter().map(|i| enc(i.trim())).collect();
+            let mut url = format!(
+                "{b}/api/level1/recall?policy={}&ids={}",
+                u("policy"),
+                ids.join(",")
+            );
+            if let Some(r) = args["root"].as_str().filter(|r| !r.trim().is_empty()) {
+                url.push_str(&format!("&root={}", enc(r.trim())));
+            }
+            ("GET", url, None)
+        }
         "watch_address" => (
             "POST",
             format!("{b}/api/watch"),
@@ -473,7 +502,7 @@ fn error(id: &Value, code: i64, message: String) -> Value {
 }
 
 /// What the server tells the calling model at `initialize`.
-const INSTRUCTIONS: &str = "Tameion is the account an agent operator gives its agents: they pay in USDC (paid APIs over x402, bills and invoices) only to payees the owner approved and only up to the mandate one contract enforces; a raise waits a delay anyone can see, a cut is instant, and every payment lands in a book anchored on chain. These tools read the account, run a pass, and prepare changes the owner signs with a passkey; none of them can add a payee, raise a cap or withdraw. Two spend, both with an agent key that has the buy scope: buy_service has the service pay a seller the owner already approved, inside the caps, and pay pays an approved payee directly, inside the caps, with the reason written to the book. Start with treasury_inbox; what waits for the owner is its `waiting` list.";
+const INSTRUCTIONS: &str = "Tameion is the account an agent operator gives its agents: they pay in USDC (paid APIs over x402, bills and invoices) only to payees the owner approved and only up to the mandate one contract enforces; a raise waits a delay anyone can see, a cut is instant, and every payment lands in a book anchored on chain. These tools read the account, run a pass, and prepare changes the owner signs with a passkey; none of them can add a payee, raise a cap or withdraw. Two spend, both with an agent key that has the buy scope: buy_service has the service pay a seller the owner already approved, inside the caps, and pay pays an approved payee directly, inside the caps, with the reason written to the book. Start with treasury_inbox; what waits for the owner is its `waiting` list. Before you rely on something you remember about the account, check it with recall: the record and the chain answer, not your memory.";
 
 /// One JSON-RPC message, either transport. `None` for a notification or a
 /// response (no `id`, or no `method`): those get no reply.
@@ -691,6 +720,7 @@ mod tests {
                         | "pass_status"
                         | "records"
                         | "record_events"
+                        | "recall"
                         | "invoices"
                         | "purchases"
                         | "desk"
@@ -761,6 +791,55 @@ mod tests {
         let req = seen.join().unwrap().to_ascii_lowercase();
         assert!(req.starts_with("post /api/level1/pay "), "{req}");
         assert!(req.contains("idempotency-key: op_12345678"), "{req}");
+    }
+
+    /// docs/117 §8: recall's ids and root are escaped into one GET, so an id
+    /// cannot add a parameter; a string of ids is split like an array.
+    #[tokio::test]
+    async fn recall_escapes_its_ids_into_one_get() {
+        use std::io::{Read, Write};
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        let seen = std::thread::spawn(move || {
+            let mut lines = Vec::new();
+            for _ in 0..2 {
+                let (mut s, _) = l.accept().unwrap();
+                let mut buf = [0u8; 4096];
+                let n = s.read(&mut buf).unwrap();
+                let body = r#"{"results":[]}"#;
+                let _ = write!(
+                    s,
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                lines.push(
+                    String::from_utf8_lossy(&buf[..n])
+                        .lines()
+                        .next()
+                        .unwrap_or("")
+                        .to_string(),
+                );
+            }
+            lines
+        });
+        let up = Upstream {
+            http: client(),
+            base: format!("http://127.0.0.1:{port}"),
+            token: None,
+        };
+        let a = json!({ "policy": "0x01", "ids": ["evt:1", "evt:2&root=0x00"], "root": "0xab" });
+        call(&up, "recall", &a).await.unwrap();
+        let b = json!({ "policy": "0x01", "ids": "evt:0, evt:4" });
+        call(&up, "recall", &b).await.unwrap();
+        let lines = seen.join().unwrap();
+        assert_eq!(
+            lines[0],
+            "GET /api/level1/recall?policy=0x01&ids=evt%3A1,evt%3A2%26root%3D0x00&root=0xab HTTP/1.1"
+        );
+        assert_eq!(
+            lines[1],
+            "GET /api/level1/recall?policy=0x01&ids=evt%3A0,evt%3A4 HTTP/1.1"
+        );
     }
 
     #[tokio::test]
