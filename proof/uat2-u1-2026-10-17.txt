@@ -1,0 +1,170 @@
+UAT U1 re-run — the agent operator (a two-person AI company whose agents buy APIs and pay a few vendors), on the fixed build
+Written 2026-10-17 14:05:43 +0800. Plan: docs/110 §3 U1; first run: docs/110 §4 U1 and proof/uat-u1-2026-10-16.txt. Brief: docs/research-data/102-team/briefs/UAT-rerun.md.
+Environment: http://localhost:7880/ (service built 10-17 00:57, TAMEION_REASONER=cloud-redacted; it serves the console export apps/console/out built
+10-16 23:34:59) and, for the owner's changes once :7880 refused them, http://localhost:3000/ (next dev = current console sources, its /api
+rewritten to the same :7880 service, same account). Arbitrum Sepolia (421614). A clean Playwright Chromium 155 headless context driven from
+a scratchpad script, CDP virtual authenticator (ctap2, internal, user verification on), widths 1280 and 390.
+No product code changed. No private key or agent key printed: the buy key went from the page straight into ~/.tameion/test-keys/uat2-u1-buy.token
+(mode 600) and is redacted in screenshot 06; the bill wallet's key is ~/.tameion/test-keys/uat2-u1-billwallet.key (mode 600). Note: the
+browser's device token for this test account appeared once in the run's own tool output (not in any file).
+
+ACCOUNT
+  name uat2-u1-acme · policy 0xa754b69c61f0a0bb7fde565ff99f40fd90787bcd · owner (PasskeyPrincipal) 0x493b6dd06545f9d1196d4b27a644a80cf34a5c9a
+  agent 0xee2b6b01123a353cfb88aa8eda63d530b9a5e28e · operator/relayer 0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25 · delay 60 s
+  deployed by the service when money arrived: owner_tx 0x8dc1b01d5b234bf1034f64a8cf5b051183b889b608fadfeca1ecf89f6a75ca86
+                                               policy_tx 0x0aaae613e97828b35105e40f8926e5cdc0885cefcb298fff1e413a4e1e72b0c5
+                                               agent gas 0xf4e64c65f5197e53b0277c8fd989d0692de2c5cb03af48bec4da337d20cdcd14
+  x402 seller: scripts/x402_seller.py on :7951 (PID 24744, stopped by PID 14:03), PAY_TO 0x30b49Dec4082a10e0740804987dAF09913Fe1b2a, 0.001 USDC
+  agent keys: research-bot (read, run, buy; 13:02:40), this browser (read, run, import; 13:39:34 — the P-203 workaround)
+  shared with U2: scratchpad uat2/shared-u1.json
+
+TIMELINE (+08; every tx https://sepolia.arbiscan.io/tx/<hash>, status 1)
+  12:57:55 step1 home 1061 ms; title "Tameion"; 10-second read written before any click (docs/110 table)
+  12:58:41 step2 name uat2-u1-acme (free), Arbitrum Sepolia already the default under "More ways"; one passkey tap -> account page in 2.66 s
+  12:59:20-23 step3 relayer -> account 1 USDC tx 0x94f3cd1379782c593aa45b0b0f8f92c0cbd387e8b4ea5ac016a233691cdba59a; page "holds 1.00" at +24 s,
+           deployed view at +75 s, no refresh. Instruction changed by itself "Pay the bills you find…" -> "Prepare the bills… and wait for my tap"
+  13:01:07 step4 seller up, 402 answered
+  13:01:29-13:02:40 step5 key hunt: account page has no key entry; "The key's limit" popover; Settings icon -> Agents -> "Other agents" (~1 min);
+           confirm "buy paid apis, inside the limits" (lower case); token-signed 200 in 1.5 s; key shown once, no copy button
+  13:04:36 agent's first call -> 400 "maxUsdc is required: the most this call may cost, e.g. \"0.01\"" (new agent-side guard)
+  13:06:35 buy#1 -> 409 needsYou in 0.57 s; the Needs-you row on the open page 7 s later (inbox refetch at once, the inbox took 4.9 s)
+  13:07:36 approve the seller, one tap: challenge 31,672 ms (P-202) + execute 4.3 s -> "Approved. The agent may buy from 127.0.0.1 from about
+           01:09 PM, after the 60 s waiting period, and only once Autopilot is on." tx 0x653905148f7cce38e026daa1c176b9bb1f5ba31daab0930fd9e2a6a7fbed7dbe
+  13:09:59 buy#2 (Asks before paying) -> 409 after 30.75 s (P-202): "the account refuses: the agent buys only on Autopilot: this account asks
+           before paying, so the purchase was refused; turn Autopilot on to let it buy inside your limits"; on the page in Needs you (red) and Recent
+  13:13:25 step6 on :7880 "Turn autopilot on" -> POST /api/level1/prepare-mode 401 {"error":"this account's owner requires an agent key: send
+           Authorization: Bearer <token> (the owner mints one on the account page)","scope":"prepare"}, no device header sent (P-200)
+  13:16:57 same account opened on :3000 (localStorage copied inside the same browser)
+  13:18:07 Autopilot ask #1 (prepare-mode 200 WITH the device header, 0.6 s; whole tap 8 s) tx 0x3b4d1f804fbed8b46e655fe8cef5ba7b1a8469559cfe85ab6c88e011eb2e79c2
+           Cancel visible 15.6 s after; cancel 13:18:41 -> "Cancelled: Autopilot will not apply." in 6.6 s tx 0xff7204357e7e80b4151cf3dca7a6a3dce24c52d40ceaf2a0ab837706add51999
+  13:21:06 ask #2 tx 0xcf68ec1d6f0f93b3fea21906b185b4b491b5be24d4997c535fa495a84593b048 (eta 1792214532); cancel tapped 19.9 s before eta while the card
+           said "in about 52 s"; landed in 6.1 s, "Cancelled: Autopilot will not apply." tx 0x6cdce6d4b3168c7e3394211296a67b1d3758e1a86150766f3a8137d09df64e2f;
+           chain mode 1, pending 0
+  13:23:22 ask #3 tx 0x7ae53b2d5ce67456800a005a8819ef9c80c67a962f790e809fe942398d7ce5f8; countdown samples every 5 s, 13:23:39…13:24:39: "about 52 s"
+           x13 (P-201); page applied 13:24:33 tx 0x10dfcb5d8e1e7c375f808c0bfd9bf7f87f86f0f5335589db4e701e7fc3fad479; card "Autopilot" 13:24:44
+  13:27:20 buy#3 -> 200 paid 0.001 in 8.0 s tx 0xe36dc505b6f489008db3635ae6c94f5a55a76a386214ca62493127e25c58e2bf; Paid row with the reason ~4 s later
+  13:27:59 step7 raise per payment 50 -> 60: 9.1 s tx 0xea310f2f8d5f13b9fbbef077ac7c6bfe0ce9a1af92718d775ef12e081c420484; banner "A higher limit applies
+           in about 51 s unless you cancel" (no limit named) + Cancel after 11.3 s; page applied ~13:29:12 tx 0xef4ef083fa65c1c429af8e037377b42d582d732110c4fac4aee7832870236349
+  13:29:52 lower to 0.005 / 0.05: execute -> 500 "Internal Server Error" after 29,993 ms (next dev proxy limit), the dialog printed it; the cut landed
+           at 13:30:44 (block 319979943), 52 s after the tap, tx 0x3ca140c315b39dd416a82145f23d8795aeb0155a5b8e4d4587490261dd3f46f0 (P-202)
+  13:34:33 lower the day to 0.04: "Lowered, at once." in 7.7 s tx 0x9d29bd7b346a5fed369f8dd27098aff1835813edf90aaaafaf3efefddb8f7890
+  13:36:49 "Save bill" 0.002 / 30 days to the seller's wallet: payee re-approved (passkey + tx 0xe1ba73d4edc2d4bc005df13d56a845afb792e5ea132d182a1cf4d46e3eca0c70),
+           then POST /api/level1/bills 401 "requires an agent key", scope import (P-203)
+  13:37:45 "Check now" -> POST /api/level1/run 401, same sentence as a toast, scope run (P-203)
+  13:39:34 workaround: key "this browser" (read, run, import), kept by the browser; 13:40:03 bill saved (bearer), payee re-approved again tx
+           0x3e087afa6a39ea7d43ba34e79e1f6ee3595f1a6067f0486e65aedb91a5519577
+  13:40:03 pass (root 0x2bd3e719787ead9f393ad190a8155ca8b9878c32d584129831dd1a34b4e4ff4b, anchor 0xc0a18b40584a9449f874c806b71de229130754ffb2ed13617713cbe70cad333f):
+           the decider ASKED (below)
+  13:44:13 owner Pay, one tap, 6 s: SettledByPrincipal 0.002 tx 0x4a748237d75d71b98c54c5d57587b709d01bbca097cddda6afcdd6b743c2f773; next pass did not ask again
+  13:44:32 bill 0.005 / 30 days to the bill wallet 0xBAD726898963814C5c3eeE7f5cEE5A4874c610Fe; approve tx 0xdb3f8fab10d4e73e7ff457a534209473072438b6986b8478720bff1cf227c4f5;
+           pass (root 0xa804115c95642e64136aaed1142635af5a04337cffe8eb538e5c8e40bde5c784, anchor 0x01c313afbfc06e00c59bf8db913abfd862da844d8fb7eaffe3e36d9a6a70d24d): ASKED
+  13:45:44 owner Pay, one tap: SettledByPrincipal 0.005 tx 0x80430a532c1f3b7f678290f9282a0bf4087a3cf8648a9acb744ffe8761ba8418
+  13:47:02-13:53:15 bill wallet -> vendor B 0x51F4BC46b15C3aA233ec661f0672e68AD8E39018 0.001 x5, 92 s apart (gas 0.0003 ETH from the relayer, tx
+           0x3eb9e52222c048be9731179e6465e12eb0f0300a7b1abc5793b405f370f87480):
+           13:47:02 round 1: 0.001 USDC to 0x51F4BC46b15C3aA233ec661f0672e68AD8E39018 tx 0xcd582cf8c80bfc54f881977d00f8c84a0aec3f8e85eb5ee48b21f6a1e41ec143 0x1 319983614
+           13:48:36 round 2: 0.001 USDC to 0x51F4BC46b15C3aA233ec661f0672e68AD8E39018 tx 0xc374e72bc3c11f2f4399a2439ab2ceddb782e9df2a3fb5fb58a9aefddc312af7 0x1 319983959
+           13:50:09 round 3: 0.001 USDC to 0x51F4BC46b15C3aA233ec661f0672e68AD8E39018 tx 0x72a1fabc7fbbe445807772462c1a05ac280e6c65938e6b48adca1634753695c6 0x1 319984305
+           13:51:42 round 4: 0.001 USDC to 0x51F4BC46b15C3aA233ec661f0672e68AD8E39018 tx 0xd68fb12a25aa771fd21cc1c26f970ce7cf0a8f52a0d8fbe335bb629dcd38cb31 0x1 319984655
+           13:53:15 round 5: 0.001 USDC to 0x51F4BC46b15C3aA233ec661f0672e68AD8E39018 tx 0xdacde1a91c9af4502d9132eda15ada67bf71e9301aab64821b587072b08135b9 0x1 319985010
+  13:49:08 "Connect a wallet that pays your bills today" with the bill wallet -> "No recurring bill in what it read" (2 payments then)
+  13:50:34 "Check now" -> 200 cached (a pass is reused for 600 s, ctx.tsx:56-62); 13:57:05 the next pass (root 0x2b99fa70aa1dc12900e540b2b7251f8db2eb62ecc3d9ca83e55d508d80c27a0e,
+           anchor 0x1a59164b6e2f30ef032497697812b66750d4454731576a8b12373320457c57f7): "Read 8 transfers … recovered 2 recurring obligations" — vendor B's
+           five payments not taken as a bill (the pass came 2.5 cycles after the last one). No bill paid by the decider itself in this run.
+  13:47:56-13:49:40 step10 Check it yourself on :7880: "Matches. Rebuilt here from 1 decisions; both public nodes hold the same fingerprint"
+  13:54:37 step11 /agent on :7880
+  14:03:35 seller PID 24744 and the browser driver PID 19319 stopped by PID
+  14:08:31 found apps/console/out rebuilt at 2026-10-17 13:25:26 (not by this seat); chunk 3xllflpk2nst1.js now has the prepare-|fund rule
+  14:09:04 RE-CHECK on the rebuilt :7880, a new browser (driver PID 81678, stopped 14:10): new account uat2-u1-chk (reserved, not funded)
+           mint a buy key -> POST /api/level1/token-signed 502 "reading the owner's key: contract call: contract call to `qx` returned no data
+           (\"0x\"); the called address might not be a contract" printed in Settings -> Agents (P-204 'Also')
+           "Turn autopilot on" -> POST /api/level1/prepare-mode 200 WITH x-tameion-device (14:09:30) — the page half of P-170 is now served on :7880.
+           Not re-run: the keyed lockout on :7880 (uat2-u1-acme's passkey lived in the stopped browser). Screenshot 28.
+
+THE DECIDER FROM THE OWNER'S SIDE (model claude-sonnet-5-5; ordering claude-opus-5 (redacted))
+  ASKED #1, on the page (Needs you, screenshot 22): "Pay 0.002 USDC to 127.0.0.1 — a bill the owner typed: 0.002000 USDC every 30 days ·
+    0x30b49d…fe1b2a was approved 0 days ago and has never been paid, so the owner should see this 0.002 USDC bill before it goes out." [Pay]
+    anchored: "DECISION ALLOW for 0x30b4… Basis: … has been paid 0 times every 30.0 days … so this reads as a subscription (confidence 1.00). Decided by
+    model claude-sonnet-5-5: ask (new_payee). …" + "ESCALATION Prepared for the owner, not paid: everything the verifier checked passed, and I chose to ask."
+  ASKED #2: "Pay 0.005 USDC to Payee ••10FE — … 0xbad726…c610fe was approved moments ago and has never been paid, so the 0.005 USDC bill due now
+    should be seen by you before it goes out." (anchored the same way)
+  PAID BY ITSELF: the agent's purchase, 0.001 USDC, tx 0xe36dc505…e2bf, reason "ETH price for the weekly research report" — on the account page
+    (Recent), /agent (Payments, Why column) and both CSVs. Not a pass decision: no bill was paid by the decider itself (see 13:57:05).
+  What the owner sees wrong: two names for one payee in one row (127.0.0.1 and 0x30b49d…fe1b2a); "has never been paid" about a wallet the agent paid
+    13 minutes earlier (Paid 1 — 0.001 on the same page); "the owner" vs "you"; after the tap the book keeps "paid by the owner; the agent asked: a
+    bill the owner typed: …" — why the agent asked is only in the anchored record (P-204).
+
+PAGE AGAINST CHAIN (14:0x)
+  chain: mode 2 (Autopilot), perActionCap 0.005, dailyCap 0.04, floor 0, pending none, balance 0.992, spentInWindow 0.001, remainingAllowance 0.005
+  account page: "Pay the bills you find when due, up to 0.04 USDC a day…" · Autopilot · "Agents can spend now 0.005 — USDC: the cap on one payment;
+    0.005 of the 0.04 a day is left, 0.001 spent" (the day has 0.039 left: P-204 #7)
+  /agent: Autopilot · Left now 0.005 · spent 0.001 of 0.04 · per payment 0.005 · per day 0.04 · holds 0.992 · last pass 13:47:01 · anchor 0x1b9025…3026   AGREES
+  GET /api/level1/tenant/<policy> (public): mode 1, per_action 50.000000, daily 100.000000   DISAGREES (stale record, P-172 #11 cause; /classic still linked)
+
+EXPORTS (:7880 and :3000 give the same columns)
+  -- tameion-0xa754b69c-statement.csv
+  date_utc,payee,amount_usdc,paid_by,reason,transaction,explorer,account
+  2026-10-17T05:45:50.000Z,Payee ••10FE (0xbad726898963814c5c3eee7f5cee5a4874c610fe),0.005,owner,paid by the owner; the agent asked: a bill the owner typed: 0.005000 USDC every 30 days,0x80430a532c1f3b7f678290f9282a0bf4087a3cf8648a9acb744ffe8761ba8418,https://sepolia.arbiscan.io/tx/0x80430a532c1f3b7f678290f9282a0bf4087a3cf8648a9acb744ffe8761ba8418,0xa754b69c61f0a0bb7fde565ff99f40fd90787bcd
+  2026-10-17T05:44:17.000Z,127.0.0.1 (0x30b49dec4082a10e0740804987daf09913fe1b2a),0.002,owner,paid by the owner; the agent asked: a bill the owner typed: 0.002000 USDC every 30 days,0x4a748237d75d71b98c54c5d57587b709d01bbca097cddda6afcdd6b743c2f773,https://sepolia.arbiscan.io/tx/0x4a748237d75d71b98c54c5d57587b709d01bbca097cddda6afcdd6b743c2f773,0xa754b69c61f0a0bb7fde565ff99f40fd90787bcd
+  2026-10-17T05:27:20.000Z,127.0.0.1 (0x30b49dec4082a10e0740804987daf09913fe1b2a),0.001,agent,ETH price for the weekly research report,0xe36dc505b6f489008db3635ae6c94f5a55a76a386214ca62493127e25c58e2bf,https://sepolia.arbiscan.io/tx/0xe36dc505b6f489008db3635ae6c94f5a55a76a386214ca62493127e25c58e2bf,0xa754b69c61f0a0bb7fde565ff99f40fd90787bcd
+  -- tameion-0xa754b69c-bank-statement.csv
+  *Date,*Amount,Payee,Description,Reference,Reason
+  2026-10-17,-0.005,Payee ••10FE,USDC payment to 0xbad726898963814c5c3eee7f5cee5a4874c610fe by the owner from 0xa754b69c61f0a0bb7fde565ff99f40fd90787bcd,0x80430a532c1f3b7f678290f9282a0bf4087a3cf8648a9acb744ffe8761ba8418,paid by the owner; the agent asked: a bill the owner typed: 0.005000 USDC every 30 days
+  2026-10-17,-0.002,127.0.0.1,USDC payment to 0x30b49dec4082a10e0740804987daf09913fe1b2a by the owner from 0xa754b69c61f0a0bb7fde565ff99f40fd90787bcd,0x4a748237d75d71b98c54c5d57587b709d01bbca097cddda6afcdd6b743c2f773,paid by the owner; the agent asked: a bill the owner typed: 0.002000 USDC every 30 days
+  2026-10-17,-0.001,127.0.0.1,USDC payment to 0x30b49dec4082a10e0740804987daf09913fe1b2a by the agent from 0xa754b69c61f0a0bb7fde565ff99f40fd90787bcd,0xe36dc505b6f489008db3635ae6c94f5a55a76a386214ca62493127e25c58e2bf,ETH price for the weekly research report
+  (reason column present in both; no line for the 1 USDC deposit, so the bank statement does not reconcile to 0.992; Xero description = bare addresses)
+
+CHECK IT YOURSELF FROM A TERMINAL, NO KEY: scripts/verify_tenant.sh http://localhost:7880 0xa754b69c61f0a0bb7fde565ff99f40fd90787bcd
+  policy  0xa754b69c61f0a0bb7fde565ff99f40fd90787bcd
+  root    0x32d09e806ace687e1c8eb7fb98e552bf41d18dab3c5f7c08618b638540652e0e  (anchored in 0x1b9025464cd67d59b5f2b0f7b4e85e575c8a0fb35f18f04abf3251999da13026)
+  events  1 lines downloaded
+  chain   arbitrum-sepolia
+  -- against https://sepolia-rollup.arbitrum.io/rpc (block 319984195)
+  [0000] OBSERVATION Holding 0.992000 USDC. Read 4 transfers (1 of them my own payments, which are not evidence) and recovered 2 recurring obligations, of which 2 fall due within 30.0 days totalling 0.007000 USDC; 0 within 3.0 days (or a tenth of their interval), which is when I pay.
+  events          : 1
+  recomputed root : 0x32d09e806ace687e1c8eb7fb98e552bf41d18dab3c5f7c08618b638540652e0e
+  file name       : 0x32d09e806ace687e1c8eb7fb98e552bf41d18dab3c5f7c08618b638540652e0e   MATCH
+  chain rootOf    : 0x32d09e806ace687e1c8eb7fb98e552bf41d18dab3c5f7c08618b638540652e0e   (anchor 0xe7c381aafa077cc99359e8b297d2125efd76b8f5, agent 0xee2b6b01123a353cfb88aa8eda63d530b9a5e28e)   MATCH
+  RESULT          : PASS
+  -- against https://arbitrum-sepolia-rpc.publicnode.com (block 319984247)
+  [0000] OBSERVATION Holding 0.992000 USDC. Read 4 transfers (1 of them my own payments, which are not evidence) and recovered 2 recurring obligations, of which 2 fall due within 30.0 days totalling 0.007000 USDC; 0 within 3.0 days (or a tenth of their interval), which is when I pay.
+  events          : 1
+  recomputed root : 0x32d09e806ace687e1c8eb7fb98e552bf41d18dab3c5f7c08618b638540652e0e
+  file name       : 0x32d09e806ace687e1c8eb7fb98e552bf41d18dab3c5f7c08618b638540652e0e   MATCH
+  chain rootOf    : 0x32d09e806ace687e1c8eb7fb98e552bf41d18dab3c5f7c08618b638540652e0e   (anchor 0xe7c381aafa077cc99359e8b297d2125efd76b8f5, agent 0xee2b6b01123a353cfb88aa8eda63d530b9a5e28e)   MATCH
+  RESULT          : PASS
+  verify_tenant: MATCH on both RPCs
+
+SCANS of :7880 human pages (account, Settings ×4 tabs, /agent) at 14:00: banned words 0 ("locks" gone); bare 0x in visible text 0 on the account page
+  at that moment (the decider's hex payee label shows while an ask waits; /agent shows the anchor as 0x1b9025…3026); jargon: ENS 1, testnet 1;
+  account menu still links "Classic view -> /classic". No horizontal scroll at 390 on home, account, Settings/Owners, /agent.
+
+FIRST-RUN FINDINGS (U1 P-170…P-174; U2's P-175/P-176 where U1 met them)
+  P-170 owner locked out after the first buy key ......... STILL THERE on :7880 at 13:13 (P-200: console export 23:34:59, fix saved 23:36:59); GONE for
+                                                          prepare-* on the current sources (:3000 13:18-13:35; :7880 sends the header since its
+                                                          13:25 rebuild); run/bills/invoice-decide still locked (P-203)
+  P-171 cancel lost to the page's auto-apply ............. GONE: 2 of 2 cancels landed (6.6 s; 6.1 s when tapped 19.9 s before eta), said in words,
+                                                          chain mode 1 / pending 0 after each; new: the countdown does not count (P-201)
+  P-172 words and pages against the chain ................ CHANGED: fixed "locks", tab title, /agent, receipts no longer open /level1, Propose spend tile,
+                                                          waiting period as a time, CSV reasons; still "Live" before deploy, the developer sentence
+                                                          on 401s, "look, run and prepare, never sign", lower-case scopes, "Other agents", the instruction
+                                                          changing silently at deploy, "1 decisions", the bare address in the terminal command,
+                                                          "Classic view", stale public tenant record
+  P-173 needs-you row only on the 60 s poll .............. GONE: 7 s (was ~80 s); the stream sends the device header (200)
+  P-174 "Asks before paying" promise and invisible refusal  CHANGED: words now true, refusal shown in Needs you and Recent; buys still refused on Asks before
+                                                          paying (by design) and the red refusal stays after Autopilot ("nothing for you to do" +
+                                                          "turn Autopilot on", P-204)
+  P-175 one tap paid twice ............................... GONE here: owner paid the asked bill once (0x4a74…f773); the next pass did not ask again
+  P-176 records closed by a key .......................... GONE for records: verify_tenant without any key, MATCH on both nodes
+
+NEW (docs/60): P-200 stale console export on :7880 (owner locked out); P-201 frozen cancel countdown; P-202 ~30 s stalls, an instant cut answered
+  "Internal Server Error" though applied; P-203 run/bills/invoice-decide still need a key after the first agent key, Save bill spends a tap first;
+  P-204 the decider's reasons and four contradicting tiles/rows from the owner's side.
+
+SCREENSHOTS: proof/uat2-u1-01…28-*.png (names carry the step, the origin when :3000, and the width).
+
+SPEND: 1.000 USDC from the relayer to the account (0x94f3…a59a) — the only USDC from the relayer; 0.0003 ETH gas to the bill wallet. The account paid
+  0.001 (purchase) + 0.002 (bill) + 0.005 (bill wallet, which paid vendor B 5 × 0.001); balance 0.992 USDC.
+RESULT: 9 of 11 steps pass on the current build (1-6, 9, 10, 11); 7 and 8 partial. Steps 6-7 ran on :3000 (the sources :7880 serves since 13:25);
+  on :7880 before that rebuild they failed as on 10-16 (P-200). First run: 6 of 11.
+CLEAN-UP LEFT: uat2-u1-acme's owner passkey lived in the stopped headless browser (no guardians), so its 0.992 test USDC and the keys research-bot
+  (read, run, buy; caps 0.005 / 0.04, seller stopped) and "this browser" (read, run, import) cannot be revoked from a page; uat2-u1-chk is reserved only.
