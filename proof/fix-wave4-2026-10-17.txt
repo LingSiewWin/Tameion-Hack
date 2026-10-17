@@ -1,0 +1,24 @@
+# Fix wave 4 — the agent pays a found bill on its due date by itself (P-228…P-231), S3 seat — written 2026-10-17 15:32:56 +0800
+Source: docs/110 §4 'U1 re-check (10-17 afternoon)', proof/uat2-u1-recheck-2026-10-17.txt. My instance :7903 (restarted 15:31:54 with this build); :7880 not touched. Ids only; no key printed.
+
+## P-228: a found bill's payee offered for approval before it falls due — :7903, 0xf1c78d0b940ee10a683e3ba899c5a829890004a8 (its last pass found two bills; payees not approved), GET inbox (15:31:54):
+  sellersToApprove row: seller 0x1111111111111111111111111111111111111111 | amount 0.200000 USDC | askedBy Your agent | bill {"everySecs": 180, "nextDue": 1790911985, "samples": 6} 
+    reason: it found this bill in your history: 0.200000 USDC every 3 minutes, paid 6 times; it fell due at unix 1790911985. Approve it and the agent pays the coming cycles itself, once the payee's 60-second waiting time has passed 
+    call: approve 1 payee(s); valid only while the terms hash to 0x694fd53bc7732a824f5379596abbb65534891ac50cfd9258adb5ee4bc09ee031 and until unix 1792222921 | to 0xf1c78d0b940ee10a683e3ba899c5a829890004a8 | data 0x3948f4ff0000000000000000…
+  sellersToApprove row: seller 0x3333333333333333333333333333333333333333 | amount 0.150000 USDC | askedBy Your agent | bill {"everySecs": 181, "nextDue": 1790911990, "samples": 6} 
+    reason: it found this bill in your history: 0.150000 USDC every 3 minutes, paid 6 times; it fell due at unix 1790911990. Approve it and the agent pays the coming cycles itself, once the payee's 60-second waiting time has passed 
+    call: approve 1 payee(s); valid only while the terms hash to 0x694fd53bc7732a824f5379596abbb65534891ac50cfd9258adb5ee4bc09ee031 and until unix 1792222921 | to 0xf1c78d0b940ee10a683e3ba899c5a829890004a8 | data 0x3948f4ff0000000000000000…
+  (this old test account's bills fell due long ago, so the words say 'the coming cycles'; a bill still ahead reads 'next due at … Approve it before then and the agent pays that cycle itself')
+
+## P-231: 'Save bill' — the same save of uat-u2-fin's bill (payee approved, retyped to start 1794748029), :7903, TAMEION_INBOX_TIMING=1 marks
+  before (15:25): 4.93 s, 4.42 s, 4.73 s, 5.22 s, 5.26 s — paid cycles read 3,974 / 4,040 ms (a whole pass's obligations_due), issuer freeze +684 / +584 ms, approvals read and saved +556 / +637 ms (patient client)
+  after (15:27, 15:31): 2.72 s, 2.37 s, 2.20 s; cold 4.63 s then 2.29 s, 2.63 s — paid cycles read 1,050–1,567 ms (the typed bill's own cycles), freeze +533–588 ms, approvals and save +513–1,063 ms (quick client)
+  the paid-cycle refusal unchanged: start 1792588029 -> 409 'the bill to 0x179dca89f69faef5765d2e7445aa5452b8159520 is paid up to its cycle due 1794748029 (unix) …'
+  :7880's 57.9 s (14:41) not reproduced here; its reads ran on the patient client (no connect or request cap), which a stalled public-node read holds up to a minute (P-186).
+
+## P-229 and P-230: tests (not run live: a bill falling due on a watched instance, and the deciding agent paying it, need :7880 or a funded account)
+  tameion-app a_pass_runs_when_a_known_bill_falls_due: the re-check's times (pass 15:02:40, due 15:03:14): 'Check now' after due is not answered from that pass; the watcher's pass is set for max(due + 5 s, pass + 60 s).
+  lib a_late_owner_payment_is_not_a_broken_rhythm: five payments 243 s apart + the owner's settle 318 s after the last: counted, confidence < 0.75 (the cause, reproduced); left out of the evidence, >= 0.75 (0.8125); next due stays 243 s after the fifth payment.
+
+## Gate
+fmt clean; clippy -p operator --lib --tests --bins --examples -D warnings clean; cargo test -p operator: lib 185, tameion-app 17, mcp 1, app_http 16, claude_transport 4, decide_eval 3, hedge_advice 4, mcp_stdio 2 — all passed (one earlier run had app_http's start-up test fail once at /healthz and pass on the rerun: a boot-timing flake, not this change).
