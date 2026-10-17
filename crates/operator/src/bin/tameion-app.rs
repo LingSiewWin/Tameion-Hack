@@ -552,6 +552,28 @@ fn verify_any_owner(
     first
 }
 
+/// An invoice or key binding refused, in the envelope with its own code
+/// (`sig_alg_missing`, `sig_alg_unknown`, `state_conflict`, …): 422, or 409 /
+/// 429 for a conflict or a full account.
+fn invoice_refused(e: operator::invoice::Refused) -> Vec<u8> {
+    let status = match e.code {
+        "state_conflict" => "409 Conflict",
+        "rate_limited" => "429 Too Many Requests",
+        _ => "422 Unprocessable Entity",
+    };
+    json_reply(
+        status,
+        operator::refusal::refuse(
+            e.code,
+            operator::refusal::Executed::No,
+            "",
+            "",
+            e.words,
+            None,
+        ),
+    )
+}
+
 /// Whether the owner settled exactly this invoice: a `SettledByPrincipal`
 /// to `payee` for `units` under `id` (docs/68 F1b). Pure, so it is tested.
 fn settles(
@@ -6714,12 +6736,12 @@ impl App {
     /// signature is the authentication, and receiving pays nothing — the
     /// agent checks it against the account's history and approved payees
     /// and puts it in Needs you with what it found, in words. Twenty an hour
-    /// per account; 4 KiB a body.
+    /// per account; 16 KiB a body (an ML-DSA-65 invoice in hex is about 11 KiB).
     async fn level1_invoice(&self, body: &str) -> Vec<u8> {
-        if body.len() > 4096 {
+        if body.len() > 16 * 1024 {
             return json_reply(
                 "413 Payload Too Large",
-                json!({ "error": "an invoice is under 4 KiB" }),
+                json!({ "error": "an invoice is under 16 KiB" }),
             );
         }
         let v: Value = match serde_json::from_str(body) {
@@ -6740,7 +6762,7 @@ impl App {
         };
         let inv = match operator::invoice::verify(c.chain_id, addr, &v, now) {
             Ok(i) => i,
-            Err(e) => return json_reply("422 Unprocessable Entity", json!({ "error": e })),
+            Err(e) => return invoice_refused(e),
         };
         let all = operator::invoice::list(&self.dir, &tenant.policy);
         // One payee cannot fill Needs you: five waiting at most.
@@ -6829,7 +6851,36 @@ impl App {
                 tokio::spawn(async move { operator::push::tell(&dir, &policy, &text).await });
                 json_reply("201 Created", line)
             }
-            Err(e) => json_reply("422 Unprocessable Entity", json!({ "error": e })),
+            Err(e) => invoice_refused(e),
+        }
+    }
+
+    /// A payee binds an ML-DSA-65 key to its address on one account (docs/117
+    /// §2, `operator::invoice::bind`). Open: the payee's address key signs it.
+    /// The same binding again answers 200 with the stored line; another key for
+    /// a payee that bound one answers 409 (a stolen address key cannot rebind).
+    fn level1_key_binding(&self, body: &str) -> Vec<u8> {
+        if body.len() > 4096 {
+            return json_reply(
+                "413 Payload Too Large",
+                json!({ "error": "a key binding is under 4 KiB" }),
+            );
+        }
+        let v: Value = match serde_json::from_str(body) {
+            Ok(v) => v,
+            Err(e) => return json_reply("400 Bad Request", json!({ "error": e.to_string() })),
+        };
+        let Some((tenant, c)) = v["policy"]
+            .as_str()
+            .and_then(|p| level1::load(&self.dir, p))
+            .and_then(|t| chain(&t.chain).map(|c| (t, c)))
+        else {
+            return json_reply("404 Not Found", json!({ "error": "no such account" }));
+        };
+        match operator::invoice::bind(&self.dir, &tenant, c.chain_id, &v, now_secs()) {
+            Ok((line, true)) => json_reply("201 Created", line),
+            Ok((line, false)) => json_reply("200 OK", line),
+            Err(e) => invoice_refused(e),
         }
     }
 
@@ -8940,6 +8991,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                     ("POST", "/api/level1/invoice") => app.level1_invoice(&body).await,
+                    ("POST", "/api/level1/key-binding") => app.level1_key_binding(&body),
                     ("POST", "/api/level1/invoice-decide") => {
                         app.level1_invoice_decide(&body, &req).await
                     }
