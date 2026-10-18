@@ -1263,6 +1263,9 @@ async function main() {
     if (prev) { const d = diffRuns(prev, keys); lines.push(`since the last run: ${d.fixed.length} fixed, ${d.added.length} new`); }
     writeFileSync(lastFile, JSON.stringify({ at: clock(), keys, findings: flat }, null, 1));
     appendFileSync(join(cfg.proof, "preflight.txt"), lines.join("\n") + "\n\n");
+    // one file per run as well: preflight.txt is tracked, and an older committed copy that comes back over it takes the newest blocks with it (P-398)
+    mkdirSync(join(cfg.proof, "runs"), { recursive: true });
+    writeFileSync(join(cfg.proof, "runs", `${clock().replace(/[: ]/g, "-").replace(/-\+08$/, "")}-${new URL(cfg.url).port || "80"}.txt`), lines.join("\n") + "\n");
   }
   console.log("\n" + lines.join("\n"));
   const bad = fails.length + steps.filter((s) => s.sev === "fail").length;
