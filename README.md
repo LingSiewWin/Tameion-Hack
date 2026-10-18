@@ -31,6 +31,11 @@ at the foot._
 
 **Live:** https://tameion-agents-production-064a.up.railway.app (testnet; the invite word is in the submission form). No install, no wallet, no seed phrase, no address to type.
 
+**The same account, two readers (preview):** https://tameion-home-production.up.railway.app — the owner's statement at `/a/guest-demo`
+(what the agents may spend today, what they paid and to whom; not one hash on the page) and the agent's terminal at `/a/guest-demo?view=agent`
+(every record with its three signature slots — agent, counterparty, witness — and the chain it is anchored on), one toggle between them.
+The landing page's hero is design: its scene and ships are prebuilt data, not a recording, and no word on it says otherwise.
+
 1. **Open.** Tap "Try it in 5 minutes", name the account, one passkey tap. It arrives funded with 0.05 test USDC.
 2. **Bill.** One tap: "Let the agent pay Demo Vendor 0.002 USDC every 2 minutes" — that approves the payee and saves the bill.
 3. **Autopilot.** One tap. It applies in 30 s unless you cancel, and anyone can see it coming.
@@ -56,6 +61,7 @@ Status is built, framed or refused; a row reads built only once its proof file h
 | 7 | Settlement rails with measured finality, and an index price table (Agorá-shaped) | built — SettlementRail with measured finality: Arc native USDC final 1.54 s (finalized tag), Arbitrum Sepolia ERC-20 receipt 1.99 s / chain finality 955.8 s (proof/rails-2026-10-17.txt); LiteLLM + OpenRouter price table pinned by hash as PRICETABLE events under anchored roots verified on two RPCs (proof/price-table-2026-10-18.txt, scripts/price_hash.py); EURC via StableFX framed (institutional access), SF Compute quote framed (bearer), CME reference not verified | `proof/rails-2026-10-17.txt`, `proof/price-table-2026-10-18.txt` |
 | 8 | A one-way valve (model text never becomes an amount or a payee) and `recall --verify` | built — GET /api/level1/recall, MCP recall, tameion recall; a forged citation evt:999 refused (recall_unknown, the rule decided) and a true evt:2 verified against its anchor, one edited byte → unverified, dead RPC → unknown; valve tests (model text never reaches amount/payee/action; events-file writers listed) (proof/recall-2026-10-17.txt) | `proof/recall-2026-10-17.txt` |
 | 9 | The ledger has a price: (a) a pistis score over triple-signed records, (b) VouchBond + CreditLine on Arc testnet, (c) the agent's DrawCredit decision | (a) built — crates/pistis, a pure fold: score = dispute survival × topological independence × recency (bps), 8 unit + 5 property tests at 4096 cases, 3 mutation runs; run over all 69 accounts (457 records: 214 unsigned, 243 single-signed, 0 double, 0 triple): every account scores 0 bps — no record is countersigned yet, so no account has a credit limit above 0; evidence for an account counts only from counterparties outside a closed loop, evidence against it from anyone (proof/pistis-2026-10-18.txt) · (b) built — VouchBond + CreditLine, 17 unit tests + 6 invariants; on Arc testnet lock → draw → repay → slash by evidence hash + rule id, proof/credit-line-2026-10-18.txt (CreditLine 0x865fd8C8…33b6) · (c) framed — not started — depends on the momentum fold (landing 05:xx) and on Arc relayer gas (0.006 USDC left); cutoff 07:59 +08, 2026-10-18 | (a) `proof/pistis-2026-10-18.txt` · (b) `proof/credit-line-2026-10-18.txt` · (c) not named yet |
+| 10 | One account read two ways: the owner's statement (a book in words and figures, zero hashes) and the agent's terminal (each record with its three signature slots, `GET /api/level1/symbolon`), one toggle | built — `apps/home` (Next.js, strict TypeScript, tokens from `apps/home/DESIGN.md`); preview on Railway with the hero landing; `npm run ci` checks tokens against DESIGN, contrast (text ≥ 4.5:1, field edges ≥ 3:1), zero-hash on every owner surface, axe, reduced motion, Lighthouse (mobile 98–100 on the build line); the hero's data is prebuilt, not live | `proof/home-2026-10-18/` (deploy.txt, preflight.txt, screenshots), `proof/home-hero-2026-10-18/preview-f7b3402/` (frames.md) |
 
 No external lender; testnet; not a lending protocol.
 
@@ -198,6 +204,14 @@ claude mcp add tameion -- $PWD/target/debug/tameion-mcp      # TAMEION_URL=http:
 ```
 
 `GET /llms.txt` is the one page an agent reads first. `scripts/x402_seller.py` starts a local paid endpoint to buy from.
+
+The home surface (`apps/home`) runs beside the service and reads it through its own proxy; it has its own gate:
+
+```bash
+cd apps/home && npm ci
+TAMEION_URL=http://localhost:7880 HOME_INVITE_WORD=<the service's invite word> npm run dev      # :3010 — / (landing), /a/<name>, /a/<name>?view=agent, /new, /a/<name>/add, /a/<name>/receive
+npm run ci -- --no-browser     # tokens vs DESIGN, contrast, zero-hash, literals, hex lint, design review; without --no-browser also axe, focus, reduced motion, Lighthouse
+```
 
 ## How it is built
 
