@@ -49,6 +49,8 @@ export type OwnerViewProps = {
   demo?: Demo | null;
   /** the clock countdowns read (unix s, ticking while something counts down); nowSecs when absent */
   clockSecs?: number;
+  /** when the account opened (tenant.created, unix s): the five minutes' finish says how long they took */
+  openedAt?: number;
 };
 
 /** The symbolon mark (DESIGN §Direction): two halves that fit, the witness the dot between; drawn in ink, only when sealed. */
@@ -334,7 +336,7 @@ export function OwnerView(p: OwnerViewProps) {
           act={p.act}
           outcome={p.outcome}
           pending={<PendingLine inbox={p.inbox} clockSecs={p.clockSecs ?? p.nowSecs} clockMs={p.clockMs} act={p.act} outcome={p.outcome} />}
-          firstByYou={first?.by === "you"}
+          openedAt={p.openedAt}
           first={
             first && (
               <ul className="m-0 list-none p-0">

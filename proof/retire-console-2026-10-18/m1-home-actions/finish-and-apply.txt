@@ -1,0 +1,28 @@
+M1 follow-up live run, 2026-10-18 14:08:29 +0800: the owner page applies a waiting change at its eta + 3 s (POST /api/level1/mode {action:"apply"} through the proxy), and the finish card once the first payment landed. Home dev server on lane/home-actions (working tree = the commit that carries this file) against tami-lane; account m1-1404; headless Chrome, CDP virtual authenticator. Before this commit A1 measured Autopilot applying 26 to 54 s after the countdown on home. The first read showed 'Done in 2 min 29 s' (the payment's time as the service first wrote it); the next read, and the screenshots, say 2 min 22 s = the payment's chain time 1792303647 minus tenant.created 1792303505.
+
+14:05:00 tap /^Make your own account/
+14:05:02 name m1-1404
+14:05:03 tap /^Continue$/
+14:05:03 tap /^Make my passkey$/
+14:05:15 funded: Let the agent pay Demo Vendor
+14:05:15 account m1-1404 0x5a60a1f6dd791cfc5e28756b9925799e195eedd8 on arbitrum-sepolia
+14:05:18 tap /^Let the agent pay Demo Vendor 0\.002 USDC every 2 minutes$/
+14:05:22   executed: https://sepolia.arbiscan.io/tx/0xcfd2a8217407ad614f006c7c98e742a9645ac1b6fc01bd037df8e1e606432e49
+14:05:25 billDone: Demo Vendor approved; the bill saved: 0.002 USDC every 2 minutes.
+14:05:25 tap /^Turn Autopilot on$/
+14:05:30   executed: https://sepolia.arbiscan.io/tx/0x353e29fb726726a32248209427c9690c4f5810f8f7aee33878b6a25370068927
+14:05:32 countdown: "It applies in 0:27 unless you cancel"
+14:06:06 APPLY: mode Autopilot read 8 s after the eta (1792303558)
+14:06:06 page: "The bill is due in 1:17."
+14:07:37 finish: "Done in 2 min 29 s. Your agent paid its bill by itself, and said why; you made the trust decisions."
+14:07:37   no human: "Paid with no human 1 of 1 bill paid, 0.002 USDC each"
+14:07:37   mandate: "The mandate you signed Pay this bill when due, up to 100 USDC a day, only to payees I approved; ask me for anything else."
+14:07:37   keys: "Tami never holds your key: your passkey stays on this device."
+14:07:39   read back: tenant.created 1792303505, oldest paid at 1792303647 by the agent (142 s), caps.daily 100.000000 USDC, typedBills 1, guardians 0
+14:07:39   zero-hash finish card: clean
+14:07:41   axe finish @1280: 0 violations
+14:07:41   axe finish @390: 0 violations
+14:07:41 account m1-1404; its passkey lived only in this run's virtual authenticator
+
+finish @1280: 0 violations (18 rules passed)
+finish @390: 0 violations (18 rules passed)
