@@ -240,7 +240,7 @@ Each row ran against a real chain; the file in `proof/` holds the requests, answ
 No key, no service of ours, no trust. From a clone (Rust installed; the events behind the Arc roots are committed):
 
 ```bash
-git clone --recurse-submodules --branch submission-2026-10-18 https://github.com/LingSiewWin/Tami && cd Tameion-Hack   # the submission tag; drop --branch for main
+git clone --recurse-submodules --branch submission-2026-10-18 https://github.com/LingSiewWin/Tami && cd Tami   # the submission tag; drop --branch for main
 R=0xb30efdbd0171ecbbd9daeac83d5ddd090a096440c2a6df47dadf402b0d986b70
 AUDIT_EVENTS=proof/arc-log-2026-10-13/$R.events.jsonl TAMEION_LOG_DIR=proof/arc-log-2026-10-13 \
 AGENT=0x80c195BE650FBfD55a9ffe059f397Db39f2fe881 RPC_URL=https://explorer.testnet.arc.io/api/eth-rpc \
