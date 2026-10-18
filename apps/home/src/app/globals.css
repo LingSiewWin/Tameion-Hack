@@ -23,6 +23,17 @@ body {
   outline-offset: 2px;
 }
 
+/* A text field shows its boundary: a 1 px ink-2 edge at rest, ink on focus; the focus ring above stays (D-FIELD-1, a ruling
+   under delegation; DESIGN amendment proposed). Its plate-2 fill alone read 1.08 to 1.26:1 against the plate, under the 3:1
+   a component's boundary needs; scripts/contrast.mjs measures the edge. Zero specificity, outside Tailwind's layers: every
+   field gets it, a page's own rule can still say otherwise. */
+:where(input:not([type="radio"], [type="checkbox"], [type="range"], [type="hidden"], [type="file"], [type="color"], [type="image"], [type="submit"], [type="button"], [type="reset"]), textarea, select) {
+  border: 1px solid var(--ink-2);
+}
+:where(input:not([type="radio"], [type="checkbox"], [type="range"], [type="hidden"], [type="file"], [type="color"], [type="image"], [type="submit"], [type="button"], [type="reset"]), textarea, select):focus {
+  border-color: var(--ink);
+}
+
 /* Press: a button answers a tap, 100 ms in / 160 ms out, to 0.98. Motion on the wrapper, colour on what is inside. */
 button {
   transition: transform var(--press-out) ease-out;

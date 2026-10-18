@@ -2,9 +2,10 @@
 // exactly the values src/tokens.ts declares (DESIGN: "a contrast script fails the build when any text pair drops under
 // 4.5:1 in either view"). Exits 1 otherwise. Node >= 22.18 (type stripping).
 import { readFileSync } from "node:fs";
-import { palette, roleClass, shared, sheetShadow, textPairs, typeRoles, VIEWS } from "../src/tokens.ts";
+import { edgePairs, palette, roleClass, shared, sheetShadow, textPairs, typeRoles, VIEWS } from "../src/tokens.ts";
 
 const MIN = 4.5;
+const MIN_EDGE = 3;
 const channel = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 const luminance = (hex) => {
   const [r, g, b] = [1, 3, 5].map((i) => channel(parseInt(hex.slice(i, i + 2), 16) / 255));
@@ -22,6 +23,12 @@ for (const view of VIEWS) {
     const line = `${view.padEnd(5)} --${text} on --${on}: ${ratio.toFixed(2)}:1`;
     console.log(`${ratio >= MIN ? "ok  " : "FAIL"} ${line}`);
     if (ratio < MIN) failures.push(line);
+  }
+  for (const { edge, on } of edgePairs) {
+    const ratio = contrast(palette[view][edge], palette[view][on]);
+    const line = `${view.padEnd(5)} edge --${edge} against --${on}: ${ratio.toFixed(2)}:1 (boundary, >= ${MIN_EDGE})`;
+    console.log(`${ratio >= MIN_EDGE ? "ok  " : "FAIL"} ${line}`);
+    if (ratio < MIN_EDGE) failures.push(line);
   }
 }
 
@@ -53,4 +60,4 @@ if (failures.length) {
   console.error(`\ncontrast/tokens: ${failures.length} failure(s)\n${failures.join("\n")}`);
   process.exit(1);
 }
-console.log(`\ncontrast/tokens: every pair >= ${MIN}:1 in both views; tokens.css matches tokens.ts`);
+console.log(`\ncontrast/tokens: every text pair >= ${MIN}:1 and every edge >= ${MIN_EDGE}:1 in both views; tokens.css matches tokens.ts`);

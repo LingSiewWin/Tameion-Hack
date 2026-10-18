@@ -53,6 +53,12 @@ export const textPairs: readonly { text: ColorToken; on: ColorToken }[] = [
   { text: "paper", on: "ink" }, // the one primary action
 ];
 
+/** A component's boundary against what it touches: each pair must reach 3:1 in both views (WCAG 1.4.11). The text field's
+ *  edge (D-FIELD-1: ink-2 at rest, ink on focus) against the plate it sits on, the plate-2 it holds, and bare paper. */
+export const edgePairs: readonly { edge: ColorToken; on: ColorToken }[] = (["ink-2", "ink"] as const).flatMap((edge) =>
+  (["plate", "plate-2", "paper"] as const).map((on) => ({ edge, on })),
+);
+
 /** The sheet is the only raised thing (and the capsule while it slides). */
 export const sheetShadow = "0 -4px 16px #0000001F";
 
