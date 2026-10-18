@@ -277,6 +277,9 @@ function domRules({ view, width, route, palette, spec }) {
   metrics.busy = !!document.querySelector('[aria-busy="true"]'); // the page is a skeleton: no hero yet
   const tok = (n) => (palette[`--${n}`] ?? "").toUpperCase();
 
+  // The hero is on `/` and nowhere else (the account page loads with no hero)
+  if (route !== "guest" && document.querySelector("[data-hero], canvas")) add("fail", "hero-outside-landing", document.querySelector("[data-hero], canvas"), "hero markup on a route other than `/`: the account pages carry none");
+
   // Hashes live in the Agent view only: none in the Owner DOM (text and every attribute, hrefs included), none in any route
   if (view === "owner") {
     const HASH = /0x[0-9a-fA-F]{8,}/;
@@ -345,7 +348,7 @@ function domRules({ view, width, route, palette, spec }) {
     const w = /\b(submit|soon|quote only|guarantee[ds]?|locked|yield|delta-neutral)\b/i.exec(own);
     if (w) add("fail", "banned-word", e, `"${w[0]}"`);
     if (/\$\s?\d/.test(own)) add("fail", "no-dollar-sign", e, "money is 0.05 USDC, never $");
-    if (/\s·\s/.test(own)) add("fail", "middle-dot-meta", e, "meta strings joined with middle dots are banned");
+    if (/\s·\s/.test(own) && !e.closest("[data-hero]")) add("fail", "middle-dot-meta", e, "meta strings joined with middle dots are banned"); // the hero caption is DESIGN's own text
     if (s.textTransform === "uppercase") add("fail", "tracked-uppercase", e, "text-transform: uppercase");
     else if (/^[A-Z][A-Z0-9 ]{3,}$/.test(own) && !/^(USDC|EURC|USD|ERC|CCTP|MCP|API|UTC|HTTP|AIS|MMSI)$/.test(own)) add("warn", "all-caps", e, `"${own.slice(0, 20)}"`);
     if (view === "owner" && (/\b\d{4}-\d{2}-\d{2}\b|T\d{2}:\d{2}:\d{2}|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(own))) add("warn", "date-not-in-words", e, "dates read Today 05:41, Yesterday, 12 Oct");
@@ -595,6 +598,17 @@ const fail503 = (route) => route.fulfill({ status: 503, contentType: "applicatio
 const API = /\/api\//;
 const FLAGS = { loading: "skeleton", empty: "empty", error: "error", offline: "offline" }; // H2's ?state= values
 
+// Does the named account still look like the state it was named for? (Seats act on the lane's accounts: a waiting item gets approved.)
+async function stillSo(cfg, name, kind) {
+  try {
+    const acct = (await (await fetch(`${cfg.url}/api/level1/name/${encodeURIComponent(name)}`)).json()).account;
+    const i = await (await fetch(`${cfg.url}/api/level1/inbox?policy=${acct}`)).json();
+    return kind === "needs-you" ? (i.waitingCount ?? 0) > 0 : (i.paid ?? []).length === 0 && (i.payees ?? []).length === 0;
+  } catch {
+    return false;
+  }
+}
+
 // Arrange one scenario's state. Real data where an account for it was given; otherwise the reply is patched in the page and R.mocked says so.
 async function arrange(page, ctx, sc, cfg, R) {
   const { state } = sc;
@@ -603,7 +617,7 @@ async function arrange(page, ctx, sc, cfg, R) {
     await page.route(API, async (route) => { await R.hold; await route.continue().catch(() => {}); });
   } else if (state === "error") {
     await page.route(API, fail503); // the service never answers: nothing was read, nothing is cached
-  } else if (state === "empty" && !cfg.policyEmpty) {
+  } else if (state === "empty" && !R.real) {
     await patchJson(page, /\/api\/level1\/inbox/, (b) => ({ ...b, paid: [], waiting: [], waitingCount: 0, needsYou: [], paidTotal: "0", purchases: [], refused: [], invoices: [] }), R);
   } else if (state === "sealed") {
     // No real account has a triple-signed record yet (the agent slot is never filled today), so the symbolon reply is patched: every record carries
@@ -613,7 +627,7 @@ async function arrange(page, ctx, sc, cfg, R) {
       const records = (b.records ?? []).map((r) => ({ ...r, agent: slot, counterparty_slot: slot, witness: slot }));
       return { ...b, records, counts: { unsigned: 0, single: 0, double: 0, triple: records.length } };
     }, R);
-  } else if (state === "needs-you" && !cfg.policyNeeds) {
+  } else if (state === "needs-you" && !R.real) {
     const item = { kind: "bill", what: "Pay Demo Vendor 0.002 USDC for the hosting bill", counterparty: "0x" + "11".repeat(20), amount: "0.002", why: "hosting bill, due today" };
     await patchJson(page, /\/api\/level1\/inbox/, (b) => ({ ...b, waiting: [item], waitingCount: 1, needsYou: [{ counterparty: item.counterparty, amount: item.amount, why: item.why, to: item.counterparty, data: "0x" }] }), R);
   }
@@ -665,7 +679,9 @@ async function scenario(browser, AxeBuilder, sc, cfg) {
   const R = { name: `${sc.route}/${sc.state}/${sc.view}/${sc.width}`, findings: [], mocked: false, pending: null };
   // --fast: the Owner home's own development flag shows loading, empty, error and offline at once; otherwise the state is made for real
   R.flag = cfg.fast && sc.route === "account" && sc.view === "owner" ? FLAGS[sc.state] : undefined;
-  const policy = sc.state === "empty" ? (cfg.policyEmpty ?? cfg.policy) : sc.state === "needs-you" ? (cfg.policyNeeds ?? cfg.policy) : cfg.policy;
+  const named = sc.state === "empty" ? cfg.policyEmpty : sc.state === "needs-you" ? cfg.policyNeeds : undefined;
+  R.real = !!named && (await (cfg.still[`${named}|${sc.state}`] ??= stillSo(cfg, named, sc.state)));
+  const policy = R.real ? named : cfg.policy;
   const pub = sc.state === "guest" || !policy ? null : policy === cfg.policy ? cfg.pub : await (cfg.pubs[policy] ??= ownerPub(cfg.url, policy));
   const { ctx, page, errors } = await newPage(browser, sc, { pub });
   let release;
@@ -922,6 +938,52 @@ async function keyboardFit(browser, route, cfg) {
   return R;
 }
 
+// The landing hero (DESIGN §The hero): 500 svh of stage under motion and 300 svh (three stills) under reduced motion; the six keyframes by scroll progress;
+// its own h1; the images over the wire stay under 350 KB.
+async function heroCheck(browser, sc, cfg) {
+  const out = [];
+  for (const reduced of [false, true]) {
+    const R = { name: `hero/${reduced ? "reduced" : "motion"}/${sc.width}`, findings: [] };
+    const { ctx, page } = await newPage(browser, { ...sc, route: "guest", view: "owner" }, { reduced });
+    try {
+      await page.goto(cfg.url + "/", { waitUntil: "domcontentloaded", timeout: 60000 });
+      await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+      await page.waitForTimeout(1800); // the canvas starts after the first paint
+      const g = await page.evaluate(() => {
+        const sec = document.querySelector("[data-hero]");
+        if (!sec) return null;
+        const r = sec.getBoundingClientRect();
+        const imgs = performance.getEntriesByType("resource").filter((e) => /\.(avif|webp|png|jpe?g|gif)(\?|$)/i.test(e.name) || e.initiatorType === "img").map((e) => ({ path: new URL(e.name).pathname.slice(-48), kb: Math.round(e.encodedBodySize / 1024) }));
+        return { top: r.top + window.scrollY, height: r.height, vh: window.innerHeight, h1s: [...document.querySelectorAll("h1")].map((h) => h.textContent.trim().slice(0, 60)), inside: sec.querySelectorAll("h1").length, imgs, canvas: !!sec.querySelector("canvas") };
+      });
+      if (!g) { R.findings.push({ sev: cfg.strict ? "fail" : "note", rule: "not-built-yet", sel: "", text: "", detail: "no [data-hero] on `/`" }); out.push(R); continue; }
+      const want = (reduced ? 3 : 5) * g.vh;
+      if (Math.abs(g.height - want) > Math.max(4, g.vh * 0.02)) R.findings.push({ sev: "fail", rule: reduced ? "hero-three-stills" : "hero-500svh", sel: "[data-hero]", text: "", detail: `the hero is ${Math.round(g.height)} px tall = ${(g.height / g.vh).toFixed(2)} screens; ${reduced ? "three stills = 3" : "the scroll-bound stage = 5"}` });
+      if (g.h1s.length !== 1) R.findings.push({ sev: "fail", rule: "hero-h1", sel: "h1", text: "", detail: `${g.h1s.length} h1 on the landing (DESIGN: the hero carries its own, one)` });
+      const big = g.imgs.filter((i) => i.kb > 350);
+      for (const i of big) R.findings.push({ sev: "fail", rule: "hero-image-350kb", sel: "img", text: i.path, detail: `${i.kb} KB over the wire; DESIGN: the hero image <= 350 KB` });
+      R.images = g.imgs.map((i) => `${i.path} ${i.kb} KB`).join(", ");
+      const shots = [];
+      const at = reduced ? [0, 1, 2].map((i) => ({ y: g.top + i * g.vh, tag: `still-${i + 1}` })) : [0, 20, 40, 60, 80, 100].map((pc) => ({ y: g.top + (pc / 100) * (g.height - g.vh), tag: `p${String(pc).padStart(3, "0")}` }));
+      for (const f of at) {
+        await page.evaluate((y) => window.scrollTo({ top: y, behavior: "instant" }), f.y);
+        await page.waitForTimeout(600);
+        const buf = await page.screenshot({ caret: "hide", animations: "allow" });
+        shots.push(buf);
+        if (cfg.shots) { mkdirSync(cfg.shotsDir, { recursive: true }); writeFileSync(join(cfg.shotsDir, `${reduced ? "reduced-hero" : "hero"}-${f.tag}-${sc.width}.png`), buf); }
+      }
+      if (reduced && (shots[0].equals(shots[1]) || shots[1].equals(shots[2]))) R.findings.push({ sev: "fail", rule: "hero-stills-identical", sel: "[data-hero]", text: "", detail: "two of the three reduced-motion stills are the same picture" });
+      if (!reduced && shots.slice(1).every((b) => b.equals(shots[0]))) R.findings.push({ sev: "fail", rule: "hero-static", sel: "[data-hero]", text: "", detail: "the six keyframes are one picture: the stage does not move with scroll" });
+    } catch (e) {
+      R.findings.push({ sev: "fail", rule: "scenario-error", sel: "", text: "", detail: String(e.message).split("\n")[0].slice(0, 160) });
+    } finally {
+      await ctx.close().catch(() => {});
+    }
+    out.push(R);
+  }
+  return out;
+}
+
 // `v` flips the view, but not while someone is typing.
 async function typingV(browser, cfg) {
   const sc = { route: "new", state: "rest", view: "owner", width: 390 };
@@ -1014,6 +1076,7 @@ async function main() {
       const AxeBuilder = await import("@axe-core/playwright").then((m) => m.AxeBuilder ?? m.default?.AxeBuilder ?? m.default);
       cfg.pub = await ownerPub(cfg.url, cfg.policy);
       cfg.pubs = {};
+      cfg.still = {};
       if (!cfg.pub) steps.push({ name: "owner-mode", sev: "warn", lines: [`could not read ${cfg.policy}'s owner key through ${cfg.url}: every account page is rendered as a guest (read-only)`] });
       const c2 = { ...cfg, palette };
       const runnable = plan.filter((s) => !s.skip);
@@ -1030,6 +1093,8 @@ async function main() {
           for (const R of await motionAndShell(browser, sc, c2)) { results.push(R); say(R, R.crossfade ? "  " + R.crossfade : ""); }
         for (const sc of runnable.filter((s) => s.route === "account" && s.state === "detail")) { const R = await sheetCheck(browser, sc, c2); results.push(R); say(R); }
         if (runnable.some((s) => s.route === "new")) { const R = await typingV(browser, c2); results.push(R); say(R); }
+        for (const sc of runnable.filter((s) => s.route === "guest" && s.state === "rest" && s.view === "owner"))
+          for (const R of await heroCheck(browser, sc, c2)) { results.push(R); say(R, R.images ? `  ${R.images}` : ""); }
         for (const route of ["new", "add"]) if (runnable.some((s) => s.route === route)) { const R = await keyboardFit(browser, route, c2); results.push(R); say(R); }
       }
       await browser.close();
