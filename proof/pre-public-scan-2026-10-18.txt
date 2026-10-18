@@ -11,3 +11,10 @@ b. The public host's invite word: not in any tracked file, not in the history of
 c. Tracked files matching .env / .key / .pem: none. 558 tracked screenshots under proof/; the ones named for keys, tokens or settings were
    opened: the console masks a minted key behind a solid block (console-agent-key-listed.png, console-coowner-key.png) and the settings
    sheet shows no secret.                                                                                                    PASS
+
+## Re-scan before the flip to public (2026-10-18 09:48), main 51d229a
+
+- `gitleaks git --redact` over the whole history: the same classes as at 05:xx and nothing new from the 130+ lane commits — authenticatorData blobs, a `settlementKey` public key in proof/audit-pack-independent-2026-10-18.txt, Idempotency-Key values in proof/mcp-http-pay-2026-10-17.txt and proof/desk-arc-2026-10-16-0303.txt (older commits 925d5ad, abad17f, 72fce7b, 325b0d4, 9714058, 3db92df). 0 real secrets.
+- The invite word: `git grep -F` over tracked files (excluding PNGs) → no file.
+- 64-hex strings outside proof/, contracts/test/, JSON and lockfiles: only the P-256 curve order N in apps/classic/home.html:248 and level1.html:143 and the test vectors in apps/classic/passkey/call.test.mjs — known, not keys.
+- Verdict: safe to flip the repository public.

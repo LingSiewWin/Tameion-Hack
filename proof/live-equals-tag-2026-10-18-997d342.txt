@@ -1,0 +1,15 @@
+# live = tag, second time (2026-10-18 09:56:49 +0800)
+
+tag submission-2026-10-18 (local)  : 997d342fb037e6504124e0854a8af1f8c9bcbcb8
+tag submission-2026-10-18 (origin) : 997d342fb037e6504124e0854a8af1f8c9bcbcb8
+main (local)                       : 997d342fb037e6504124e0854a8af1f8c9bcbcb8
+moved from f632c8f at 09:50 +08 by the founder's delegation ('you are tech lead, you decide', 09:4x); gate on the merged main green (runtime/gate-main-arc-demo.log, 18 steps, forge 228, Rust 594).
+
+public host https://tameion-agents-production-064a.up.railway.app redeployed from the tag with scripts/deploy_railway.sh (main tree checked out at the tag, detached):
+  newest deployment: 5d6c5b36-8aec-4e97-a227-58a275ccb36d SUCCESS 2026-10-18T01:50:53.945Z
+  GET /healthz -> ok
+  GET /api/level1/codes -> contractVersion 2026-10-18.1 | codes 42
+  GET /api/level1/symbolon?policy=0x…0001 (a route only the new build has) -> {"contractVersion":"2026-10-18.1","error":{"audience":"agent","by":"input","code":"not_found","executed":"no","meaning":"No such account, job or record on this 
+  (the first probe, seconds after 'Deploy complete', still read the old container: plain 404; 20 s later the envelope above.)
+
+home preview https://tameion-home-production.up.railway.app serves lane/home cecbb00 (= main minus merge commits) with HOME_DEMO_NAME=guest-demo-arc; lane service tameion-lane deployment bcc2469f (cecbb00).
