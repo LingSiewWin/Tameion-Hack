@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tameion Watch</title>
+<title>Tami Watch</title>
 <meta name="description" content="Paste a treasury address. See what it owes, what an agent would pay, and the most a stolen key could lose. Read-only: no key, nothing sent.">
 <style>
   :root { --bg:#f6f5f1; --ink:#171717; --mute:#6b6b66; --line:#dedcd4; --accent:#1f6f5c; --amber:#a3630a; --crimson:#9b2c2c; --card:#ffffff; --mono:"SF Mono",ui-monospace,Menlo,monospace; }
@@ -41,7 +41,7 @@
 </head>
 <body>
 <main>
-  <h1>Tameion Watch</h1>
+  <h1>Tami Watch</h1>
   <p class="sub">Paste a treasury address. See what it owes, what an agent would pay, and the most a stolen key could lose. Read-only: no key, nothing sent, nothing stored but this report.</p>
 
   <form class="card" id="f">
@@ -113,7 +113,7 @@
 
   <section class="card hide" id="err"><div class="warn" id="errText"></div></section>
 
-  <footer>Tameion · a treasury account for onchain companies that keeps itself solvent. The agent's key can pay payees you approved, under a cap, and nothing else.</footer>
+  <footer>Tami · a treasury account for onchain companies that keeps itself solvent. The agent's key can pay payees you approved, under a cap, and nothing else.</footer>
 </main>
 <script>
 const $ = (s) => document.querySelector(s);
@@ -185,7 +185,7 @@ function render(d, id) {
   if (he && he.chains && he.chains.length) $("#balSub").textContent += ` · ${he.total} more in Circle Gateway (${he.chains.map(c => `${c.chain} ${c.balance.replace(" USDC", "")}`).join(", ")})`;
   // PLAN 5.49: what it holds outside dollars, in days of its own bills.
   const ex = d.exposure;
-  if (ex && ex.holdings && ex.holdings.length && ex.notionalUsd) $("#balSub").textContent += ` · also ${Number(ex.ethTotal).toLocaleString("en-US", { maximumFractionDigits: 4 })} ETH ($${Number(ex.notionalUsd).toLocaleString("en-US", { maximumFractionDigits: 2 })}); a 30% fall would cost $${Number(ex.fall30Usd).toLocaleString("en-US", { maximumFractionDigits: 2 })}${ex.fall30Days != null ? `, about ${ex.fall30Days} days of these bills` : ""} — Tameion can keep that protected, up to a printed maximum`;
+  if (ex && ex.holdings && ex.holdings.length && ex.notionalUsd) $("#balSub").textContent += ` · also ${Number(ex.ethTotal).toLocaleString("en-US", { maximumFractionDigits: 4 })} ETH ($${Number(ex.notionalUsd).toLocaleString("en-US", { maximumFractionDigits: 2 })}); a 30% fall would cost $${Number(ex.fall30Usd).toLocaleString("en-US", { maximumFractionDigits: 2 })}${ex.fall30Days != null ? `, about ${ex.fall30Days} days of these bills` : ""} — Tami can keep that protected, up to a printed maximum`;
   const tb = $("#tbl tbody"); tb.innerHTML = "";
   $("#emptyNote").style.display = d.obligations.length ? "none" : "block";
   for (const o of d.obligations) {

@@ -1,6 +1,6 @@
 {
-  "name": "Tameion",
-  "short_name": "Tameion",
+  "name": "Tami",
+  "short_name": "Tami",
   "description": "A treasury account that keeps itself solvent: bills paid on time inside a limit you set; your phone is the only key that can take money out.",
   "start_url": "/",
   "scope": "/",
