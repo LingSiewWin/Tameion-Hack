@@ -336,17 +336,20 @@ function domRules({ view, width, route, palette, spec }) {
     // The one allowed exception (founder, 2026-10-18): the receive address, whole, in exactly these two components, on /add
     // and /receive only (the same list as test/zero-hash-exceptions.test.mts). Anything else marked so is a leak.
     const ALLOWED = { AddressPlate: "add", ReceiveAddress: "receive" };
+    // and the header's Console link (founder, 2026-10-18: judges get one link): the address in its href only, on any route
+    const LINK = "console-link";
     let text = document.body.innerText;
     for (const e of document.body.querySelectorAll("[data-hash-allowed]")) {
       const who = e.getAttribute("data-hash-allowed");
       if (ALLOWED[who] === route) text = text.replace(e.innerText, "");
-      else add("fail", "zero-hash-exception", e, `data-hash-allowed="${who}" outside its one place`);
+      else if (who !== LINK || e.tagName !== "A") add("fail", "zero-hash-exception", e, `data-hash-allowed="${who}" outside its one place`);
     }
     const t = text.match(HASH);
     if (t) add("fail", "zero-hash", null, `text: ${t[0].slice(0, 14)}...`);
     for (const e of document.body.querySelectorAll("*")) {
       if (SKIP.test(e.tagName)) continue;
-      for (const a of e.attributes) if (HASH.test(a.value)) add("fail", "zero-hash", e, `${a.name}="${a.value.slice(0, 40)}"`);
+      const link = e.tagName === "A" && e.getAttribute("data-hash-allowed") === LINK;
+      for (const a of e.attributes) if (HASH.test(a.value) && !(link && a.name === "href")) add("fail", "zero-hash", e, `${a.name}="${a.value.slice(0, 40)}"`);
     }
     const grouped = document.body.innerText.match(/(?:0x)?(?:[0-9a-fA-F]{4}[ \u00a0]){7,}[0-9a-fA-F]{4}/);
     // D-H5-1 (PM, under delegation): /add and /receive are where the owner must copy or scan the account address, so it may be spelled in groups of four there and only there

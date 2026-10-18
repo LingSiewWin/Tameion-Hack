@@ -11,6 +11,7 @@ export const copy = {
   tryAgain: "Try again",
   details: "What the service said",
   recordsMissing: (figures: boolean) => (figures ? "The records did not load; the figures above still stand." : "The records did not load."),
+  staleFrom: (what: string, t: string) => `${what} shown is from ${t}; the chain has not answered since.`,
   none: "–",
   top: {
     region: "The account now",
@@ -25,6 +26,9 @@ export const copy = {
     runway: { head: "Runway", source: "status.runway.byRateDays" },
     shortfall: { head: "First shortfall", source: "status.runway.firstShortfallDays" },
     days: (n: number) => `${n} d`,
+    // A status that answered with a null runway field means what the CLI's `top` says: no burn yet, every bill covered.
+    noBurn: "no burn",
+    covered: "none in 90 d",
     noFigure: (fields: string[]) => `– the service gave no figure: ${fields.join(", ")}.`,
   },
   stream: {
@@ -36,7 +40,8 @@ export const copy = {
       "This account is read with its owner's device or a read key. Anyone can check each record's leaf; its fields and slots stay with them.",
     empty: "No records yet. The agent writes one on each pass.",
     region: "Records, newest first",
-    head: ["When", "Seq", "Kind", "Verdict", "Counterparty", "Qty", "Unit", "Agent", "Seller", "Witness", "Leaf", "Anchor"],
+    head: ["Seq", "Kind", "Counterparty", "Qty", "Unit", "Usd", "Agent", "Seller", "Witness", "Leaf", "Anchor"],
+    usdNone: "usd – the service gives no USD price for a record (GET /api/level1/symbolon has none).",
     headLocked: ["Seq", "Leaf", "Root"],
     kinds: {
       SETTLEMENT: "settlement",
@@ -51,9 +56,12 @@ export const copy = {
     mark: {
       verified: (alg: string, keyId: string) => `verified, ${alg}, ${keyId}`,
       unread: "the anchoring could not be read this time",
-      none: "none",
+      none: "empty",
     },
     detail: {
+      at: "At",
+      counterparty: "Counterparty",
+      verdict: "Verdict",
       root: "Root",
       leaf: "Leaf",
       head: ["Slot", "Alg", "Key id", "Verified"],

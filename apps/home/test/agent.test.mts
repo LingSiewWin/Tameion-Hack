@@ -75,7 +75,14 @@ const symbolon: Symbolon = {
   ],
 };
 const status = { ok: true, contractVersion: "2026-10-18.1", recentUpdates: [], rate: "0.000428 USDC", windowDays: 7, runway: { byRateDays: 109, firstShortfallDays: null } } as Status;
-const inbox = { policy: symbolon.policy, mode: "Autopilot", balance: "0.047000 USDC", paidTotal: "0.003000 USDC", runway: null } as unknown as Inbox;
+const inbox = {
+  policy: symbolon.policy,
+  mode: "Autopilot",
+  balance: "0.047000 USDC",
+  paidTotal: "0.003000 USDC",
+  runway: null,
+  parties: { [VENDOR]: { label: "Demo Vendor", kind: "invoice", verified: true, note: "", tail: "3854" } },
+} as unknown as Inbox;
 const src = <T,>(value: T) => ({ value, at: new Date(2026, 9, 18, 6, 42, 5).getTime(), error: null });
 const render = (s: Symbolon, extra: Partial<Parameters<typeof AgentScreen>[0]["reads"]> = {}) =>
   renderToStaticMarkup(
@@ -92,7 +99,8 @@ test("top: each figure from its field, labelled by it; a field the service left 
   assert.match(html, />0\.003<\/span><\/td>/);
   assert.match(html, />≈ 0\.00000029<\/span><\/td>/);
   assert.match(html, />109 d<\/span><\/td>/);
-  assert.match(html, /the service gave no figure: inbox\.runway\.horizonTotal, status\.runway\.firstShortfallDays/);
+  assert.match(html, /the service gave no figure: inbox\.runway\.horizonTotal\./);
+  assert.match(html, />none in 90 d<\/span><\/td>/, "a null first shortfall on a status that answered: every bill covered");
   assert.doesNotMatch(html.slice(0, html.indexOf("Records ")), />0<\/span><\/td>/, "no fake zero in the top table");
   assert.match(html, /0xcf57c48b69104c89a462cdb68ddc3f4f0933e2e1/, "the Agent view names the address");
   assert.match(html, /as of 06:42:05/);
@@ -102,12 +110,15 @@ test("stream: newest first, three slots per line, counts in the header, a refusa
   const html = render(symbolon);
   assert.match(html, /Records 3/);
   assert.match(html, /Single 2.*Double 1.*Triple 0.*Unsigned 0/s);
-  const order = ["Today 05:58", "Today 05:56", "Today 05:55"].map((t) => html.indexOf(t));
+  const order = ["0x7b7b…7b7b", "0x508d…a968", "0xf1f1…f1f1"].map((t) => html.indexOf(t));
   assert.ok(order.every((i, k) => i > 0 && (k === 0 || i > order[k - 1])), `newest first: ${order}`);
   assert.match(html, /Seller: verified, secp256k1-eip712, 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854/);
-  assert.match(html, /Agent: none/);
+  assert.match(html, /<span aria-hidden="true"><\/span><span class="sr-only">Agent: empty<\/span>/, "an empty slot is blank");
+  assert.match(html, /<th scope="col"[^>]*>Seq<\/th><th scope="col"[^>]*>Kind<\/th><th scope="col"[^>]*>Counterparty<\/th><th scope="col"[^>]*>Qty<\/th><th scope="col"[^>]*>Unit<\/th><th scope="col"[^>]*>Usd<\/th><th scope="col"[^>]*>Agent<\/th><th scope="col"[^>]*>Seller<\/th><th scope="col"[^>]*>Witness<\/th>/, "the founder's line");
+  assert.match(html, /title="0xe5e2d8dcc2038fd0a010a6e7845378b646e33854">Demo Vendor<\/td>/, "the inbox's name for the counterparty");
+  assert.match(html, /usd – the service gives no USD price for a record/, "a column the route cannot fill says so");
   assert.match(html, /Witness: the anchoring could not be read this time/, "a failed chain read is ?, not none");
-  assert.match(html, /<span class="text-\(--attention\)">refused<\/span> <span class="meta">block<\/span>/);
+  assert.match(html, /<span class="text-\(--attention\)">refused<\/span> <span class="text-\(--ink-2\)">block<\/span>/);
   assert.equal((html.match(/text-\(--attention\)/g) ?? []).length, 1, "attention only on the refusal");
   assert.match(html, /href="https:\/\/sepolia\.arbiscan\.io\/tx\/0x(66){32}"/);
   assert.match(html, /0x508d…a968/);
@@ -145,3 +156,14 @@ test("a read that failed keeps the last answer, says since when, and offers one 
   const none = renderToStaticMarkup(createElement(AgentScreen, { reads: { status: silent, inbox: silent, symbolon: silent } }));
   assert.match(none, /The records did not load\.<\/p>/, "no figure stands when none was read");
 });
+
+test("a body the service served from its last good read is shown, marked with that read's time", () => {
+  const stale = { ...status, stale: true, asOf: new Date(2026, 9, 18, 10, 21, 3).getTime() / 1000 } as Status;
+  const html = render(symbolon, { status: src(stale) });
+  assert.match(html, /The status shown is from 10:21:03; the chain has not answered since\./);
+  assert.match(html, />≈ 0\.00000029<\/span><\/td>/, "its figures still stand");
+  // A party the inbox only describes keeps its short key.
+  const described = { ...inbox, parties: { [VENDOR]: { label: "Payee ••3854", kind: "new", verified: false, note: "", tail: "3854" } } } as unknown as Inbox;
+  assert.match(render(symbolon, { inbox: src(described) }), /title="0xe5e2d8dcc2038fd0a010a6e7845378b646e33854">0xe5e2…3854<\/td>/);
+});
+
