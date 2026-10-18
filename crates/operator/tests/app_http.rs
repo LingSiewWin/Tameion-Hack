@@ -2393,3 +2393,174 @@ fn the_symbolon_route_shows_each_records_slots_and_outsiders_only_leaves() {
     assert_eq!(v["locked"].as_bool(), Some(false), "{v}");
     assert_eq!(v["records"][0]["counterpartySlot"]["verified"], true);
 }
+
+/// docs/122 D-RC-3: with `TAMEION_HOME_URL` set, the console's pages answer
+/// 302 to the same path and query on the home app, and only those: the API,
+/// /llms.txt, /classic and /healthz stay; the agent map and the card name the
+/// home app. Unset, `/` is served as before.
+#[test]
+fn the_console_pages_redirect_to_the_home_app_only_when_it_is_set() {
+    let home = "https://tami-home.example";
+    let policy = "0x00000000000000000000000000000000000000c2";
+    let dir = std::env::temp_dir().join(format!("tameion-app-test-{}-191", std::process::id()));
+    std::fs::create_dir_all(dir.join("tenants")).unwrap();
+    std::fs::write(
+        dir.join("tenants").join(format!("{policy}.json")),
+        format!(
+            r#"{{"chain":"arc-testnet","owner":"0x0000000000000000000000000000000000000001","policy":"{policy}","agent":"0x0000000000000000000000000000000000000003","operator":"0x0000000000000000000000000000000000000004","watched":"0x0000000000000000000000000000000000000005","recovery":"0x0000000000000000000000000000000000000000","per_action":"1","daily":"1","floor":"0","delay_secs":60,"mode":1,"created_block":0,"history_from_block":0,"created":0,"deployed":true}}"#
+        ),
+    )
+    .unwrap();
+    let srv = start_with(
+        191,
+        &[
+            ("TAMEION_HOME_URL", "https://tami-home.example/"),
+            ("TAMEION_RPC_ARC", "http://127.0.0.1:9"),
+        ],
+    );
+    let p = srv.port;
+    let q = format!("/?policy={policy}");
+    for path in ["/", q.as_str(), "/agent", "/pay", "/watch?x=1"] {
+        let (st, head, body) = http_with(p, "GET", path, "", "");
+        assert_eq!(st, 302, "{path}: {head}");
+        let loc = format!("Location: {home}{path}\r\n");
+        assert!(format!("{head}\r\n").contains(&loc), "{path}: {head}");
+        assert_eq!(
+            body,
+            format!("Tami's account pages moved to {home}{path}\n")
+        );
+    }
+    let (st, head, _) = http_with(p, "HEAD", "/", "", "");
+    assert!(
+        st == 302 && head.contains(&format!("Location: {home}/")),
+        "{head}"
+    );
+    for path in [
+        "/api/level1/codes",
+        "/healthz",
+        "/classic",
+        "/api/openapi.json",
+    ] {
+        let (st, head, _) = http_with(p, "GET", path, "", "");
+        assert_eq!(st, 200, "{path} stays: {head}");
+    }
+    let (st, _) = http(p, "GET", "/agent/x", "");
+    assert_ne!(st, 302, "exact paths only");
+    let (_, llms) = http(p, "GET", "/llms.txt", "");
+    assert!(
+        llms.contains(&format!("- Account page: {home}/ ·")),
+        "{llms}"
+    );
+    let (st, card) = http(p, "GET", &format!("/agents/{policy}.json"), "");
+    assert_eq!(st, 200, "{card}");
+    let card: serde_json::Value = serde_json::from_str(&card).unwrap();
+    assert!(
+        card["services"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["name"] == "web" && s["endpoint"] == format!("{home}/")),
+        "{card}"
+    );
+
+    let off = start_with(192, &[("TAMEION_HOME_URL", "")]);
+    let (st, head, body) = http_with(off.port, "GET", "/", "", "");
+    assert_eq!(st, 200, "{head}");
+    assert!(!head.contains("Location:") && body.contains("Needs you"));
+    let (_, llms) = http(off.port, "GET", "/llms.txt", "");
+    assert!(llms.contains("- Account page: / ·"));
+}
+
+/// A node for a deployed account: `delay()` is 60 s, `attestedSince(payee)` is
+/// `since`, every other read is zero words (mode Watch, no caps, no pending
+/// change, nobody else approved). Returns its port.
+fn payee_node(payee: &'static str, since: u64) -> u16 {
+    use std::io::Write;
+    let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = l.local_addr().unwrap().port();
+    let sel = |sig: &str| alloy::hex::encode(&alloy::primitives::keccak256(sig.as_bytes())[..4]);
+    let (attested_since, delay) = (sel("attestedSince(address)"), sel("delay()"));
+    let who = payee.trim_start_matches("0x").to_lowercase();
+    std::thread::spawn(move || {
+        for mut s in l.incoming().flatten() {
+            let body = request_body(&mut s);
+            let req: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();
+            let answer = |r: &serde_json::Value| {
+                let id = r["id"].clone();
+                let input = r["params"][0]["input"]
+                    .as_str()
+                    .or(r["params"][0]["data"].as_str())
+                    .unwrap_or("")
+                    .trim_start_matches("0x")
+                    .to_lowercase();
+                // Enough words for the widest fixed return read here (`pending()`, six).
+                let words = |v: u64| format!("0x{v:064x}{}", "0".repeat(64 * 7));
+                let result = match r["method"].as_str().unwrap_or("") {
+                    "eth_chainId" => serde_json::json!("0x66eee"),
+                    "eth_blockNumber" => serde_json::json!("0x10"),
+                    "eth_getLogs" => serde_json::json!([]),
+                    "eth_call" if input.starts_with(&attested_since) && input.ends_with(&who) => {
+                        serde_json::json!(words(since))
+                    }
+                    "eth_call" if input.starts_with(&delay) => serde_json::json!(words(60)),
+                    "eth_call" => serde_json::json!(words(0)),
+                    _ => serde_json::json!("0x0"),
+                };
+                serde_json::json!({ "jsonrpc": "2.0", "id": id, "result": result })
+            };
+            let out = match req.as_array() {
+                Some(batch) => serde_json::Value::Array(batch.iter().map(answer).collect()),
+                None => answer(&req),
+            }
+            .to_string();
+            let _ = write!(
+                s,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{out}",
+                out.len()
+            );
+        }
+    });
+    port
+}
+
+/// docs/60 P-405: a payee the owner approved by address alone — named, with
+/// no bill, payment or ask naming it — is listed in the inbox's `payees` with
+/// when the agent may pay it; a contact the chain has not approved is not.
+#[test]
+fn a_contact_approved_with_no_bill_is_listed_in_payees() {
+    let (approved, unapproved) = (
+        "0x00000000000000000000000000000000000000b7",
+        "0x00000000000000000000000000000000000000b8",
+    );
+    let node = payee_node(approved, 1_000);
+    let srv = start_with(
+        193,
+        &[(
+            "TAMEION_RPC_ARBITRUM_SEPOLIA",
+            &format!("http://127.0.0.1:{node}"),
+        )],
+    );
+    let dir = std::env::temp_dir().join(format!("tameion-app-test-{}-193", std::process::id()));
+    let policy = "0x00000000000000000000000000000000000000f3";
+    std::fs::create_dir_all(dir.join("tenants")).unwrap();
+    std::fs::write(
+        dir.join("tenants").join(format!("{policy}.json")),
+        format!(
+            r#"{{"chain":"arbitrum-sepolia","owner":"0x00000000000000000000000000000000000000a3","policy":"{policy}","agent":"0x0000000000000000000000000000000000000003","operator":"0x0000000000000000000000000000000000000004","watched":"0x0000000000000000000000000000000000000005","recovery":"0x0000000000000000000000000000000000000000","per_action":"1","daily":"1","floor":"0","delay_secs":60,"mode":1,"created_block":0,"history_from_block":0,"created":0,"deployed":true,"contacts":[{{"address":"{approved}","name":"Bare Payee","at":0}},{{"address":"{unapproved}","name":"Not Yet","at":0}}]}}"#
+        ),
+    )
+    .unwrap();
+    let (st, b) = http(
+        srv.port,
+        "GET",
+        &format!("/api/level1/inbox?policy={policy}"),
+        "",
+    );
+    assert_eq!(st, 200, "{b}");
+    let v: serde_json::Value = serde_json::from_str(&b).unwrap();
+    assert_eq!(
+        v["payees"],
+        serde_json::json!([{ "address": approved, "approvedAt": 1_000, "payableFrom": 1_060, "payableNow": true }]),
+        "{b}"
+    );
+}
