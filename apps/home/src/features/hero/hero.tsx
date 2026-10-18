@@ -103,7 +103,16 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
     let raf = 0;
     let L: Layout | null = null;
 
+    // At the top of the page the header sits above the stage, so what hangs from the stage's foot (the caption on a wide
+    // screen, the plate on a phone) is lifted by the stage's offset until the stage reaches the top and sticks.
+    const lift = () => {
+      const by = Math.max(0, st.getBoundingClientRect().top);
+      const wideNow = st.clientWidth >= 640;
+      if (captionEl.current) captionEl.current.style.transform = wideNow && by ? `translateY(${-by}px)` : "";
+      pl.style.transform = !wideNow && by ? `translateY(${-by}px)` : "";
+    };
     const measure = () => {
+      pl.style.transform = ""; // the plate's box as laid out; lift() puts the offset back below
       // full bleed: the class places it for a page without a classic scrollbar; this corrects for one (100vw counts it)
       const parent = sec.parentElement!;
       const left = parent.getBoundingClientRect().left + parseFloat(getComputedStyle(parent).paddingLeft || "0");
@@ -119,6 +128,7 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
       L = { W, H, plate: plateRect, rows: { x, y } };
       stage.resize(L);
       setLayout(L);
+      lift();
     };
     const frame = () => {
       raf = 0;
@@ -126,6 +136,7 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
       const raw = clamp01(-r.top / Math.max(1, r.height - window.innerHeight));
       const p = reduced ? stillAt(raw) : raw;
       const ph = phases(p);
+      lift();
       const set = (el: HTMLElement | null, o: number) => el && (el.style.opacity = String(o));
       set(table.current, seg(ph.hand, 0.5, 1));
       set(book.current, ph.book);
@@ -214,7 +225,7 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
       <div ref={stageEl} className="sticky top-0 h-svh w-full overflow-hidden" data-treatment={treatment}>
         {treatment === "A" && realScene?.src ? (
           // eslint-disable-next-line @next/next/no-img-element -- the scene is the LCP image, sized and placed by the stage
-          <img data-scene src={realScene.src} alt="" fetchPriority="high" className="absolute inset-0 h-full w-full object-cover" />
+          <img data-scene src={realScene.src} srcSet={realScene.srcSet} sizes="100vw" alt="" fetchPriority="high" className="absolute inset-0 h-full w-full object-cover" />
         ) : null}
         <canvas ref={canvas} aria-hidden className="absolute inset-0 h-full w-full" />
 
