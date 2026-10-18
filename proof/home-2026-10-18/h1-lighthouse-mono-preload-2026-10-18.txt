@@ -1,0 +1,20 @@
+# Lighthouse mobile on / : Plex Mono preload on / or not (2026-10-18 09:24 +0800, seat H1)
+# lighthouse@13.5.0 --only-categories=performance --chrome-flags=--headless=new (the flags of apps/home/scripts/ci.mjs), Chrome stable,
+# production build of lane/home-h1 on :3019 (next start, TAMEION_URL=lane service), three runs each, same Mac, back to back
+
+before (e499002: Sans + Mono 400 + Mono 500 preloaded)     run 1: performance 97, LCP 2627 ms, FCP 762 ms, font requests 3 (59 KB), 264 KB total
+before (e499002: Sans + Mono 400 + Mono 500 preloaded)     run 2: performance 99, LCP 2108 ms, FCP 758 ms, font requests 3 (59 KB), 264 KB total
+before (e499002: Sans + Mono 400 + Mono 500 preloaded)     run 3: performance 97, LCP 2630 ms, FCP 758 ms, font requests 3 (59 KB), 264 KB total
+root Mono preload: false only                              run 1: performance 98, LCP 2481 ms, FCP 759 ms, font requests 2 (49 KB), 253 KB total
+root Mono preload: false only                              run 2: performance 98, LCP 2470 ms, FCP 756 ms, font requests 2 (49 KB), 253 KB total
+root Mono preload: false only                              run 3: performance 98, LCP 2470 ms, FCP 755 ms, font requests 2 (49 KB), 253 KB total
+final (Mono preloaded on /a/* and /new only)               run 1: performance 98, LCP 2478 ms, FCP 759 ms, font requests 2 (49 KB), 253 KB total
+final (Mono preloaded on /a/* and /new only)               run 2: performance 98, LCP 2471 ms, FCP 756 ms, font requests 2 (49 KB), 253 KB total
+final (Mono preloaded on /a/* and /new only)               run 3: performance 98, LCP 2481 ms, FCP 762 ms, font requests 2 (49 KB), 254 KB total
+
+H7 (e499002, docs(proof) commit message): 97 / 97 / 82, LCP 2.6 s simulated
+
+# after rebasing onto lane/home b728698 (commit 7aedb02), 09:26 +0800: / preloads 1 font file (Sans), /a/northwind-agents 3 (as before)
+7aedb02 (rebased tip)                                      run 1: performance 98, LCP 2476 ms, FCP 759 ms
+7aedb02 (rebased tip)                                      run 2: performance 98, LCP 2472 ms, FCP 755 ms
+7aedb02 (rebased tip)                                      run 3: performance 98, LCP 2479 ms, FCP 756 ms

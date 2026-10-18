@@ -1,5 +1,144 @@
 {
- "at": "2026-10-18 09:11:54 +08",
- "keys": [],
- "findings": []
+ "at": "2026-10-18 09:25:31 +08",
+ "keys": [
+  "guest/rest/owner/1280|date-not-in-words|section.relative.-mt-(--space-5) > div.sticky.top-0 > p.meta.absolute|dates read Today 05:41, Yesterday, 12 Oct",
+  "guest/rest/owner/390|date-not-in-words|section.relative.-mt-(--space-5) > div.sticky.top-0 > p.meta.absolute|dates read Today 05:41, Yesterday, 12 Oct",
+  "guest/error/owner/1280|date-not-in-words|section.relative.-mt-(--space-5) > div.sticky.top-0 > p.meta.absolute|dates read Today 05:41, Yesterday, 12 Oct",
+  "guest/error/owner/390|date-not-in-words|section.relative.-mt-(--space-5) > div.sticky.top-0 > p.meta.absolute|dates read Today 05:41, Yesterday, 12 Oct",
+  "account/error/agent/1280|measure|div.mono-dense.flex > section.flex.flex-col > p.mono-read.m-0|about 81 characters per line (DESIGN: measure <= 68 ch)",
+  "account/error/agent/390|touch-target|div.flex.flex-col > details.meta > summary.cursor-pointer.py-(--space-1)|350x28 px; DESIGN touch targets are >= 44 (accepted in an opened line: WCAG 2.2 AA 24 px, D-H3-1)",
+  "account/detail/agent/390|touch-target|div.flex.flex-col > details.meta > summary.cursor-pointer.py-(--space-1)|350x28 px; DESIGN touch targets are >= 44 (accepted in an opened line: WCAG 2.2 AA 24 px, D-H3-1)",
+  "account/detail/agent/390|touch-target|div.flex.flex-col > div.grid.grid-cols-[14ch_1fr] > a.text-(--ink).underline|823x28 px; DESIGN touch targets are >= 44 (accepted in an opened line: WCAG 2.2 AA 24 px, D-H3-1)",
+  "account/detail/agent/390|console||502 /api/level1/inbox"
+ ],
+ "findings": [
+  {
+   "sev": "warn",
+   "rule": "date-not-in-words",
+   "sel": "section.relative.-mt-(--space-5) > div.sticky.top-0 > p.meta.absolute",
+   "text": "Strait of Hormuz from NOAA-20 VIIRS true colour (N",
+   "detail": "dates read Today 05:41, Yesterday, 12 Oct",
+   "name": "guest/rest/owner/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "date-not-in-words",
+   "sel": "section.relative.-mt-(--space-5) > div.sticky.top-0 > p.meta.absolute",
+   "text": "Strait of Hormuz from NOAA-20 VIIRS true colour (N",
+   "detail": "dates read Today 05:41, Yesterday, 12 Oct",
+   "name": "guest/rest/owner/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "date-not-in-words",
+   "sel": "section.relative.-mt-(--space-5) > div.sticky.top-0 > p.meta.absolute",
+   "text": "Strait of Hormuz from NOAA-20 VIIRS true colour (N",
+   "detail": "dates read Today 05:41, Yesterday, 12 Oct",
+   "name": "guest/error/owner/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "date-not-in-words",
+   "sel": "section.relative.-mt-(--space-5) > div.sticky.top-0 > p.meta.absolute",
+   "text": "Strait of Hormuz from NOAA-20 VIIRS true colour (N",
+   "detail": "dates read Today 05:41, Yesterday, 12 Oct",
+   "name": "guest/error/owner/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "measure",
+   "sel": "div.mono-dense.flex > section.flex.flex-col > p.mono-read.m-0",
+   "text": "– the service gave no figure: inbox.balance, inbox",
+   "detail": "about 81 characters per line (DESIGN: measure <= 68 ch)",
+   "name": "account/error/agent/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "touch-target",
+   "sel": "div.flex.flex-col > details.meta > summary.cursor-pointer.py-(--space-1)",
+   "text": "What the service said",
+   "detail": "350x28 px; DESIGN touch targets are >= 44 (accepted in an opened line: WCAG 2.2 AA 24 px, D-H3-1)",
+   "name": "account/error/agent/390"
+  },
+  {
+   "sev": "note",
+   "rule": "mocked",
+   "sel": "",
+   "text": "",
+   "detail": "the service reply was patched in the page (no real account for this state)",
+   "name": "account/needs-you/owner/1280"
+  },
+  {
+   "sev": "note",
+   "rule": "mocked",
+   "sel": "",
+   "text": "",
+   "detail": "the service reply was patched in the page (no real account for this state)",
+   "name": "account/needs-you/owner/390"
+  },
+  {
+   "sev": "note",
+   "rule": "mocked",
+   "sel": "",
+   "text": "",
+   "detail": "the service reply was patched in the page (no real account for this state)",
+   "name": "account/sealed/owner/1280"
+  },
+  {
+   "sev": "note",
+   "rule": "mocked",
+   "sel": "",
+   "text": "",
+   "detail": "the service reply was patched in the page (no real account for this state)",
+   "name": "account/sealed/owner/390"
+  },
+  {
+   "sev": "note",
+   "rule": "mocked",
+   "sel": "",
+   "text": "",
+   "detail": "the service reply was patched in the page (no real account for this state)",
+   "name": "account/sealed/agent/1280"
+  },
+  {
+   "sev": "note",
+   "rule": "mocked",
+   "sel": "",
+   "text": "",
+   "detail": "the service reply was patched in the page (no real account for this state)",
+   "name": "account/sealed/agent/390"
+  },
+  {
+   "sev": "note",
+   "rule": "not-built-yet",
+   "sel": "",
+   "text": "",
+   "detail": "no row disclosure to open yet",
+   "name": "account/detail/agent/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "touch-target",
+   "sel": "div.flex.flex-col > details.meta > summary.cursor-pointer.py-(--space-1)",
+   "text": "What the service said",
+   "detail": "350x28 px; DESIGN touch targets are >= 44 (accepted in an opened line: WCAG 2.2 AA 24 px, D-H3-1)",
+   "name": "account/detail/agent/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "touch-target",
+   "sel": "div.flex.flex-col > div.grid.grid-cols-[14ch_1fr] > a.text-(--ink).underline",
+   "text": "0x36daa2337987c9f54a01f7b6d071381a7b36729967949319",
+   "detail": "823x28 px; DESIGN touch targets are >= 44 (accepted in an opened line: WCAG 2.2 AA 24 px, D-H3-1)",
+   "name": "account/detail/agent/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "console",
+   "sel": "",
+   "text": "",
+   "detail": "502 /api/level1/inbox",
+   "name": "account/detail/agent/390"
+  }
+ ]
 }
