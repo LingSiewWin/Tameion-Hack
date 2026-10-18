@@ -6,11 +6,11 @@ The account an agent operator gives its agents: they pay inside the mandate you 
 
 ## Try it in 5 minutes
 
-**Live:** https://tameion-home-production.up.railway.app — the front page; "Open the book" opens a demo account on Arc testnet (guest, read-only). The invite word is in the submission form.
+**Live:** https://tami-home.up.railway.app — the front page; "Open the book" opens a demo account on Arc testnet (guest, read-only). The invite word is in the submission form.
 
-1. Open https://tameion-home-production.up.railway.app and tap "Open the book" — the owner's statement: what the agents may spend today, what they paid and to whom, the reason beside each row, not one hash on the page.
+1. Open https://tami-home.up.railway.app and tap "Open the book" — the owner's statement: what the agents may spend today, what they paid and to whom, the reason beside each row, not one hash on the page.
 2. Tap the toggle, or add `?view=agent` — the same account as the agent's terminal: every record with its three signature slots (agent, counterparty, witness) and the chain it is anchored on.
-3. On https://tameion-home-production.up.railway.app/ type the invite word and tap "Make your own" — name an account, one passkey tap; it arrives funded with test USDC, with a receipt and an address to receive more.
+3. On https://tami-home.up.railway.app/ type the invite word and tap "Make your own" — name an account, one passkey tap; it arrives funded with test USDC, with a receipt and an address to receive more.
 4. Tap "Console" on your account page — every owner action lives there: approve the demo vendor, save the bill, turn on Autopilot; from the next due time the agent pays by itself, every two minutes, and each row carries its reason.
 5. Raise the cap on one payment: it waits 30 s with a Cancel, and anyone can see it coming. Cut it: instant.
 
@@ -103,9 +103,9 @@ at the foot._
 
 ### Try it in 5 minutes
 
-**Live:** https://tameion-agents-production-064a.up.railway.app (testnet; the invite word is in the submission form). No install, no wallet, no seed phrase, no address to type.
+**Live:** https://tami-console.up.railway.app (testnet; the invite word is in the submission form). No install, no wallet, no seed phrase, no address to type.
 
-**Owner home (preview):** https://tameion-home-production.up.railway.app — the same account two ways: the owner's statement at `/a/guest-demo-arc`
+**Owner home (preview):** https://tami-home.up.railway.app — the same account two ways: the owner's statement at `/a/guest-demo-arc`
 (an account on Arc testnet, paying a demo vendor every two minutes on Autopilot: what the agents may spend today, what they paid and to whom; not one hash on the page) and the agent's terminal at `/a/guest-demo-arc?view=agent`
 (every record with its three signature slots — agent, counterparty, witness — and the chain it is anchored on), one toggle between them.
 The landing page's hero is design: the scene is NOAA-20 VIIRS true colour from NASA GIBS (public domain, 2026-10-16), the vessels
@@ -223,7 +223,7 @@ Each row ran against a real chain; the file in `proof/` holds the requests, answ
 - **Open:** as of the last user test the signed mandate sentence does not name the cap on one payment; a finance lead cannot yet hold a read-only seat once the
   operator mints an agent key (the records are open, a viewer seat is not built); the passkey can withdraw everything at once, by design
   (a withdrawal delay is not built); no mainnet; the contracts are unaudited; no person has yet signed with real Touch ID on this build
-  (the tests used a virtual authenticator); the public copy runs on Railway (https://tameion-agents-production-064a.up.railway.app, `scripts/deploy_railway.sh`; `fly.toml` + `scripts/deploy_fly.sh` build the same image elsewhere) and holds only demo accounts on testnet.
+  (the tests used a virtual authenticator); the public copy runs on Railway (https://tami-console.up.railway.app, `scripts/deploy_railway.sh`; `fly.toml` + `scripts/deploy_fly.sh` build the same image elsewhere) and holds only demo accounts on testnet.
 - **x402 compatibility is narrow.** The account pays by x402's ERC-7710 method so that the cap stays on chain. The only seller it has paid is our own test seller
   (`scripts/x402_seller.py`); no third-party seller has been paid. None of the 1,401 payment options in the first 600 Bazaar listings names ERC-7710 (they name EIP-3009 or Permit2: `proof/x402-bazaar-payment-methods-2026-10-17.txt`), so
   whether an outside seller's facilitator accepts our method is untested — and is the first thing an outside operator's agent will meet.
