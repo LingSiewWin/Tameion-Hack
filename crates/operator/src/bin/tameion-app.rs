@@ -4682,7 +4682,19 @@ impl App {
             // P-181: spent and left in the trailing 24 hours, and whom the agent may
             // pay and from when, read from the contract (not learned from refusals).
             if let (Some(client), true) = (rc.as_ref(), tenant.deployed) {
-                let named = operator::parties::named_in(&reply);
+                // P-405: a payee approved by address alone (no bill, payment or ask
+                // names it) is one of the owner's contacts; only attested ones list.
+                // ponytail: one chain read per contact per inbox read (≤ MAX_CONTACTS);
+                // read the attestation events instead if contact lists grow long.
+                let mut named = operator::parties::named_in(&reply);
+                named.extend(
+                    tenant
+                        .contacts
+                        .iter()
+                        .filter_map(|c| Address::from_str(&c.address).ok()),
+                );
+                named.sort();
+                named.dedup();
                 let (auth, left, since) = tokio::join!(
                     client.authority(policy),
                     client.remaining_allowance(policy),
