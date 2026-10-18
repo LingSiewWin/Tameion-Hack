@@ -10,8 +10,9 @@ import { useSkeleton } from "../../components/skeleton.tsx";
 import { fetchDemo, fetchInbox, fetchTenant } from "../../lib/api.ts";
 import type { Demo, Inbox, Tenant } from "../../lib/types.ts";
 import { useView } from "../../lib/view.ts";
-import { byKey, type CctpChain } from "./cctp.ts";
+import { byKey, USDC_MARK, type CctpChain } from "./cctp.ts";
 import { asOfText, grouped, ledgerText, parseHeld, usdcText, whenText, type Held } from "./format.ts";
+import { Mark } from "./mark.tsx";
 import { MovePlate } from "./move-plate.tsx";
 import { explorer, FAUCET, plate, quiet, rowLink } from "./ui.ts";
 import { demoFunding } from "./wallet.ts";
@@ -47,6 +48,7 @@ async function readAll(name: string): Promise<Reads> {
 }
 
 export function AddMoney({ account: props }: { account: AddProps }) {
+  const view = useView();
   const joined = props.addressText.replaceAll(" ", "");
   const account: AddAccount = { name: props.name, address: (isAddress(joined) ? joined : "0x") as Address, chain: props.chain };
   const dest = isAddress(joined) ? byKey(account.chain) : undefined;
@@ -95,7 +97,11 @@ export function AddMoney({ account: props }: { account: AddProps }) {
         </h1>
         {shown && (
           <>
-            <p className="balance money">{ledgerText(shown.balance)}</p>
+            {/* real marks in the Owner view; the Agent view stays the machine's text (DESIGN, Arc §3.3: no low-contrast ground) */}
+            <div className="flex items-center gap-(--space-3)">
+              {view === "owner" && <Mark src={USDC_MARK} />}
+              <p className="balance money">{ledgerText(shown.balance)}</p>
+            </div>
             <p className="meta">
               In the account on {dest.name}
               {staleAt ? `, ${asOfText(staleAt)}` : ""}
@@ -146,8 +152,9 @@ function AddressPlate({ dest, address }: { dest: CctpChain; address: Address }) 
   };
   return (
     <section aria-labelledby="address-title" className={plate}>
-      <h2 id="address-title" className="row-title">
-        The account&apos;s address on {dest.name}
+      <h2 id="address-title" className="row-title flex items-center gap-(--space-2)">
+        {view === "owner" && <Mark src={dest.mark} />}
+        <span>The account&apos;s address on {dest.name}</span>
       </h2>
       {/* grouped, the Owner view's address wraps between groups; the Agent view's unbroken hex wraps anywhere */}
       <p className={`row money ${view === "agent" ? "break-all" : "break-words"}`}>{view === "agent" ? address : grouped(address)}</p>

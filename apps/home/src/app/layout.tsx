@@ -5,7 +5,9 @@ import { VIEW_BOOT } from "../tokens.ts";
 import "./globals.css";
 
 const sans = IBM_Plex_Sans({ subsets: ["latin"], weight: ["400", "500", "600"], display: "swap", variable: "--font-plex-sans" });
-const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], display: "swap", variable: "--font-plex-mono" });
+// Not preloaded here: `/` sets its statement in Sans and needs Mono only at the hero's hand-over; the routes that read Mono
+// from the start (the account pages, the stepper) preload it in their layouts (src/app/mono-preload.ts).
+const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], display: "swap", variable: "--font-plex-mono", preload: false });
 
 export const metadata: Metadata = {
   title: "Tameion",
