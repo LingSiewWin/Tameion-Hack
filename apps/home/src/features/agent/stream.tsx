@@ -1,7 +1,8 @@
 "use client";
-// The record stream (Agent view): every record of the account, newest first, from GET /api/level1/symbolon. Each line
-// spells out its three slots; a line opens to the slots' alg, key id and whether the check passed, with the full leaf,
-// root and the anchoring transaction. A decision the rule blocked is a refusal and carries its code.
+// The record stream (Agent view): every record of the account, newest first, from GET /api/level1/symbolon, as the
+// founder wrote the line: seq kind counterparty qty unit usd agent✓ seller✓ witness✓, then the leaf and the anchoring
+// transaction. ✓ is a filled slot, blank an empty one. A line opens to its three slots. A decision the rule blocked is a
+// refusal and carries its code.
 import { Fragment, useEffect, useState } from "react";
 import type { Slot, Symbolon, SymbolonRecord } from "../../lib/types.ts";
 import { copy } from "./copy.ts";
@@ -20,17 +21,18 @@ const LINK = "text-(--ink) underline underline-offset-4";
 const ROW_LINK = `${LINK} inline-flex min-h-(--touch) items-center`;
 const LINE_LINK = `${LINK} inline-block py-(--space-1)`;
 
-/** A slot as one mark: ✓ verified, – none, ? its anchoring could not be read this time (witness only). */
+/** A slot as one mark: ✓ filled (its check passed), blank empty, ? its anchoring could not be read this time (witness only). */
 function mark(s: Slot | null | undefined, unread: boolean): { glyph: string; words: string } {
   if (s?.verified) return { glyph: "✓", words: C.mark.verified(s.alg, s.keyId) };
   if (unread) return { glyph: "?", words: C.mark.unread };
-  return { glyph: copy.none, words: C.mark.none };
+  return { glyph: "", words: C.mark.none };
 }
 
 const txLink = (explorer: string | null | undefined, tx: string | null | undefined) =>
   explorer && tx && /^0x[0-9a-fA-F]{64}$/.test(tx) && /^https:\/\//.test(explorer) ? `${explorer}/tx/${tx}` : null;
 
-export function Stream({ data, now }: { data: Symbolon; now?: number }) {
+/** `names`: what the inbox calls each counterparty (lowercase address -> name), when it names one. */
+export function Stream({ data, now, names = {} }: { data: Symbolon; now?: number; names?: Record<string, string> }) {
   const [open, setOpen] = useState<string | null>(null);
   const unread = new Set(data.chainReadFailed.map((r) => r.toLowerCase()));
   const records = [...data.records].sort((a, b) => (b.at ?? 0) - (a.at ?? 0) || b.root.localeCompare(a.root) || b.seq - a.seq);
@@ -47,7 +49,7 @@ export function Stream({ data, now }: { data: Symbolon; now?: number }) {
   return (
     <section aria-labelledby="records-title" className="flex flex-col gap-(--space-2)">
       <div className="flex flex-wrap items-baseline gap-x-(--space-5) gap-y-(--space-1)">
-        <h2 id="records-title" className="row-title m-0">
+        <h2 id="records-title" className="mono-dense m-0">
           {C.records(records.length)}
         </h2>
         {c && (
@@ -59,11 +61,11 @@ export function Stream({ data, now }: { data: Symbolon; now?: number }) {
             ))}
           </p>
         )}
-        {unread.size > 0 && <p className="mono-read m-0 text-(--ink-2)">{C.unread(unread.size)}</p>}
+        {unread.size > 0 && <p className="mono-dense m-0 text-(--ink-2)">{C.unread(unread.size)}</p>}
       </div>
-      {data.locked && <p className="mono-read m-0">{C.locked}</p>}
+      {data.locked && <p className="mono-dense m-0">{C.locked}</p>}
       {records.length === 0 ? (
-        <p className="mono-read m-0">{C.empty}</p>
+        <p className="mono-dense m-0">{C.empty}</p>
       ) : (
         <div role="region" aria-label={C.region} tabIndex={0} className="relative overflow-x-auto">
           <table className="mono-dense w-full border-collapse whitespace-nowrap text-left">
@@ -101,27 +103,26 @@ export function Stream({ data, now }: { data: Symbolon; now?: number }) {
                           aria-expanded={isOpen}
                           aria-controls={`slots-${id}`}
                           onClick={() => setOpen(isOpen ? null : id)}
-                          className="min-h-(--touch) cursor-pointer border-0 bg-transparent p-0 text-left text-(--ink) [font:inherit]"
+                          className="min-h-(--touch) min-w-(--touch) cursor-pointer border-0 bg-transparent p-0 text-left text-(--ink) [font:inherit]"
                         >
-                          {r.at ? when(r.at, now) : copy.none}
+                          {r.seq}
                         </button>
                       </td>
-                      <td className="pr-(--space-4)">{r.seq}</td>
-                      <td className="pr-(--space-4)">{C.kinds[r.kind ?? ""] ?? r.kind?.toLowerCase() ?? copy.none}</td>
                       <td className="pr-(--space-4)">
                         {r.decision === "BLOCK" ? (
                           <>
-                            <span className="text-(--attention)">{C.refused}</span> <span className="meta">{C.refusedCode}</span>
+                            <span className="text-(--attention)">{C.refused}</span> <span className="text-(--ink-2)">{C.refusedCode}</span>
                           </>
                         ) : (
-                          (r.decision?.toLowerCase() ?? copy.none)
+                          (C.kinds[r.kind ?? ""] ?? r.kind?.toLowerCase() ?? copy.none)
                         )}
                       </td>
                       <td className="pr-(--space-4)" title={r.counterparty}>
-                        {r.counterparty ? short(r.counterparty) : copy.none}
+                        {r.counterparty ? (names[r.counterparty.toLowerCase()] ?? short(r.counterparty)) : copy.none}
                       </td>
                       <td className="pr-(--space-4) text-right">{amount?.qty ?? copy.none}</td>
                       <td className="pr-(--space-4)">{amount?.unit ?? ""}</td>
+                      <td className="pr-(--space-4) text-right">{copy.none}</td>
                       {SLOTS.map((s) => {
                         const m = mark(s.of(r), s.name === "witness" && unread.has(r.root.toLowerCase()));
                         return (
@@ -149,7 +150,13 @@ export function Stream({ data, now }: { data: Symbolon; now?: number }) {
                     {isOpen && (
                       <tr id={`slots-${id}`} className="border-b border-(--rule)">
                         <td colSpan={C.head.length} className="pb-(--space-3)">
-                          <Detail r={r} explorer={data.explorer} unread={unread.has(r.root.toLowerCase())} />
+                          <Detail
+                            r={r}
+                            explorer={data.explorer}
+                            unread={unread.has(r.root.toLowerCase())}
+                            now={now}
+                            name={r.counterparty ? names[r.counterparty.toLowerCase()] : undefined}
+                          />
                         </td>
                       </tr>
                     )}
@@ -160,17 +167,36 @@ export function Stream({ data, now }: { data: Symbolon; now?: number }) {
           </table>
         </div>
       )}
+      {records.length > 0 && !data.locked && <p className="mono-dense m-0 text-(--ink-2)">{C.usdNone}</p>}
     </section>
   );
 }
 
-function Detail({ r, explorer, unread }: { r: SymbolonRecord; explorer?: string | null; unread: boolean }) {
+function Detail({ r, explorer, unread, now, name }: { r: SymbolonRecord; explorer?: string | null; unread: boolean; now?: number; name?: string }) {
   const D = C.detail;
   const anchor = txLink(explorer, r.anchorTx);
   const paid = txLink(explorer, r.tx);
   const line = "grid grid-cols-[14ch_1fr] gap-x-(--space-4)";
   return (
     <div className="flex flex-col gap-(--space-1) whitespace-normal break-all pl-(--space-4)">
+      {r.at && (
+        <div className={line}>
+          <span className="meta">{D.at}</span>
+          <span>{when(r.at, now)}</span>
+        </div>
+      )}
+      {r.counterparty && (
+        <div className={line}>
+          <span className="meta">{D.counterparty}</span>
+          <span>{name ? `${name} ${r.counterparty}` : r.counterparty}</span>
+        </div>
+      )}
+      {r.decision && (
+        <div className={line}>
+          <span className="meta">{D.verdict}</span>
+          <span>{r.decision.toLowerCase()}</span>
+        </div>
+      )}
       <div className={line}>
         <span className="meta">{D.root}</span>
         <span>{r.root}</span>
@@ -233,7 +259,7 @@ function Detail({ r, explorer, unread }: { r: SymbolonRecord; explorer?: string 
       {r.note && (
         <div className={line}>
           <span className="meta">{D.note}</span>
-          <span className="mono-read break-normal">{r.note}</span>
+          <span className="break-normal">{r.note}</span>
         </div>
       )}
     </div>

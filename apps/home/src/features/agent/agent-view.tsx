@@ -63,19 +63,36 @@ export function AgentScreen({ reads, onRetry, now }: { reads: Reads; onRetry?: (
   const policy = symbolon.value?.policy ?? status.value?.policy ?? inbox.value?.policy;
   const failed = (Object.keys(reads) as (keyof Reads)[]).filter((k) => reads[k].error !== null);
   const latest = Math.max(...Object.values(reads).map((s: Src<unknown>) => s.at ?? 0));
+  // The service's last good read, served while the chain does not answer (`stale` + `asOf`): shown, marked with its time.
+  const staleAt = (k: keyof Reads) => {
+    const v = reads[k].value as { stale?: unknown; asOf?: unknown } | null;
+    return v?.stale === true && typeof v.asOf === "number" ? v.asOf : null;
+  };
+  const stale = (Object.keys(reads) as (keyof Reads)[]).filter((k) => staleAt(k) !== null);
+  // A counterparty by the inbox's name for it; a party it only describes ("new") keeps its short key.
+  const names = Object.fromEntries(
+    Object.entries(inbox.value?.parties ?? {})
+      .filter(([, p]) => p.kind !== "new" && p.label)
+      .map(([a, p]) => [a.toLowerCase(), p.label]),
+  );
   return (
     <div className="mono-dense flex flex-col gap-(--space-5)">
       <div className="flex flex-wrap gap-x-(--space-5) gap-y-(--space-1)">
-        <h1 className="row-title m-0">{copy.title}</h1>
+        <h1 className="mono-dense m-0">{copy.title}</h1>
         {policy && <span className="break-all">{policy}</span>}
         {symbolon.value?.chain && <span>{symbolon.value.chain}</span>}
         {inbox.value?.mode && <span>{copy.mode(inbox.value.mode)}</span>}
         {latest > 0 && <span className="meta">{copy.asOf(clock(latest))}</span>}
       </div>
+      {stale.map((k) => (
+        <p key={k} className="mono-dense m-0 text-(--ink-2)">
+          {copy.staleFrom(SOURCES[k], clock(staleAt(k)! * 1000))}
+        </p>
+      ))}
       {failed.length > 0 && (
         <div role="alert" className="flex flex-col gap-(--space-2)">
           <div className="flex flex-wrap items-center gap-x-(--space-4) gap-y-(--space-2)">
-            <p className="mono-read m-0">
+            <p className="mono-dense m-0">
               {failed.map((k) => (
                 <span key={k} className="mr-(--space-4) inline-block">
                   {copy.didNotAnswer(SOURCES[k], reads[k].at ? clock(reads[k].at) : null)}
@@ -105,7 +122,11 @@ export function AgentScreen({ reads, onRetry, now }: { reads: Reads; onRetry?: (
         </div>
       )}
       <Top status={status.value} inbox={inbox.value} />
-      {symbolon.value ? <Stream data={symbolon.value} now={now} /> : <p className="mono-read m-0">{copy.recordsMissing(!!(status.value || inbox.value))}</p>}
+      {symbolon.value ? (
+        <Stream data={symbolon.value} now={now} names={names} />
+      ) : (
+        <p className="mono-dense m-0">{copy.recordsMissing(!!(status.value || inbox.value))}</p>
+      )}
     </div>
   );
 }
@@ -120,14 +141,14 @@ export function Top({ status, inbox }: { status: Status | null; inbox: Inbox | n
     { head: T.reserved.head, source: T.reserved.source(inbox?.runway?.horizonDays), value: qty(inbox?.runway?.horizonTotal) },
     { head: T.consumed.head, source: T.consumed.source, value: qty(inbox?.paidTotal) },
     { head: T.rate.head, source: T.rate.source(status?.windowDays), value: perMinute(status?.rate) },
-    { head: T.runway.head, source: T.runway.source, value: days(status?.runway?.byRateDays) },
-    { head: T.shortfall.head, source: T.shortfall.source, value: days(status?.runway?.firstShortfallDays) },
+    { head: T.runway.head, source: T.runway.source, value: status?.runway ? (days(status.runway.byRateDays) ?? T.noBurn) : null },
+    { head: T.shortfall.head, source: T.shortfall.source, value: status?.runway ? (days(status.runway.firstShortfallDays) ?? T.covered) : null },
   ];
   const missing = cols.filter((c) => c.value === null).map((c) => c.source.split(" ")[0]);
   return (
     <section aria-label={T.region} className="flex flex-col gap-(--space-1)">
       <div role="region" aria-label={T.table} tabIndex={0} className="relative overflow-x-auto">
-        <table className="mono-dense border-collapse text-left">
+        <table className="mono-dense w-full border-collapse text-left">
           <thead>
             <tr>
               <th scope="col" className="pr-(--space-5) font-normal">
@@ -177,7 +198,7 @@ export function Top({ status, inbox }: { status: Status | null; inbox: Inbox | n
           </tbody>
         </table>
       </div>
-      {missing.length > 0 && <p className="mono-read m-0 text-(--ink-2)">{T.noFigure(missing)}</p>}
+      {missing.length > 0 && <p className="mono-dense m-0 text-(--ink-2)">{T.noFigure(missing)}</p>}
     </section>
   );
 }
