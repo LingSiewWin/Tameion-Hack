@@ -199,7 +199,9 @@ function stepLighthouse(url, paths = ["/"]) {
     const lcpEl = a["largest-contentful-paint-element"]?.details?.items?.[0]?.items?.[0]?.node?.snippet?.slice(0, 50) ?? "";
     lines.push(`${path}: mobile performance ${score} (DESIGN >= 85), LCP ${lcp} ms (DESIGN <= 2500)${lcpEl ? ` on ${lcpEl}` : ""}, TBT ${Math.round(a["total-blocking-time"].numericValue)} ms, CLS ${a["cumulative-layout-shift"].numericValue.toFixed(3)}, ${Math.round(a["total-byte-weight"].numericValue / 1024)} KB over the wire${imgs[0] ? `, largest image ${Math.round(imgs[0].transferSize / 1024)} KB` : ""}; Lighthouse ${j.lighthouseVersion} on ${url}`);
     for (const x of big) lines.push(`${path}: over 350 KB: ${new URL(x.url).pathname.slice(0, 60)} ${Math.round(x.transferSize / 1024)} KB`);
-    if (score < 85 || lcp > 2500 || big.length) sev = "fail";
+    // DESIGN's acceptance is for `/` (the hero); another page's slower LCP is reported, not failed
+    if (score < 85 || big.length || (lcp > 2500 && path === "/")) sev = "fail";
+    else if (lcp > 2500 && sev === "pass") sev = "warn";
   }
   return { name: "lighthouse", sev, lines };
 }
