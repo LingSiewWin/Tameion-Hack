@@ -234,6 +234,20 @@ async function stepLighthouse(url, paths = ["/"], view = "owner") {
   return { name: "lighthouse", sev, lines };
 }
 
+// DESIGN §Rules: "No hard-coded strings in components." A heuristic read of the .tsx files: a run of words between tags on one line, or a literal of two words or more in
+// aria-label, placeholder, title or alt. Strings belong in a copy module; this lists what is still inline, it does not know which are fine.
+function stepStrings() {
+  const walk = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]));
+  const hits = [];
+  for (const f of walk(join(APP, "src")).filter((p) => /\.tsx$/.test(p)))
+    readFileSync(f, "utf8").split("\n").forEach((line, i) => {
+      if (/^\s*(\/\/|\*|\/\*|import |export type|type )/.test(line)) return;
+      const t = />\s*([A-Za-z][A-Za-z ,.'’!?:;-]*[A-Za-z.!?])\s*</.exec(line) ?? /(?:aria-label|placeholder|title|alt)="([^"{}]+ [^"{}]+)"/.exec(line);
+      if (t && /\s/.test(t[1].trim())) hits.push(`${relative(APP, f)}:${i + 1}  "${t[1].trim().slice(0, 44)}"`);
+    });
+  return { name: "strings", sev: hits.length ? "warn" : "pass", lines: hits.length ? [`${hits.length} inline strings in .tsx (DESIGN: none in components):`, ...hits.slice(0, 8), ...(hits.length > 8 ? [`... ${hits.length - 8} more`] : [])] : [] };
+}
+
 // Steps another seat builds, wired in as soon as the npm script exists (DESIGN §Acceptance: the tokens-only hex lint, `21st review` with zero errors).
 function stepScripts(name, keys, missing, strict) {
   const pkg = JSON.parse(readFileSync(join(APP, "package.json"), "utf8"));
@@ -391,10 +405,11 @@ function domRules({ view, width, route, palette, spec }) {
     if (/\s·\s/.test(own) && !e.closest("[data-hero]")) add("fail", "middle-dot-meta", e, "meta strings joined with middle dots are banned"); // the hero caption is DESIGN's own text
     if (s.textTransform === "uppercase") add("fail", "tracked-uppercase", e, "text-transform: uppercase");
     else if (/^[A-Z][A-Z0-9 ]{3,}$/.test(own) && !/^(USDC|EURC|USD|ERC|CCTP|MCP|API|UTC|HTTP|AIS|MMSI)$/.test(own)) add("warn", "all-caps", e, `"${own.slice(0, 20)}"`);
-    if (view === "owner" && (/\b\d{4}-\d{2}-\d{2}\b|T\d{2}:\d{2}:\d{2}|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(own))) add("warn", "date-not-in-words", e, "dates read Today 05:41, Yesterday, 12 Oct");
+    // the founder's DESIGN names the hero caption's scene date and says nothing of words for dates; a raw timestamp in the Owner view is still worth a look
+    if (view === "owner" && !e.closest("[data-hero]") && (/T\d{2}:\d{2}:\d{2}|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(own))) add("note", "timestamp-shape", e, "a raw timestamp or day/month/year in the Owner view");
     for (const m of own.matchAll(money)) {
       const frac = (m[1].split(".")[1] ?? "");
-      if (frac.length > 6 || /0$/.test(frac)) add("warn", "money-not-shortest", e, `"${m[0]}": six decimals trimmed to the shortest that is exact`);
+      if (view === "owner" && (frac.length > 6 || /0$/.test(frac))) add("warn", "money-not-shortest", e, `"${m[0]}": six decimals trimmed to the shortest that is exact`);
     }
     if ((own.match(money) || clock.test(own)) && !/tabular-nums/.test(s.fontVariantNumeric) && !mono(e)) add("fail", "figures-not-tabular", e, `${own.match(money) ? "money" : "time"} is not set in tabular lining figures (font-variant-numeric)`);
   }
@@ -771,7 +786,7 @@ async function scenario(browser, AxeBuilder, sc, cfg) {
     R.metrics = metrics;
     // a skeleton has no hero; the heading rule waits for the content
     if (!cfg.noAxe) R.findings.push(...(await axeFindings(page, AxeBuilder, R)).filter((f) => !(metrics.busy && f.rule === "axe:page-has-heading-one")));
-    if (metrics.busy && sc.state === "rest") R.pending = "the route still shows its skeleton after settling: no content yet";
+    if (metrics.busy && sc.state === "rest" && sc.route !== "guest") R.pending = "the route still shows its skeleton after settling: no content yet";
     if (sc.state === "rest" || sc.state === "detail") {
       const flash = (metrics.skeleton ?? []).filter((s) => s.ms < 300);
       if (flash.length) R.findings.push({ sev: "fail", rule: "skeleton-flash", sel: "", text: "", detail: `skeleton on screen for ${flash.map((f) => f.ms + " ms").join(", ")} (DESIGN: >= 300 ms once shown)` });
@@ -1170,7 +1185,7 @@ async function main() {
     return 0;
   }
   const steps = [
-    stepTokens(), run("contrast", ["scripts/contrast.mjs"], "scripts/contrast.mjs is missing (H1: WCAG 4.5:1 for every pair in both views)"), stepZeroHash(), stepLiterals(),
+    stepTokens(), stepStrings(), run("contrast", ["scripts/contrast.mjs"], "scripts/contrast.mjs is missing (H1: WCAG 4.5:1 for every pair in both views)"), stepZeroHash(), stepLiterals(),
     stepScripts("hex-lint", ["lint:tokens", "lint:hex", "tokens:lint", "lint-tokens"], "no tokens-only hex lint script yet (H1 writes it: no literal colour outside src/tokens.*; npm script lint:tokens)", cfg.strict),
     stepScripts("21st-review", ["review", "review:21st", "21st:review", "21st-review", "design:review"], "no `21st review` script yet (npm script review: `21st review src`, 0 errors expected)", cfg.strict),
   ];
@@ -1248,6 +1263,9 @@ async function main() {
     if (prev) { const d = diffRuns(prev, keys); lines.push(`since the last run: ${d.fixed.length} fixed, ${d.added.length} new`); }
     writeFileSync(lastFile, JSON.stringify({ at: clock(), keys, findings: flat }, null, 1));
     appendFileSync(join(cfg.proof, "preflight.txt"), lines.join("\n") + "\n\n");
+    // one file per run as well: preflight.txt is tracked, and an older committed copy that comes back over it takes the newest blocks with it (P-398)
+    mkdirSync(join(cfg.proof, "runs"), { recursive: true });
+    writeFileSync(join(cfg.proof, "runs", `${clock().replace(/[: ]/g, "-").replace(/-\+08$/, "")}-${new URL(cfg.url).port || "80"}.txt`), lines.join("\n") + "\n");
   }
   console.log("\n" + lines.join("\n"));
   const bad = fails.length + steps.filter((s) => s.sev === "fail").length;

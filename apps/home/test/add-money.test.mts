@@ -59,7 +59,7 @@ test("the chains: Circle's domains, and a move never starts on the account's own
   assert.deepEqual([byKey("arbitrum-sepolia")?.domain, byKey("base-sepolia")?.domain, byKey("arc-testnet")?.domain], [3, 6, 26]);
   assert.equal(byDomain(7), undefined);
   assert.deepEqual(sourcesFor(byKey("arc-testnet")!).map((c) => c.name), ["Arbitrum Sepolia", "Base Sepolia"]);
-  assert.deepEqual(sourcesFor(byKey("arbitrum-sepolia")!).map((c) => c.name), ["Base Sepolia", "Arc testnet"]);
+  assert.deepEqual(sourcesFor(byKey("arbitrum-sepolia")!).map((c) => c.name), ["Arc testnet", "Base Sepolia"], "Arc is offered first");
 });
 
 test("money in words: six decimals trimmed to the shortest exact form, never $", () => {
