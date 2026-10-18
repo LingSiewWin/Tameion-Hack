@@ -3,14 +3,17 @@
 //   node scripts/hero-data.mjs synthetic                          write the 200-line synthetic replay (test/fixtures/ais.synthetic.jsonl)
 //                                                                 and its packed copy public/hero/ais.synthetic.json (gitignored, dev only)
 //   node scripts/hero-data.mjs portwatch <query.json> <url>       IMF PortWatch daily chokepoint rows -> public/hero/portwatch.json
+//   node scripts/hero-data.mjs scene <image> <world file> <scene id> <YYYY-MM-DD>
+//                                     the founder's Sentinel-2 export -> public/hero/scene.avif (<= 350 KB), scene-828.avif (phones)
+//                                     and scene.json (size, world file, crs read from it: metres = EPSG:3857, degrees = EPSG:4326)
 import { readFileSync, writeFileSync } from "node:fs";
-import { BBOX, pack } from "../src/features/hero/model.ts";
+import { BBOX, pack, parseWorldFile } from "../src/features/hero/model.ts";
 
 const app = new URL("..", import.meta.url).pathname;
 const [cmd, a1, a2] = process.argv.slice(2);
 const lines = (file) => readFileSync(file, "utf8").split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
 const write = (file, value) => {
-  writeFileSync(file, typeof value === "string" ? value : JSON.stringify(value));
+  writeFileSync(file, typeof value === "string" || Buffer.isBuffer(value) ? value : JSON.stringify(value));
   console.log(`wrote ${file}`);
 };
 
@@ -67,6 +70,29 @@ if (cmd === "ais") {
     total: a.n_total, tanker: a.n_tanker, container: a.n_container, dryBulk: a.n_dry_bulk, generalCargo: a.n_general_cargo, roro: a.n_roro,
   }));
   write(`${app}public/hero/portwatch.json`, { source: a2, fetchedAt: new Date().toISOString(), days });
+} else if (cmd === "scene") {
+  const [, , , , worldFile, id, date] = process.argv;
+  if (!a1 || !worldFile || !id || !/^\d{4}-\d{2}-\d{2}$/.test(date ?? "")) throw new Error("scene: <image> <world file> <scene id> <YYYY-MM-DD>");
+  const sharp = (await import("sharp")).default;
+  const { width, height } = await sharp(a1).metadata();
+  const wld = parseWorldFile(readFileSync(worldFile, "utf8"));
+  if (wld.length !== 6 || wld.some((x) => !Number.isFinite(x)) || wld[1] || wld[2]) throw new Error("scene: the world file needs six numbers and no rotation");
+  const crs = Math.abs(wld[4]) > 360 ? "EPSG:3857" : "EPSG:4326";
+  // the hero image stays <= 350 KB (DESIGN §Acceptance): step the AVIF quality down until it fits
+  const encode = async (w, max) => {
+    for (let q = 60; q >= 20; q -= 5) {
+      const buf = await sharp(a1).resize({ width: Math.min(w, width) }).avif({ quality: q, effort: 6 }).toBuffer();
+      if (buf.length <= max) return buf;
+    }
+    throw new Error(`scene: cannot fit ${w} px under ${max} bytes`);
+  };
+  const full = await encode(2560, 350_000);
+  const phone = await encode(828, 120_000);
+  write(`${app}public/hero/scene.avif`, full);
+  write(`${app}public/hero/scene-828.avif`, phone);
+  const src = "/hero/scene.avif";
+  write(`${app}public/hero/scene.json`, { id, date, width, height, crs, wld, src, srcSet: `/hero/scene-828.avif 828w, ${src} ${Math.min(2560, width)}w` });
+  console.log(`${width}x${height} ${crs}; ${full.length} B and ${phone.length} B`);
 } else {
   console.error("usage: hero-data.mjs ais <recording.jsonl> [out] | synthetic | portwatch <query.json> <url>");
   process.exit(2);

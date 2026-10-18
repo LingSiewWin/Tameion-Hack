@@ -133,7 +133,7 @@ export const windowWords = (r: Replay) => ({ from: new Date(r.from).toISOString(
 
 /** A georeferenced image: its size in px and its world file [A, D, B, E, C, F] in `crs` (EPSG:3857 metres or EPSG:4326
  *  degrees); `src` null = the placeholder drawn from the coast. */
-export type Scene = { id: string; date: string | null; width: number; height: number; crs: "EPSG:3857" | "EPSG:4326"; wld: number[]; src: string | null };
+export type Scene = { id: string; date: string | null; width: number; height: number; crs: "EPSG:3857" | "EPSG:4326"; wld: number[]; src: string | null; srcSet?: string };
 
 const EARTH = 6378137;
 const merc = (lon: number, lat: number): [number, number] => [
