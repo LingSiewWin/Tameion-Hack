@@ -634,7 +634,7 @@ async function arrange(page, ctx, sc, cfg, R) {
     // all three halves, verified. The log says "mocked": this screenshot is a fixture of the sealed look, not an account's proof.
     const slot = { alg: "secp256k1-eip712", keyId: "0x" + "ab".repeat(20), verified: true };
     await patchJson(page, /\/api\/level1\/symbolon/, (b) => {
-      const records = (b.records ?? []).map((r) => ({ ...r, agent: slot, counterparty_slot: slot, witness: slot }));
+      const records = (b.records ?? []).map((r) => ({ ...r, agent: slot, counterpartySlot: slot, counterparty_slot: slot, witness: slot }));
       return { ...b, records, counts: { unsigned: 0, single: 0, double: 0, triple: records.length } };
     }, R);
   } else if (state === "needs-you" && !R.real) {
