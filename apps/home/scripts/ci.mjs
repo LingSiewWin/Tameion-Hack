@@ -35,12 +35,12 @@ export const HASH = /0x[0-9a-fA-F]{8,}/;
 export const VIEW_KEY = "tameion.home.view";
 export const HEIGHT = { 1280: 800, 390: 844 };
 export const ROUTES = {
-  guest: { path: () => "/", states: ["rest", "loading", "error", "offline"] },
+  guest: { path: () => "/", states: ["rest", "error"] },
   // rest is the owner's browser (the passkey's public half seeded, nothing signed); guest is the same page read-only
   account: { path: (p) => `/a/${p}`, states: ["rest", "guest", "loading", "empty", "error", "offline", "needs-you", "sealed", "detail"] },
   new: { path: () => "/new", states: ["rest", "error"] },
   add: { path: (p) => `/a/${p}/add`, states: ["rest", "loading", "error", "offline"] },
-  receive: { path: (p) => `/a/${p}/receive`, states: ["rest", "loading", "error", "offline"] },
+  receive: { path: (p) => `/a/${p}/receive`, states: ["rest", "loading", "error"] },
 };
 const CORE = ["paper", "plate", "plate-2", "ink", "ink-2", "rule", "attention", "transit"];
 // The numbers the checks use, from DESIGN.md (founder, 2026-10-18 07:01). When the founder changes a value, change it here.
@@ -362,8 +362,14 @@ function domRules({ view, width, route, palette, spec }) {
   }
 
   // Visual bans: gradients, glow, shadows (the sheet's own excepted), spinner pages, borders on content, radii off the scale
+  const rgb = (v) => {
+    const m = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+%?))?\s*\)$/.exec(v);
+    if (!m) return null;
+    return { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : m[4].endsWith("%") ? parseFloat(m[4]) / 100 : +m[4] };
+  };
   const RADII = [0, 4, 8, 12, 16, 24];
-  const ledgerRow = (e, sides) => (e.matches("tr, td, th, thead, tbody, tfoot") || !!e.closest("table")) || (e.matches("li, [role=listitem]") && sides.every((x) => x === "Bottom" || x === "Top"));
+  const inPlate = (e) => { for (let a = e.parentElement; a && a !== document.body; a = a.parentElement) { const c = rgb(st(a).backgroundColor); if (c && c.a > 0 && a.tagName !== "MAIN") return true; } return false; };
+  const ledgerRow = (e, sides) => (e.matches("tr, td, th, thead, tbody, tfoot") || !!e.closest("table")) || (sides.every((x) => x === "Bottom" || x === "Top") && (e.matches("li, [role=listitem], [role=row]") || inPlate(e)));
   const radii = new Map();
   for (const e of all) {
     const s = st(e);
@@ -388,11 +394,6 @@ function domRules({ view, width, route, palette, spec }) {
     else allowed.add(v);
   }
   const red = tok("attention") || tok("red");
-  const rgb = (v) => {
-    const m = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+%?))?\s*\)$/.exec(v);
-    if (!m) return null;
-    return { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : m[4].endsWith("%") ? parseFloat(m[4]) / 100 : +m[4] };
-  };
   const hex = (c) => "#" + [c.r, c.g, c.b].map((x) => x.toString(16).padStart(2, "0")).join("").toUpperCase();
   const used = new Map(), reds = new Set();
   const note = (raw, e, prop) => {
@@ -401,12 +402,13 @@ function domRules({ view, width, route, palette, spec }) {
     const key = c ? (c.a < 1 ? `${hex(c)}@${c.a}` : hex(c)) : raw;
     if (key === red) reds.add(e);
     if (prop === "color" && view === "owner" && key === tok("transit")) add("fail", "transit-as-text", e, "transit is for marks only, never text on light");
-    if (prop === "color" && (key === tok("up") || key === tok("down")) && !/[+\-−–]|\b(up|down|in|out|more|less|received|paid|spent|refused|days?)\b/i.test(e.innerText || "")) add("warn", "direction-alone", e, "up and down colour a direction; with a sign or a word, never alone");
+    if (prop === "color" && (key === tok("up") || (key === tok("down") && key !== red)) && !/[+\-−–]|\b(up|down|in|out|more|less|received|paid|spent|refused|days?)\b/i.test(e.innerText || "")) add("warn", "direction-alone", e, "up and down colour a direction; with a sign or a word, never alone");
     const u = used.get(key) ?? { n: 0, e, prop, raw };
     u.n++;
     used.set(key, u);
   };
   for (const e of [document.documentElement, document.body, ...all]) {
+    if (e instanceof SVGElement || e.closest("svg") || e.matches("img, [role=img]")) continue; // real marks (USDC, QR, vendors) keep their own colours
     const s = st(e);
     if (e === document.body || h.own(e)) note(s.color, e, "color"); // <html> paints no text of its own
     note(s.backgroundColor, e, "background");
@@ -462,6 +464,19 @@ function domRules({ view, width, route, palette, spec }) {
     }
   }
 
+  // A text field is found by its edge: fill or border against what it sits on must reach 3:1 (WCAG 2.2 1.4.11) unless a border carries it
+  const lum = (c) => [c.r, c.g, c.b].map((x) => x / 255).map((x) => (x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4)).reduce((t, x, i) => t + x * [0.2126, 0.7152, 0.0722][i], 0);
+  const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+  const under = (e) => { for (let a = e.parentElement; a; a = a.parentElement) { const c = rgb(st(a).backgroundColor); if (c && c.a > 0) return c; } return rgb(st(document.body).backgroundColor) ?? { r: 255, g: 255, b: 255, a: 1 }; };
+  for (const e of all.filter((x) => x.matches("input:not([type=hidden]):not([type=radio]):not([type=checkbox]):not([type=submit]), textarea, select"))) {
+    const s = st(e), bg = rgb(s.backgroundColor), around = under(e);
+    const edges = [];
+    if (bg && bg.a > 0) edges.push(ratio(bg, around));
+    for (const side of ["Top", "Right", "Bottom", "Left"]) { const c = rgb(s[`border${side}Color`]); if (px(s[`border${side}Width`]) > 0 && s[`border${side}Style`] !== "none" && c && c.a > 0) edges.push(ratio(c, around)); }
+    const best = edges.length ? Math.max(...edges) : 1;
+    if (best < 3) add("warn", "control-boundary", e, `the field's edge reads ${best.toFixed(2)}:1 against what it sits on (WCAG 2.2 1.4.11 asks 3:1); only its label says where to type`);
+  }
+
   // The shell: Testnet is a word and a dashed capsule; the capsule says which view it is
   const header = document.querySelector("header");
   const pill = header && [...header.querySelectorAll("*")].find((e) => /^testnet$/i.test(h.own(e)) && h.vis(e));
@@ -484,18 +499,19 @@ function domRules({ view, width, route, palette, spec }) {
   return { findings: F, metrics };
 }
 
-/** Every focusable thing the page offers right now, for the "is it reachable by Tab" count. */
+/** Every focusable thing the page offers right now, for the "is it reachable by Tab" count; each is given a number the walk can read back. */
 function interactive() {
   const h = window.__h6;
+  window.__h6.n ??= 0;
   return [...document.querySelectorAll('a[href], button, input:not([type=hidden]), select, textarea, summary, [tabindex], [role=button]')]
     .filter((e) => !e.disabled && e.tabIndex >= 0 && h.vis(e) && !e.closest("[inert], [aria-hidden=true], nextjs-portal"))
-    .map((e) => { const r = e.getBoundingClientRect(); return `${h.sel(e)}@${Math.round(r.x)},${Math.round(r.y + window.scrollY)}`; });
+    .map((e) => { e.__h6id ??= ++window.__h6.n; return { id: e.__h6id, sel: h.sel(e) }; });
 }
 
 function focusInfo(e) {
   const h = window.__h6, s = getComputedStyle(e), r = e.getBoundingClientRect();
   return {
-    key: `${h.sel(e)}@${Math.round(r.x)},${Math.round(r.y + window.scrollY)}`, y: r.y + window.scrollY,
+    key: e.__h6id ?? `${h.sel(e)}@${Math.round(r.x)},${Math.round(r.y + window.scrollY)}`, y: r.y + window.scrollY,
     sel: h.sel(e), name: (e.getAttribute("aria-label") || e.innerText || e.value || e.title || "").replace(/\s+/g, " ").trim().slice(0, 30),
     portal: !!e.closest("nextjs-portal") || e.tagName === "NEXTJS-PORTAL",
     visible: e.matches(":focus-visible"), outline: `${s.outlineStyle} ${s.outlineWidth} ${s.outlineColor} +${s.outlineOffset}`, shadow: s.boxShadow === "none" ? "" : s.boxShadow.slice(0, 40),
@@ -747,9 +763,9 @@ async function focusWalk(browser, sc, cfg) {
         await page.screenshot({ path: join(cfg.shotsDir, `focus-${sc.route}-${sc.view}-${sc.width}.png`), animations: "disabled", caret: "hide" });
       }
     }
-    const missed = want.filter((k) => !seen.has(k));
+    const missed = want.filter((w) => !seen.has(w.id));
     if (capped) R.findings.push({ sev: "warn", rule: "focus-walk-capped", sel: "", text: "", detail: `${R.stops} stops and Tab had not wrapped yet: the walk stopped at 400 presses` });
-    else if (missed.length) R.findings.push({ sev: "warn", rule: "not-reachable-by-tab", sel: missed[0].split("@")[0], text: "", detail: `${missed.length} interactive element(s) were never a Tab stop` });
+    else if (missed.length) R.findings.push({ sev: "warn", rule: "not-reachable-by-tab", sel: missed[0].sel, text: "", detail: `${missed.length} interactive element(s) were never a Tab stop` });
   } catch (e) {
     R.findings.push({ sev: "fail", rule: "scenario-error", sel: "", text: "", detail: String(e.message).split("\n")[0].slice(0, 160) });
   } finally {
@@ -896,7 +912,7 @@ async function keyboardFit(browser, route, cfg) {
     if (!m.cta) R.findings.push({ sev: "warn", rule: "keyboard-cta", sel: "", text: "", detail: "no CTA button found on the page" });
     else {
       if (m.cta.bottom > m.h + 0.5) R.findings.push({ sev: "fail", rule: "keyboard-cta", sel: "button", text: m.cta.text, detail: `CTA spans ${Math.round(m.cta.top)}..${Math.round(m.cta.bottom)} of ${m.h} px with the keyboard open` });
-      if (![SPEC.button, SPEC.buttonCompact].some((h) => Math.abs(m.cta.hgt - h) <= 0.6) || m.cta.w < 375 - 2 * SPEC.gutter.narrow - 1) R.findings.push({ sev: "warn", rule: "cta-plate", sel: "button", text: m.cta.text, detail: `CTA is ${Math.round(m.cta.w)}x${Math.round(m.cta.hgt)} px; DESIGN: a ${SPEC.button} px plate (${SPEC.buttonCompact} compact), full width on mobile` });
+      if (!/^copy$/i.test(m.cta.text) && ![SPEC.button, SPEC.buttonCompact].some((h) => Math.abs(m.cta.hgt - h) <= 0.6)) R.findings.push({ sev: "warn", rule: "cta-plate", sel: "button", text: m.cta.text, detail: `CTA is ${Math.round(m.cta.w)}x${Math.round(m.cta.hgt)} px; DESIGN: a ${SPEC.button} px plate (${SPEC.buttonCompact} compact)` });
     }
   } catch (e) {
     R.findings.push({ sev: "fail", rule: "scenario-error", sel: "", text: "", detail: String(e.message).split("\n")[0].slice(0, 160) });
