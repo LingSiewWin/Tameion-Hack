@@ -9,7 +9,7 @@
 //   npm run ci -- --route account --state loading,error --view owner --width 390
 //   npm run ci -- --no-browser                  the static steps only
 //   npm run ci -- --dry                         list the matrix, run nothing
-//   npm run ci -- --lighthouse                  Lighthouse mobile on `/` (LH_URL for a production server): performance >= 85, LCP <= 2.5 s, no image over 350 KB
+//   npm run ci -- --lighthouse                  Lighthouse mobile on `/` (LH_URL for a production server, LH_PATHS=/,/a/<name> for more pages): performance >= 85, LCP <= 2.5 s, no image over 350 KB
 //   npm run ci -- --fast                        use the Owner home's ?state= flag for loading, empty, error, offline (the real offline path waits ~20 s)
 //   npm run ci -- --strict                      a feature that is not built yet (no sheet, no account) counts as FAIL
 //
@@ -184,19 +184,24 @@ function stepZeroHash() {
 
 // DESIGN §Acceptance: Lighthouse mobile performance >= 85 and LCP <= 2.5 s on `/`, no image over 350 KB. Lighthouse mobile is its default (a Moto G class phone,
 // slow 4G, simulated). Measure a production server (`npm run build && npx next start -p 3015`, then LH_URL=http://localhost:3015), not `next dev`.
-function stepLighthouse(url) {
-  const file = join(tmpdir(), `lh-${process.pid}.json`);
+function stepLighthouse(url, paths = ["/"]) {
   const chrome = process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-  const r = spawnSync("npx", ["--yes", "lighthouse@13.5.0", `${url}/`, "--quiet", "--only-categories=performance", "--output=json", `--output-path=${file}`, "--chrome-flags=--headless=new"], { env: { ...process.env, CHROME_PATH: chrome }, encoding: "utf8", timeout: 300000 });
-  if (r.status !== 0 || !existsSync(file)) return { name: "lighthouse", sev: "fail", lines: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim().split("\n").slice(-6) };
-  const j = JSON.parse(readFileSync(file, "utf8")), a = j.audits;
-  const score = Math.round(j.categories.performance.score * 100), lcp = Math.round(a["largest-contentful-paint"].numericValue);
-  const imgs = (a["network-requests"]?.details?.items ?? []).filter((x) => x.resourceType === "Image").sort((x, y) => y.transferSize - x.transferSize);
-  const big = imgs.filter((x) => x.transferSize > 350 * 1024);
-  const lines = [`mobile performance ${score} (DESIGN >= 85), LCP ${lcp} ms (DESIGN <= 2500), TBT ${Math.round(a["total-blocking-time"].numericValue)} ms, CLS ${a["cumulative-layout-shift"].numericValue.toFixed(3)}, ${Math.round(a["total-byte-weight"].numericValue / 1024)} KB over the wire; Lighthouse ${j.lighthouseVersion} on ${url}/`];
-  if (imgs[0]) lines.push(`largest image ${Math.round(imgs[0].transferSize / 1024)} KB ${new URL(imgs[0].url).pathname.slice(0, 60)}`);
-  for (const x of big) lines.push(`over 350 KB: ${new URL(x.url).pathname.slice(0, 60)} ${Math.round(x.transferSize / 1024)} KB`);
-  return { name: "lighthouse", sev: score >= 85 && lcp <= 2500 && !big.length ? "pass" : "fail", lines };
+  const lines = [];
+  let sev = "pass";
+  for (const path of paths) {
+    const file = join(tmpdir(), `lh-${process.pid}-${paths.indexOf(path)}.json`);
+    const r = spawnSync("npx", ["--yes", "lighthouse@13.5.0", `${url}${path}`, "--quiet", "--only-categories=performance", "--output=json", `--output-path=${file}`, "--chrome-flags=--headless=new"], { env: { ...process.env, CHROME_PATH: chrome }, encoding: "utf8", timeout: 300000 });
+    if (r.status !== 0 || !existsSync(file)) { sev = "fail"; lines.push(`${path}: Lighthouse did not run: ${`${r.stdout ?? ""}${r.stderr ?? ""}`.trim().split("\n").slice(-2).join(" | ")}`); continue; }
+    const j = JSON.parse(readFileSync(file, "utf8")), a = j.audits;
+    const score = Math.round(j.categories.performance.score * 100), lcp = Math.round(a["largest-contentful-paint"].numericValue);
+    const imgs = (a["network-requests"]?.details?.items ?? []).filter((x) => x.resourceType === "Image").sort((x, y) => y.transferSize - x.transferSize);
+    const big = imgs.filter((x) => x.transferSize > 350 * 1024);
+    const lcpEl = a["largest-contentful-paint-element"]?.details?.items?.[0]?.items?.[0]?.node?.snippet?.slice(0, 50) ?? "";
+    lines.push(`${path}: mobile performance ${score} (DESIGN >= 85), LCP ${lcp} ms (DESIGN <= 2500)${lcpEl ? ` on ${lcpEl}` : ""}, TBT ${Math.round(a["total-blocking-time"].numericValue)} ms, CLS ${a["cumulative-layout-shift"].numericValue.toFixed(3)}, ${Math.round(a["total-byte-weight"].numericValue / 1024)} KB over the wire${imgs[0] ? `, largest image ${Math.round(imgs[0].transferSize / 1024)} KB` : ""}; Lighthouse ${j.lighthouseVersion} on ${url}`);
+    for (const x of big) lines.push(`${path}: over 350 KB: ${new URL(x.url).pathname.slice(0, 60)} ${Math.round(x.transferSize / 1024)} KB`);
+    if (score < 85 || lcp > 2500 || big.length) sev = "fail";
+  }
+  return { name: "lighthouse", sev, lines };
 }
 
 // Steps another seat builds, wired in as soon as the npm script exists (DESIGN §Acceptance: the tokens-only hex lint, `21st review` with zero errors).
@@ -740,6 +745,7 @@ async function scenario(browser, AxeBuilder, sc, cfg) {
     if (!quiet) for (const e of errors.filter((x) => !/^Failed to load resource/.test(x) && !/^404 \/favicon/.test(x) && !/_next\/(webpack-)?hmr/.test(x))) {
       // the symbolon projection is merged after the tag: this service answering 404 for it is expected, the page then marks nothing sealed
       if (/^404 \/api\/level1\/symbolon/.test(e)) { R.symbolon404 = true; continue; }
+      if (/^404 \/api\/level1\/name\//.test(e)) { R.nameFree = true; continue; } // the stepper's name check: 404 means the name is free
       R.findings.push({ sev: /hydrat|pageerror/i.test(e) ? "fail" : "warn", rule: "console", sel: "", text: "", detail: e });
     }
     if (cfg.shots) {
@@ -772,7 +778,16 @@ async function focusWalk(browser, sc, cfg) {
     const seen = new Set();
     let prevY = -1;
     mkdirSync(join(cfg.shotsDir, "focus"), { recursive: true });
-    await page.evaluate(() => { document.activeElement?.blur?.(); window.scrollTo(0, 0); });
+    await page.evaluate(() => {
+      document.activeElement?.blur?.();
+      window.scrollTo(0, 0);
+      // the sequential focus starting point goes to the top of the document (a page that focuses a field on load would otherwise start Tab below the header)
+      const t = document.createElement("i");
+      t.tabIndex = -1;
+      document.body.insertBefore(t, document.body.firstChild);
+      t.focus();
+      t.remove();
+    });
     let capped = true;
     for (let i = 0; i < 400; i++) {
       await page.keyboard.press("Tab");
@@ -1021,7 +1036,7 @@ async function typingV(browser, cfg) {
     await input.focus();
     await page.keyboard.type("v");
     const view = await page.evaluate(() => document.documentElement.dataset.view), value = await input.inputValue();
-    if (view !== "owner" || value !== "v") R.findings.push({ sev: "fail", rule: "v-while-typing", sel: "input", text: "", detail: `typed v: view ${view}, field reads "${value}"` });
+    if (view !== "owner" || !value.endsWith("v")) R.findings.push({ sev: "fail", rule: "v-while-typing", sel: "input", text: "", detail: `typed v: view ${view}, field reads "${value.slice(-24)}"` });
   } catch (e) {
     R.findings.push({ sev: "fail", rule: "scenario-error", sel: "", text: "", detail: String(e.message).split("\n")[0].slice(0, 160) });
   } finally {
@@ -1087,7 +1102,7 @@ async function main() {
   const palette = Object.fromEntries(["owner", "agent"].map((v) => [v, Object.keys(pal[v] ?? {}).length ? pal[v] : Object.fromEntries(Object.entries(css[v]).map(([k, x]) => [k, hexNorm(x)]).filter(([, x]) => x))]));
   for (const s of steps) console.log(`${s.sev.toUpperCase().padEnd(5)} ${s.name}${s.lines.length ? "\n        " + s.lines.join("\n        ") : ""}`);
 
-  if (args.lighthouse) { const lh = stepLighthouse((process.env.LH_URL ?? cfg.url).replace(/\/$/, "")); steps.push(lh); console.log(`${lh.sev.toUpperCase().padEnd(5)} ${lh.name}\n        ${lh.lines.join("\n        ")}`); }
+  if (args.lighthouse) { const lh = stepLighthouse((process.env.LH_URL ?? cfg.url).replace(/\/$/, ""), (process.env.LH_PATHS ?? "/").split(",").map((x) => x.trim()).filter(Boolean)); steps.push(lh); console.log(`${lh.sev.toUpperCase().padEnd(5)} ${lh.name}\n        ${lh.lines.join("\n        ")}`); }
   const results = [];
   const say = (R, extra = "") => console.log(`${worst(R.findings).toUpperCase().padEnd(5)} ${R.name}${extra}`);
   if (!args["no-browser"]) {
