@@ -145,9 +145,6 @@ struct App {
     /// A confirmed transaction stays confirmed, so each is read once per
     /// process. ponytail: unbounded, one entry per anchored root.
     witnessed: Mutex<std::collections::HashSet<(alloy::primitives::B256, alloy::primitives::B256)>>,
-    /// The last good inbox, status and symbolon body per caller, served marked stale for 30 s when the chain
-    /// does not answer (`operator::guard::LastGood`); memory only.
-    last_good: Mutex<operator::guard::LastGood>,
 }
 
 /// When an idempotent POST was first seen, its body's hash, and its reply.
@@ -2829,44 +2826,7 @@ impl App {
         )
     }
 
-    /// A read route's reply, or its last good body for this caller (`LastGood`) when the reply is a chain failure.
-    async fn or_last_good(
-        &self,
-        method: &str,
-        path: &str,
-        query: &str,
-        raw: &str,
-        reply: Vec<u8>,
-    ) -> Vec<u8> {
-        if method != "GET" || !operator::guard::STALE_ROUTES.contains(&path) {
-            return reply;
-        }
-        let Some(i) = reply.windows(4).position(|w| w == b"\r\n\r\n") else {
-            return reply;
-        };
-        let status = String::from_utf8_lossy(&reply[..i])
-            .split_whitespace()
-            .nth(1)
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0);
-        let Ok(body) = serde_json::from_slice::<Value>(&reply[i + 4..]) else {
-            return reply;
-        };
-        // The caller is part of the key: an inbox names payees to the owner's device only.
-        let key = level1::token_hash(&format!(
-            "{path}?{query}|{}|{}",
-            bearer_of(raw, query).unwrap_or_default(),
-            header(raw, "x-tameion-device").unwrap_or_default()
-        ));
-        let stale =
-            self.last_good
-                .lock()
-                .await
-                .answer(method, path, &key, now_secs(), status, &body);
-        stale.map_or(reply, |v| json_reply("200 OK", v))
-    }
-
-    /// Whether this request may read a locked account: the owner's device, or    /// Whether this request may read a locked account: the owner's device, or
+    /// Whether this request may read a locked account: the owner's device, or
     /// an agent key with the `read` scope (the inbox's own rule, `token_gate`).
     fn reads_account(&self, t: &level1::Tenant, raw: &str, query: &str) -> bool {
         level1::reserve_token_ok(t, header(raw, "x-tameion-device"))
@@ -6147,13 +6107,9 @@ impl App {
                     );
                 }
             };
-            // A rate-limited node fails every read: after the first failure this request reads no more.
-            let mut down: Option<String> = None;
             for a in list {
                 let r = if self.witnessed.lock().await.contains(&(a.tx, a.root)) {
                     Ok(true)
-                } else if let Some(e) = &down {
-                    Err(e.clone())
                 } else {
                     match &client {
                         Some(Ok(c)) => c
@@ -6164,12 +6120,8 @@ impl App {
                         None => Err(format!("chain {} unknown", t.chain)),
                     }
                 };
-                match &r {
-                    Ok(true) => {
-                        self.witnessed.lock().await.insert((a.tx, a.root));
-                    }
-                    Err(e) => down = Some(e.clone()),
-                    Ok(false) => {}
+                if r == Ok(true) {
+                    self.witnessed.lock().await.insert((a.tx, a.root));
                 }
                 read.push((a, r));
             }
@@ -8477,7 +8429,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         names: Mutex::new(()),
         events: tokio::sync::broadcast::channel(256).0,
         witnessed: Mutex::new(Default::default()),
-        last_good: Mutex::new(Default::default()),
         dir: dir.clone(),
         jobs: Mutex::new(HashMap::new()),
         slots: Arc::new(Semaphore::new(3)),
@@ -8964,7 +8915,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 None => None,
             };
             let first = replay.is_none();
-            let gated = denied.is_some();
             let reply = if let Some(r) = denied {
                 r
             } else if let Some(r) = replay {
@@ -9470,11 +9420,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .unwrap_or_else(|| respond("404 Not Found", "text/plain", b"not found")),
                     _ => respond("404 Not Found", "text/plain", b"not found"),
                 }
-            };
-            let reply = if !gated {
-                app.or_last_good(method, path, query, &req, reply).await
-            } else {
-                reply
             };
             let reply = shaped(reply, method, path, &req);
             if let (Some((_, slot)), true) = (&idem, first) {
