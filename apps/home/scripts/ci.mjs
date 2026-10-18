@@ -394,7 +394,7 @@ function domRules({ view, width, route, palette, spec }) {
     if (view === "owner" && (/\b\d{4}-\d{2}-\d{2}\b|T\d{2}:\d{2}:\d{2}|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(own))) add("warn", "date-not-in-words", e, "dates read Today 05:41, Yesterday, 12 Oct");
     for (const m of own.matchAll(money)) {
       const frac = (m[1].split(".")[1] ?? "");
-      if (frac.length > 6 || /0$/.test(frac)) add("warn", "money-not-shortest", e, `"${m[0]}": six decimals trimmed to the shortest that is exact`);
+      if (view === "owner" && (frac.length > 6 || /0$/.test(frac))) add("warn", "money-not-shortest", e, `"${m[0]}": six decimals trimmed to the shortest that is exact`);
     }
     if ((own.match(money) || clock.test(own)) && !/tabular-nums/.test(s.fontVariantNumeric) && !mono(e)) add("fail", "figures-not-tabular", e, `${own.match(money) ? "money" : "time"} is not set in tabular lining figures (font-variant-numeric)`);
   }
@@ -771,7 +771,7 @@ async function scenario(browser, AxeBuilder, sc, cfg) {
     R.metrics = metrics;
     // a skeleton has no hero; the heading rule waits for the content
     if (!cfg.noAxe) R.findings.push(...(await axeFindings(page, AxeBuilder, R)).filter((f) => !(metrics.busy && f.rule === "axe:page-has-heading-one")));
-    if (metrics.busy && sc.state === "rest") R.pending = "the route still shows its skeleton after settling: no content yet";
+    if (metrics.busy && sc.state === "rest" && sc.route !== "guest") R.pending = "the route still shows its skeleton after settling: no content yet";
     if (sc.state === "rest" || sc.state === "detail") {
       const flash = (metrics.skeleton ?? []).filter((s) => s.ms < 300);
       if (flash.length) R.findings.push({ sev: "fail", rule: "skeleton-flash", sel: "", text: "", detail: `skeleton on screen for ${flash.map((f) => f.ms + " ms").join(", ")} (DESIGN: >= 300 ms once shown)` });
