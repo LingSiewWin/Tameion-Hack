@@ -2,7 +2,7 @@
 // from the scene (or its two-tone placeholder), treatment B from an ink line chart of the coast. Colours come from the
 // tokens (tokens.ts) of the view the page is in; nothing is drawn that the scene or the recording does not hold.
 import { palette, type View } from "../../tokens.ts";
-import { cellAt, COLUMN, FOCUS, fixAt, labelOf, lerp, luma, MODULE, otsu, phases, seg, toPixel, type Replay, type Scene, type Vessel } from "./model.ts";
+import { cellAt, COLUMN, FOCUS, fixAt, handBeats, labelOf, lerp, luma, MODULE, otsu, phases, seg, toPixel, type Replay, type Scene, type Vessel } from "./model.ts";
 
 export type Rect = { x: number; y: number; w: number; h: number };
 export type Layout = { W: number; H: number; plate: Rect; rows: { x: number; y: number } };
@@ -252,8 +252,8 @@ export function createStage(canvas: HTMLCanvasElement) {
       }
       ctx.font = `400 13px ${inp.monoFont}`;
       ctx.textBaseline = "alphabetic";
-      const slide = seg(ph.hand, 0, 0.6);
-      ctx.globalAlpha = ph.track * (1 - seg(ph.hand, 0.5, 1));
+      const { slide, labels: shownLabels } = handBeats(ph.hand);
+      ctx.globalAlpha = ph.track * shownLabels;
       labels.forEach((lb, i) => {
         const f = fixAt(lb.v, t);
         const text = f ? labelOf(lb.v, f) : lb.text;

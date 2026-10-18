@@ -24,6 +24,10 @@ export function phases(p: number) {
 export const STILLS = [0, 0.2, 0.8] as const;
 export const stillAt = (raw: number) => STILLS[Math.min(STILLS.length - 1, Math.floor(raw * STILLS.length))];
 
+/** The hand-over in three beats that never overlap, so no amount ever shares a row with a ship: the labels slide into
+ *  the rows, they are gone, and only then do the account's records arrive. */
+export const handBeats = (hand: number) => ({ slide: seg(hand, 0, 0.45), labels: 1 - seg(hand, 0.35, 0.55), records: seg(hand, 0.6, 1) });
+
 /** Which words the plate holds: 0 the statement (p 0 and .2), then one stage line each for .4, .6, .8, then the product. */
 export const stageOf = (p: number) => (p < 0.3 ? 0 : p < 0.5 ? 1 : p < 0.7 ? 2 : p < 0.9 ? 3 : 4);
 

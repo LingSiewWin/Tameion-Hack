@@ -10,7 +10,7 @@ import type { Inbox } from "../../lib/types.ts";
 import { useView } from "../../lib/view.ts";
 import { COPY as OWNER_WORDS, lines } from "../owner/words.ts";
 import { CAPTION, FIGURES, HERO } from "./copy.ts";
-import { clamp01, COLUMN, MODULE, phases, placeholderScene, seg, stillAt, STILLS, windowWords, type PortWatch, type Replay, type Scene } from "./model.ts";
+import { clamp01, COLUMN, handBeats, MODULE, phases, placeholderScene, seg, stillAt, STILLS, windowWords, type PortWatch, type Replay, type Scene } from "./model.ts";
 import { createStage, drawChart, drawPlaceholder, type Layout } from "./stage.ts";
 
 // H2's Owner home closes the hero; its code (passkey signing included) loads only once the hand-over begins
@@ -138,7 +138,7 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
       const ph = phases(p);
       lift();
       const set = (el: HTMLElement | null, o: number) => el && (el.style.opacity = String(o));
-      set(table.current, seg(ph.hand, 0.5, 1));
+      set(table.current, handBeats(ph.hand).records);
       set(book.current, ph.book);
       set(captionEl.current, 1 - ph.book); // the book names itself; the caption leaves with the strait
       set(figs.current, 1 - seg(p, 0.26, 0.34));

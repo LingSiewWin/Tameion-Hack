@@ -4,7 +4,7 @@ import "../scripts/tsx.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { BBOX, cellAt, fixAt, labelOf, otsu, pack, phases, placeholderScene, toPixel, typeWord, type Report } from "../src/features/hero/model.ts";
+import { BBOX, cellAt, fixAt, handBeats, labelOf, otsu, pack, phases, placeholderScene, toPixel, typeWord, type Report } from "../src/features/hero/model.ts";
 
 const { rowsOf } = await import("../src/features/hero/hero.tsx");
 
@@ -17,6 +17,15 @@ test("every keyframe is whole at its p", () => {
   assert.equal(phases(0.8).hand, 1);
   assert.equal(phases(1).book, 1);
   assert.equal(phases(0.39).track, 0, "no label before the drain is done");
+});
+
+test("no amount ever shares a row with a ship: labels are gone before the records arrive", () => {
+  for (let h = 0; h <= 1; h += 0.01) {
+    const b = handBeats(h);
+    assert.ok(b.labels === 0 || b.records === 0, `hand ${h.toFixed(2)}: labels ${b.labels} and records ${b.records} together`);
+  }
+  assert.equal(handBeats(1).records, 1);
+  assert.equal(handBeats(0).labels, 1);
 });
 
 test("Otsu splits dark sea from bright land", () => {
