@@ -23,7 +23,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script dangerouslySetInnerHTML={{ __html: VIEW_BOOT }} />
       </head>
       <body>
-        <Shell>{children}</Shell>
+        {/* the console's origin, read here on the server and handed down: no client code reads the environment */}
+        <Shell consoleUrl={process.env.NEXT_PUBLIC_CONSOLE_URL ?? null}>{children}</Shell>
       </body>
     </html>
   );

@@ -5,22 +5,24 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { resolveAccount } from "../lib/api.ts";
+import { CONSOLE, consoleHref } from "../lib/console.ts";
 import { isViewKey, otherView, setView, useView } from "../lib/view.ts";
 import { VIEWS, type View } from "../tokens.ts";
 
 const LABEL: Record<View, string> = { owner: "Owner", agent: "Agent" };
 
-export function Header() {
+export function Header({ consoleUrl = null }: { consoleUrl?: string | null }) {
   const wanted = useParams<{ name?: string }>()?.name;
   const view = useView();
-  // the name as the service resolved it; null when no account has it (or the read failed)
-  const [resolved, setResolved] = useState<{ wanted: string; name: string | null } | undefined>(undefined);
+  // the name as the service resolved it; null when no account has it (or the read failed). `policy` (the address) is kept
+  // for the Console link's href only.
+  const [resolved, setResolved] = useState<{ wanted: string; name: string | null; policy?: string } | undefined>(undefined);
 
   useEffect(() => {
     if (!wanted) return;
     let live = true;
     resolveAccount(wanted).then(
-      (r) => live && setResolved({ wanted, name: r?.name ?? null }),
+      (r) => live && setResolved({ wanted, name: r?.name ?? null, policy: r?.policy }),
       () => live && setResolved({ wanted, name: null }),
     );
     return () => {
@@ -40,6 +42,7 @@ export function Header() {
 
   const reading = wanted !== undefined && resolved?.wanted !== wanted;
   const title = wanted && resolved?.wanted === wanted && resolved.name ? resolved.name : "Tameion";
+  const toConsole = resolved?.wanted === wanted ? consoleHref(consoleUrl, resolved?.policy) : null;
 
   return (
     <header>
@@ -51,7 +54,18 @@ export function Header() {
             {title}
           </span>
         )}
-        <span className="pill meta ml-auto">Testnet</span>
+        {/* every owner action lives in the console (founder: judges get one link); Mono in the Agent view, as .meta is there */}
+        {toConsole && (
+          <a
+            href={toConsole}
+            data-hash-allowed="console-link"
+            title={CONSOLE.title}
+            className="meta ml-auto inline-flex min-h-(--touch) items-center whitespace-nowrap px-(--space-1) text-(--ink) underline underline-offset-4"
+          >
+            {CONSOLE.label}
+          </a>
+        )}
+        <span className={`pill meta ${toConsole ? "" : "ml-auto"}`}>Testnet</span>
         <div className="capsule" role="group" aria-label="View">
           {VIEWS.map((v) => (
             <button key={v} type="button" aria-pressed={view === v} aria-keyshortcuts="v" onClick={() => view !== v && setView(v)}>
