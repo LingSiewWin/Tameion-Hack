@@ -45,15 +45,22 @@ for (const t of which) {
     await ctx.close();
   }
 }
-// reduced motion: three stills instead of the scroll sequence
+// reduced motion: three stills (photograph, grid, book) that swap at each third of the scroll, never tween
 for (const [width, height] of sizes) {
-  const page = await browser.newPage({ viewport: { width, height }, reducedMotion: "reduce" });
+  const ctx = await browser.newContext({ viewport: { width, height }, reducedMotion: "reduce" });
+  const page = await ctx.newPage();
   await page.goto(`${base}/`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(1200);
-  const path = `${out}/hero-reduced-motion-${width}.png`;
-  await page.screenshot({ path, fullPage: true });
-  console.log(path);
-  await page.close();
+  await page.waitForSelector('[data-ready="1"]', { timeout: 20_000 });
+  for (const [i, name] of ["photograph", "grid", "book"].entries()) {
+    await scrollTo(page, (i + 0.5) / 3);
+    await page.waitForTimeout(400);
+    const path = `${out}/hero-reduced-${name}-${width}.png`;
+    await page.screenshot({ path });
+    console.log(path);
+  }
+  const { violations } = await new AxeBuilder({ page }).analyze();
+  console.log(`axe reduced ${width}: ${violations.length ? violations.map((v) => v.id).join(", ") : "clean"}`);
+  await ctx.close();
 }
 // one contact sheet per treatment and width: the six keyframes in order, for the founder's pick
 const sheet = await browser.newPage({ viewport: { width: 1320, height: 900 } });
