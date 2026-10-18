@@ -11,7 +11,7 @@ import type { Demo, Inbox } from "../../lib/types.ts";
 import { FIELD } from "../onboarding/styles.ts";
 import { Segments } from "../onboarding/ui.tsx";
 import type { Outcome, Phase } from "./owner-view.tsx";
-import { amount, changeOf, clockText, COPY, cutOf, everyWords, minor, modeIndex, MODES, money, payeeLabel, pendingWords, phaseText, raiseOf, stripOf, timeWords } from "./words.ts";
+import { amount, changeOf, clockText, COPY, cutOf, everyWords, mandateWords, minor, modeIndex, MODES, money, payeeLabel, pendingWords, phaseText, raiseOf, spanWords, stripOf, timeWords } from "./words.ts";
 
 export const plate = "rounded-(--radius-plate) bg-(--plate)";
 export const button = "inline-flex min-h-(--button) items-center justify-center rounded-(--radius-button) px-(--space-5) row-title";
@@ -84,11 +84,14 @@ const STRIP_KEYS = ["demo-bill", "autopilot", "raise", "cut"];
 /** USDC as typed back into a field: the shortest exact form, no grouping. */
 const plainAmount = (u: bigint) => amount(u).replace(/,/g, "");
 
-export function Strip(p: { inbox: Inbox; demo: Demo; clockSecs: number; clockMs?: number; act: Actions; outcome?: Outcome; pending: React.ReactNode; first?: React.ReactNode; firstByYou?: boolean }) {
+export function Strip(p: { inbox: Inbox; demo: Demo; clockSecs: number; clockMs?: number; act: Actions; outcome?: Outcome; pending: React.ReactNode; first?: React.ReactNode; openedAt?: number }) {
   const s = stripOf(p.inbox, p.demo);
   const cutDone = p.outcome?.key === "cut" && !p.outcome.failed;
   const up = raiseOf(p.inbox.caps);
   const down = cutOf(p.inbox.caps, p.demo.bill.usdc);
+  // The finish: from the opening to the first payment, and how many went out with no human (the agent's own).
+  const firstAt = s.paid.reduce((t, x) => (x.at && (!t || x.at < t) ? x.at : t), 0);
+  const byAgent = s.paid.filter((x) => x.by !== "you").length;
   const v = p.demo.vendor.toLowerCase();
   const payee = p.inbox.payees?.find((y) => y.address.toLowerCase() === v);
   const asked = p.inbox.needsYou?.some((n) => n.counterparty.toLowerCase() === v);
@@ -120,8 +123,17 @@ export function Strip(p: { inbox: Inbox; demo: Demo; clockSecs: number; clockMs?
         <p className="row m-0">{asked ? COPY.strip.asked : left > 0 ? COPY.strip.due(clockText(left)) : COPY.strip.dueNow}</p>
       )}
       {s.step === 3 && payee && payee.payableFrom > p.clockSecs && <p className="row m-0">{COPY.strip.cooling(timeWords(payee.payableFrom))}</p>}
-      {s.step === 4 && <p className="row m-0">{p.firstByYou ? COPY.strip.doneByYou : COPY.strip.done}</p>}
+      {s.step === 4 && <p className="row-title m-0">{COPY.strip.finish(p.openedAt && firstAt > p.openedAt ? spanWords(firstAt - p.openedAt) : null, byAgent > 0)}</p>}
       {s.step === 4 && p.first}
+      {s.step === 4 && (
+        <dl className="m-0 flex flex-col gap-(--space-1)">
+          <dt className="meta">{COPY.strip.noHuman}</dt>
+          <dd className="m-0 flex flex-wrap items-baseline gap-x-(--space-2)">
+            <span className="balance money">{byAgent}</span>
+            <span className="row">{COPY.strip.noHumanOf(s.paid.length, money(s.bill?.amount ?? p.demo.bill.usdc))}</span>
+          </dd>
+        </dl>
+      )}
       {s.step === 4 && <p className="row m-0">{COPY.strip.raiseCut(`${p.demo.delaySecs} s`)}</p>}
       {s.step === 4 && (
         <div className="flex flex-col gap-(--space-3) md:flex-row">
@@ -138,6 +150,13 @@ export function Strip(p: { inbox: Inbox; demo: Demo; clockSecs: number; clockMs?
         </div>
       )}
       {outcome && <Result o={outcome} />}
+      {s.step === 4 && (
+        <div className="flex flex-col gap-(--space-1)">
+          <p className="meta m-0">{COPY.strip.mandate}</p>
+          <p className="row m-0 max-w-(--measure)">{mandateWords(p.inbox)}</p>
+        </div>
+      )}
+      {s.step === 4 && <p className="row m-0 max-w-(--measure)">{COPY.strip.keys(p.inbox.guardians?.list.length ?? 0)}</p>}
     </section>
   );
 }

@@ -104,7 +104,7 @@ const cases: [string, string][] = [
   ["the five minutes: Autopilot", render({ ...fresh, payees: inbox.payees, typedBills: inbox.typedBills }, { demo })],
   ["the five minutes: Autopilot counting down", render(autopilotWaits, { demo, clockSecs: NOW })],
   ["the five minutes: the bill due", render({ ...autopilotWaits, pending: null, mode: "Autopilot" }, { demo, clockSecs: NOW })],
-  ["the five minutes: done, the first row", render(inbox, { demo })],
+  ["the five minutes: done, the first row", render(inbox, { demo, openedAt: 1792275400 })],
   ["a raise counting down", render(raiseWaits, { clockSecs: NOW })],
   ["the payees sheet", render(inbox, { act: act({ sheet: "payees" }) })],
   ["the limits sheet", render(inbox, { act: act({ sheet: "limits" }) })],
@@ -128,8 +128,14 @@ test("each new control carries the name the acceptance script finds it by", () =
   assert.equal((counting.match(/>Cancel<\/button>/g) ?? []).length, 1, "one Cancel, in the five minutes, not twice");
   assert.match(page["the five minutes: the bill due"], /The bill is due/);
   const done = page["the five minutes: done, the first row"];
-  assert.match(done, /Done\. The agent paid Demo Vendor by itself/);
-  assert.match(done, /Done\. The agent paid[^<]*<\/p><ul[^>]*><li[^>]*><button[^>]*>.*?Paid by the agent: a bill the owner typed/, "the first row, with its why, is the ledger's own row");
+  // the finish: from the opening (tenant.created, here 248 s before the oldest payment) to the first payment, the count
+  // with no human, the mandate in the owner's voice, where the keys are not
+  assert.match(done, />Done in 4 min 8 s\. Your agent paid its bill by itself, and said why; you made the trust decisions\.<\/p><ul[^>]*><li[^>]*><button[^>]*>.*?Paid by the agent: a bill the owner typed/, "the first row, with its why, is the ledger's own row");
+  assert.match(done, /<dt class="meta">Paid with no human<\/dt><dd[^>]*><span class="balance money">8<\/span><span class="row">of 8 bills paid, 0\.002 USDC each<\/span>/);
+  assert.match(done, />The mandate you signed<\/p><p[^>]*>Pay this bill when due, up to 0\.05 USDC a day, only to payees I approved; ask me for anything else\.<\/p>/);
+  assert.match(done, /Tami never holds your key: your passkey stays on this device\. The agent holds a bounded key/);
+  assert.match(done, /No guardians yet/);
+  assert.match(render(inbox, { demo }), />Done\. Your agent paid its bill by itself/, "no opening time from the service: no span");
   assert.match(page["a raise counting down"], /the limits rise to 0\.05 USDC a day, 0\.01 at a time\. It applies in 0:20 unless you cancel\./);
   assert.match(page["a raise counting down"], />Cancel<\/button>/);
   assert.doesNotMatch(page["a guest during a raise"], />Cancel<\/button>/, "a reader sees the change coming, never its Cancel");

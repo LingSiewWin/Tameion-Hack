@@ -420,6 +420,22 @@ export function cutOf(caps: Pick<Inbox["caps"], "perAction" | "daily">, bill: st
   return half < day ? { perAction: per, daily: half, one: false } : null;
 }
 
+/** "48 s", "3 min 12 s": how long something took. */
+export const spanWords = (secs: number) => {
+  const s = Math.max(0, Math.round(secs));
+  return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`;
+};
+
+/** The mandate in the owner's own voice (apps/console MandateSentence), from what the contract holds now. */
+export function mandateWords(inbox: Pick<Inbox, "mode" | "caps" | "typedBills">): string {
+  if (inbox.mode === "Watch") return "Pay nothing for now; keep reading and reporting; ask me for anything else.";
+  const n = inbox.typedBills?.length ?? 0;
+  const bills = n > 1 ? `these ${n} bills` : n === 1 ? "this bill" : "the bills you find";
+  const day = minor(inbox.caps.daily);
+  const propose = inbox.mode === "Propose";
+  return `${propose ? "Prepare" : "Pay"} ${bills} when due${propose ? " and wait for my tap" : ""}, up to ${day === null ? "the daily limit" : `${amount(day)} USDC`} a day, only to payees I approved; ask me for anything else.`;
+}
+
 /** The autonomy levels in contract order (BudgetPolicy.Mode): 0 Watch, 1 Propose, 2 Autopilot. */
 export const MODES = ["Watch", "Propose", "Autopilot"] as const;
 export const modeIndex = (mode: string) => Math.max(0, MODES.indexOf(mode as (typeof MODES)[number]));
@@ -513,8 +529,16 @@ export const COPY = {
     dueNow: "The bill is due: the agent is paying Demo Vendor now.",
     asked: "The agent asked you instead of paying by itself: it is under Needs you.",
     cooling: (at: string) => `A new payee waits first: the agent may pay Demo Vendor from ${at}.`,
-    done: "Done. The agent paid Demo Vendor by itself, inside your limits, and said why:",
-    doneByYou: "Done. You paid Demo Vendor with your tap after the agent asked:",
+    // The finish (docs/115 §3 step 5, apps/console judge.tsx Finish), once the first payment landed. `span`: from the
+    // account's opening to that payment, when the service says when the account opened.
+    finish: (span: string | null, byAgent: boolean) =>
+      `${span ? `Done in ${span}.` : "Done."} ${byAgent ? "Your agent paid its bill by itself, and said why; you made the trust decisions." : "The agent asked you before paying, and your one tap paid; the limits held the whole time."}`,
+    noHuman: "Paid with no human",
+    noHumanOf: (all: number, each: string) => `of ${all} bill${all === 1 ? "" : "s"} paid, ${each} each`,
+    mandate: "The mandate you signed",
+    // Where the keys are not, before what the agent does (CLAUDE.md, How to say what this is).
+    keys: (guardians: number) =>
+      `Tami never holds your key: your passkey stays on this device. The agent holds a bounded key: it pays only payees you approved, up to the mandate you signed. ${guardians >= 2 ? "Your guardians can bring the account back if this device is lost." : "No guardians yet: on a real account, two guardians bring it back if this device is lost."}`,
     raiseCut: (delay: string) => `Now raise, then cut: a raise waits ${delay} where anyone can see it; a cut applies at once, even while a raise waits.`,
     raise: (amt: string) => `Raise one payment to ${amt} USDC`,
     cutOne: (amt: string) => `Cut one payment to ${amt} USDC`,

@@ -70,6 +70,7 @@ export function OwnerHome({ name }: { name: string }) {
   // account's delay: a demo account waits the demo's (`GET /api/level1/demo` delaySecs), which is how the page knows one.
   const [agentId, setAgentId] = useState<string | undefined>(undefined);
   const [delay, setDelay] = useState<number | null>(null);
+  const [openedAt, setOpenedAt] = useState<number | undefined>(undefined);
   useEffect(() => {
     let live = true;
     fetchTenant(name).then(
@@ -77,6 +78,7 @@ export function OwnerHome({ name }: { name: string }) {
         if (!live) return;
         if (typeof t.agent === "string") setAgentId(t.agent.toLowerCase());
         if (typeof t.delay_secs === "number") setDelay(t.delay_secs);
+        if (typeof t.created === "number") setOpenedAt(t.created);
       },
       () => undefined,
     );
@@ -125,6 +127,32 @@ export function OwnerHome({ name }: { name: string }) {
     const t = setInterval(() => !busy.current && void refresh(), 5_000);
     return () => clearInterval(t);
   }, [hurry, refresh]);
+
+  // A raise the owner signed (Autopilot, a higher limit) waits the delay; anyone may apply it after, and applying is
+  // not a trust decision, so the owner's page does it at the eta + 3 s (apps/console account.tsx). A chain clock behind
+  // the page's refuses the first try (TooEarly): again every 15 s while it is still pending (P-49). Never over an owner
+  // action in flight (P-171): a cancel the owner signed reaches the chain before this applies what it cancels.
+  const pub0 = data ? savedPub() : null;
+  const ownsKey = !!pub0 && !!data?.inbox.owners?.keys.some((k) => k.qx.toLowerCase() === pub0.qx.toLowerCase());
+  useEffect(() => {
+    if (!pendingEta || !ownsKey) return;
+    let t: ReturnType<typeof setTimeout>;
+    let tries = 0;
+    const apply = async () => {
+      if (busy.current) {
+        t = setTimeout(apply, 3_000);
+        return;
+      }
+      const ok = await fetch("/api/level1/mode", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ policy: name, action: "apply" }) }).then(
+        (r) => r.ok,
+        () => false,
+      );
+      if (!ok && ++tries < 20) t = setTimeout(apply, 15_000);
+      void refresh();
+    };
+    t = setTimeout(apply, Math.max(0, pendingEta * 1000 - Date.now()) + 3_000);
+    return () => clearTimeout(t);
+  }, [pendingEta, ownsKey, name, refresh]);
 
   // While a tap is in flight its control counts the seconds (DESIGN §States, waits).
   const inFlight = !!stopPhase || Object.values(needPhase).some(Boolean) || Object.values(phases).some(Boolean);
@@ -405,6 +433,7 @@ export function OwnerHome({ name }: { name: string }) {
         act={act}
         demo={owns ? demo : null}
         clockSecs={Math.max(tick, now || Math.floor(shown.at / 1000))}
+        openedAt={openedAt}
       />
       <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-(--space-5) flex justify-center px-(--space-4)">
         {toast && <p className="row-title m-0 rounded-(--radius-button) bg-(--ink) px-(--space-5) py-(--space-3) text-(--paper)">{toast}</p>}
