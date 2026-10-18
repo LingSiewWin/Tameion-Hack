@@ -35,4 +35,6 @@ export const FIGURES = {
   transits: (date: string) => `transits through the strait on ${date}, IMF PortWatch`,
   window: (synthetic: boolean) => (synthetic ? "vessels in the synthetic replay" : "vessels reporting in our AIS window"),
   types: { tanker: "tanker", container: "container", dryBulk: "dry bulk", generalCargo: "general cargo", roro: "ro-ro" },
+  source: "IMF PortWatch",
+  unit: "transits",
 } as const;

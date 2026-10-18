@@ -21,8 +21,9 @@ type Row = { date: string; who: string; amount: string; why: string; state: stri
 type Props = { treatment: Treatment; scene: Scene | null; replayUrl: string | null; portwatch: PortWatch | null; demo: string | null };
 
 /** Columns of the book on the grid, in px (multiples of 8; the row module is 40): date, who, amount, why, state. */
-const COLS_WIDE = [80, 160, 120, 240, 80];
-const COLS_NARROW = [64, 112, 88, 0, 80];
+const COLS_WIDE = [120, 160, 120, 200, 80];
+// on a phone: who, amount, state (the Owner home's dates and whys need the width; they follow on the book itself)
+const COLS_NARROW = [0, 144, 120, 0, 80];
 /** The demo account's records as the book's rows, in the Owner home's own words (H2's lines()), so the hand-over reads
  *  exactly like the page it hands over to: payees by name, amounts trimmed, no hash (DESIGN Rule 1). */
 export function rowsOf(inbox: Inbox, vendor?: string, nowSecs = Date.now() / 1000): Row[] {
@@ -236,7 +237,7 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
               <div ref={prows} className="absolute left-0 top-0" style={{ opacity: 0 }}>
                 {portRows.map((r, i) => (
                   <div key={r.type} data-shift={(sortedIndex(i) - i) * MODULE} className="row money absolute grid h-10 items-center" style={{ ...grid, top: MODULE * (1 + i) }}>
-                    {[latest!.date.slice(5), r.type, String(r.n), wide ? "IMF PortWatch" : null, "transits"].filter((x) => x !== null).map((c, j) => (
+                    {[latest!.date.slice(5), r.type, String(r.n), FIGURES.source, FIGURES.unit].filter((_, j) => cols[j] > 0).map((c, j) => (
                       <span key={j} className="truncate px-(--space-2)">{c}</span>
                     ))}
                   </div>
