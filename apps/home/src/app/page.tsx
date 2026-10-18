@@ -1,10 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { redirect } from "next/navigation";
 import { HERO } from "../features/hero/copy.ts";
 import type { Treatment } from "../features/hero/hero.tsx";
 import type { PortWatch, Scene } from "../features/hero/model.ts";
 import { HeroSlot } from "../features/hero/slot.tsx";
 import { GuestCard } from "../features/onboarding/guest.tsx";
+import { accountHref } from "../lib/api.ts";
 
 // `/`: the guest card (the invite word opens the seeded demo account read-only, or starts the stepper, H4) under the
 // statement. The hero ships behind HOME_HERO=1 until the five-second test passes (founder): with it, H7's hero (the strait
@@ -13,9 +15,13 @@ import { GuestCard } from "../features/onboarding/guest.tsx";
 const pub = (f: string) => join(process.cwd(), "public", f);
 const readJson = <T,>(f: string): T | null => (existsSync(pub(f)) ? (JSON.parse(readFileSync(pub(f), "utf8")) as T) : null);
 
-export default async function GuestPage({ searchParams }: { searchParams: Promise<{ treatment?: string }> }) {
+export default async function GuestPage({ searchParams }: { searchParams: Promise<{ treatment?: string; policy?: string; view?: string }> }) {
   // read first: it keeps the page rendered per request, so the flag is read at run time, not frozen at build
-  const t = (await searchParams).treatment;
+  const sp = await searchParams;
+  const t = sp.treatment;
+  // An old console link (`/?policy=0x…`, and `/agent?policy=…` through next.config): the account's page, by its name.
+  const to = typeof sp.policy === "string" ? await accountHref(sp.policy, sp.view) : null;
+  if (to) redirect(to);
   if (process.env.HOME_HERO !== "1")
     return (
       <>

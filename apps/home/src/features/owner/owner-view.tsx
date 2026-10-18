@@ -4,8 +4,9 @@
 // so the zero-hash test can render it from a captured inbox. Depth is one step of fill; rules only between table rows.
 import { Sheet } from "../../components/sheet.tsx";
 import { Mark } from "../../lib/mark.ts";
-import type { Inbox } from "../../lib/types.ts";
-import { asOf, authority, COPY, facts, foldRuns, halvesWords, lines, needs, payeeName, pendingWords, phaseText, type Entry, type Halves, type Line, type Need, type Run } from "./words.ts";
+import type { Demo, Inbox } from "../../lib/types.ts";
+import { button, compact, Mandate, PendingLine, plate, Result, Strip, type Actions } from "./actions-view.tsx";
+import { asOf, authority, COPY, facts, foldRuns, halvesWords, lines, needs, payeeName, pendingWords, phaseText, stripOf, type Entry, type Halves, type Line, type Need, type Run } from "./words.ts";
 
 /** A control in flight: its phase and since when (DESIGN §Money lifecycle); it never looks disabled. */
 export type Phase = { label: string; since: number } | null;
@@ -42,11 +43,13 @@ export type OwnerViewProps = {
   needPhase?: Record<string, Phase>;
   onNeed?: (n: Need) => void;
   outcome?: Outcome;
+  /** the owner's other actions (payees, limits, mode, Cancel, the five minutes); absent for a reader */
+  act?: Actions;
+  /** the host's demo (`GET /api/level1/demo`) when this is a demo account the owner holds: the five minutes show */
+  demo?: Demo | null;
+  /** the clock countdowns read (unix s, ticking while something counts down); nowSecs when absent */
+  clockSecs?: number;
 };
-
-const plate = "rounded-(--radius-plate) bg-(--plate)";
-const button = "inline-flex min-h-(--button) items-center justify-center rounded-(--radius-button) px-(--space-5) row-title";
-const compact = "inline-flex min-h-(--button-compact) shrink-0 items-center justify-center rounded-(--radius-button) bg-(--plate-2) px-(--space-4) row-title text-(--ink)";
 
 /** The symbolon mark (DESIGN §Direction): two halves that fit, the witness the dot between; drawn in ink, only when sealed. */
 function SealMark() {
@@ -59,22 +62,6 @@ function SealMark() {
   );
 }
 
-function Result({ o }: { o: NonNullable<Outcome> }) {
-  return (
-    <div className="flex flex-col gap-(--space-1)">
-      <p role={o.failed ? "alert" : "status"} className={`row m-0 ${o.failed ? "text-(--attention)" : ""}`}>
-        {o.text}
-      </p>
-      {o.detail && (
-        <details className="meta">
-          <summary className="cursor-pointer">{COPY.whatHappened}</summary>
-          <p className="m-0 pt-(--space-1)">{o.detail}</p>
-        </details>
-      )}
-    </div>
-  );
-}
-
 function Hero(p: OwnerViewProps) {
   const stopped = p.inbox.mode === "Watch";
   const verb = stopped ? COPY.start : COPY.stop;
@@ -82,12 +69,14 @@ function Hero(p: OwnerViewProps) {
   const control = !p.guest && !(stopped && (p.inbox.pending?.kinds ?? 0) & 2);
   const pending = pendingWords(p.inbox);
   const label = (ph: Phase | undefined, rest: string) => (ph ? phaseText(ph, p.clockMs ?? ph.since) : rest);
+  // On a demo account at its Autopilot step, the five minutes hold the countdown and its Cancel; everywhere else, here.
+  const inStrip = !!p.demo && !p.guest && stripOf(p.inbox, p.demo).step === 2 && p.inbox.pending?.mode === "Autopilot";
   return (
     <section aria-labelledby="authority" className="flex flex-col gap-(--space-5)">
       <h1 id="authority" className="authority m-0 max-w-[68ch]">
         {authority(p.inbox)}
       </h1>
-      {pending && <p className="row m-0">{pending}</p>}
+      {!inStrip && <PendingLine inbox={p.inbox} clockSecs={p.clockSecs ?? p.nowSecs} clockMs={p.clockMs} act={p.guest ? undefined : p.act} outcome={p.outcome} />}
       {control &&
         (p.asking ? (
           <div className={`${plate} flex flex-col gap-(--space-4) p-(--space-5)`} role="group" aria-labelledby="stop-q">
@@ -114,7 +103,7 @@ function Hero(p: OwnerViewProps) {
             {verb}
           </button>
         ))}
-      {p.outcome?.key === "stop" && <Result o={p.outcome} />}
+      {(p.outcome?.key === "stop" || (p.outcome?.key === "cancel" && !pending)) && <Result o={p.outcome} />}
     </section>
   );
 }
@@ -148,6 +137,30 @@ const CELL = {
   stale: "meta order-7 col-span-2 md:col-start-2 md:row-start-3 md:col-span-1",
 };
 
+/** One line of the book; a folded run is one line too. The five minutes show their first payment with this same row. */
+function LedgerRow({ e, onOpen, staleAt }: { e: Entry; onOpen?: (key: string | null) => void; staleAt?: number | null }) {
+  const first = e.run ? e.run.lines[0] : e.line;
+  const key = e.run ? e.run.key : e.line.key;
+  return (
+    <li className="border-b border-(--rule) last:border-b-0">
+      <button type="button" onClick={() => onOpen?.(key)} className={`${LINE} min-h-(--touch) bg-transparent py-(--space-4) text-left text-(--ink)`}>
+        <span className={CELL.date}>{first.when}</span>
+        <span className={`${CELL.who} ${e.run ? "col-span-2 md:col-span-2" : ""}`}>
+          <Mark id={first.payeeId} kind="payee" size={24} />
+          <span className="min-w-0">{e.run ? e.run.title : first.payee}</span>
+        </span>
+        {!e.run && <span className={CELL.amount}>{first.amount}</span>}
+        <span className={CELL.why}>{first.why}</span>
+        <span className={`${CELL.state} ${first.state === "Refused" ? "text-(--attention)" : ""}`}>
+          {first.sealed && <SealMark />}
+          {first.state}
+        </span>
+        {staleAt && <span className={CELL.stale}>{asOf(staleAt)}</span>}
+      </button>
+    </li>
+  );
+}
+
 function Paid(p: OwnerViewProps & { entries: Entry[]; className?: string }) {
   return (
     <section aria-labelledby="paid-title" className={`flex min-w-0 flex-col gap-(--space-3) ${p.className ?? ""}`}>
@@ -163,28 +176,9 @@ function Paid(p: OwnerViewProps & { entries: Entry[]; className?: string }) {
             <span className="text-right md:col-start-4">{COPY.paidColumns[3]}</span>
           </div>
           <ul className="m-0 list-none p-0">
-            {p.entries.map((e) => {
-              const first = e.run ? e.run.lines[0] : e.line;
-              const key = e.run ? e.run.key : e.line.key;
-              return (
-                <li key={key} className="border-b border-(--rule) last:border-b-0">
-                  <button type="button" onClick={() => p.onOpen?.(key)} className={`${LINE} min-h-(--touch) bg-transparent py-(--space-4) text-left text-(--ink)`}>
-                    <span className={CELL.date}>{first.when}</span>
-                    <span className={`${CELL.who} ${e.run ? "col-span-2 md:col-span-2" : ""}`}>
-                      <Mark id={first.payeeId} kind="payee" size={24} />
-                      <span className="min-w-0">{e.run ? e.run.title : first.payee}</span>
-                    </span>
-                    {!e.run && <span className={CELL.amount}>{first.amount}</span>}
-                    <span className={CELL.why}>{first.why}</span>
-                    <span className={`${CELL.state} ${first.state === "Refused" ? "text-(--attention)" : ""}`}>
-                      {first.sealed && <SealMark />}
-                      {first.state}
-                    </span>
-                    {p.staleAt && <span className={CELL.stale}>{asOf(p.staleAt)}</span>}
-                  </button>
-                </li>
-              );
-            })}
+            {p.entries.map((e) => (
+              <LedgerRow key={e.run ? e.run.key : e.line.key} e={e} onOpen={p.onOpen} staleAt={p.staleAt} />
+            ))}
           </ul>
         </div>
       ) : (
@@ -228,7 +222,7 @@ function Needs(p: OwnerViewProps & { items: Need[]; className?: string }) {
         {COPY.needsTitle}
       </h2>
       {/* a failure whose item is gone after the read that followed it still says what happened */}
-      {p.outcome && p.outcome.key !== "stop" && !p.items.some((n) => n.key === p.outcome?.key) && <Result o={p.outcome} />}
+      {p.outcome && /^(seller|invoice|bill)-/.test(p.outcome.key) && !p.items.some((n) => n.key === p.outcome?.key) && <Result o={p.outcome} />}
       {p.items.length ? (
         <ul className={`${plate} m-0 list-none px-(--space-5) py-0`}>
           {p.items.map((n) => {
@@ -315,6 +309,9 @@ export function OwnerView(p: OwnerViewProps) {
   const entries = foldRuns(rows, p.nowSecs);
   const items = needs(p.inbox);
   const run = entries.find((e) => e.run?.key === p.openKey)?.run;
+  const demo = p.demo && p.act && !p.guest ? p.demo : null;
+  // The five minutes' last step is the first payment to Demo Vendor: the oldest row of the book that names it.
+  const first = demo ? rows.filter((r) => r.payeeId === demo.vendor.toLowerCase() && r.state !== "Refused").at(-1) : undefined;
   return (
     <div className="flex flex-col gap-(--space-6)">
       {p.staleAt && p.silent && (
@@ -328,13 +325,34 @@ export function OwnerView(p: OwnerViewProps) {
         </div>
       )}
       <Hero {...p} />
+      {demo && p.act && (
+        <Strip
+          inbox={p.inbox}
+          demo={demo}
+          clockSecs={p.clockSecs ?? p.nowSecs}
+          clockMs={p.clockMs}
+          act={p.act}
+          outcome={p.outcome}
+          pending={<PendingLine inbox={p.inbox} clockSecs={p.clockSecs ?? p.nowSecs} clockMs={p.clockMs} act={p.act} outcome={p.outcome} />}
+          firstByYou={first?.by === "you"}
+          first={
+            first && (
+              <ul className="m-0 list-none p-0">
+                <LedgerRow e={{ line: first }} onOpen={p.onOpen} />
+              </ul>
+            )
+          }
+        />
+      )}
       {/* From 1024 px two columns (founder): the statement left (at most 680 px), a rail on the right with the four facts, Needs
-          you and the marks; the authority sentence above spans both. Below that, one column in reading order. */}
-      <div className="grid grid-cols-1 gap-(--space-6) lg:grid-cols-[minmax(0,680px)_minmax(0,1fr)] lg:grid-rows-[auto_auto_1fr] lg:items-start">
+          you, what the owner may change and the marks; the authority sentence above spans both. Below that, one column in
+          reading order. */}
+      <div className="grid grid-cols-1 gap-(--space-6) lg:grid-cols-[minmax(0,680px)_minmax(0,1fr)] lg:grid-rows-[auto_auto_auto_1fr] lg:items-start">
         <Facts {...p} className="lg:col-start-2 lg:row-start-1" />
-        <Paid {...p} entries={entries} className="lg:col-start-1 lg:row-span-3 lg:row-start-1" />
+        <Paid {...p} entries={entries} className="lg:col-start-1 lg:row-span-4 lg:row-start-1" />
         <Needs {...p} items={items} className="lg:col-start-2 lg:row-start-2" />
-        <Marks {...p} className="lg:col-start-2 lg:row-start-3" />
+        {p.act && !p.guest && <Mandate inbox={p.inbox} act={p.act} outcome={p.outcome} clockMs={p.clockMs} className="lg:col-start-2 lg:row-start-3" />}
+        <Marks {...p} className="lg:col-start-2 lg:row-start-4" />
       </div>
       <Disclosure {...p} run={run} line={run ? undefined : rows.find((r) => r.key === p.openKey)} />
     </div>

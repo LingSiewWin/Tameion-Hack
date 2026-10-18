@@ -1,0 +1,16 @@
+Console links on home, 2026-10-18 13:42:47 +0800: curl against the home dev server (lane/home-actions, :3031, TAMEION_URL=tameion-lane). Each line: the path asked, the status, where it sends.
+
+/agent                                                                   307 http://localhost:3031/
+/agent?policy=0x8e388dc7a4098b0e7837b6607a70114238655623                 307 http://localhost:3031/?policy=0x8e388dc7a4098b0e7837b6607a70114238655623&view=agent
+/?view=agent&policy=0x8e388dc7a4098b0e7837b6607a70114238655623           307 http://localhost:3031/a/guest-demo-arc?view=agent
+/?policy=0x8e388dc7a4098b0e7837b6607a70114238655623                      307 http://localhost:3031/a/guest-demo-arc
+/?policy=0x0000000000000000000000000000000000000001                      200 
+/?policy=guest-demo-arc                                                  307 http://localhost:3031/a/guest-demo-arc
+/pay?to=guest-demo-arc                                                   307 http://localhost:3031/a/guest-demo-arc/receive?to=guest-demo-arc
+/pay                                                                     307 http://localhost:3031/
+/pay?to=Bad_Name                                                         307 http://localhost:3031/?to=Bad_Name
+/watch?address=0xe5e2d8dcc2038fd0a010a6e7845378b646e33854                307 http://localhost:3031/?address=0xe5e2d8dcc2038fd0a010a6e7845378b646e33854
+
+In a browser (headless Chrome, 13:43:23): where each lands and in which view
+/agent?policy=0x8e388dc7a4098b0e7837b6607a70114238655623 -> /a/guest-demo-arc?view=agent view agent title guest-demo-arc
+/?policy=0x8e388dc7a4098b0e7837b6607a70114238655623 -> /a/guest-demo-arc view owner title guest-demo-arc

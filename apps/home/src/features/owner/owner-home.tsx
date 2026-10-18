@@ -7,14 +7,17 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { useSkeleton } from "../../components/skeleton.tsx";
 import { OwnerSkeleton } from "../../components/skeletons.tsx";
 import { ApiError, fetchDemo, fetchInbox, fetchStatus, fetchSymbolon, fetchTenant, resolveAccount } from "../../lib/api.ts";
-import type { Inbox, Status } from "../../lib/types.ts";
+import type { Demo, Inbox, Status } from "../../lib/types.ts";
 import { setView } from "../../lib/view.ts";
-import { calls, checkSettle, decideInvoice, keyIndexOf, ownerCall, prepare, raiseCap, Refused, savedPub, units, type Account } from "./owner-call.ts";
+import { ownerPost } from "../onboarding/actions.ts";
+import { useNow } from "../onboarding/ui.tsx";
+import type { Actions, SheetName } from "./actions-view.tsx";
+import { calls, checkSettle, decideInvoice, keyIndexOf, limitsCall, mintKey, ownerCall, prepare, raiseCap, Refused, revokeKey, savedPub, units, type Account } from "./owner-call.ts";
 import { OwnerError, OwnerView, type Outcome, type Phase } from "./owner-view.tsx";
-import { agentAnchor, COPY, halvesByPayment, money, payeeName, servedAsOf, type Halves, type Line, type Need } from "./words.ts";
+import { agentAnchor, changeOf, COPY, everyWords, halvesByPayment, MODES, modeIndex, money, payeeLabel, payeeName, servedAsOf, stripOf, type Halves, type Line, type Need } from "./words.ts";
 
 /** `servedAt`: the service answered with its last good read (stale + asOf), that read's time; else null. */
-type Read = { inbox: Inbox; status: Status; halves: Map<string, Halves>; at: number; servedAt: number | null };
+type Read = { inbox: Inbox; status: Status; halves: Map<string, Halves>; at: number; servedAt: number | null; demo: Demo | null };
 type DevState = "skeleton" | "empty" | "error" | "offline" | null;
 
 const devState = (): DevState => {
@@ -41,10 +44,12 @@ async function read(name: string): Promise<Read> {
     fetchSymbolon(name).then((r) => r.records, () => null),
     fetchDemo().catch(() => null),
   ]);
-  return { inbox: withDemoVendor(inbox, demo?.vendor), status, halves: halvesByPayment(records), at: Date.now(), servedAt: servedAsOf(inbox, status) };
+  return { inbox: withDemoVendor(inbox, demo?.vendor), status, halves: halvesByPayment(records), at: Date.now(), servedAt: servedAsOf(inbox, status), demo };
 }
 
 const clock = (unix: number) => new Date(unix * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+/** A step that failed after an earlier one went through: `said` is the summary the owner reads (what holds). */
+const partly = (done: string, e: unknown) => Object.assign(new Error((e as Error)?.message ?? String(e)), { said: COPY.partly(done) });
 
 export function OwnerHome({ name }: { name: string }) {
   const [data, setData] = useState<Read | null>(null);
@@ -59,12 +64,20 @@ export function OwnerHome({ name }: { name: string }) {
   const [outcome, setOutcome] = useState<Outcome>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [clockMs, setClockMs] = useState(0);
-  // The agent's key, for its mark beside "the agent" (read once; in memory only, never rendered as text).
+  const [phases, setPhases] = useState<Record<string, Phase>>({});
+  const [sheet, setSheet] = useState<SheetName | null>(null);
+  // The agent's key, for its mark beside "the agent" (read once; in memory only, never rendered as text), and the
+  // account's delay: a demo account waits the demo's (`GET /api/level1/demo` delaySecs), which is how the page knows one.
   const [agentId, setAgentId] = useState<string | undefined>(undefined);
+  const [delay, setDelay] = useState<number | null>(null);
   useEffect(() => {
     let live = true;
     fetchTenant(name).then(
-      (t) => live && typeof t.agent === "string" && setAgentId(t.agent.toLowerCase()),
+      (t) => {
+        if (!live) return;
+        if (typeof t.agent === "string") setAgentId(t.agent.toLowerCase());
+        if (typeof t.delay_secs === "number") setDelay(t.delay_secs);
+      },
       () => undefined,
     );
     return () => {
@@ -100,8 +113,21 @@ export function OwnerHome({ name }: { name: string }) {
   // The skeleton, once shown, stays at least 300 ms (DESIGN §States).
   const loading = useSkeleton(!data && !failed);
 
+  // Countdowns tick each second while something counts down: a change waiting out the delay, the five minutes' bill.
+  const pendingEta = data?.inbox.pending?.eta ?? 0;
+  const demo = data?.demo?.enabled && delay === data.demo.delaySecs ? data.demo : null;
+  const step = demo && data ? stripOf(data.inbox, demo) : null;
+  const tick = useNow(pendingEta > 0 || step?.step === 0 || step?.step === 3);
+  // Past the eta, or past the bill's due time, the chain moves without this page: read every 5 s until it shows.
+  const hurry = (pendingEta > 0 && tick >= pendingEta) || step?.step === 0 || (step?.step === 3 && !!step.bill && tick >= step.bill.nextDue);
+  useEffect(() => {
+    if (!hurry) return;
+    const t = setInterval(() => !busy.current && void refresh(), 5_000);
+    return () => clearInterval(t);
+  }, [hurry, refresh]);
+
   // While a tap is in flight its control counts the seconds (DESIGN §States, waits).
-  const inFlight = !!stopPhase || Object.values(needPhase).some(Boolean);
+  const inFlight = !!stopPhase || Object.values(needPhase).some(Boolean) || Object.values(phases).some(Boolean);
   useEffect(() => {
     if (!inFlight) return;
     const t = setInterval(() => setClockMs(Date.now()), 1000);
@@ -127,7 +153,7 @@ export function OwnerHome({ name }: { name: string }) {
   };
 
   /** One tap: phases named on the control, the outcome in words, never re-sent (DESIGN §Money lifecycle). */
-  const run = async (key: string, setPhase: (p: Phase) => void, act: (phase: (label: string) => void) => Promise<string>) => {
+  const run = async (key: string, setPhase: (p: Phase) => void, act: (phase: (label: string) => void) => Promise<string>, keep = false) => {
     if (busy.current) return;
     busy.current = true;
     setOutcome(null);
@@ -140,18 +166,24 @@ export function OwnerHome({ name }: { name: string }) {
     try {
       const done = await act(phase);
       setPhase({ label: COPY.phase.confirmed, since: Date.now() });
+      // a sheet closes on success, so the page shows what changed (the toast, a countdown with its Cancel); a minted key's
+      // secret stays in its sheet (`keep`), shown once
+      if (!keep) setSheet(null);
       await refresh();
-      // Success is a toast: the item it answered may be gone after the read that followed it.
-      setToast(done);
+      // Success is a toast: the item it answered may be gone after the read that followed it. The five minutes' cut
+      // stays in words (it is their last step, and nothing else on the page says it happened); the rest show as state.
+      if (key === "cut" || keep) setOutcome({ key, text: done, failed: false });
+      else setToast(done);
     } catch (e) {
       const closed = (e as Error).name === "NotAllowedError" || (e as Error).name === "AbortError";
+      const said = (e as { said?: string }).said;
       // Whether money (or a setting) may have moved: a refusal says so in its envelope; no answer at all after the call
       // went out is "still checking", and the page never sends it again (DESIGN §Money lifecycle).
       const moved = e instanceof Refused ? e.executed : sent ? "unknown" : "no";
       setOutcome({
         key,
         failed: true,
-        text: closed ? COPY.promptClosed : moved === "yes" ? COPY.sentWriting : moved === "unknown" ? COPY.lostAnswer : COPY.nothingSent,
+        text: said ?? (closed ? COPY.promptClosed : moved === "yes" ? COPY.sentWriting : moved === "unknown" ? COPY.lostAnswer : COPY.nothingSent),
         detail: closed ? undefined : (e as Error).message,
       });
       void refresh();
@@ -205,6 +237,126 @@ export function OwnerHome({ name }: { name: string }) {
       return n.invoice?.everyDays ? COPY.accepted(who, money(n.amount)) : COPY.paidTo(money(n.amount), who);
     });
 
+  const keyed = (key: string) => (p: Phase) => setPhases((s) => ({ ...s, [key]: p }));
+  /** One owner call on the account: built here, prepared by the service, compared, signed with the passkey. */
+  const sign = async (route: string, body: Record<string, unknown>, data: string, phase: (label: string) => void) => {
+    const acct = await account();
+    const prepared = await prepare(acct, route, body);
+    await ownerCall(acct, data, { prepared, keyIndex: keyIndexOf(data_().inbox.owners?.keys), phase });
+    return acct;
+  };
+  const data_ = () => data!;
+  const at = () => clock(Math.floor(Date.now() / 1000) + (delay ?? data_().demo?.delaySecs ?? 0));
+
+  /** The five minutes' bill: approve Demo Vendor (one passkey tap, skipped when it already is) and save its bill, as the
+   *  console's judge strip and this app's stepper do; the device token rides on the server (actions.ts ownerPost). */
+  const onBill = () =>
+    run("demo-bill", keyed("demo-bill"), async (phase) => {
+      const { inbox, demo } = data_();
+      if (!demo) throw new Error(COPY.notReady);
+      const v = demo.vendor.toLowerCase();
+      phase(COPY.phase.signing);
+      const acct = await account();
+      // Ask first whether this device may save bills here, so a refusal costs no passkey tap (docs/60 P-225).
+      const check = await ownerPost(acct.policy, "bills", { check: true });
+      if ("error" in check) throw new Refused(check.error, 403, "no");
+      if (inbox.agentTokens?.length) throw new Error(COPY.strip.agentKeys);
+      const approve = !stripOf(inbox, demo).approved;
+      if (approve) await sign("prepare-payees", { payees: [v] }, calls.setPayees([v], true), phase);
+      try {
+        // First due one cycle from now, so the countdown shows; `everyDays: 0` so the bytes never rest on a default.
+        const every = demo.bill.everySecs;
+        const bill = { payee: v, amount: demo.bill.usdc, everyDays: 0, everySecs: every, nextDue: Math.floor(Date.now() / 1000) + every };
+        const saved = await ownerPost(acct.policy, "bills", { bills: [bill] });
+        if ("error" in saved) throw new Refused(saved.error, 400, saved.executed);
+        const refused = (saved.body as { refused?: { why: string }[] }).refused;
+        if (refused?.length) throw new Error(refused[0].why);
+        await ownerPost(acct.policy, "contacts", { address: v, name: COPY.demoVendor });
+        return COPY.strip.billSaved(money(demo.bill.usdc), everyWords(every));
+      } catch (e) {
+        throw approve ? partly(COPY.strip.billApproved, e) : e;
+      }
+    });
+
+  /** Watch, Propose or Autopilot: lowering applies at once, raising waits the delay (BudgetPolicy.setMode). */
+  const onMode = (mode: 0 | 1 | 2, key = `mode-${mode}`) =>
+    run(key, keyed(key), async (phase) => {
+      const raise = mode > modeIndex(data_().inbox.mode);
+      phase(COPY.phase.signing);
+      await sign("prepare-mode", { mode }, calls.setMode(mode), phase);
+      return raise ? COPY.modes.asked(MODES[mode], at()) : COPY.modes.now(MODES[mode]);
+    });
+
+  /** Drop the change waiting out the delay (a raised limit or mode): instant. */
+  const onCancel = () =>
+    run("cancel", keyed("cancel"), async (phase) => {
+      phase(COPY.phase.signing);
+      await sign("prepare-cancel", {}, calls.cancelPending(), phase);
+      return COPY.cancelled;
+    });
+
+  /** Approve a payee by address and name: the name first (nothing is signed when it cannot be saved), then the passkey. */
+  const onApprove = (address: string, label: string) =>
+    run("approve", keyed("approve"), async (phase) => {
+      const a = address.toLowerCase();
+      phase(COPY.phase.signing);
+      const acct = await account();
+      const named = await ownerPost(acct.policy, "contacts", { address: a, name: label });
+      if ("error" in named) throw new Refused(named.error, 403, "no");
+      await sign("prepare-payees", { payees: [a] }, calls.setPayees([a], true), phase);
+      return COPY.approved(label);
+    });
+
+  /** Stop paying a payee: instant (setPayees(…, false)). */
+  const onStopPayee = (address: string) => {
+    const a = address.toLowerCase();
+    const who = payeeLabel(data_().inbox, a);
+    return run(`stop-${a}`, keyed(`stop-${a}`), async (phase) => {
+      phase(COPY.phase.signing);
+      await sign("prepare-payees", { payees: [a], allow: false }, calls.setPayees([a], false), phase);
+      return COPY.payees.stopped(who);
+    });
+  };
+
+  /** The two caps as typed, the floor kept: a raise waits the delay with its Cancel, a cut applies at once. */
+  const onLimits = (perAction: string, daily: string, key = "limits") =>
+    run(key, keyed(key), async (phase) => {
+      const caps = data_().inbox.caps;
+      const c = changeOf(caps, perAction, daily);
+      if ("error" in c) throw new Error(c.error);
+      const call = limitsCall(caps, c.perAction, c.daily);
+      phase(COPY.phase.signing);
+      await sign("prepare-limits", call.body, call.data, phase);
+      return c.kind === "cut" ? COPY.limits.cutDone(money(call.body.perAction), money(call.body.daily)) : COPY.limits.asked(at());
+    });
+
+  /** Mint an agent key: the passkey over exactly these scopes, label and expiry; the secret is shown once, in its sheet. */
+  const onMintKey = (scopes: string[], label: string, days: number) =>
+    run(
+      "mint",
+      keyed("mint"),
+      async (phase) => {
+        phase(COPY.phase.signing);
+        const r = await mintKey(await account(), scopes, label, days);
+        return COPY.keys.made(label || COPY.keys.unnamed, r.token);
+      },
+      true,
+    );
+
+  /** Stop an agent key: refused from now on, at once (no chain call). */
+  const onStopKey = (id: string, label: string) =>
+    run(`revoke-${id}`, keyed(`revoke-${id}`), async (phase) => {
+      phase(COPY.phase.signing);
+      const r = await revokeKey(await account(), id);
+      return COPY.keys.stopped(label, !r.gated);
+    });
+
+  /** A sheet closing takes a minted key's secret with it. */
+  const onSheet = (s: SheetName | null) => {
+    if (!s) setOutcome((o) => (o?.key === "mint" ? null : o));
+    setSheet(s);
+  };
+
   /** "Open in Agent view": the anchor names the agent's check by its time, never a hash (ruled 06:32); the Agent view
    *  marks each record `pass-<at>` and scrolls to the location's anchor once its records are read. */
   const onAgentView = (l: Line) => {
@@ -225,6 +377,7 @@ export function OwnerHome({ name }: { name: string }) {
   // Only the device that holds one of the account's owner keys sees Stop and the actions; everyone else reads.
   const pub = savedPub();
   const owns = !!pub && !!inbox.owners?.keys.some((k) => k.qx.toLowerCase() === pub.qx.toLowerCase());
+  const act: Actions = { phases, sheet, onSheet, onBill, onMode, onCancel, onApprove, onStopPayee, onLimits, onMintKey, onStopKey };
   return (
     <>
       <OwnerView
@@ -249,6 +402,9 @@ export function OwnerHome({ name }: { name: string }) {
         needPhase={needPhase}
         onNeed={onNeed}
         outcome={outcome}
+        act={act}
+        demo={owns ? demo : null}
+        clockSecs={Math.max(tick, now || Math.floor(shown.at / 1000))}
       />
       <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-(--space-5) flex justify-center px-(--space-4)">
         {toast && <p className="row-title m-0 rounded-(--radius-button) bg-(--ink) px-(--space-5) py-(--space-3) text-(--paper)">{toast}</p>}

@@ -91,6 +91,17 @@ export async function resolveAccount(name: string): Promise<Account | null> {
   }
 }
 
+const isHandle = (s: string) => /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/.test(s);
+/** Where an old console link lands (`/?policy=<address or name>`, `/agent?policy=…`; the Rust service answers 302 to home for
+ *  them since docs/122): the account's page by its name, `?view=agent` for the Agent view; null when no account has it.
+ *  The address is turned into the name on the server (the tenant route names it), so no address reaches the route. */
+export async function accountHref(policy: string, view?: string | null): Promise<string | null> {
+  const p = policy.trim();
+  const name = isAddress(p) ? await fetchTenant(p).then((t) => t.name, () => undefined) : p.toLowerCase();
+  if (!name || !isHandle(name)) return null;
+  return `/a/${encodeURIComponent(name)}${view === "agent" ? "?view=agent" : ""}`;
+}
+
 /** The `policy` a call carries: in the browser the name itself (the proxy resolves it), on the server the address. */
 async function policyOf(account: string): Promise<string> {
   if (typeof window !== "undefined" || isAddress(account)) return account;

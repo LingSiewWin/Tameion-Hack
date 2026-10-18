@@ -95,17 +95,23 @@ export const calls = {
     "0x" + selector("setPayees(address[],bool)") + word(64n) + word(attested ? 1n : 0n) + word(BigInt(payees.length)) + payees.map(word).join(""),
   setLimits: (perAction: bigint, daily: bigint, floor: bigint) =>
     "0x" + selector("setLimits(uint256,uint256,uint256)") + word(perAction) + word(daily) + word(floor),
+  /** drops the change waiting out the delay (a raised limit or mode) */
+  cancelPending: () => "0x" + selector("cancelPending()"),
 };
 
+const text = (u: bigint) => `${u / 1_000_000n}.${(u % 1_000_000n).toString().padStart(6, "0")}`;
+/** The prepare-limits body and the call the page will compare it with: these two caps, the floor kept. */
+export function limitsCall(caps: { floor: string }, perAction: bigint, daily: bigint) {
+  const floor = units(caps.floor);
+  return { body: { perAction: text(perAction), daily: text(daily), floor: text(floor) }, data: calls.setLimits(perAction, daily, floor) };
+}
+
 /** "Raise the cap" for a payment over the per-payment cap: one payment may be that payment's amount, and the day's cap
- *  at least as much; the floor stays. The prepare-limits body and the call the page will compare it with. */
+ *  at least as much; the floor stays. */
 export function raiseCap(caps: { daily: string; floor: string }, amountText: string) {
   const want = units(amountText);
   const daily = units(caps.daily);
-  const floor = units(caps.floor);
-  const day = daily > want ? daily : want;
-  const text = (u: bigint) => `${u / 1_000_000n}.${(u % 1_000_000n).toString().padStart(6, "0")}`;
-  return { body: { perAction: text(want), daily: text(day), floor: text(floor) }, data: calls.setLimits(want, day, floor) };
+  return limitsCall(caps, want, daily > want ? daily : want);
 }
 
 const SETTLE = [selector("settleAsPrincipal(address,uint256,bytes32)"), selector("settleAsPrincipalIf(address,uint256,bytes32,bytes32,uint64)")];
@@ -245,3 +251,37 @@ export function keyIndexOf(keys?: { qx: string }[] | null): number {
 /** prepare-* on the service, for the calls it builds (it reads the account's current state); the result is checked. */
 export const prepare = (acct: Account, route: string, body: Record<string, unknown>) =>
   post<{ to: string; data: string }>(`/api/level1/${route}`, { policy: acct.policy, ...body });
+
+// ---- agent keys (level1::token_challenge, level1::token_revoke_challenge; apps/console guard.ts) --------------------
+
+const utf8 = (s: string) => hex(new TextEncoder().encode(s)).slice(2);
+const u32 = (n: number) => n.toString(16).padStart(8, "0");
+const u64 = (n: number | bigint) => BigInt(n).toString(16).padStart(16, "0");
+const addr20 = (a: string) => word(a).slice(24);
+
+/** keccak256(packed "tameion.token.v1", u64 chainId, policy, u32 len, scopes joined by ",", u32 len, label, u64 expires,
+ *  u64 issued): the bytes the owner's passkey signs to mint an agent key. */
+export function tokenChallenge(chainId: number, policy: string, scopes: string[], label: string, expires: number, issued: number) {
+  const j = scopes.join(",");
+  const len = (s: string) => new TextEncoder().encode(s).length;
+  return hex(keccak256(bytesOf(utf8("tameion.token.v1") + u64(chainId) + addr20(policy) + u32(len(j)) + utf8(j) + u32(len(label)) + utf8(label) + u64(expires) + u64(issued))));
+}
+
+/** keccak256(packed "tameion.token-revoke.v1", u64 chainId, policy, id, u64 issued): stop agent key `id`. */
+export const tokenRevokeChallenge = (chainId: number, policy: string, id: string, issued: number) =>
+  hex(keccak256(bytesOf(utf8("tameion.token-revoke.v1") + u64(chainId) + addr20(policy) + utf8(id) + u64(issued))));
+
+/** Mint an agent key with the owner's passkey over exactly these scopes, label and expiry. The secret comes back once. */
+export async function mintKey(acct: Account, scopes: string[], label: string, days: number) {
+  const issued = Math.floor(Date.now() / 1000);
+  const expires = issued + days * 86_400;
+  const auth = await passkey(tokenChallenge(acct.chainId, acct.policy, scopes, label, expires, issued));
+  return post<{ token: string; id: string }>("/api/level1/token-signed", { policy: acct.policy, scopes, label, issued, expires, auth });
+}
+
+/** Stop an agent key: refused from now on, at once, with no chain call. */
+export async function revokeKey(acct: Account, id: string) {
+  const issued = Math.floor(Date.now() / 1000);
+  const auth = await passkey(tokenRevokeChallenge(acct.chainId, acct.policy, id, issued));
+  return post<{ revoked: string; gated: boolean }>("/api/level1/token-revoke-signed", { policy: acct.policy, id, issued, auth });
+}

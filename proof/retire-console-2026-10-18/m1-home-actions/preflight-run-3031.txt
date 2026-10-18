@@ -1,0 +1,26 @@
+== 2026-10-18 13:42:12 +08  lane/home-actions 27c43ef at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home-actions  seat H6  http://localhost:3031
+PASS  tokens  owner --up: DESIGN #2F7A00, tokens.css #2E7800 (deliberate: DESIGN's value reads 4.39:1 on its surfaces, this one 4.51:1)
+WARN  strings  8 inline strings in .tsx (DESIGN: none in components):
+        src/app/a/[name]/add/page.tsx:13  "The service did not answer"
+        src/app/a/[name]/add/page.tsx:15  "No account has that name"
+        src/features/add-money/add-money.tsx:134  "Add money"
+        src/features/add-money/add-money.tsx:231  "The demo pays an account once, when it opens"
+        src/features/add-money/move-plate.tsx:290  "The move"
+        src/features/add-money/move-plate.tsx:385  "What the wallet said"
+        src/features/add-money/move-plate.tsx:508  "Amount in USDC"
+PASS  contrast  contrast/tokens: every text pair >= 4.5:1 and every edge >= 3:1 in both views; tokens.css matches tokens.ts
+PASS  zero-hash  ℹ tests 13  ℹ pass 13  ℹ fail 0
+PASS  literals
+PASS  hex-lint  tokens-lint: no colour literal outside the tokens files; every token used is defined
+PASS  21st-review  src/tokens.css:43:12 info design-hardcoded-color Hardcoded color may drift from project design tokens.
+        57 file(s), 25 finding(s), 0 fixed.
+browser: 22 checks, 6 FAIL, 2 WARN (1 + 1 distinct), 0 note
+  FAIL middle-dot-meta  button.grid.w-full > span.row-title.order-1 > span.min-w-0 "Demo Vendor · paid 4 times today · 0.008 USDC"  meta strings joined with middle dots are banned
+       in 6: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  WARN touch-target  div.flex.flex-col > div.grid.grid-cols-[14ch_1fr] > a.text-(--ink).underline "0x71422c4e0962bf4b45e806eeae6b830528f5478292b639fe"  640x28 px; DESIGN touch targets are >= 44 (accepted in an opened line: WCAG 2.2 AA 24 px, D-H3-1)
+       in 2: account/detail/agent/390, account/detail/agent/390
+measured:
+  account/rest/owner/1280: h1 31px/38px/500; main 80..1200 (1120 wide); 1 element(s) in --red
+  account/rest/owner/390: h1 31px/38px/500; main 0..390 (390 wide); 1 element(s) in --red
+  account/rest/agent/1280: h1 13px/20px/400; main 80..1200 (1120 wide)
+  account/rest/agent/390: h1 13px/20px/400; main 0..390 (390 wide)
