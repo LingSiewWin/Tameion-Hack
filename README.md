@@ -67,6 +67,12 @@ Status is built, framed or refused; a row reads built only once its proof file h
 
 No external lender; testnet; not a lending protocol.
 
+## Since submission
+
+The tag `submission-2026-10-18` is what existed when the form went in on 2026-10-18 (clone it with `--branch submission-2026-10-18`).
+Everything after it lands here as one dated line, newest first, each naming the file in `proof/` that holds its run — so a reader can tell
+what was there at the tag and what came after. Nothing yet.
+
 ## The problem, in numbers measured on 2026-10-16
 
 - **Agents already pay.** 2,768,695 x402-style USDC payments from 150,399 wallets on Base in 30 days (2026-09-16 to 10-16). The x402
