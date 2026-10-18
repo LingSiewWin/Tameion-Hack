@@ -296,7 +296,9 @@ function domRules({ view, width, route, palette, spec }) {
       for (const a of e.attributes) if (HASH.test(a.value)) add("fail", "zero-hash", e, `${a.name}="${a.value.slice(0, 40)}"`);
     }
     const grouped = document.body.innerText.match(/(?:0x)?(?:[0-9a-fA-F]{4}[ \u00a0]){7,}[0-9a-fA-F]{4}/);
-    if (grouped) add("warn", "grouped-hash", null, `an address spelled in groups of four ("${grouped[0].slice(0, 24)}...") passes the 0x{8,} test but is a hash on the Owner screen`);
+    // D-H5-1 (PM, under delegation): /add and /receive are where the owner must copy or scan the account address, so it may be spelled in groups of four there and only there
+    if (grouped && !["add", "receive"].includes(route)) add("fail", "grouped-hash", null, `an address spelled in groups of four ("${grouped[0].slice(0, 24)}...") passes the 0x{8,} test but is a hash on an Owner surface other than /add and /receive`);
+    else if (grouped) metrics.groupedAddress = "allowed here (D-H5-1)";
     for (const e of document.head.querySelectorAll("link[href],meta[content]")) {
       const v = e.getAttribute("href") ?? e.getAttribute("content");
       if (HASH.test(v)) add("warn", "zero-hash-head", e, v.slice(0, 40));
@@ -471,8 +473,9 @@ function domRules({ view, width, route, palette, spec }) {
       const label = e.closest("label");
       if (label && label.getBoundingClientRect().height >= spec.touch - 0.5 && /^(radio|checkbox)$/.test(e.type)) continue;
       const inline = e.tagName === "A" && e.parentElement && e.parentElement.innerText.length > e.innerText.length + 12;
-      const dense = view === "agent" && r.height >= 24 && r.width >= 24; // the Agent view is dense by DESIGN: 24 px is WCAG 2.2 AA, 44 is DESIGN's
-      add(inline || dense ? "warn" : "fail", "touch-target", e, `${Math.round(r.width)}x${Math.round(r.height)} px; DESIGN touch targets are >= ${spec.touch}${dense ? " (meets WCAG 2.2 AA 24 px)" : ""}`);
+      // D-H3-1 (PM, under delegation): inside an opened line of the dense Agent view and on its disclosure summary, 24 px (WCAG 2.5.8 AA) is accepted; row-level controls stay 44
+      const dense = view === "agent" && r.height >= 24 && r.width >= 24 && (e.matches("summary") || !!e.closest('[id^="slots-"], details'));
+      add(inline || dense ? "warn" : "fail", "touch-target", e, `${Math.round(r.width)}x${Math.round(r.height)} px; DESIGN touch targets are >= ${spec.touch}${dense ? " (accepted in an opened line: WCAG 2.2 AA 24 px, D-H3-1)" : ""}`);
     }
   }
 
