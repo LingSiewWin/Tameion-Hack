@@ -1,0 +1,6 @@
+2026-10-18 09:08 +0800
+Lighthouse 12.8.2 mobile (simulated slow 4G, 4x CPU) on / (treatment A) of lane/home-h7 32eed0b, production build (next start :3027, warm), with the NASA GIBS AVIF scene (scene-828.avif 26,789 B on this phone) as the LCP element and the illustrative tracks:
+run 1 perf 82 a11y 100 FCP 0.8 s LCP 3.0 s TBT 500 ms CLS 0 Total size was 277 KiB
+run 2 perf 97 a11y 100 FCP 0.8 s LCP 2.6 s TBT 10 ms CLS 0 Total size was 277 KiB
+run 3 perf 97 a11y 100 FCP 0.8 s LCP 2.6 s TBT 10 ms CLS 0 Total size was 277 KiB
+Observed (unthrottled) LCP 57 ms. A head preload of the image (React preload) was tried: 2.6-2.7 s, no gain, reverted.
