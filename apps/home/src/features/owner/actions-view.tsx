@@ -19,7 +19,7 @@ const compactShape = "inline-flex min-h-(--button-compact) shrink-0 items-center
 export const compact = `${compactShape} text-(--ink)`;
 const primary = `${button} bg-(--ink) text-(--paper)`;
 
-export type SheetName = "payees" | "limits" | "mode";
+export type SheetName = "payees" | "limits" | "mode" | "keys";
 /** What the container does for each control; `phases` names each control's phase in flight, by its key. */
 export type Actions = {
   phases: Record<string, Phase>;
@@ -33,6 +33,8 @@ export type Actions = {
   onStopPayee: (address: string) => void;
   /** `key` names the control in flight (the five minutes' raise and cut are their own) */
   onLimits: (perAction: string, daily: string, key?: string) => void;
+  onMintKey: (scopes: string[], label: string, days: number) => void;
+  onStopKey: (id: string, label: string) => void;
 };
 
 export function Result({ o }: { o: NonNullable<Outcome> }) {
@@ -143,7 +145,7 @@ export function Strip(p: { inbox: Inbox; demo: Demo; clockSecs: number; clockMs?
 /** The mandate's three parts, each behind one sheet (DESIGN §Page grammar: detail behind one disclosure). */
 export function Mandate(p: { inbox: Inbox; act: Actions; outcome?: Outcome; clockMs?: number; className?: string }) {
   const close = () => p.act.onSheet(null);
-  const parts = ["payees", "limits", "mode"] as const;
+  const parts = ["payees", "limits", "mode", "keys"] as const;
   return (
     <>
       <section aria-labelledby="mandate-title" className={`flex min-w-0 flex-col gap-(--space-3) ${p.className ?? ""}`}>
@@ -167,6 +169,9 @@ export function Mandate(p: { inbox: Inbox; act: Actions; outcome?: Outcome; cloc
       </Sheet>
       <Sheet open={p.act.sheet === "mode"} onClose={close} title={COPY.mandate.sheet.mode}>
         <Modes {...p} />
+      </Sheet>
+      <Sheet open={p.act.sheet === "keys"} onClose={close} title={COPY.mandate.sheet.keys}>
+        <Keys {...p} />
       </Sheet>
     </>
   );
@@ -305,5 +310,82 @@ function Modes(p: { inbox: Inbox; act: Actions; outcome?: Outcome; clockMs?: num
         );
       })}
     </ul>
+  );
+}
+
+const SCOPES = ["read", "run", "prepare", "import", "buy"] as const;
+const scopeWords = (scopes: string[]) => scopes.map((x) => COPY.keys.scopes[x as (typeof SCOPES)[number]] ?? x).join(", ");
+
+/** Agent keys (level1 token-signed / token-revoke-signed): what another agent may do on this account, for how long; the
+ *  owner's passkey signs exactly these scopes, label and expiry. A key never signs; the secret shows once, here. */
+function Keys(p: { inbox: Inbox; act: Actions; outcome?: Outcome; clockMs?: number }) {
+  const [what, setWhat] = useState("");
+  const [scopes, setScopes] = useState<string[]>(["read", "run"]);
+  const [days, setDays] = useState("90");
+  const [error, setError] = useState<string | null>(null);
+  const list = p.inbox.agentTokens ?? [];
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const d = Number(days);
+    if (!scopes.length) return setError(COPY.keys.needScope);
+    if (!Number.isInteger(d) || d < 1 || d > 365) return setError(COPY.keys.badDays);
+    setError(null);
+    p.act.onMintKey(SCOPES.filter((x) => scopes.includes(x)), what.trim(), d);
+  };
+  return (
+    <div className="flex flex-col gap-(--space-5)">
+      {list.length ? (
+        <ul className="m-0 flex list-none flex-col gap-(--space-4) p-0">
+          {list.map((t) => {
+            const who = t.label || COPY.keys.unnamed;
+            const k = `revoke-${t.id}`;
+            return (
+              <li key={t.id} className="flex flex-col gap-(--space-2)">
+                <p className="row-title m-0">{who}</p>
+                <p className="meta m-0">{COPY.keys.until(scopeWords(t.scopes), new Date(t.expires * 1000).toLocaleDateString())}</p>
+                <button type="button" onClick={() => p.act.onStopKey(t.id, who)} className={`${compactShape} self-start text-(--attention)`}>
+                  {label(p.act.phases[k], p.clockMs, COPY.keys.stop(who))}
+                </button>
+                {p.outcome?.key === k && <Result o={p.outcome} />}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="row m-0">{COPY.keys.none}</p>
+      )}
+      <form onSubmit={submit} noValidate className="flex flex-col gap-(--space-2)">
+        <label htmlFor="key-label" className="meta">
+          {COPY.keys.label}
+        </label>
+        <input id="key-label" className={FIELD} value={what} maxLength={40} onChange={(e) => setWhat(e.target.value)} autoComplete="off" />
+        <fieldset className="m-0 flex flex-col gap-(--space-1) border-0 p-0 pt-(--space-2)">
+          <legend className="meta">{COPY.keys.may}</legend>
+          {SCOPES.map((x) => (
+            <label key={x} className="row flex min-h-(--touch) items-center gap-(--space-3)">
+              <input type="checkbox" className="size-5" checked={scopes.includes(x)} onChange={(e) => setScopes((s) => (e.target.checked ? [...s, x] : s.filter((y) => y !== x)))} />
+              {COPY.keys.scopes[x]}
+            </label>
+          ))}
+        </fieldset>
+        <label htmlFor="key-days" className="meta pt-(--space-2)">
+          {COPY.keys.days}
+        </label>
+        <input id="key-days" inputMode="numeric" className={`${FIELD} money`} value={days} onChange={(e) => setDays(e.target.value)} autoComplete="off" />
+        {error && (
+          <p role="alert" className="row m-0 text-(--attention)">
+            {error}
+          </p>
+        )}
+        <button type="submit" className={`${primary} mt-(--space-2)`}>
+          {label(p.act.phases.mint, p.clockMs, COPY.keys.make)}
+        </button>
+        {p.outcome?.key === "mint" && (
+          <div className="rounded-(--radius-inner) bg-(--plate-2) p-(--space-4) [overflow-wrap:anywhere]">
+            <Result o={p.outcome} />
+          </div>
+        )}
+      </form>
+    </div>
   );
 }

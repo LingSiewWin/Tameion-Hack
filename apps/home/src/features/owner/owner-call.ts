@@ -251,3 +251,37 @@ export function keyIndexOf(keys?: { qx: string }[] | null): number {
 /** prepare-* on the service, for the calls it builds (it reads the account's current state); the result is checked. */
 export const prepare = (acct: Account, route: string, body: Record<string, unknown>) =>
   post<{ to: string; data: string }>(`/api/level1/${route}`, { policy: acct.policy, ...body });
+
+// ---- agent keys (level1::token_challenge, level1::token_revoke_challenge; apps/console guard.ts) --------------------
+
+const utf8 = (s: string) => hex(new TextEncoder().encode(s)).slice(2);
+const u32 = (n: number) => n.toString(16).padStart(8, "0");
+const u64 = (n: number | bigint) => BigInt(n).toString(16).padStart(16, "0");
+const addr20 = (a: string) => word(a).slice(24);
+
+/** keccak256(packed "tameion.token.v1", u64 chainId, policy, u32 len, scopes joined by ",", u32 len, label, u64 expires,
+ *  u64 issued): the bytes the owner's passkey signs to mint an agent key. */
+export function tokenChallenge(chainId: number, policy: string, scopes: string[], label: string, expires: number, issued: number) {
+  const j = scopes.join(",");
+  const len = (s: string) => new TextEncoder().encode(s).length;
+  return hex(keccak256(bytesOf(utf8("tameion.token.v1") + u64(chainId) + addr20(policy) + u32(len(j)) + utf8(j) + u32(len(label)) + utf8(label) + u64(expires) + u64(issued))));
+}
+
+/** keccak256(packed "tameion.token-revoke.v1", u64 chainId, policy, id, u64 issued): stop agent key `id`. */
+export const tokenRevokeChallenge = (chainId: number, policy: string, id: string, issued: number) =>
+  hex(keccak256(bytesOf(utf8("tameion.token-revoke.v1") + u64(chainId) + addr20(policy) + utf8(id) + u64(issued))));
+
+/** Mint an agent key with the owner's passkey over exactly these scopes, label and expiry. The secret comes back once. */
+export async function mintKey(acct: Account, scopes: string[], label: string, days: number) {
+  const issued = Math.floor(Date.now() / 1000);
+  const expires = issued + days * 86_400;
+  const auth = await passkey(tokenChallenge(acct.chainId, acct.policy, scopes, label, expires, issued));
+  return post<{ token: string; id: string }>("/api/level1/token-signed", { policy: acct.policy, scopes, label, issued, expires, auth });
+}
+
+/** Stop an agent key: refused from now on, at once, with no chain call. */
+export async function revokeKey(acct: Account, id: string) {
+  const issued = Math.floor(Date.now() / 1000);
+  const auth = await passkey(tokenRevokeChallenge(acct.chainId, acct.policy, id, issued));
+  return post<{ revoked: string; gated: boolean }>("/api/level1/token-revoke-signed", { policy: acct.policy, id, issued, auth });
+}

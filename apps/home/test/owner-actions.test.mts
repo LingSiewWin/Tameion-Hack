@@ -11,7 +11,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { Demo, Inbox } from "../src/lib/types.ts";
 
 process.env.TZ = "Asia/Kuala_Lumpur";
-const { calls, limitsCall } = await import("../src/features/owner/owner-call.ts");
+const { calls, limitsCall, tokenChallenge, tokenRevokeChallenge } = await import("../src/features/owner/owner-call.ts");
+const { encodePacked, keccak256 } = await import("viem");
 const { changeOf, clockText, everyWords, modeIndex, nextDue, payeeLabel, stripOf } = await import("../src/features/owner/words.ts");
 const { OwnerView } = await import("../src/features/owner/owner-view.tsx");
 
@@ -36,6 +37,22 @@ test("the calls are byte for byte the ones the service prepared (prepare-cancel,
   assert.equal(
     l.data,
     "0x189ae5f20000000000000000000000000000000000000000000000000000000000000fa0000000000000000000000000000000000000000000000000000000000000c3500000000000000000000000000000000000000000000000000000000000000000",
+  );
+});
+
+test("agent key challenges are the service's bytes (level1::token_challenge, level1::token_revoke_challenge)", () => {
+  const P = "0x7F6E61dc54c31794fa8e88e91ea52dfa67a2930c";
+  const want = keccak256(
+    encodePacked(
+      ["string", "uint64", "address", "uint32", "string", "uint32", "string", "uint64", "uint64"],
+      ["tameion.token.v1", 421614n, P.toLowerCase() as `0x${string}`, 8, "read,run", 7, "ops bot", 1800000000n, 1792300000n],
+    ),
+  );
+  assert.equal(tokenChallenge(421614, P, ["read", "run"], "ops bot", 1800000000, 1792300000), want);
+  assert.equal(tokenChallenge(421614, P, ["read"], "", 1800000000, 1792300000).length, 66);
+  assert.equal(
+    tokenRevokeChallenge(421614, P, "k_3f2a", 1792300000),
+    keccak256(encodePacked(["string", "uint64", "address", "string", "uint64"], ["tameion.token-revoke.v1", 421614n, P.toLowerCase() as `0x${string}`, "k_3f2a", 1792300000n])),
   );
 });
 
@@ -76,7 +93,7 @@ test("small words: a countdown, a cadence, the next due time, a mode, a payee by
 
 // ---- rendered ---------------------------------------------------------------------------------------------------------
 
-const act = (over: Record<string, unknown> = {}) => ({ phases: {}, sheet: null, onSheet: noop, onBill: noop, onMode: noop, onCancel: noop, onApprove: noop, onStopPayee: noop, onLimits: noop, ...over });
+const act = (over: Record<string, unknown> = {}) => ({ phases: {}, sheet: null, onSheet: noop, onBill: noop, onMode: noop, onCancel: noop, onApprove: noop, onStopPayee: noop, onLimits: noop, onMintKey: noop, onStopKey: noop, ...over });
 const render = (i: Inbox, over: Record<string, unknown> = {}) =>
   renderToStaticMarkup(createElement(OwnerView, { inbox: { ...i, parties: { ...i.parties, ...named } }, byRateDays: null, halves: new Map(), nowSecs: NOW, act: act(), ...over }));
 const autopilotWaits = { ...fresh, payees: inbox.payees, typedBills: inbox.typedBills, pending: { mode: "Autopilot", kinds: 2, eta: NOW + 27 } };
@@ -92,6 +109,7 @@ const cases: [string, string][] = [
   ["the payees sheet", render(inbox, { act: act({ sheet: "payees" }) })],
   ["the limits sheet", render(inbox, { act: act({ sheet: "limits" }) })],
   ["the mode sheet", render(inbox, { act: act({ sheet: "mode" }) })],
+  ["the keys sheet, one key", render({ ...inbox, agentTokens: [{ id: "k_1", label: "ops bot", scopes: ["read", "run"], expires: NOW + 90 * 86_400 }] }, { act: act({ sheet: "keys" }) })],
   ["a guest during a raise", render(raiseWaits, { guest: true, clockSecs: NOW })],
 ];
 for (const [name, html] of cases)
@@ -116,7 +134,14 @@ test("each new control carries the name the acceptance script finds it by", () =
   assert.match(page["a raise counting down"], />Cancel<\/button>/);
   assert.doesNotMatch(page["a guest during a raise"], />Cancel<\/button>/, "a reader sees the change coming, never its Cancel");
   assert.doesNotMatch(page["a guest during a raise"], /Change what the agent may do/);
-  for (const k of ["Payees", "Limits", "Mode"]) assert.match(page["the payees sheet"], new RegExp(`<button[^>]*>${k}</button>`));
+  const keys = page["the keys sheet, one key"];
+  assert.match(keys, /<button[^>]*>Stop ops bot<\/button>/);
+  assert.match(keys, /May read, run checks, until /);
+  assert.match(keys, /<label for="key-label"[^>]*>What it is \(your ops bot, Claude\)<\/label>/);
+  for (const s of ["read", "run checks", "prepare calls for your passkey", "add bills", "buy paid APIs, inside the limits"]) assert.match(keys, new RegExp(`<input type="checkbox"[^>]*>${s.replace(/[()]/g, "\\$&")}</label>`));
+  assert.match(keys, /<label for="key-days"[^>]*>Days it lasts \(1 to 365\)<\/label>/);
+  assert.match(keys, /<button type="submit"[^>]*>Make a key<\/button>/);
+  for (const k of ["Payees", "Limits", "Mode", "Agent keys"]) assert.match(page["the payees sheet"], new RegExp(`<button[^>]*>${k}</button>`));
   const payees = page["the payees sheet"];
   assert.match(payees, /<button[^>]*>Stop paying Demo Vendor<\/button>/);
   assert.match(payees, /<label for="payee-address"[^>]*>Payee address<\/label>/);

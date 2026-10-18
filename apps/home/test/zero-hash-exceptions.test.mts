@@ -56,7 +56,7 @@ test("the payee field renders empty: no address reaches the Owner DOM until the 
   const { Mandate } = await import("../src/features/owner/actions-view.tsx");
   const inbox = JSON.parse(readFileSync(new URL("./fixtures/owner-inbox.json", import.meta.url), "utf8"));
   const noop = () => {};
-  const act = { phases: {}, sheet: "payees" as const, onSheet: noop, onBill: noop, onMode: noop, onCancel: noop, onApprove: noop, onStopPayee: noop, onLimits: noop };
+  const act = { phases: {}, sheet: "payees" as const, onSheet: noop, onBill: noop, onMode: noop, onCancel: noop, onApprove: noop, onStopPayee: noop, onLimits: noop, onMintKey: noop, onStopKey: noop };
   const html = renderToStaticMarkup(createElement(Mandate, { inbox, act }));
   const field = /<input[^>]*data-hash-allowed="payee-address"[^>]*>/.exec(html)?.[0] ?? "";
   assert.match(field, /value=""/);

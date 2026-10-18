@@ -12,7 +12,7 @@ import { setView } from "../../lib/view.ts";
 import { ownerPost } from "../onboarding/actions.ts";
 import { useNow } from "../onboarding/ui.tsx";
 import type { Actions, SheetName } from "./actions-view.tsx";
-import { calls, checkSettle, decideInvoice, keyIndexOf, limitsCall, ownerCall, prepare, raiseCap, Refused, savedPub, units, type Account } from "./owner-call.ts";
+import { calls, checkSettle, decideInvoice, keyIndexOf, limitsCall, mintKey, ownerCall, prepare, raiseCap, Refused, revokeKey, savedPub, units, type Account } from "./owner-call.ts";
 import { OwnerError, OwnerView, type Outcome, type Phase } from "./owner-view.tsx";
 import { agentAnchor, changeOf, COPY, everyWords, halvesByPayment, MODES, modeIndex, money, payeeLabel, payeeName, servedAsOf, stripOf, type Halves, type Line, type Need } from "./words.ts";
 
@@ -153,7 +153,7 @@ export function OwnerHome({ name }: { name: string }) {
   };
 
   /** One tap: phases named on the control, the outcome in words, never re-sent (DESIGN §Money lifecycle). */
-  const run = async (key: string, setPhase: (p: Phase) => void, act: (phase: (label: string) => void) => Promise<string>) => {
+  const run = async (key: string, setPhase: (p: Phase) => void, act: (phase: (label: string) => void) => Promise<string>, keep = false) => {
     if (busy.current) return;
     busy.current = true;
     setOutcome(null);
@@ -166,12 +166,13 @@ export function OwnerHome({ name }: { name: string }) {
     try {
       const done = await act(phase);
       setPhase({ label: COPY.phase.confirmed, since: Date.now() });
-      // a sheet closes on success, so the page shows what changed (the toast, a countdown with its Cancel)
-      setSheet(null);
+      // a sheet closes on success, so the page shows what changed (the toast, a countdown with its Cancel); a minted key's
+      // secret stays in its sheet (`keep`), shown once
+      if (!keep) setSheet(null);
       await refresh();
       // Success is a toast: the item it answered may be gone after the read that followed it. The five minutes' cut
       // stays in words (it is their last step, and nothing else on the page says it happened); the rest show as state.
-      if (key === "cut") setOutcome({ key, text: done, failed: false });
+      if (key === "cut" || keep) setOutcome({ key, text: done, failed: false });
       else setToast(done);
     } catch (e) {
       const closed = (e as Error).name === "NotAllowedError" || (e as Error).name === "AbortError";
@@ -329,6 +330,33 @@ export function OwnerHome({ name }: { name: string }) {
       return c.kind === "cut" ? COPY.limits.cutDone(money(call.body.perAction), money(call.body.daily)) : COPY.limits.asked(at());
     });
 
+  /** Mint an agent key: the passkey over exactly these scopes, label and expiry; the secret is shown once, in its sheet. */
+  const onMintKey = (scopes: string[], label: string, days: number) =>
+    run(
+      "mint",
+      keyed("mint"),
+      async (phase) => {
+        phase(COPY.phase.signing);
+        const r = await mintKey(await account(), scopes, label, days);
+        return COPY.keys.made(label || COPY.keys.unnamed, r.token);
+      },
+      true,
+    );
+
+  /** Stop an agent key: refused from now on, at once (no chain call). */
+  const onStopKey = (id: string, label: string) =>
+    run(`revoke-${id}`, keyed(`revoke-${id}`), async (phase) => {
+      phase(COPY.phase.signing);
+      const r = await revokeKey(await account(), id);
+      return COPY.keys.stopped(label, !r.gated);
+    });
+
+  /** A sheet closing takes a minted key's secret with it. */
+  const onSheet = (s: SheetName | null) => {
+    if (!s) setOutcome((o) => (o?.key === "mint" ? null : o));
+    setSheet(s);
+  };
+
   /** "Open in Agent view": the anchor names the agent's check by its time, never a hash (ruled 06:32); the Agent view
    *  marks each record `pass-<at>` and scrolls to the location's anchor once its records are read. */
   const onAgentView = (l: Line) => {
@@ -349,7 +377,7 @@ export function OwnerHome({ name }: { name: string }) {
   // Only the device that holds one of the account's owner keys sees Stop and the actions; everyone else reads.
   const pub = savedPub();
   const owns = !!pub && !!inbox.owners?.keys.some((k) => k.qx.toLowerCase() === pub.qx.toLowerCase());
-  const act: Actions = { phases, sheet, onSheet: setSheet, onBill, onMode, onCancel, onApprove, onStopPayee, onLimits };
+  const act: Actions = { phases, sheet, onSheet, onBill, onMode, onCancel, onApprove, onStopPayee, onLimits, onMintKey, onStopKey };
   return (
     <>
       <OwnerView
