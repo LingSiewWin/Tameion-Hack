@@ -1,0 +1,17 @@
+# live = tag, final (2026-10-18 11:16 +08)
+
+tag submission-2026-10-18 (local)  : 911f87c593e8a7ab37e7e92801ebc255680f7efe
+tag submission-2026-10-18 (origin) : 911f87c593e8a7ab37e7e92801ebc255680f7efe
+repository: https://github.com/LingSiewWin/Tami (renamed from Tameion-Hack 11:00; public)
+
+Railway domains renamed 11:13–11:15 (CLI railway domain update): home preview → https://tami-home.up.railway.app ; console → https://tami-console.up.railway.app ; lane service unchanged.
+service variables: tameion-lane TAMEION_PUBLIC_URL=https://tami-home.up.railway.app ; tameion-home NEXT_PUBLIC_CONSOLE_URL=https://tami-console.up.railway.app ; tameion-agents TAMEION_PUBLIC_URL=https://tami-console.up.railway.app
+
+console (tami-console) runs the Rust build of 2862176 (deployment at 03:0xZ, scripts/deploy_railway.sh from the main tree at the tag then): crates/ are identical between 2862176 and 911f87c (the later commits touch apps/home, README, proof only) — git diff --stat 2862176 911f87c -- crates/ = 0 lines.
+  GET https://tami-console.up.railway.app/healthz -> ok
+  GET https://tami-console.up.railway.app/ title -> <title>Tami</title>
+  GET /llms.txt first line -> # Tami
+home preview (tami-home) serves main df0a835's apps/home (Railway build 03:0x; 911f87c changes README only):
+  GET https://tami-home.up.railway.app/ -> 200 title <title>Tami</title>
+  GET https://tami-home.up.railway.app/a/guest-demo-arc -> 200
+lane service (tameion-lane) runs main 2862176's crates (deployment 03:04:06Z).
