@@ -1,0 +1,769 @@
+{
+ "at": "2026-10-18 06:47:52 +08",
+ "keys": [
+  "guest/rest/owner/1280|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "guest/rest/owner/1280|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "guest/rest/owner/390|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "guest/rest/owner/390|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "guest/rest/agent/1280|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "guest/rest/agent/1280|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "guest/rest/agent/390|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "guest/rest/agent/390|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "guest/loading/owner/1280|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "guest/loading/owner/1280|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "guest/loading/owner/390|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "guest/loading/owner/390|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "guest/loading/agent/1280|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "guest/loading/agent/1280|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "guest/loading/agent/390|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "guest/loading/agent/390|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "account/rest/owner/1280|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "account/rest/owner/1280|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "account/rest/owner/390|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "account/rest/owner/390|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "account/rest/agent/1280|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "account/rest/agent/1280|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "account/rest/agent/390|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "account/rest/agent/390|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "account/loading/owner/1280|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "account/loading/owner/1280|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "account/loading/owner/390|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "account/loading/owner/390|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "account/loading/agent/1280|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "account/loading/agent/1280|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "account/loading/agent/390|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "account/loading/agent/390|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "new/rest/owner/1280|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "new/rest/owner/1280|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "new/rest/owner/390|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "new/rest/owner/390|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "new/rest/agent/1280|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "new/rest/agent/1280|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "new/rest/agent/390|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "new/rest/agent/390|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "add/rest/owner/1280|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "add/rest/owner/1280|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "add/rest/owner/390|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "add/rest/owner/390|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "add/rest/agent/1280|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "add/rest/agent/1280|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "add/rest/agent/390|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "add/rest/agent/390|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "add/loading/owner/1280|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "add/loading/owner/1280|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "add/loading/owner/390|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "add/loading/owner/390|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "add/loading/agent/1280|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "add/loading/agent/1280|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "add/loading/agent/390|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "add/loading/agent/390|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "receive/rest/owner/1280|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "receive/rest/owner/1280|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "receive/rest/owner/390|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "receive/rest/owner/390|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "receive/rest/agent/1280|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "receive/rest/agent/1280|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "receive/rest/agent/390|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "receive/rest/agent/390|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "receive/loading/owner/1280|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "receive/loading/owner/1280|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "receive/loading/owner/390|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "receive/loading/owner/390|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "receive/loading/agent/1280|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "receive/loading/agent/1280|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "receive/loading/agent/390|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "receive/loading/agent/390|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "motion/normal/account/1280|moves-at-rest|div.flex.flex-col > div.flex.flex-col > div.skeleton.h-12|11 animation(s) still run on a settled page (pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity); nothing moves that is not a state change",
+  "motion/normal/account/1280|flip-not-opacity|::view-transition-new(root)|the flip animates mixBlendMode; DESIGN: crossfade only, no slide, no scale",
+  "motion/normal/account/1280|flip-not-opacity|::view-transition-new(root)|the flip animates mixBlendMode; DESIGN: crossfade only, no slide, no scale",
+  "motion/reduced/account/1280|flip-not-opacity|::view-transition-new(root)|the flip animates mixBlendMode; DESIGN: crossfade only, no slide, no scale",
+  "motion/reduced/account/1280|flip-not-opacity|::view-transition-new(root)|the flip animates mixBlendMode; DESIGN: crossfade only, no slide, no scale",
+  "motion/normal/account/390|moves-at-rest|div.flex.flex-col > div.flex.flex-col > div.skeleton.h-12|11 animation(s) still run on a settled page (pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity); nothing moves that is not a state change",
+  "motion/normal/account/390|flip-not-opacity|::view-transition-new(root)|the flip animates mixBlendMode; DESIGN: crossfade only, no slide, no scale",
+  "motion/normal/account/390|flip-not-opacity|::view-transition-new(root)|the flip animates mixBlendMode; DESIGN: crossfade only, no slide, no scale",
+  "motion/reduced/account/390|flip-not-opacity|::view-transition-new(root)|the flip animates mixBlendMode; DESIGN: crossfade only, no slide, no scale",
+  "motion/reduced/account/390|flip-not-opacity|::view-transition-new(root)|the flip animates mixBlendMode; DESIGN: crossfade only, no slide, no scale"
+ ],
+ "findings": [
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "guest/rest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "guest/rest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "guest/rest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "guest/rest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "guest/rest/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "guest/rest/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "guest/rest/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "guest/rest/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "guest/loading/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "guest/loading/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "guest/loading/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "guest/loading/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "guest/loading/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "guest/loading/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "guest/loading/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "guest/loading/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "account/rest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "account/rest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "account/rest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "account/rest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "account/rest/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "account/rest/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "account/rest/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "account/rest/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "account/loading/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "account/loading/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "account/loading/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "account/loading/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "account/loading/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "account/loading/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "account/loading/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "account/loading/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "new/rest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "new/rest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "new/rest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "new/rest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "new/rest/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "new/rest/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "new/rest/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "new/rest/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "add/rest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "add/rest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "add/rest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "add/rest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "add/rest/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "add/rest/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "add/rest/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "add/rest/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "add/loading/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "add/loading/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "add/loading/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "add/loading/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "add/loading/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "add/loading/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "add/loading/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "add/loading/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "receive/rest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "receive/rest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "receive/rest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "receive/rest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "receive/rest/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "receive/rest/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "receive/rest/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "receive/rest/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "receive/loading/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "receive/loading/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "receive/loading/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "receive/loading/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "receive/loading/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "receive/loading/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "receive/loading/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "receive/loading/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "moves-at-rest",
+   "sel": "div.flex.flex-col > div.flex.flex-col > div.skeleton.h-12",
+   "text": "",
+   "detail": "11 animation(s) still run on a settled page (pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity); nothing moves that is not a state change",
+   "name": "motion/normal/account/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "flip-not-opacity",
+   "sel": "::view-transition-new(root)",
+   "text": "",
+   "detail": "the flip animates mixBlendMode; DESIGN: crossfade only, no slide, no scale",
+   "name": "motion/normal/account/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "flip-not-opacity",
+   "sel": "::view-transition-new(root)",
+   "text": "",
+   "detail": "the flip animates mixBlendMode; DESIGN: crossfade only, no slide, no scale",
+   "name": "motion/normal/account/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "flip-not-opacity",
+   "sel": "::view-transition-new(root)",
+   "text": "",
+   "detail": "the flip animates mixBlendMode; DESIGN: crossfade only, no slide, no scale",
+   "name": "motion/reduced/account/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "flip-not-opacity",
+   "sel": "::view-transition-new(root)",
+   "text": "",
+   "detail": "the flip animates mixBlendMode; DESIGN: crossfade only, no slide, no scale",
+   "name": "motion/reduced/account/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "moves-at-rest",
+   "sel": "div.flex.flex-col > div.flex.flex-col > div.skeleton.h-12",
+   "text": "",
+   "detail": "11 animation(s) still run on a settled page (pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity); nothing moves that is not a state change",
+   "name": "motion/normal/account/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "flip-not-opacity",
+   "sel": "::view-transition-new(root)",
+   "text": "",
+   "detail": "the flip animates mixBlendMode; DESIGN: crossfade only, no slide, no scale",
+   "name": "motion/normal/account/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "flip-not-opacity",
+   "sel": "::view-transition-new(root)",
+   "text": "",
+   "detail": "the flip animates mixBlendMode; DESIGN: crossfade only, no slide, no scale",
+   "name": "motion/normal/account/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "flip-not-opacity",
+   "sel": "::view-transition-new(root)",
+   "text": "",
+   "detail": "the flip animates mixBlendMode; DESIGN: crossfade only, no slide, no scale",
+   "name": "motion/reduced/account/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "flip-not-opacity",
+   "sel": "::view-transition-new(root)",
+   "text": "",
+   "detail": "the flip animates mixBlendMode; DESIGN: crossfade only, no slide, no scale",
+   "name": "motion/reduced/account/390"
+  },
+  {
+   "sev": "note",
+   "rule": "not-built-yet",
+   "sel": "",
+   "text": "",
+   "detail": "no text input on /new yet",
+   "name": "typing-v/new/owner/390"
+  },
+  {
+   "sev": "note",
+   "rule": "not-built-yet",
+   "sel": "",
+   "text": "",
+   "detail": "no text input on /new yet",
+   "name": "keyboard/new/375"
+  },
+  {
+   "sev": "note",
+   "rule": "not-built-yet",
+   "sel": "",
+   "text": "",
+   "detail": "no text input on /add yet",
+   "name": "keyboard/add/375"
+  }
+ ]
+}

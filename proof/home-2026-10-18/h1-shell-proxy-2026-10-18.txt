@@ -1,0 +1,20 @@
+# H1 shell + proxy, real runs (2026-10-18 06:31:09 +0800, lane/home 3ef80d6)
+
+## next dev -p 3010 (TAMEION_URL=http://127.0.0.1:7890, the lane service)
+GET / -> 200
+GET /new -> 200
+GET /a/0xb1da17cf2b327cacf2acd7418f3debb24ff4a795 -> 200
+GET /a/0xb1da17cf2b327cacf2acd7418f3debb24ff4a795/add -> 200
+GET /a/0xb1da17cf2b327cacf2acd7418f3debb24ff4a795/receive -> 200
+GET /icon.svg -> 200
+
+$ curl http://localhost:3010/api/level1/demo
+{"bill":{"cycles":15,"everySecs":120,"usdc":"0.002"},"delaySecs":30,"enabled":true,"vendor":"0xe5e2d8dcc2038fd0a010a6e7845378b646e33854"}  -> HTTP 200
+$ curl 'http://localhost:3010/api/level1/inbox?policy=0x0000000000000000000000000000000000000001'
+{"contractVersion":"2026-10-18.1","error":{"audience":"agent","by":"input","code":"not_found","executed":"no","meaning":"No such account, job or record on this service.","nextStep":"Check the address or id; an account lives on the service that opened it.","retryAfterSecs":0,"words":"no such tenant"},"ok":false}  -> HTTP 404
+
+## next start (production build) on :3019, TAMEION_URL=https://tameion-agents-production-064a.up.railway.app (read-only GET)
+$ curl http://localhost:3019/api/level1/tenant/0xb1da17cf2b327cacf2acd7418f3debb24ff4a795 | name
+  name: acme-agents-1541 | chain: arbitrum-sepolia | deployed: True
+$ curl http://localhost:3019/api/level1/status?policy=0xb1da…a795 | contractVersion, runway
+  ok: True | contractVersion: 2026-10-18.1 | rate: 0.004285 USDC | runway: {'byRateDays': 4, 'firstShortfallDays': None}

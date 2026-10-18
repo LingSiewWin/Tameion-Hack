@@ -1,0 +1,8 @@
+Sun Oct 18 08:23:23 +08 2026
+Lighthouse 12.8.2 mobile (simulated slow 4G, 4x CPU), production build of lane/home-h7 abf4dab (next start :3027, warm), HOME_DEMO_NAME=northwind-agents on the lane service :7890; no AIS recording in production (the synthetic replay is dev only); placeholder scene.
+A run 1 perf 100 a11y 100 FCP 0.8 s LCP 1.7 s TBT 10 ms CLS 0 SI 0.8 s bytes Total size was 249 KiB
+A run 2 perf 99 a11y 100 FCP 0.8 s LCP 2.0 s TBT 10 ms CLS 0 SI 0.8 s bytes Total size was 249 KiB
+B run 1 perf 100 a11y 100 FCP 0.8 s LCP 1.8 s TBT 10 ms CLS 0 SI 0.8 s bytes Total size was 248 KiB
+B run 2 perf 98 a11y 100 FCP 0.8 s LCP 2.5 s TBT 20 ms CLS 0 SI 0.8 s bytes Total size was 248 KiB
+C run 1 perf 100 a11y 100 FCP 0.8 s LCP 1.8 s TBT 10 ms CLS 0 SI 0.8 s bytes Total size was 240 KiB
+C run 2 perf 100 a11y 100 FCP 0.8 s LCP 1.7 s TBT 10 ms CLS 0 SI 0.8 s bytes Total size was 240 KiB

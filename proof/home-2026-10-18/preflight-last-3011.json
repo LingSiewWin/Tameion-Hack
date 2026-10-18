@@ -1,0 +1,246 @@
+{
+ "at": "2026-10-18 07:00:48 +08",
+ "keys": [
+  "account/error/owner/1280|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "account/error/owner/1280|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "account/error/owner/390|one-hero||0 h1 on the page (DESIGN: one hero per surface)",
+  "account/error/owner/390|axe:page-has-heading-one|html|moderate: Page must have a level-one heading",
+  "account/detail/owner/390|touch-target|div.flex.flex-col > div.flex.flex-col > button.row.self-start|129x22 px; DESIGN touch targets are >= 44",
+  "account/rest/owner/1280|money-not-tabular|h1#authority|\"0.05 USDC\": tabular lining figures wherever money appears",
+  "account/rest/owner/390|money-not-tabular|h1#authority|\"0.05 USDC\": tabular lining figures wherever money appears",
+  "account/guest/owner/1280|money-not-tabular|h1#authority|\"0.05 USDC\": tabular lining figures wherever money appears",
+  "account/guest/owner/390|money-not-tabular|h1#authority|\"0.05 USDC\": tabular lining figures wherever money appears",
+  "account/empty/owner/1280|money-not-tabular|h1#authority|\"0.05 USDC\": tabular lining figures wherever money appears",
+  "account/empty/owner/390|money-not-tabular|h1#authority|\"0.05 USDC\": tabular lining figures wherever money appears",
+  "account/offline/owner/1280|money-not-tabular|h1#authority|\"0.05 USDC\": tabular lining figures wherever money appears",
+  "account/offline/owner/390|money-not-tabular|h1#authority|\"0.05 USDC\": tabular lining figures wherever money appears",
+  "account/needs-you/owner/1280|money-not-tabular|h1#authority|\"0.05 USDC\": tabular lining figures wherever money appears",
+  "account/needs-you/owner/1280|money-not-tabular|ul.rounded-(--radius-plate).border > li.flex.flex-col > p.row-title.m-0|\"0.002 USDC\": tabular lining figures wherever money appears",
+  "account/needs-you/owner/390|money-not-tabular|h1#authority|\"0.05 USDC\": tabular lining figures wherever money appears",
+  "account/needs-you/owner/390|money-not-tabular|ul.rounded-(--radius-plate).border > li.flex.flex-col > p.row-title.m-0|\"0.002 USDC\": tabular lining figures wherever money appears",
+  "account/sealed/owner/1280|money-not-tabular|h1#authority|\"0.05 USDC\": tabular lining figures wherever money appears",
+  "account/sealed/owner/390|money-not-tabular|h1#authority|\"0.05 USDC\": tabular lining figures wherever money appears",
+  "account/detail/owner/1280|money-not-tabular|h1#authority|\"0.05 USDC\": tabular lining figures wherever money appears",
+  "account/detail/owner/1280|money-not-tabular|h2#_r_0_|\"0.002 USDC\": tabular lining figures wherever money appears",
+  "account/detail/owner/390|money-not-tabular|h1#authority|\"0.05 USDC\": tabular lining figures wherever money appears",
+  "account/detail/owner/390|money-not-tabular|h2#_r_0_|\"0.002 USDC\": tabular lining figures wherever money appears"
+ ],
+ "findings": [
+  {
+   "sev": "warn",
+   "rule": "money-not-tabular",
+   "sel": "h1#authority",
+   "text": "Your agents may spend 0.05 USDC a day, 0.005 at a ",
+   "detail": "\"0.05 USDC\": tabular lining figures wherever money appears",
+   "name": "account/rest/owner/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "money-not-tabular",
+   "sel": "h1#authority",
+   "text": "Your agents may spend 0.05 USDC a day, 0.005 at a ",
+   "detail": "\"0.05 USDC\": tabular lining figures wherever money appears",
+   "name": "account/rest/owner/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "money-not-tabular",
+   "sel": "h1#authority",
+   "text": "Your agents may spend 0.05 USDC a day, 0.005 at a ",
+   "detail": "\"0.05 USDC\": tabular lining figures wherever money appears",
+   "name": "account/guest/owner/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "money-not-tabular",
+   "sel": "h1#authority",
+   "text": "Your agents may spend 0.05 USDC a day, 0.005 at a ",
+   "detail": "\"0.05 USDC\": tabular lining figures wherever money appears",
+   "name": "account/guest/owner/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "money-not-tabular",
+   "sel": "h1#authority",
+   "text": "Your agents may spend 0.05 USDC a day, 0.005 at a ",
+   "detail": "\"0.05 USDC\": tabular lining figures wherever money appears",
+   "name": "account/empty/owner/1280"
+  },
+  {
+   "sev": "note",
+   "rule": "mocked",
+   "sel": "",
+   "text": "",
+   "detail": "the service reply was patched in the page (no real account for this state)",
+   "name": "account/empty/owner/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "money-not-tabular",
+   "sel": "h1#authority",
+   "text": "Your agents may spend 0.05 USDC a day, 0.005 at a ",
+   "detail": "\"0.05 USDC\": tabular lining figures wherever money appears",
+   "name": "account/empty/owner/390"
+  },
+  {
+   "sev": "note",
+   "rule": "mocked",
+   "sel": "",
+   "text": "",
+   "detail": "the service reply was patched in the page (no real account for this state)",
+   "name": "account/empty/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "account/error/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "account/error/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "one-hero",
+   "sel": "",
+   "text": "",
+   "detail": "0 h1 on the page (DESIGN: one hero per surface)",
+   "name": "account/error/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "axe:page-has-heading-one",
+   "sel": "html",
+   "text": "",
+   "detail": "moderate: Page must have a level-one heading",
+   "name": "account/error/owner/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "money-not-tabular",
+   "sel": "h1#authority",
+   "text": "Your agents may spend 0.05 USDC a day, 0.005 at a ",
+   "detail": "\"0.05 USDC\": tabular lining figures wherever money appears",
+   "name": "account/offline/owner/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "money-not-tabular",
+   "sel": "h1#authority",
+   "text": "Your agents may spend 0.05 USDC a day, 0.005 at a ",
+   "detail": "\"0.05 USDC\": tabular lining figures wherever money appears",
+   "name": "account/offline/owner/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "money-not-tabular",
+   "sel": "h1#authority",
+   "text": "Your agents may spend 0.05 USDC a day, 0.005 at a ",
+   "detail": "\"0.05 USDC\": tabular lining figures wherever money appears",
+   "name": "account/needs-you/owner/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "money-not-tabular",
+   "sel": "ul.rounded-(--radius-plate).border > li.flex.flex-col > p.row-title.m-0",
+   "text": "The agent prepared 0.002 USDC to a payee you have ",
+   "detail": "\"0.002 USDC\": tabular lining figures wherever money appears",
+   "name": "account/needs-you/owner/1280"
+  },
+  {
+   "sev": "note",
+   "rule": "mocked",
+   "sel": "",
+   "text": "",
+   "detail": "the service reply was patched in the page (no real account for this state)",
+   "name": "account/needs-you/owner/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "money-not-tabular",
+   "sel": "h1#authority",
+   "text": "Your agents may spend 0.05 USDC a day, 0.005 at a ",
+   "detail": "\"0.05 USDC\": tabular lining figures wherever money appears",
+   "name": "account/needs-you/owner/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "money-not-tabular",
+   "sel": "ul.rounded-(--radius-plate).border > li.flex.flex-col > p.row-title.m-0",
+   "text": "The agent prepared 0.002 USDC to a payee you have ",
+   "detail": "\"0.002 USDC\": tabular lining figures wherever money appears",
+   "name": "account/needs-you/owner/390"
+  },
+  {
+   "sev": "note",
+   "rule": "mocked",
+   "sel": "",
+   "text": "",
+   "detail": "the service reply was patched in the page (no real account for this state)",
+   "name": "account/needs-you/owner/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "money-not-tabular",
+   "sel": "h1#authority",
+   "text": "Your agents may spend 0.05 USDC a day, 0.005 at a ",
+   "detail": "\"0.05 USDC\": tabular lining figures wherever money appears",
+   "name": "account/sealed/owner/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "money-not-tabular",
+   "sel": "h1#authority",
+   "text": "Your agents may spend 0.05 USDC a day, 0.005 at a ",
+   "detail": "\"0.05 USDC\": tabular lining figures wherever money appears",
+   "name": "account/sealed/owner/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "money-not-tabular",
+   "sel": "h1#authority",
+   "text": "Your agents may spend 0.05 USDC a day, 0.005 at a ",
+   "detail": "\"0.05 USDC\": tabular lining figures wherever money appears",
+   "name": "account/detail/owner/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "money-not-tabular",
+   "sel": "h2#_r_0_",
+   "text": "0.002 USDC to Demo Vendor",
+   "detail": "\"0.002 USDC\": tabular lining figures wherever money appears",
+   "name": "account/detail/owner/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "money-not-tabular",
+   "sel": "h1#authority",
+   "text": "Your agents may spend 0.05 USDC a day, 0.005 at a ",
+   "detail": "\"0.05 USDC\": tabular lining figures wherever money appears",
+   "name": "account/detail/owner/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "money-not-tabular",
+   "sel": "h2#_r_0_",
+   "text": "0.002 USDC to Demo Vendor",
+   "detail": "\"0.002 USDC\": tabular lining figures wherever money appears",
+   "name": "account/detail/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "touch-target",
+   "sel": "div.flex.flex-col > div.flex.flex-col > button.row.self-start",
+   "text": "Open in Agent view",
+   "detail": "129x22 px; DESIGN touch targets are >= 44",
+   "name": "account/detail/owner/390"
+  }
+ ]
+}

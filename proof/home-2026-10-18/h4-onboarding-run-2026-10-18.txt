@@ -1,0 +1,114 @@
+H4 onboarding run on the lane service (written 2026-10-18 06:56 +0800)
+
+Where: apps/home production build (`next build` + `next start -p 3013 -H localhost`), branch lane/home-h4, against the lane service
+http://127.0.0.1:7890 (demo mode; Arbitrum Sepolia). Browser: a private headless Chromium (Chrome for Testing 1243, playwright-core
+1.50.1) at 390 x 844, fresh context, a CDP virtual passkey (ctap2, internal, resident key, user verification on). The shared MCP browser
+was not used for the run: another seat's session replaced the page during the first attempt (06:44), which would have deleted the
+passkey mid-flow. The invite word was read from a private env file by the script; it was never typed into a tool call's output,
+a screenshot or this file.
+
+RESULT: PASS. Guest refusal, guest -> stepper, name, passkey, funded, one-tap allowance, the receipt, Open the account, Receive (QR
+decodes to the account's address), guest -> the demo account. No 5xx, no refusal from the service. One account opened.
+
+Timeline (run 3, +08):
+06:53:40  `/` wrong word -> "That is not the word from the judges' form." (the server compares an HMAC of the word; the page never has it)
+06:53:41  right word, "Make your own" -> /new; cookie tameion.home.invite (httpOnly, SameSite=Lax)
+06:53:41  1 Name: suggested acme-agents-5333, "acme-agents-5333 is free." -> Continue
+06:53:41  2 Passkey: "Make my passkey" -> 1 credential in the virtual authenticator
+06:53:41  3 Funded: POST /api/level1/deploy {chain arbitrum-sepolia, demo, lazy, name, qx, qy, invite added on the server}
+06:53:55  "Sent 0.05 USDC to the account; reading the balance back." (deploy answered, funding confirmed): 14 s
+06:53:57  balance read back 0.05 USDC (inbox with the device token) -> 4 Allowance
+06:53:57  tap "Let the agent pay Demo Vendor 0.002 USDC every 2 minutes" -> Signing (bills check, prepare-payees, challenge recomputed
+          in the page and equal to the service's, passkey assertion)
+06:54:28  Sent (POST /api/level1/execute, one Idempotency-Key per tap) — Signing took 31 s this run (2 s in run 2 at 06:48); the lane
+          log shows the agent's pass 202 starting on the funding at the same time; the service's own latency, not measured further
+06:54:34  Confirmed (bill saved, Demo Vendor named), 06:54:37 the receipt read back from the account
+06:54:41  Open the account -> /a/acme-agents-5333
+06:54:43  /a/acme-agents-5333/receive: "acme-agents-5333@arbitrum-sepolia", "Any USDC on Arbitrum Sepolia arrives here."; the QR read by
+          the browser's BarcodeDetector = 0xb52fe91fd5aed4ed01118e03769b2014c324ea26 = the account (match); Agent view shows the address
+06:54:46  `/` right word, "Open the demo account" -> /a/northwind-agents (HOME_DEMO_NAME on the lane)
+
+Account: acme-agents-5333  policy 0xb52fe91fd5aed4ed01118e03769b2014c324ea26  owner 0xd524b4d5fb26df467fb0a395e5abe86fabb57f8f
+         agent 0x7bca5572f79306fd45b32187bc98c88c9649388a  operator (relayer) 0x6c1ce01bfe3f834a5fbfa0a9081d5d976b819a25
+         delay 30 s, per payment 50 USDC, a day 100 USDC, mode Propose, created block 320216115
+Transactions (Arbitrum Sepolia; receipts read back with eth_getTransactionReceipt, status 1 each):
+  policy deploy    0x6d349b9f50cd86b91272dabe0b3e38e9f5a2e821652b5f9afe6f047df15fd633  block 320216143 (CREATE2 factory, 4 logs)
+  owner deploy     0x6fd596a41f4583548e6d6b0c68e4db35ec1b81b6fed2e1998b4a6662172325c1
+  agent's gas      0x206c9d9681931034faca02489561fad553cd59e7b4409254e7db48ab99e59e86
+  funding 0.05     0xcac4ceb572cf86d93336994062044479afa1955d6bdafc76e4af826c7001c0c5  block 320216161 (USDC transfer, 1 log)
+  payee approval   0x26ab11117741e3844074d0c937be8dddc369855c9b1ecaabf6e6d74ba4726bc0  block 320216296 (PasskeyPrincipal.execute
+                   -> setPayees([Demo Vendor], true), 2 logs)
+Read back from the service after the run (GET /api/level1/inbox): payees [0xe5e2…3854 approvedAt 1792277671 payableFrom 1792277701],
+typedBills [0.002 USDC every 120 s], mode Propose, balance 0.050000 USDC.
+
+Zero-hash on the receipt page: 0 attributes and 0 text matches of /0x[0-9a-fA-F]{8,}/ outside scripts. Cookies after the run:
+tameion.home.invite (httpOnly), tameion.home.device (httpOnly). localStorage: tameion.pub, tameion.tenants, tameion.tenant (the
+console's keys). Console errors: one, the expected 404 of GET /api/level1/name/<free name> (a free name answers 404).
+
+The receipt as the page built it from the account's inbox (receiptOf, every line from the mandate and the contract rule behind it):
+  Tameion can
+    - Prepare each payment to Demo Vendor; nothing goes out until you tap.
+    - Ask for higher limits or more autonomy; nothing rises for 30 seconds, anyone can see it coming, and you can cancel it.
+    - Cut a limit or stop the agent at once.
+  Tameion can never
+    - Pay anyone you have not approved.
+    - Pay a payee in its first 30 seconds after you approve it.
+    - Pay more than 50 USDC at a time, or more than 100 USDC in any 24 hours.
+    - Pay the same bill twice.
+    - Approve a payee, move your money out or change your keys. Those take your passkey.
+    - Keep paying after 16 Jan unless you renew the agent.
+  Worst case
+    - A stolen agent key moves nothing while each payment waits for your tap.
+    - A stolen Tameion key is held to the same limits and payees. Anything more waits 30 seconds, and your passkey cancels it.
+    - If you lose this device before adding guardians, no one can move the money out; the agent stays inside these limits.
+
+Screenshots (proof/home-2026-10-18/): guest-owner-390/1280, guest-refused-owner-390, new-1-name-owner-390, new-2-passkey-owner-390,
+new-3-funded-opening-owner-390, new-3-funded-sent-owner-390, new-4-allowance-owner-390, new-4-allowance-inflight-owner-390,
+new-receipt-owner-390 (full page), new-receipt-owner-1280, new-then-account-owner-390, receive-owner-390/1280, receive-agent-390,
+guest-then-demo-owner-390. Earlier runs: run 1 06:47 (acme-agents-3314, funded; the script mistook Next's route announcer for an
+alert and left before the allowance: that account has no bill), run 2 06:48 (acme-agents-5289, PASS on the dev server, payee
+approval 0xfcdcb1d57458bccdf1a47ee1b0bdffd0a9da00e6314b7689eada2f9a360a995b).
+
+======================================================================================================================================
+Run 4 on the founder's design (lane/home 9c5f50e tokens + f3e08d1 CI; H4 at aacef26), written 2026-10-18 07:25 +0800
+Same set-up as run 3 (production build on localhost:3013, private headless Chromium, CDP virtual passkey, lane service :7890).
+RESULT: PASS through the receipt; the script then stopped at Receive on a real bug, fixed and re-checked on the same account:
+Receive (a server component) imported the style strings from a "use client" module and got a client reference, so its title and
+handle had no type role (`className="undefined …"`). Fix aacef26: the strings live in a plain module (features/onboarding/styles.ts).
+Re-check 07:24 on acme-agents-1016: title class "sheet-title", handle "acme-agents-1016@arbitrum-sepolia", the QR read back by
+BarcodeDetector = 0x95cc401a8118909f5d74ece664500fc9be1a29d5 = the account (match), no hash in the Owner text, the Agent view
+shows the address in mono; guest -> /a/northwind-agents.
+
+07:19:27  guest refused, then /new; 1 Name acme-agents-1016 free; 2 passkey (1 credential)
+07:19:27  3 Funded: deploy; 07:19:41 "Sent 0.05 USDC to the account; reading the balance back." (14 s); 07:19:44 balance read back
+07:19:44  4 Allowance tap -> Signing; 07:20:13 Sent (29 s; the agent's pass ran on the funding again); 07:20:18 Confirmed
+07:20:21  the receipt (the same fourteen lines as run 3, Demo Vendor named, 50 / 100 USDC caps, 30 s delay, 16 Jan expiry)
+Account acme-agents-1016: policy 0x95cc401a8118909f5d74ece664500fc9be1a29d5, owner 0x6a6575382a500fae046ffa88c8f18c1f060aa804
+  policy deploy 0x679373e35a70b4896c4693fd1dc96188e56762adbe5c77562bc33ceba7be5750
+  owner deploy  0x925c43f9ee187c3a335f8819436950541756da778bc168203a1282fa33f48feb
+  agent's gas   0xe71760e5f6450fa8a071054f8dc1211b48ce5936de19017b3831fb75a1626f48
+  funding 0.05  0x7e2de71c6ea3c876502426012c66574608ff7b999347771ac8ff134f2e6a7708
+  payee approval 0x4001f21db238f1a7de4b10ada3347ec20117e75d780e291553708c4c62ad2ff0 (status 1, block 320221899)
+Zero-hash on the receipt page: 0 attributes, 0 text matches. axe-core (wcag2a, wcag2aa, wcag21aa, best-practice) at 390 and 1280:
+step 1, step 2, Receive in both views clean; `/` reports only page-has-heading-one, because its h1 is H7's hero (not yet on
+lane/home) and the guest card is an h2 by design.
+Screenshots of run 4 replace run 3's under the same names in proof/home-2026-10-18/.
+
+======================================================================================================================================
+Run 5 on lane/home 7bb2a53 (H2's Owner home merged) + H4 4cde130, written 2026-10-18 07:40 +0800
+RESULT: PASS end to end, same set-up. acme-agents-4288 (policy 0x90f26836fa1fb22f8bbc15927c0c0108ff54d8e0): 07:38:42 name, deploy and
+funding 0.05 confirmed 07:38:58, allowance Signing 07:39:00 -> Sent 07:39:06 -> Confirmed 07:39:11 (11 s this time), payee approval
+0xbb892fac410c89f1661d0ea38c73b954af865f43f3f709a32bf53b5a472a85eb (status 1, block 320225999), receipt 07:39:16 (zero-hash 0/0),
+Open the account -> /a/acme-agents-4288, where H2's Owner home reads "Your agents may spend 100 USDC a day, 50 at a time, only on
+Demo Vendor, and each payment waits for your tap." (no hash in the Owner text; new-then-account-owner-390.png); Receive QR read back
+= the account; guest -> /a/northwind-agents. Cookies: tameion.home.invite, tameion.home.device (both httpOnly); the proxy now H2's.
+
+Software owner key through the service's routes (for guest-demo on the lane's Railway service), proved locally first:
+h4-softkey-check on :7890 (policy 0xb9f1bafcbaf62209655e2731841d68612a25a11b), key ~/.tameion/test-keys/h4-h4-softkey-check-owner.pk8
+(mode 600, never printed): 07:28:48 opened, funding 0x1ca1c19bf73c0dcaeddbe5ffecbec27b1f3f9abe904311302322f5c7d4bc0870; 07:28:56 payee
+approved 0x5be7436e4194ab60284be5107f36445d9decdd066f650da6616859b2f7b9eaa9; 07:28:57 bill saved (0.002 every 120 s); 07:29:06 Autopilot
+asked 0xb6d63ee8810c3764a045cd76dd5836eb4e50838c37199466f6c304fd4d367791; applied by the service's watcher (0x1cdc5de9…dcf8), mode
+Autopilot at 07:29:55; 07:31:01 THE AGENT PAID BY ITSELF 0.002 USDC, tx 0xc1840d878bdfa3b31b1178cea3dd4519fd9af78c7c13d1869e2dd48aa4e1ad86
+("paid by the agent: a bill the owner typed"). The same driver against https://tameion-lane-production.up.railway.app was refused
+at 07:31 and 07:32: "/api/level1/deploy 403: an invite word is needed to deploy; ask us" (neither the :7890 word nor the S17a word
+file is that service's). guest-demo does not exist yet.

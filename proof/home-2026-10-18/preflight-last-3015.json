@@ -1,0 +1,825 @@
+{
+ "at": "2026-10-18 07:13:28 +08",
+ "keys": [
+  "account/rest/owner/1280|border-on-content|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)|Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/rest/owner/1280|border-on-content|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/rest/owner/1280|border-on-content|header.border-b.border-(--rule) > div.surface.flex > div.capsule|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/rest/owner/1280|off-token-colour|div.surface.flex > div.capsule > button|background #1E5F46 x1: a saturated colour that is no token",
+  "account/rest/owner/1280|network-pill-dashed|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Testnet is a dashed capsule; the border is solid",
+  "account/rest/owner/390|border-on-content|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)|Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/rest/owner/390|border-on-content|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/rest/owner/390|border-on-content|header.border-b.border-(--rule) > div.surface.flex > div.capsule|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/rest/owner/390|off-token-colour|div.surface.flex > div.capsule > button|background #1E5F46 x1: a saturated colour that is no token",
+  "account/rest/owner/390|network-pill-dashed|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Testnet is a dashed capsule; the border is solid",
+  "account/rest/agent/1280|border-on-content|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)|Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/rest/agent/1280|border-on-content|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/rest/agent/1280|border-on-content|header.border-b.border-(--rule) > div.surface.flex > div.capsule|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/rest/agent/1280|off-token-colour|div.surface.flex > div.capsule > button|background #7FD1A8 x1: a saturated colour that is no token",
+  "account/rest/agent/1280|content-max|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > main.surface.py-(--space-5)|main is 1280 px wide; content max is 1120",
+  "account/rest/agent/1280|network-pill-dashed|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Testnet is a dashed capsule; the border is solid",
+  "account/rest/agent/390|border-on-content|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)|Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/rest/agent/390|border-on-content|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/rest/agent/390|border-on-content|header.border-b.border-(--rule) > div.surface.flex > div.capsule|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/rest/agent/390|off-token-colour|div.surface.flex > div.capsule > button|background #7FD1A8 x1: a saturated colour that is no token",
+  "account/rest/agent/390|network-pill-dashed|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Testnet is a dashed capsule; the border is solid",
+  "account/guest/owner/1280|border-on-content|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)|Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/guest/owner/1280|border-on-content|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/guest/owner/1280|border-on-content|header.border-b.border-(--rule) > div.surface.flex > div.capsule|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/guest/owner/1280|off-token-colour|div.surface.flex > div.capsule > button|background #1E5F46 x1: a saturated colour that is no token",
+  "account/guest/owner/1280|network-pill-dashed|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Testnet is a dashed capsule; the border is solid",
+  "account/guest/owner/390|border-on-content|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)|Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/guest/owner/390|border-on-content|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/guest/owner/390|border-on-content|header.border-b.border-(--rule) > div.surface.flex > div.capsule|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/guest/owner/390|off-token-colour|div.surface.flex > div.capsule > button|background #1E5F46 x1: a saturated colour that is no token",
+  "account/guest/owner/390|network-pill-dashed|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Testnet is a dashed capsule; the border is solid",
+  "account/detail/owner/1280|border-on-content|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)|Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/detail/owner/1280|border-on-content|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/detail/owner/1280|border-on-content|header.border-b.border-(--rule) > div.surface.flex > div.capsule|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/detail/owner/1280|off-token-colour|div.surface.flex > div.capsule > button|background #1E5F46 x1: a saturated colour that is no token",
+  "account/detail/owner/1280|network-pill-dashed|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Testnet is a dashed capsule; the border is solid",
+  "account/detail/owner/390|border-on-content|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)|Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/detail/owner/390|border-on-content|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/detail/owner/390|border-on-content|header.border-b.border-(--rule) > div.surface.flex > div.capsule|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/detail/owner/390|off-token-colour|div.surface.flex > div.capsule > button|background #1E5F46 x1: a saturated colour that is no token",
+  "account/detail/owner/390|network-pill-dashed|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Testnet is a dashed capsule; the border is solid",
+  "account/detail/agent/1280|border-on-content|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)|Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/detail/agent/1280|border-on-content|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/detail/agent/1280|border-on-content|header.border-b.border-(--rule) > div.surface.flex > div.capsule|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/detail/agent/1280|off-token-colour|div.surface.flex > div.capsule > button|background #7FD1A8 x1: a saturated colour that is no token",
+  "account/detail/agent/1280|content-max|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > main.surface.py-(--space-5)|main is 1280 px wide; content max is 1120",
+  "account/detail/agent/1280|network-pill-dashed|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Testnet is a dashed capsule; the border is solid",
+  "account/detail/agent/390|border-on-content|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)|Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/detail/agent/390|border-on-content|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/detail/agent/390|border-on-content|header.border-b.border-(--rule) > div.surface.flex > div.capsule|Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+  "account/detail/agent/390|off-token-colour|div.surface.flex > div.capsule > button|background #7FD1A8 x1: a saturated colour that is no token",
+  "account/detail/agent/390|network-pill-dashed|header.border-b.border-(--rule) > div.surface.flex > span.pill.meta|Testnet is a dashed capsule; the border is solid",
+  "account/rest/owner/1280|off-token-colour|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body|color #101410 x8: a colour literal, not a token",
+  "account/rest/owner/390|off-token-colour|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body|color #101410 x8: a colour literal, not a token",
+  "account/rest/agent/1280|off-token-colour|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body|color #E8EEE6 x28: a colour literal, not a token",
+  "account/rest/agent/1280|off-token-colour|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body|background #0F1511 x1: a colour literal, not a token",
+  "account/rest/agent/1280|off-token-colour|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)|border #2A332C x10: a colour literal, not a token",
+  "account/rest/agent/1280|off-token-colour|header.border-b.border-(--rule) > div.surface.flex > div.capsule|background #161D18 x2: a colour literal, not a token",
+  "account/rest/agent/1280|off-token-colour|div.mono.flex > div.flex.flex-wrap > span.meta|color #9AA69C x9: a colour literal, not a token",
+  "account/rest/agent/390|off-token-colour|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body|color #E8EEE6 x28: a colour literal, not a token",
+  "account/rest/agent/390|off-token-colour|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body|background #0F1511 x1: a colour literal, not a token",
+  "account/rest/agent/390|off-token-colour|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)|border #2A332C x10: a colour literal, not a token",
+  "account/rest/agent/390|off-token-colour|header.border-b.border-(--rule) > div.surface.flex > div.capsule|background #161D18 x2: a colour literal, not a token",
+  "account/rest/agent/390|off-token-colour|div.mono.flex > div.flex.flex-wrap > span.meta|color #9AA69C x9: a colour literal, not a token",
+  "account/guest/owner/1280|off-token-colour|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body|color #101410 x8: a colour literal, not a token",
+  "account/guest/owner/390|off-token-colour|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body|color #101410 x8: a colour literal, not a token",
+  "account/detail/owner/1280|off-token-colour|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body|color #101410 x8: a colour literal, not a token",
+  "account/detail/owner/390|off-token-colour|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body|color #101410 x8: a colour literal, not a token",
+  "account/detail/agent/1280|off-token-colour|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body|color #E8EEE6 x28: a colour literal, not a token",
+  "account/detail/agent/1280|off-token-colour|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body|background #0F1511 x1: a colour literal, not a token",
+  "account/detail/agent/1280|off-token-colour|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)|border #2A332C x10: a colour literal, not a token",
+  "account/detail/agent/1280|off-token-colour|header.border-b.border-(--rule) > div.surface.flex > div.capsule|background #161D18 x2: a colour literal, not a token",
+  "account/detail/agent/1280|off-token-colour|div.mono.flex > div.flex.flex-wrap > span.meta|color #9AA69C x9: a colour literal, not a token",
+  "account/detail/agent/390|off-token-colour|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body|color #E8EEE6 x28: a colour literal, not a token",
+  "account/detail/agent/390|off-token-colour|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body|background #0F1511 x1: a colour literal, not a token",
+  "account/detail/agent/390|off-token-colour|html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)|border #2A332C x10: a colour literal, not a token",
+  "account/detail/agent/390|off-token-colour|header.border-b.border-(--rule) > div.surface.flex > div.capsule|background #161D18 x2: a colour literal, not a token",
+  "account/detail/agent/390|off-token-colour|div.mono.flex > div.flex.flex-wrap > span.meta|color #9AA69C x9: a colour literal, not a token",
+  "motion/reduced/account/1280|reduced-motion-crossfade|::view-transition-new(root)|a 200 ms crossfade still runs under reduced motion; DESIGN (founder 07:01): the capsule swaps instantly (the lane brief had said crossfade only: a ruling is needed)",
+  "motion/reduced/account/1280|reduced-motion-crossfade|::view-transition-new(root)|a 200 ms crossfade still runs under reduced motion; DESIGN (founder 07:01): the capsule swaps instantly (the lane brief had said crossfade only: a ruling is needed)",
+  "motion/reduced/account/390|reduced-motion-crossfade|::view-transition-new(root)|a 200 ms crossfade still runs under reduced motion; DESIGN (founder 07:01): the capsule swaps instantly (the lane brief had said crossfade only: a ruling is needed)",
+  "motion/reduced/account/390|reduced-motion-crossfade|::view-transition-new(root)|a 200 ms crossfade still runs under reduced motion; DESIGN (founder 07:01): the capsule swaps instantly (the lane brief had said crossfade only: a ruling is needed)"
+ ],
+ "findings": [
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/rest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/rest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > div.capsule",
+   "text": "Owner Agent",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/rest/owner/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "color #101410 x8: a colour literal, not a token",
+   "name": "account/rest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "off-token-colour",
+   "sel": "div.surface.flex > div.capsule > button",
+   "text": "Owner",
+   "detail": "background #1E5F46 x1: a saturated colour that is no token",
+   "name": "account/rest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "network-pill-dashed",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Testnet is a dashed capsule; the border is solid",
+   "name": "account/rest/owner/1280"
+  },
+  {
+   "sev": "note",
+   "rule": "not-built-yet",
+   "sel": "",
+   "text": "",
+   "detail": "the route still shows its skeleton after settling: no content yet",
+   "name": "account/rest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/rest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/rest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > div.capsule",
+   "text": "Owner Agent",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/rest/owner/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "color #101410 x8: a colour literal, not a token",
+   "name": "account/rest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "off-token-colour",
+   "sel": "div.surface.flex > div.capsule > button",
+   "text": "Owner",
+   "detail": "background #1E5F46 x1: a saturated colour that is no token",
+   "name": "account/rest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "network-pill-dashed",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Testnet is a dashed capsule; the border is solid",
+   "name": "account/rest/owner/390"
+  },
+  {
+   "sev": "note",
+   "rule": "not-built-yet",
+   "sel": "",
+   "text": "",
+   "detail": "the route still shows its skeleton after settling: no content yet",
+   "name": "account/rest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/rest/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/rest/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > div.capsule",
+   "text": "Owner Agent",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/rest/agent/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body",
+   "text": "acme-agents-1541 Testnet Owner Agent tameion top 0",
+   "detail": "color #E8EEE6 x28: a colour literal, not a token",
+   "name": "account/rest/agent/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body",
+   "text": "acme-agents-1541 Testnet Owner Agent tameion top 0",
+   "detail": "background #0F1511 x1: a colour literal, not a token",
+   "name": "account/rest/agent/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "border #2A332C x10: a colour literal, not a token",
+   "name": "account/rest/agent/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > div.capsule",
+   "text": "Owner Agent",
+   "detail": "background #161D18 x2: a colour literal, not a token",
+   "name": "account/rest/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "off-token-colour",
+   "sel": "div.surface.flex > div.capsule > button",
+   "text": "Agent",
+   "detail": "background #7FD1A8 x1: a saturated colour that is no token",
+   "name": "account/rest/agent/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "div.mono.flex > div.flex.flex-wrap > span.meta",
+   "text": "as of 07:12:19",
+   "detail": "color #9AA69C x9: a colour literal, not a token",
+   "name": "account/rest/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "content-max",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > main.surface.py-(--space-5)",
+   "text": "tameion top 0xb1da17cf2b327cacf2acd7418f3debb24ff4",
+   "detail": "main is 1280 px wide; content max is 1120",
+   "name": "account/rest/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "network-pill-dashed",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Testnet is a dashed capsule; the border is solid",
+   "name": "account/rest/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/rest/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/rest/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > div.capsule",
+   "text": "Owner Agent",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/rest/agent/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body",
+   "text": "acme-agents-1541 Testnet Owner Agent tameion top 0",
+   "detail": "color #E8EEE6 x28: a colour literal, not a token",
+   "name": "account/rest/agent/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body",
+   "text": "acme-agents-1541 Testnet Owner Agent tameion top 0",
+   "detail": "background #0F1511 x1: a colour literal, not a token",
+   "name": "account/rest/agent/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "border #2A332C x10: a colour literal, not a token",
+   "name": "account/rest/agent/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > div.capsule",
+   "text": "Owner Agent",
+   "detail": "background #161D18 x2: a colour literal, not a token",
+   "name": "account/rest/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "off-token-colour",
+   "sel": "div.surface.flex > div.capsule > button",
+   "text": "Agent",
+   "detail": "background #7FD1A8 x1: a saturated colour that is no token",
+   "name": "account/rest/agent/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "div.mono.flex > div.flex.flex-wrap > span.meta",
+   "text": "as of 07:12:22",
+   "detail": "color #9AA69C x9: a colour literal, not a token",
+   "name": "account/rest/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "network-pill-dashed",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Testnet is a dashed capsule; the border is solid",
+   "name": "account/rest/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/guest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/guest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > div.capsule",
+   "text": "Owner Agent",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/guest/owner/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "color #101410 x8: a colour literal, not a token",
+   "name": "account/guest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "off-token-colour",
+   "sel": "div.surface.flex > div.capsule > button",
+   "text": "Owner",
+   "detail": "background #1E5F46 x1: a saturated colour that is no token",
+   "name": "account/guest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "network-pill-dashed",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Testnet is a dashed capsule; the border is solid",
+   "name": "account/guest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/guest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/guest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > div.capsule",
+   "text": "Owner Agent",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/guest/owner/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "color #101410 x8: a colour literal, not a token",
+   "name": "account/guest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "off-token-colour",
+   "sel": "div.surface.flex > div.capsule > button",
+   "text": "Owner",
+   "detail": "background #1E5F46 x1: a saturated colour that is no token",
+   "name": "account/guest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "network-pill-dashed",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Testnet is a dashed capsule; the border is solid",
+   "name": "account/guest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/detail/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/detail/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > div.capsule",
+   "text": "Owner Agent",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/detail/owner/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "color #101410 x8: a colour literal, not a token",
+   "name": "account/detail/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "off-token-colour",
+   "sel": "div.surface.flex > div.capsule > button",
+   "text": "Owner",
+   "detail": "background #1E5F46 x1: a saturated colour that is no token",
+   "name": "account/detail/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "network-pill-dashed",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Testnet is a dashed capsule; the border is solid",
+   "name": "account/detail/owner/1280"
+  },
+  {
+   "sev": "note",
+   "rule": "not-built-yet",
+   "sel": "",
+   "text": "",
+   "detail": "no row disclosure to open yet",
+   "name": "account/detail/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/detail/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/detail/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > div.capsule",
+   "text": "Owner Agent",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/detail/owner/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "color #101410 x8: a colour literal, not a token",
+   "name": "account/detail/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "off-token-colour",
+   "sel": "div.surface.flex > div.capsule > button",
+   "text": "Owner",
+   "detail": "background #1E5F46 x1: a saturated colour that is no token",
+   "name": "account/detail/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "network-pill-dashed",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Testnet is a dashed capsule; the border is solid",
+   "name": "account/detail/owner/390"
+  },
+  {
+   "sev": "note",
+   "rule": "not-built-yet",
+   "sel": "",
+   "text": "",
+   "detail": "no row disclosure to open yet",
+   "name": "account/detail/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/detail/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/detail/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > div.capsule",
+   "text": "Owner Agent",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/detail/agent/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body",
+   "text": "acme-agents-1541 Testnet Owner Agent tameion top 0",
+   "detail": "color #E8EEE6 x28: a colour literal, not a token",
+   "name": "account/detail/agent/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body",
+   "text": "acme-agents-1541 Testnet Owner Agent tameion top 0",
+   "detail": "background #0F1511 x1: a colour literal, not a token",
+   "name": "account/detail/agent/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "border #2A332C x10: a colour literal, not a token",
+   "name": "account/detail/agent/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > div.capsule",
+   "text": "Owner Agent",
+   "detail": "background #161D18 x2: a colour literal, not a token",
+   "name": "account/detail/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "off-token-colour",
+   "sel": "div.surface.flex > div.capsule > button",
+   "text": "Agent",
+   "detail": "background #7FD1A8 x1: a saturated colour that is no token",
+   "name": "account/detail/agent/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "div.mono.flex > div.flex.flex-wrap > span.meta",
+   "text": "as of 07:12:40",
+   "detail": "color #9AA69C x9: a colour literal, not a token",
+   "name": "account/detail/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "content-max",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > main.surface.py-(--space-5)",
+   "text": "tameion top 0xb1da17cf2b327cacf2acd7418f3debb24ff4",
+   "detail": "main is 1280 px wide; content max is 1120",
+   "name": "account/detail/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "network-pill-dashed",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Testnet is a dashed capsule; the border is solid",
+   "name": "account/detail/agent/1280"
+  },
+  {
+   "sev": "note",
+   "rule": "not-built-yet",
+   "sel": "",
+   "text": "",
+   "detail": "no row disclosure to open yet",
+   "name": "account/detail/agent/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/detail/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/detail/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "border-on-content",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > div.capsule",
+   "text": "Owner Agent",
+   "detail": "Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)",
+   "name": "account/detail/agent/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body",
+   "text": "acme-agents-1541 Testnet Owner Agent tameion top 0",
+   "detail": "color #E8EEE6 x28: a colour literal, not a token",
+   "name": "account/detail/agent/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body",
+   "text": "acme-agents-1541 Testnet Owner Agent tameion top 0",
+   "detail": "background #0F1511 x1: a colour literal, not a token",
+   "name": "account/detail/agent/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule)",
+   "text": "acme-agents-1541 Testnet Owner Agent",
+   "detail": "border #2A332C x10: a colour literal, not a token",
+   "name": "account/detail/agent/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > div.capsule",
+   "text": "Owner Agent",
+   "detail": "background #161D18 x2: a colour literal, not a token",
+   "name": "account/detail/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "off-token-colour",
+   "sel": "div.surface.flex > div.capsule > button",
+   "text": "Agent",
+   "detail": "background #7FD1A8 x1: a saturated colour that is no token",
+   "name": "account/detail/agent/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "off-token-colour",
+   "sel": "div.mono.flex > div.flex.flex-wrap > span.meta",
+   "text": "as of 07:12:43",
+   "detail": "color #9AA69C x9: a colour literal, not a token",
+   "name": "account/detail/agent/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "network-pill-dashed",
+   "sel": "header.border-b.border-(--rule) > div.surface.flex > span.pill.meta",
+   "text": "Testnet",
+   "detail": "Testnet is a dashed capsule; the border is solid",
+   "name": "account/detail/agent/390"
+  },
+  {
+   "sev": "note",
+   "rule": "not-built-yet",
+   "sel": "",
+   "text": "",
+   "detail": "no row disclosure to open yet",
+   "name": "account/detail/agent/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "reduced-motion-crossfade",
+   "sel": "::view-transition-new(root)",
+   "text": "",
+   "detail": "a 200 ms crossfade still runs under reduced motion; DESIGN (founder 07:01): the capsule swaps instantly (the lane brief had said crossfade only: a ruling is needed)",
+   "name": "motion/reduced/account/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "reduced-motion-crossfade",
+   "sel": "::view-transition-new(root)",
+   "text": "",
+   "detail": "a 200 ms crossfade still runs under reduced motion; DESIGN (founder 07:01): the capsule swaps instantly (the lane brief had said crossfade only: a ruling is needed)",
+   "name": "motion/reduced/account/1280"
+  },
+  {
+   "sev": "warn",
+   "rule": "reduced-motion-crossfade",
+   "sel": "::view-transition-new(root)",
+   "text": "",
+   "detail": "a 200 ms crossfade still runs under reduced motion; DESIGN (founder 07:01): the capsule swaps instantly (the lane brief had said crossfade only: a ruling is needed)",
+   "name": "motion/reduced/account/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "reduced-motion-crossfade",
+   "sel": "::view-transition-new(root)",
+   "text": "",
+   "detail": "a 200 ms crossfade still runs under reduced motion; DESIGN (founder 07:01): the capsule swaps instantly (the lane brief had said crossfade only: a ruling is needed)",
+   "name": "motion/reduced/account/390"
+  },
+  {
+   "sev": "note",
+   "rule": "not-built-yet",
+   "sel": "",
+   "text": "",
+   "detail": "no row disclosure to open",
+   "name": "sheet/account/owner/1280"
+  },
+  {
+   "sev": "note",
+   "rule": "not-built-yet",
+   "sel": "",
+   "text": "",
+   "detail": "no row disclosure to open",
+   "name": "sheet/account/owner/390"
+  },
+  {
+   "sev": "note",
+   "rule": "not-built-yet",
+   "sel": "",
+   "text": "",
+   "detail": "no row disclosure to open",
+   "name": "sheet/account/agent/1280"
+  },
+  {
+   "sev": "note",
+   "rule": "not-built-yet",
+   "sel": "",
+   "text": "",
+   "detail": "no row disclosure to open",
+   "name": "sheet/account/agent/390"
+  }
+ ]
+}
