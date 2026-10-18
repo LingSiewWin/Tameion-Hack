@@ -19,6 +19,7 @@
 //      SHOTS_DIR         where the PNGs go (default PROOF_DIR): a seat's tree before it is merged has its own folder
 //      PROOF_DIR         default <main checkout>/proof/home-2026-10-18      PW_CHANNEL  default chrome (PW_CHANNEL= for bundled chromium)
 //      APP_TREE          where the server runs, when lsof cannot say (only for the commit line in the log)
+//      INVITE_FILE       a file holding the invite word (never printed): `/new` is measured only when it is given, because without the word it redirects to `/`
 //      APP_DIR           check another tree (a seat's apps/home) instead of this one: its tokens, contrast, test, literals
 //
 // Read-only: it loads pages, flips the capsule, presses Tab, opens a row. It never presses Stop, Approve, Decline or Raise.
@@ -551,6 +552,15 @@ const worst = (xs) => xs.reduce((m, x) => (SEV[x.sev] > SEV[m] ? x.sev : m), "pa
 const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"];
 const DENY = /^\s*(stop|approve|decline|raise|pay now|send|sign|confirm|delete|revoke|start|resume|cancel|withdraw|add money|make your own|close|try again)\b/i;
 
+// `/new` sends a visitor back to `/` until the invite word has been presented there (H4's gate). With INVITE_FILE (a file holding the word, never printed) the word is
+// typed on `/` the way a person would, and "Make your own" opens the stepper. Without it `/new` is not measured: it would only measure `/`.
+async function openNew(page, cfg) {
+  await page.goto(cfg.url + "/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.fill("#word", cfg.invite);
+  await Promise.all([page.waitForURL(/\/new(\?|$)/, { timeout: 20000 }), page.getByRole("button", { name: /make your own/i }).click()]);
+}
+const gotoRoute = (page, cfg, route, url, opts) => (route === "new" && cfg.invite ? openNew(page, cfg) : page.goto(url, opts));
+
 async function newPage(browser, sc, { reduced = false, seed = true, pub = null } = {}) {
   const ctx = await browser.newContext({
     viewport: { width: sc.width, height: sc.height ?? HEIGHT[sc.width] ?? 800 }, deviceScaleFactor: 1, isMobile: sc.width < 768, hasTouch: sc.width < 768,
@@ -689,7 +699,7 @@ async function scenario(browser, AxeBuilder, sc, cfg) {
   const quiet = ["loading", "error", "offline"].includes(sc.state);
   try {
     await arrange(page, ctx, sc, cfg, R);
-    await page.goto(cfg.url + ROUTES[sc.route].path(policy) + (R.flag ? `?state=${R.flag}` : ""), { waitUntil: sc.state === "loading" && !R.flag ? "commit" : "domcontentloaded", timeout: 60000 });
+    await gotoRoute(page, cfg, sc.route, cfg.url + ROUTES[sc.route].path(policy) + (R.flag ? `?state=${R.flag}` : ""), { waitUntil: sc.state === "loading" && !R.flag ? "commit" : "domcontentloaded", timeout: 60000 });
     if (sc.state === "loading") {
       await page.waitForSelector('[aria-busy="true"], .skeleton, [data-skeleton]', { timeout: 5000 }).catch(() => R.findings.push({ sev: "warn", rule: "no-skeleton", sel: "", text: "", detail: "no skeleton on screen while the service reply is held" }));
       await page.waitForTimeout(450);
@@ -740,7 +750,7 @@ async function focusWalk(browser, sc, cfg) {
   const R = { name: `focus/${sc.route}/${sc.view}/${sc.width}`, findings: [], stops: 0 };
   const { ctx, page } = await newPage(browser, sc, { pub: cfg.pub });
   try {
-    await page.goto(cfg.url + ROUTES[sc.route].path(cfg.policy), { waitUntil: "domcontentloaded", timeout: 60000 });
+    await gotoRoute(page, cfg, sc.route, cfg.url + ROUTES[sc.route].path(cfg.policy), { waitUntil: "domcontentloaded", timeout: 60000 });
     await settle(page);
     await setView(page, sc.view);
     await page.addStyleTag({ content: "nextjs-portal{display:none!important}" }).catch(() => {});
@@ -912,7 +922,7 @@ async function keyboardFit(browser, route, cfg) {
   const R = { name: `keyboard/${route}/375`, findings: [] };
   const { ctx, page } = await newPage(browser, { route, state: "rest", view: "owner", width: 375, height: 812 - 336 });
   try {
-    await page.goto(cfg.url + ROUTES[route].path(cfg.policy), { waitUntil: "domcontentloaded", timeout: 60000 });
+    await gotoRoute(page, cfg, route, cfg.url + ROUTES[route].path(cfg.policy), { waitUntil: "domcontentloaded", timeout: 60000 });
     await settle(page);
     const input = await page.$("main input:not([type=hidden]):not([type=radio]):not([type=checkbox]), main textarea");
     if (!input) { R.findings.push({ sev: cfg.strict ? "fail" : "note", rule: "not-built-yet", sel: "", text: "", detail: `no text input on /${route} yet` }); return R; }
@@ -990,7 +1000,7 @@ async function typingV(browser, cfg) {
   const R = { name: "typing-v/new/owner/390", findings: [] };
   const { ctx, page } = await newPage(browser, sc);
   try {
-    await page.goto(cfg.url + ROUTES.new.path(), { waitUntil: "domcontentloaded", timeout: 60000 });
+    await gotoRoute(page, cfg, "new", cfg.url + ROUTES.new.path(), { waitUntil: "domcontentloaded", timeout: 60000 });
     await settle(page);
     const input = await page.$("main input:not([type=hidden]):not([type=radio]):not([type=checkbox]), main textarea");
     if (!input) { R.findings.push({ sev: cfg.strict ? "fail" : "note", rule: "not-built-yet", sel: "", text: "", detail: "no text input on /new yet" }); return R; }
@@ -1043,6 +1053,7 @@ async function main() {
     url: (process.env.APP_URL ?? "http://localhost:3010").replace(/\/$/, ""),
     policy, policyEmpty: process.env.POLICY_EMPTY || undefined, policyNeeds: process.env.POLICY_NEEDS || undefined,
     proof: proofDir(), shotsDir: process.env.SHOTS_DIR ?? proofDir(), shots: !!args.shots, strict: !!args.strict, noAxe: !!args["no-axe"], fast: !!args.fast,
+    invite: process.env.INVITE_FILE && existsSync(process.env.INVITE_FILE) ? readFileSync(process.env.INVITE_FILE, "utf8").trim() : undefined,
   };
   const plan = matrix(args, { policy: !!policy });
   if (args.dry) {
@@ -1079,7 +1090,9 @@ async function main() {
       cfg.still = {};
       if (!cfg.pub) steps.push({ name: "owner-mode", sev: "warn", lines: [`could not read ${cfg.policy}'s owner key through ${cfg.url}: every account page is rendered as a guest (read-only)`] });
       const c2 = { ...cfg, palette };
-      const runnable = plan.filter((s) => !s.skip);
+      const noInvite = plan.filter((s) => s.route === "new" && !cfg.invite);
+      const runnable = plan.filter((s) => !s.skip && !noInvite.includes(s));
+      if (noInvite.length) results.push({ name: "new", findings: [{ sev: cfg.strict ? "fail" : "note", rule: "not-measured", sel: "", text: "", detail: `/new redirects to / until the invite word is presented there: ${noInvite.length} stepper scenarios were not run (INVITE_FILE=<file holding the word> measures them)` }] });
       if (plan.length > runnable.length) results.push({ name: "policy", findings: [{ sev: cfg.strict ? "fail" : "warn", rule: "no-policy", sel: "", text: "", detail: `POLICY is not set: ${plan.length - runnable.length} account scenarios were not run` }] });
       for (const sc of runnable) {
         const R = await scenario(browser, AxeBuilder, sc, c2);
