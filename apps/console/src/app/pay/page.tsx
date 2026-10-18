@@ -80,7 +80,7 @@ function Pay() {
             </Section>
             <p className="mt-6 flex gap-2 text-sm leading-relaxed text-muted-foreground">
               <ShieldCheck className="mt-0.5 size-4 shrink-0 text-protect" aria-hidden />
-              <span>The money goes to {r.name}&apos;s own account on chain. Only {r.name}&apos;s passkey can take it out; Tameion cannot.</span>
+              <span>The money goes to {r.name}&apos;s own account on chain. Only {r.name}&apos;s passkey can take it out; Tami cannot.</span>
             </p>
             <p className="mt-8 text-sm">
               <Link href="/" className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">

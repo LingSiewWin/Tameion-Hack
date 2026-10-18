@@ -98,7 +98,7 @@ export function TopBar({ children, surface, humanHref }: { children?: React.Reac
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
             <Mark />
-            <span>Tameion</span>
+            <span>Tami</span>
           </Link>
           <div className="ml-auto flex items-center gap-1">
             {children}

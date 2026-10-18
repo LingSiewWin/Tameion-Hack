@@ -73,7 +73,7 @@ export function useTyped(text: string, chain: string) {
 }
 
 const KIND_WORDS: Record<Resolved["kind"], string> = {
-  tameion: "a Tameion account",
+  tameion: "a Tami account",
   ens: "its ENS name, checked both ways",
   domain: "listed by the domain itself",
   address: "",
@@ -99,7 +99,7 @@ export function TypedParty({ t }: { t: ReturnType<typeof useTyped> }) {
 const SOURCE: Record<Party["kind"], string> = {
   owner: "You named it.",
   you: "",
-  tameion: "A Tameion account, by its own name.",
+  tameion: "A Tami account, by its own name.",
   domain: "Proved by its web domain.",
   ens: "Its ENS name, checked both ways.",
   x402: "The site you bought from gave this address.",

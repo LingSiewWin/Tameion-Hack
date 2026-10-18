@@ -70,7 +70,7 @@ export function Keys({ tenant, cfg, pub, owns }: { tenant: Tenant; cfg: Cfg; pub
       if (!chain) throw new Error("This page does not know the account's chain; reload it.");
       const other = slots[i === 0 ? 1 : 0];
       const a = await connectGuardian(tenant, chain.chainId, [
-        { address: cfg.operator, why: "That is Tameion's own key. A guardian is a wallet you, or someone you trust, holds." },
+        { address: cfg.operator, why: "That is Tami's own key. A guardian is a wallet you, or someone you trust, holds." },
         { address: tenant.owner, why: "That is this account itself." },
         { address: tenant.policy, why: "That is this account itself." },
         { address: other, why: `That wallet is already guardian ${i === 0 ? 2 : 1}. Pick a different wallet: two accounts of one wallet share one recovery phrase.` },
@@ -195,7 +195,7 @@ export function Keys({ tenant, cfg, pub, owns }: { tenant: Tenant; cfg: Cfg; pub
         <p className="text-sm text-muted-foreground">
           {tameionRecovery ? (
             <>
-              <span className="text-attention">Tameion&apos;s relayer can also propose a new key for you alone</span> (a test-account setting).{" "}
+              <span className="text-attention">Tami&apos;s relayer can also propose a new key for you alone</span> (a test-account setting).{" "}
               {owns && (
                 <Button variant="link" size="sm" className="h-auto p-0" disabled={busy} onClick={dropTameion}>
                   Remove it
