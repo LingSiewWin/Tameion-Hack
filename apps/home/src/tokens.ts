@@ -8,7 +8,8 @@ export const VIEWS: readonly View[] = ["owner", "agent"];
 export const VIEW_KEY = "tameion.home.view";
 /** Inline in <head> before paint (src/app/layout.tsx): a remembered Agent view never flashes Owner. Storage may throw
  *  in a private window; Owner then stays. Kept here, not in lib/view.ts, because the server layout cannot import that. */
-export const VIEW_BOOT = `try{if(localStorage.getItem(${JSON.stringify(VIEW_KEY)})==="agent")document.documentElement.dataset.view="agent"}catch(e){}`;
+// `?view=agent` (an old console `/agent` link, docs/122) is remembered first, then read like any remembered choice.
+export const VIEW_BOOT = `try{var v=new URLSearchParams(location.search).get("view");if(v==="agent"||v==="owner")localStorage.setItem(${JSON.stringify(VIEW_KEY)},v)}catch(e){}try{if(localStorage.getItem(${JSON.stringify(VIEW_KEY)})==="agent")document.documentElement.dataset.view="agent"}catch(e){}`;
 
 /** The palette per view, keyed by CSS variable name (without `--`). Owner = light, "land"; Agent = dark, "sea". */
 export const palette = {
