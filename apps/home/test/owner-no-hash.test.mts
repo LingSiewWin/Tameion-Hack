@@ -10,7 +10,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { Inbox, Status } from "../src/lib/types.ts";
 
 process.env.TZ = "Asia/Kuala_Lumpur";
-const { OwnerView } = await import("../src/features/owner/owner-view.tsx");
+const { OwnerError, OwnerView } = await import("../src/features/owner/owner-view.tsx");
 const { lines, halvesByPayment } = await import("../src/features/owner/words.ts");
 
 const read = <T,>(f: string) => JSON.parse(readFileSync(new URL(`./fixtures/${f}`, import.meta.url), "utf8")) as T;
@@ -38,6 +38,8 @@ const cases: [string, string][] = [
   ["stale", render({ staleAt: NOW * 1000 - 360_000, onRetry: () => {} })],
   ["empty (a fresh account)", render({ inbox: fresh, byRateDays: null })],
   ["guest", render({ guest: true })],
+  ["the cold error", renderToStaticMarkup(createElement(OwnerError, { missing: false }))],
+  ["no such account", renderToStaticMarkup(createElement(OwnerError, { missing: true }))],
 ];
 
 for (const [name, html] of cases)
@@ -54,7 +56,9 @@ test("the seeded page shows what it is for (so the empty check above is not vacu
   assert.equal((html.match(/>Demo Vendor</g) ?? []).length, 8, "eight paid rows, each by name");
   assert.match(cases[3][1], /Paid and sealed/);
   assert.doesNotMatch(cases[6][1], /Stop the agent/, "a guest has no Stop");
-  assert.match(cases[5][1], /Nothing paid yet/);
+  assert.match(cases[5][1], /Nothing paid yet: the first payment goes to a payee you approve/);
+  assert.doesNotMatch(cases[5][1], /Approve a payee under Needs you/, "an empty line never names a button that is not there");
+  for (const html of [cases[7][1], cases[8][1]]) assert.match(html, /<h1 class="authority[^"]*">/, "the cold error has the page's one heading");
 });
 
 test("the test catches a hash when one leaks (a row whose payee has no name falls back to words, never the address)", () => {

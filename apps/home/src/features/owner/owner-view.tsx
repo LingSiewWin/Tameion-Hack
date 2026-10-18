@@ -216,13 +216,28 @@ function Disclosure(p: OwnerViewProps & { line?: Line }) {
           <p className="row m-0">{l.why}</p>
           {l.state !== "Refused" && <p className="row m-0">{halvesWords(l.halves, l.payee)}</p>}
           {l.state !== "Refused" && (
-            <button type="button" onClick={() => p.onAgentView?.(l)} className="row self-start bg-transparent p-0 text-(--ink) underline underline-offset-4">
+            <button type="button" onClick={() => p.onAgentView?.(l)} className="row self-start bg-transparent px-0 py-(--space-3) text-(--ink) underline underline-offset-4">
               {COPY.agentView}
             </button>
           )}
         </div>
       )}
     </Sheet>
+  );
+}
+
+/** The cold error: nothing read yet. Says what still holds and the one action; the page's one heading (DESIGN §States). */
+export function OwnerError({ missing, onRetry }: { missing: boolean; onRetry?: () => void }) {
+  return (
+    <div role="alert" className={`${plate} flex flex-col gap-(--space-4) p-(--space-5)`}>
+      <h1 className="authority m-0">{missing ? COPY.noAccount : COPY.serviceSilent}</h1>
+      {!missing && <p className="row m-0">{COPY.noFigures}</p>}
+      {!missing && (
+        <button type="button" onClick={onRetry} className={`${button} self-start bg-(--ink) text-(--paper)`}>
+          {COPY.tryAgain}
+        </button>
+      )}
+    </div>
   );
 }
 

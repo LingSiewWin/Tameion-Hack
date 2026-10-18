@@ -10,7 +10,7 @@ import { ApiError, fetchDemo, fetchInbox, fetchStatus, fetchSymbolon, fetchTenan
 import type { Inbox, Status } from "../../lib/types.ts";
 import { setView } from "../../lib/view.ts";
 import { calls, checkSettle, decideInvoice, keyIndexOf, ownerCall, prepare, raiseCap, Refused, savedPub, units, type Account } from "./owner-call.ts";
-import { OwnerView, type Outcome, type Phase } from "./owner-view.tsx";
+import { OwnerError, OwnerView, type Outcome, type Phase } from "./owner-view.tsx";
 import { agentAnchor, COPY, halvesByPayment, money, payeeName, type Halves, type Line, type Need } from "./words.ts";
 
 type Read = { inbox: Inbox; status: Status; halves: Map<string, Halves>; at: number };
@@ -204,14 +204,7 @@ export function OwnerHome({ name }: { name: string }) {
   if (dev === "skeleton" || (loading && dev !== "error")) return <OwnerSkeleton />;
   if (dev === "error" || (!data && failed))
     return (
-      <div role="alert" className="flex flex-col gap-(--space-4) rounded-(--radius-plate) bg-(--plate) p-(--space-5)">
-        <p className="row-title m-0">{missing ? COPY.noAccount : COPY.noFigures}</p>
-        {!missing && (
-          <button type="button" onClick={() => void refresh()} className="inline-flex min-h-(--button) items-center justify-center self-start rounded-(--radius-button) bg-(--ink) px-(--space-5) row-title text-(--paper)">
-            {COPY.tryAgain}
-          </button>
-        )}
-      </div>
+      <OwnerError missing={missing} onRetry={() => void refresh()} />
     );
   const shown = data!;
   const inbox: Inbox =
