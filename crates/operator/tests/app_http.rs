@@ -2393,3 +2393,80 @@ fn the_symbolon_route_shows_each_records_slots_and_outsiders_only_leaves() {
     assert_eq!(v["locked"].as_bool(), Some(false), "{v}");
     assert_eq!(v["records"][0]["counterpartySlot"]["verified"], true);
 }
+
+/// docs/122 D-RC-3: with `TAMEION_HOME_URL` set, the console's pages answer
+/// 302 to the same path and query on the home app, and only those: the API,
+/// /llms.txt, /classic and /healthz stay; the agent map and the card name the
+/// home app. Unset, `/` is served as before.
+#[test]
+fn the_console_pages_redirect_to_the_home_app_only_when_it_is_set() {
+    let home = "https://tami-home.example";
+    let policy = "0x00000000000000000000000000000000000000c2";
+    let dir = std::env::temp_dir().join(format!("tameion-app-test-{}-191", std::process::id()));
+    std::fs::create_dir_all(dir.join("tenants")).unwrap();
+    std::fs::write(
+        dir.join("tenants").join(format!("{policy}.json")),
+        format!(
+            r#"{{"chain":"arc-testnet","owner":"0x0000000000000000000000000000000000000001","policy":"{policy}","agent":"0x0000000000000000000000000000000000000003","operator":"0x0000000000000000000000000000000000000004","watched":"0x0000000000000000000000000000000000000005","recovery":"0x0000000000000000000000000000000000000000","per_action":"1","daily":"1","floor":"0","delay_secs":60,"mode":1,"created_block":0,"history_from_block":0,"created":0,"deployed":true}}"#
+        ),
+    )
+    .unwrap();
+    let srv = start_with(
+        191,
+        &[
+            ("TAMEION_HOME_URL", "https://tami-home.example/"),
+            ("TAMEION_RPC_ARC", "http://127.0.0.1:9"),
+        ],
+    );
+    let p = srv.port;
+    let q = format!("/?policy={policy}");
+    for path in ["/", q.as_str(), "/agent", "/pay", "/watch?x=1"] {
+        let (st, head, body) = http_with(p, "GET", path, "", "");
+        assert_eq!(st, 302, "{path}: {head}");
+        let loc = format!("Location: {home}{path}\r\n");
+        assert!(format!("{head}\r\n").contains(&loc), "{path}: {head}");
+        assert_eq!(
+            body,
+            format!("Tami's account pages moved to {home}{path}\n")
+        );
+    }
+    let (st, head, _) = http_with(p, "HEAD", "/", "", "");
+    assert!(
+        st == 302 && head.contains(&format!("Location: {home}/")),
+        "{head}"
+    );
+    for path in [
+        "/api/level1/codes",
+        "/healthz",
+        "/classic",
+        "/api/openapi.json",
+    ] {
+        let (st, head, _) = http_with(p, "GET", path, "", "");
+        assert_eq!(st, 200, "{path} stays: {head}");
+    }
+    let (st, _) = http(p, "GET", "/agent/x", "");
+    assert_ne!(st, 302, "exact paths only");
+    let (_, llms) = http(p, "GET", "/llms.txt", "");
+    assert!(
+        llms.contains(&format!("- Account page: {home}/ ·")),
+        "{llms}"
+    );
+    let (st, card) = http(p, "GET", &format!("/agents/{policy}.json"), "");
+    assert_eq!(st, 200, "{card}");
+    let card: serde_json::Value = serde_json::from_str(&card).unwrap();
+    assert!(
+        card["services"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["name"] == "web" && s["endpoint"] == format!("{home}/")),
+        "{card}"
+    );
+
+    let off = start_with(192, &[("TAMEION_HOME_URL", "")]);
+    let (st, head, body) = http_with(off.port, "GET", "/", "", "");
+    assert_eq!(st, 200, "{head}");
+    assert!(!head.contains("Location:") && body.contains("Needs you"));
+    let (_, llms) = http(off.port, "GET", "/llms.txt", "");
+    assert!(llms.contains("- Account page: / ·"));
+}

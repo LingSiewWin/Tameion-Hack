@@ -1216,6 +1216,36 @@ fn respond_with(status: &str, ctype: &str, cache: &str, body: &[u8]) -> Vec<u8> 
     out
 }
 
+/// Where the account pages live once the console is retired (docs/122 D-RC-3):
+/// `TAMEION_HOME_URL` without a trailing slash; `None` when unset or empty.
+fn home_url() -> Option<String> {
+    let u = std::env::var("TAMEION_HOME_URL").ok()?;
+    let u = u.trim().trim_end_matches('/');
+    (!u.is_empty()).then(|| u.to_string())
+}
+
+/// With `TAMEION_HOME_URL` set, the console's own pages (`/`, `/agent`, `/pay`,
+/// `/watch`, exact) answer 302 to the same path and query on the home app;
+/// everything else (the API, /llms.txt, /classic, /mcp) is untouched. Unset:
+/// `None`, and the console is served as before. `target` comes from the
+/// request line split on whitespace, so it holds no CR/LF, and it starts with
+/// the matched path, so the Location cannot leave the home host.
+fn home_redirect(method: &str, path: &str, target: &str) -> Option<Vec<u8>> {
+    if method != "GET" || !matches!(path, "/" | "/agent" | "/pay" | "/watch") {
+        return None;
+    }
+    let to = format!("{}{target}", home_url()?);
+    let body = format!("Tami's account pages moved to {to}\n");
+    let mut out = format!(
+        "HTTP/1.1 302 Found\r\nLocation: {to}\r\nContent-Type: text/plain; charset=utf-8\r\n\
+         Content-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
+        body.len()
+    )
+    .into_bytes();
+    out.extend_from_slice(body.as_bytes());
+    Some(out)
+}
+
 /// The console (`apps/console`, a Next.js static export): `TAMEION_CONSOLE_DIR`,
 /// default `apps/console/out` (or the pre-move `web/console/out`) under the working directory. `None` until it has
 /// been built, and then `/` stays the classic page (`/classic` always is).
@@ -1381,6 +1411,9 @@ async fn agent_card(
         if let Some(sv) = card["services"].as_array_mut() {
             sv.push(json!({ "name": "agent-card", "endpoint": format!("{o}/agents/{}.json", t.policy) }));
             sv.push(json!({ "name": "MCP", "endpoint": format!("{o}/llms.txt"), "version": "tameion-mcp (stdio)" }));
+            if let Some(h) = home_url() {
+                sv.push(json!({ "name": "web", "endpoint": format!("{h}/") }));
+            }
         }
     }
     if !live {
@@ -8919,6 +8952,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 r
             } else if let Some(r) = replay {
                 r
+            } else if let Some(r) = home_redirect(method, path, target) {
+                r
             } else {
                 match (method, path) {
                     // The console when it is built; the classic page until then
@@ -8979,11 +9014,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         include_str!("../../../../apps/classic/icon.svg").as_bytes(),
                     ),
                     // PLAN 5.42: the agent-readable map of this service.
-                    ("GET", "/llms.txt") => respond(
-                        "200 OK",
-                        "text/plain; charset=utf-8",
-                        include_str!("../../../../apps/classic/llms.txt").as_bytes(),
-                    ),
+                    ("GET", "/llms.txt") => {
+                        let text = include_str!("../../../../apps/classic/llms.txt");
+                        // docs/122 D-RC-3: the account page lives on the home app once set.
+                        let text = match home_url() {
+                            Some(h) => text
+                                .replace("- Account page: / ", &format!("- Account page: {h}/ ")),
+                            None => text.to_string(),
+                        };
+                        respond("200 OK", "text/plain; charset=utf-8", text.as_bytes())
+                    }
                     // docs/115 §2: the refusal codes, the retry rules and what changed.
                     ("GET", "/api/level1/codes") => {
                         json_reply("200 OK", operator::refusal::catalogue())
