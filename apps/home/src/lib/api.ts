@@ -25,13 +25,41 @@ const refusalOf = (body: unknown): RefusalError | null => {
   return e && typeof e === "object" && typeof e.code === "string" ? e : null;
 };
 
+/** A read that may answer on a second try: the service or its chain did not answer, or was rate-limited. */
+const AGAIN = new Set([429, 500, 502, 503, 504]);
+/** How long a failed read waits before its one retry (the public Arc RPC rate-limits; the next read usually succeeds). */
+export const RETRY_MS = 700;
+const sleep = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+
+/** A body that carries the service's last good read (`stale: true` + `asOf`): figures to show, marked with their time. */
+const servedStale = (body: unknown) => {
+  const b = body as { stale?: unknown; asOf?: unknown } | null;
+  return b?.stale === true && b.asOf != null;
+};
+
+/** One GET of the service. Reads only: a failed read is tried once more after RETRY_MS before it counts as failed; a
+ *  refusal body that carries the last good read (`stale` + `asOf`) is returned as the answer. Writes never come here. */
 async function get(path: string, headers?: HeadersInit): Promise<Response> {
-  const r = await fetch(`${base()}${path}`, { headers, cache: "no-store" });
-  if (r.ok) return r;
-  const body: unknown = await r.json().catch(() => null);
-  const refusal = refusalOf(body);
-  const words = refusal?.words ?? (typeof (body as { error?: unknown } | null)?.error === "string" ? (body as { error: string }).error : r.statusText);
-  throw new ApiError(r.status, refusal, words || `HTTP ${r.status}`);
+  for (let attempt = 0; ; attempt++) {
+    let r: Response;
+    try {
+      r = await fetch(`${base()}${path}`, { headers, cache: "no-store" });
+    } catch (e) {
+      if (attempt) throw e;
+      await sleep(RETRY_MS);
+      continue;
+    }
+    if (r.ok) return r;
+    const body: unknown = await r.json().catch(() => null);
+    if (servedStale(body)) return Response.json(body);
+    if (!attempt && AGAIN.has(r.status)) {
+      await sleep(RETRY_MS);
+      continue;
+    }
+    const refusal = refusalOf(body);
+    const words = refusal?.words ?? (typeof (body as { error?: unknown } | null)?.error === "string" ? (body as { error: string }).error : r.statusText);
+    throw new ApiError(r.status, refusal, words || `HTTP ${r.status}`);
+  }
 }
 const json = async <T>(path: string, headers?: HeadersInit) => (await (await get(path, headers)).json()) as T;
 const q = (params: Record<string, string | undefined>) =>

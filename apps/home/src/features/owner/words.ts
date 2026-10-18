@@ -119,6 +119,19 @@ export function dateWords(unix: number, nowSecs: number): string {
 /** "as of 06:12" for a value kept from an earlier read (DESIGN §States, offline / stale). */
 export const asOf = (ms: number) => `as of ${hhmm(new Date(ms))}`;
 
+/** When the service answered with its last good read (`stale: true` + `asOf`, unix seconds, ms or an ISO time), that
+ *  read's time in ms; the oldest when several bodies carry one; null when every body is fresh. */
+export function servedAsOf(...bodies: unknown[]): number | null {
+  let at: number | null = null;
+  for (const body of bodies) {
+    const b = body as { stale?: unknown; asOf?: unknown } | null;
+    if (b?.stale !== true || b.asOf == null) continue;
+    const ms = typeof b.asOf === "number" ? (b.asOf < 1e12 ? b.asOf * 1000 : b.asOf) : Date.parse(String(b.asOf));
+    if (Number.isFinite(ms)) at = at === null ? ms : Math.min(at, ms);
+  }
+  return at;
+}
+
 export type Fact = { label: string; figure?: string; unit?: string; words?: string; attention?: boolean };
 
 /** The four facts at rest (DESIGN §Page grammar). `byRateDays` is status.runway.byRateDays. */
