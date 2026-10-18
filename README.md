@@ -33,7 +33,7 @@ at the foot._
 
 **Live:** https://tameion-agents-production-064a.up.railway.app (testnet; the invite word is in the submission form). No install, no wallet, no seed phrase, no address to type.
 
-**The same account, two readers (preview):** https://tameion-home-production.up.railway.app — the owner's statement at `/a/guest-demo-arc`
+**Owner home (preview):** https://tameion-home-production.up.railway.app — the same account two ways: the owner's statement at `/a/guest-demo-arc`
 (an account on Arc testnet, paying a demo vendor every two minutes on Autopilot: what the agents may spend today, what they paid and to whom; not one hash on the page) and the agent's terminal at `/a/guest-demo-arc?view=agent`
 (every record with its three signature slots — agent, counterparty, witness — and the chain it is anchored on), one toggle between them.
 The landing page's hero is design: the scene is NOAA-20 VIIRS true colour from NASA GIBS (public domain, 2026-10-16), the vessels
