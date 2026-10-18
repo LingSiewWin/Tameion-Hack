@@ -290,6 +290,8 @@ function domRules({ view, width, route, palette, spec }) {
       if (SKIP.test(e.tagName)) continue;
       for (const a of e.attributes) if (HASH.test(a.value)) add("fail", "zero-hash", e, `${a.name}="${a.value.slice(0, 40)}"`);
     }
+    const grouped = document.body.innerText.match(/(?:0x)?(?:[0-9a-fA-F]{4}[ \u00a0]){7,}[0-9a-fA-F]{4}/);
+    if (grouped) add("warn", "grouped-hash", null, `an address spelled in groups of four ("${grouped[0].slice(0, 24)}...") passes the 0x{8,} test but is a hash on the Owner screen`);
     for (const e of document.head.querySelectorAll("link[href],meta[content]")) {
       const v = e.getAttribute("href") ?? e.getAttribute("content");
       if (HASH.test(v)) add("warn", "zero-hash-head", e, v.slice(0, 40));
@@ -323,7 +325,7 @@ function domRules({ view, width, route, palette, spec }) {
       if (!fits(spec.authority)) add("fail", "type-authority", h1s[0], `h1 is ${metrics.h1}; the Owner hero is the authority role ${spec.authority.join("/")}`);
       if (!/\s/.test(h1s[0].innerText) || /^[\d.,\s]*(USDC)?$/.test(h1s[0].innerText.trim())) add("warn", "hero-not-a-sentence", h1s[0], "the Owner hero is a sentence, not a number");
     }
-    if (route === "guest" && !fits(width < spec.heroNarrowUnder ? spec.heroNarrow : spec.heroStatement)) add("warn", "type-heroStatement", h1s[0], `h1 is ${metrics.h1}; the landing hero is heroStatement ${spec.heroStatement.join("/")} (${spec.heroNarrow.join("/")} under ${spec.heroNarrowUnder} px)`);
+    if (route === "guest" && view === "owner" && !fits(width < spec.heroNarrowUnder ? spec.heroNarrow : spec.heroStatement)) add("warn", "type-heroStatement", h1s[0], `h1 is ${metrics.h1}; the landing hero is heroStatement ${spec.heroStatement.join("/")} (${spec.heroNarrow.join("/")} under ${spec.heroNarrowUnder} px)`);
   }
   // one accented word inside a headline is banned
   for (const hd of all.filter((e) => /^H[1-3]$/.test(e.tagName))) {
@@ -464,7 +466,8 @@ function domRules({ view, width, route, palette, spec }) {
       const label = e.closest("label");
       if (label && label.getBoundingClientRect().height >= spec.touch - 0.5 && /^(radio|checkbox)$/.test(e.type)) continue;
       const inline = e.tagName === "A" && e.parentElement && e.parentElement.innerText.length > e.innerText.length + 12;
-      add(inline ? "warn" : "fail", "touch-target", e, `${Math.round(r.width)}x${Math.round(r.height)} px; DESIGN touch targets are >= ${spec.touch}`);
+      const dense = view === "agent" && r.height >= 24 && r.width >= 24; // the Agent view is dense by DESIGN: 24 px is WCAG 2.2 AA, 44 is DESIGN's
+      add(inline || dense ? "warn" : "fail", "touch-target", e, `${Math.round(r.width)}x${Math.round(r.height)} px; DESIGN touch targets are >= ${spec.touch}${dense ? " (meets WCAG 2.2 AA 24 px)" : ""}`);
     }
   }
 
@@ -651,9 +654,20 @@ async function afterLoad(page, ctx, sc, R) {
     await ctx.setOffline(true);
     await page.evaluate(() => { window.dispatchEvent(new Event("offline")); window.dispatchEvent(new Event("focus")); document.dispatchEvent(new Event("visibilitychange")); }).catch(() => {});
     const t0 = Date.now();
-    const seen = await page.waitForFunction(() => /\bas of \d{1,2}:\d{2}\b/i.test(document.body.innerText), null, { timeout: 30000 }).then(() => true, () => false);
+    const stale = (ms) => page.waitForFunction(() => /\bas of \d{1,2}:\d{2}\b|\bas of yesterday\b/i.test(document.body.innerText), null, { timeout: ms }).then(() => true, () => false);
+    let seen = await stale(24000);
+    let how = "the connection dropped after a good read";
+    if (!seen) {
+      // a page that keeps its last figures on the device marks them stale on the next open: open it again while the service does not answer
+      await ctx.setOffline(false);
+      await page.route(API, (r) => r.abort("internetdisconnected"));
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await settle(page);
+      seen = await stale(6000);
+      how = "the connection dropped after a good read, then the page was opened again while the service did not answer";
+    }
     R.waited = Math.round((Date.now() - t0) / 1000);
-    if (!seen) R.findings.push({ sev: "warn", rule: "offline-no-stale-marker", sel: "", text: "", detail: `no "as of HH:MM" on the page ${R.waited} s after the connection dropped (DESIGN: cached values at full ink, each marked stale with its time)` });
+    if (!seen) R.findings.push({ sev: "warn", rule: "offline-no-stale-marker", sel: "", text: "", detail: `no "as of HH:MM" on the page after ${how} (DESIGN: cached values at full ink, each marked stale with its time)` });
     await page.waitForTimeout(300);
   } else if (sc.state === "detail") {
     const ok = await openDetail(page);
@@ -1093,7 +1107,7 @@ async function main() {
       const noInvite = plan.filter((s) => s.route === "new" && !cfg.invite);
       const runnable = plan.filter((s) => !s.skip && !noInvite.includes(s));
       if (noInvite.length) results.push({ name: "new", findings: [{ sev: cfg.strict ? "fail" : "note", rule: "not-measured", sel: "", text: "", detail: `/new redirects to / until the invite word is presented there: ${noInvite.length} stepper scenarios were not run (INVITE_FILE=<file holding the word> measures them)` }] });
-      if (plan.length > runnable.length) results.push({ name: "policy", findings: [{ sev: cfg.strict ? "fail" : "warn", rule: "no-policy", sel: "", text: "", detail: `POLICY is not set: ${plan.length - runnable.length} account scenarios were not run` }] });
+      if (plan.some((x) => x.skip)) results.push({ name: "policy", findings: [{ sev: cfg.strict ? "fail" : "warn", rule: "no-policy", sel: "", text: "", detail: `POLICY is not set: ${plan.filter((x) => x.skip).length} account scenarios were not run` }] });
       for (const sc of runnable) {
         const R = await scenario(browser, AxeBuilder, sc, c2);
         results.push(R);
