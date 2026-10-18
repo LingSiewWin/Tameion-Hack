@@ -58,6 +58,18 @@ export function OwnerHome({ name }: { name: string }) {
   const [outcome, setOutcome] = useState<Outcome>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [clockMs, setClockMs] = useState(0);
+  // The agent's key, for its mark beside "the agent" (read once; in memory only, never rendered as text).
+  const [agentId, setAgentId] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    fetchTenant(name).then(
+      (t) => live && typeof t.agent === "string" && setAgentId(t.agent.toLowerCase()),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [name]);
   const busy = useRef(false);
   const acctRef = useRef<{ name: string; acct: Account } | null>(null);
 
@@ -222,6 +234,7 @@ export function OwnerHome({ name }: { name: string }) {
         clockMs={clockMs}
         staleAt={dev === "offline" ? shown.at - 6 * 60_000 : failed ? shown.at : null}
         guest={!owns}
+        agentId={agentId}
         openKey={openKey}
         onOpen={setOpenKey}
         onAgentView={onAgentView}

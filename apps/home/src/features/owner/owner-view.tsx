@@ -3,6 +3,7 @@
 // what the agent paid and why, then Needs you. Pure: the container (owner-home.tsx) reads and acts; this only draws,
 // so the zero-hash test can render it from a captured inbox. Depth is one step of fill; rules only between table rows.
 import { Sheet } from "../../components/sheet.tsx";
+import { Mark } from "../../lib/mark.ts";
 import type { Inbox } from "../../lib/types.ts";
 import { asOf, authority, COPY, facts, halvesWords, lines, needs, pendingWords, phaseText, type Halves, type Line, type Need } from "./words.ts";
 
@@ -24,6 +25,8 @@ export type OwnerViewProps = {
   staleAt?: number | null;
   /** a reader without one of the account's owner keys on this device: reads only, no Stop, no actions */
   guest?: boolean;
+  /** the agent's key address, for its mark beside "the agent" (never rendered as text) */
+  agentId?: string;
   openKey?: string | null;
   onOpen?: (key: string | null) => void;
   onAgentView?: (line: Line) => void;
@@ -132,7 +135,7 @@ function Facts(p: OwnerViewProps) {
 }
 
 /** One payment as a ledger line: stacked on a phone; the book's columns (date, who, amount, why, state) from 768 px. */
-const LINE = "grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-(--space-4) gap-y-(--space-1) md:grid-cols-[7rem_minmax(8rem,12rem)_7rem_minmax(0,1fr)_9rem] md:items-baseline";
+const LINE = "grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-(--space-4) gap-y-(--space-1) md:grid-cols-[7rem_minmax(8rem,12rem)_7rem_minmax(0,1fr)_9rem] md:items-center";
 
 function Paid(p: OwnerViewProps & { rows: Line[] }) {
   return (
@@ -154,7 +157,10 @@ function Paid(p: OwnerViewProps & { rows: Line[] }) {
               <li key={r.key} className="border-b border-(--rule) last:border-b-0">
                 <button type="button" onClick={() => p.onOpen?.(r.key)} className={`${LINE} min-h-(--touch) bg-transparent py-(--space-4) text-left text-(--ink)`}>
                   <span className="meta order-5 md:order-1">{r.when}</span>
-                  <span className="row-title order-1 min-w-0 md:order-2">{r.payee}</span>
+                  <span className="row-title order-1 flex min-w-0 items-center gap-(--space-2) md:order-2">
+                    <Mark id={r.payeeId} kind="payee" size={24} />
+                    <span className="min-w-0">{r.payee}</span>
+                  </span>
                   <span className="row-title money order-2 text-right md:order-3">{r.amount}</span>
                   <span className="row order-3 col-span-2 md:order-4 md:col-span-1">{r.why}</span>
                   <span className={`meta order-6 flex items-center justify-end gap-(--space-1) md:order-5 ${r.state === "Refused" ? "text-(--attention)" : ""}`}>
@@ -188,7 +194,10 @@ function Needs(p: OwnerViewProps & { items: Need[] }) {
             const ph = p.needPhase?.[n.key];
             return (
               <li key={n.key} className="flex flex-col gap-(--space-3) border-b border-(--rule) py-(--space-4) last:border-b-0 md:flex-row md:items-center">
-                <p className="row-title m-0 min-w-0 flex-1">{n.sentence}</p>
+                <p className="row-title m-0 flex min-w-0 flex-1 items-center gap-(--space-3)">
+                  <Mark id={n.counterparty.toLowerCase()} kind="payee" size={24} />
+                  <span className="min-w-0">{n.sentence}</span>
+                </p>
                 {!p.guest && n.action && (
                   <button type="button" onClick={() => p.onNeed?.(n)} className={compact}>
                     {ph ? phaseText(ph, p.clockMs ?? ph.since) : n.action}
@@ -212,7 +221,14 @@ function Disclosure(p: OwnerViewProps & { line?: Line }) {
     <Sheet open={!!l} onClose={() => p.onOpen?.(null)} title={l ? `${l.amount} to ${l.payee}` : ""}>
       {l && (
         <div className="flex flex-col gap-(--space-4)">
-          <p className="row m-0">{l.state === "Refused" ? COPY.refusedSheet(l.when) : COPY.paidSheet(l.state, l.by, l.when)}</p>
+          <p className="row-title m-0 flex items-center gap-(--space-3)">
+            <Mark id={l.payeeId} kind="payee" size={40} />
+            {l.payee}
+          </p>
+          <p className="row m-0 flex items-center gap-(--space-3)">
+            {l.by === "the agent" && p.agentId && <Mark id={p.agentId} kind="agent" size={24} />}
+            <span>{l.state === "Refused" ? COPY.refusedSheet(l.when) : COPY.paidSheet(l.state, l.by, l.when)}</span>
+          </p>
           <p className="row m-0">{l.why}</p>
           {l.state !== "Refused" && <p className="row m-0">{halvesWords(l.halves, l.payee)}</p>}
           {l.state !== "Refused" && (
