@@ -11,9 +11,10 @@ import type { Inbox, Status } from "../../lib/types.ts";
 import { setView } from "../../lib/view.ts";
 import { calls, checkSettle, decideInvoice, keyIndexOf, ownerCall, prepare, raiseCap, Refused, savedPub, units, type Account } from "./owner-call.ts";
 import { OwnerError, OwnerView, type Outcome, type Phase } from "./owner-view.tsx";
-import { agentAnchor, COPY, halvesByPayment, money, payeeName, type Halves, type Line, type Need } from "./words.ts";
+import { agentAnchor, COPY, halvesByPayment, money, payeeName, servedAsOf, type Halves, type Line, type Need } from "./words.ts";
 
-type Read = { inbox: Inbox; status: Status; halves: Map<string, Halves>; at: number };
+/** `servedAt`: the service answered with its last good read (stale + asOf), that read's time; else null. */
+type Read = { inbox: Inbox; status: Status; halves: Map<string, Halves>; at: number; servedAt: number | null };
 type DevState = "skeleton" | "empty" | "error" | "offline" | null;
 
 const devState = (): DevState => {
@@ -40,7 +41,7 @@ async function read(name: string): Promise<Read> {
     fetchSymbolon(name).then((r) => r.records, () => null),
     fetchDemo().catch(() => null),
   ]);
-  return { inbox: withDemoVendor(inbox, demo?.vendor), status, halves: halvesByPayment(records), at: Date.now() };
+  return { inbox: withDemoVendor(inbox, demo?.vendor), status, halves: halvesByPayment(records), at: Date.now(), servedAt: servedAsOf(inbox, status) };
 }
 
 const clock = (unix: number) => new Date(unix * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
@@ -232,7 +233,8 @@ export function OwnerHome({ name }: { name: string }) {
         halves={shown.halves}
         nowSecs={now || Math.floor(shown.at / 1000)}
         clockMs={clockMs}
-        staleAt={dev === "offline" ? shown.at - 6 * 60_000 : failed ? shown.at : null}
+        staleAt={dev === "offline" ? shown.at - 6 * 60_000 : failed ? (shown.servedAt ?? shown.at) : shown.servedAt}
+        silent={dev === "offline" || !!failed}
         guest={!owns}
         agentId={agentId}
         openKey={openKey}

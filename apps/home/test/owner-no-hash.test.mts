@@ -35,7 +35,8 @@ const cases: [string, string][] = [
   ["the Stop question", render({ asking: true })],
   ["a row's sheet open, the agent's mark beside it", render({ openKey: lines(inbox, NOW)[0].key, agentId: "0x270d9f049e75b5eead616975196edf80b756b3cb" })],
   ["sealed, its sheet open", render({ halves: sealedHalves(), openKey: lines(inbox, NOW)[0].key })],
-  ["stale", render({ staleAt: NOW * 1000 - 360_000, onRetry: () => {} })],
+  ["stale, the service silent", render({ staleAt: NOW * 1000 - 360_000, silent: true, onRetry: () => {} })],
+  ["stale, served by the service", render({ staleAt: NOW * 1000 - 20_000 })],
   ["empty (a fresh account)", render({ inbox: fresh, byRateDays: null })],
   ["guest", render({ guest: true })],
   ["the cold error", renderToStaticMarkup(createElement(OwnerError, { missing: false }))],
@@ -49,19 +50,25 @@ for (const [name, html] of cases)
   });
 
 test("the seeded page shows what it is for (so the empty check above is not vacuous)", () => {
-  const html = cases[0][1];
+  const page = Object.fromEntries(cases);
+  const html = page["at rest"];
   assert.match(html, /Your agents may spend 0\.05 USDC a day, 0\.005 at a time, only on Demo Vendor\./);
   assert.match(html, />Stop the agent</);
   assert.match(html, /What the agent paid, and why/);
   assert.equal((html.match(/>Demo Vendor</g) ?? []).length, 8, "eight paid rows, each by name");
   assert.equal((html.match(/<svg width="24" height="24" viewBox="0 0 16 16"/g) ?? []).length, 8, "each paid row wears its payee's mark");
-  assert.match(cases[2][1], /<svg width="40" height="40" viewBox="0 0 16 16"/, "the sheet: the payee's seal at 40 px");
-  assert.equal((cases[2][1].match(/<svg width="24" height="24" viewBox="0 0 16 16"/g) ?? []).length, 9, "and the agent's mark beside its line");
-  assert.match(cases[3][1], /Paid and sealed/);
-  assert.doesNotMatch(cases[6][1], /Stop the agent/, "a guest has no Stop");
-  assert.match(cases[5][1], /Nothing paid yet: the first payment goes to a payee you approve/);
-  assert.doesNotMatch(cases[5][1], /Approve a payee under Needs you/, "an empty line never names a button that is not there");
-  for (const html of [cases[7][1], cases[8][1]]) assert.match(html, /<h1 class="authority[^"]*">/, "the cold error has the page's one heading");
+  const sheet = page["a row's sheet open, the agent's mark beside it"];
+  assert.match(sheet, /<svg width="40" height="40" viewBox="0 0 16 16"/, "the sheet: the payee's seal at 40 px");
+  assert.equal((sheet.match(/<svg width="24" height="24" viewBox="0 0 16 16"/g) ?? []).length, 9, "and the agent's mark beside its line");
+  assert.match(page["sealed, its sheet open"], /Paid and sealed/);
+  assert.doesNotMatch(page["guest"], /Stop the agent/, "a guest has no Stop");
+  const empty = page["empty (a fresh account)"];
+  assert.match(empty, /Nothing paid yet: the first payment goes to a payee you approve/);
+  assert.doesNotMatch(empty, /Approve a payee under Needs you/, "an empty line never names a button that is not there");
+  for (const k of ["the cold error", "no such account"]) assert.match(page[k], /<h1 class="authority[^"]*">/, "the cold error has the page's one heading");
+  assert.match(page["stale, the service silent"], /The service did not answer\. The figures below are as of/);
+  assert.match(page["stale, served by the service"], /as of /);
+  assert.doesNotMatch(page["stale, served by the service"], /did not answer/, "a last good read the service served is not a silence");
 });
 
 test("the test catches a hash when one leaks (a row whose payee has no name falls back to words, never the address)", () => {

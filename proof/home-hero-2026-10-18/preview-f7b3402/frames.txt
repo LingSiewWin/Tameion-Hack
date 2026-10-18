@@ -1,0 +1,27 @@
+# Hero A on the preview (lane/home f7b3402)
+
+Captured 2026-10-18 08:41 +0800 (HOME_DEMO_NAME=guest-demo live since 08:36) from https://tameion-home-production.up.railway.app with a private headless Chrome (playwright-core,
+channel chrome), never the shared MCP browser. No invite word was typed. Widths 390 × 844 and 1280 × 800. The six keyframes
+sit at p = 0, .2, .4, .6, .8, 1 of the hero's scroll (scrollY includes the 64 px header above the hero). frames.json holds
+the facts each line is written from.
+
+Flag state: these frames show the landing with the hero on, which is what `HOME_HERO=1` renders; they were captured before the flag existed, when `/` always carried the hero (with the flag unset, `/` shows the statement and the guest card only).
+
+| File | scrollY | What the reader sees |
+|---|---|---|
+| photograph-390.png | 64 | p 0.00: the scene (placeholder: Natural Earth coast in two tones) full bleed; the plate holds "Trade moves before money does.", the body line, Open the book and Try it in 5 minutes; the caption names the placeholder, says no vessels are recorded yet, and names the demo account. |
+| grid-390.png | 739 | p 0.20: the same scene quantised to the 40 px row module, nearest-neighbour, colour intact; the statement unchanged. |
+| drain-390.png | 1414 | p 0.40: colour drained to two tones, land paper, sea ruled at the row module; no vessels: nothing recorded on the preview yet; "The sea becomes a page." |
+| tracking-390.png | 2090 | p 0.60: the ruled sea; no labels, since no vessel was recorded yet; "Every vessel is seen, named and timed." |
+| hand-over-390.png | 2765 | p 0.80: the stage is one ruled page; the book's columns carry 6 rows of the demo account, the first "Demo Vendor · 0.002 USDC · Paid"; "Your agents pass through a strait too. Every call, every bill, every refusal: one book." |
+| owner-home-390.png | 3440 | p 1.00: "The demo account, as its owner sees it" over the live Owner home (H2's OwnerHome), headed "Your agents may spend 100 USDC a day, 50 at a time, only on Demo Vendor.". |
+| photograph-1280.png | 64 | p 0.00: the scene (placeholder: Natural Earth coast in two tones) full bleed; the plate holds "Trade moves before money does.", the body line, Open the book and Try it in 5 minutes; the caption names the placeholder, says no vessels are recorded yet, and names the demo account. |
+| grid-1280.png | 704 | p 0.20: the same scene quantised to the 40 px row module, nearest-neighbour, colour intact; the statement unchanged. |
+| drain-1280.png | 1344 | p 0.40: colour drained to two tones, land paper, sea ruled at the row module; no vessels: nothing recorded on the preview yet; "The sea becomes a page." |
+| tracking-1280.png | 1984 | p 0.60: the ruled sea; no labels, since no vessel was recorded yet; "Every vessel is seen, named and timed." |
+| hand-over-1280.png | 2624 | p 0.80: the stage is one ruled page; the book's columns carry 6 rows of the demo account, the first "Today 08:14 · Demo Vendor · 0.002 USDC · Paid by the agent inside the limits · Paid"; "Your agents pass through a strait too. Every call, every bill, every refusal: one book." |
+| owner-home-1280.png | 3264 | p 1.00: "The demo account, as its owner sees it" over the live Owner home (H2's OwnerHome), headed "Your agents may spend 100 USDC a day, 50 at a time, only on Demo Vendor.". |
+| reduced-photograph-390.png | 345 | reduced motion, still 1 of 3 (the photograph): no tween between stills. |
+| reduced-grid-390.png | 908 | reduced motion, still 2 of 3 (the grid): no tween between stills. |
+| reduced-book-390.png | 1471 | reduced motion, still 3 of 3 (the book): no tween between stills. The book's columns carry 6 rows of the demo account, the first "Demo Vendor · 0.002 USDC · Paid". |
+| account-guest-demo-390.png | 0 | /a/guest-demo, the judges' path: the Owner home with its h1 "Your agents may spend 100 USDC a day, 50 at a time, only on Demo Vendor."; hero markup on the page: 0 (grep data-hero, the statement, hero-statement). |

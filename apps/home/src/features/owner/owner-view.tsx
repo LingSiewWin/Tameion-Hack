@@ -21,8 +21,10 @@ export type OwnerViewProps = {
   nowSecs: number;
   /** the clock for phases in flight (ms) */
   clockMs?: number;
-  /** ms of the read these figures come from, when the latest read failed (offline / stale) */
+  /** ms of the read these figures come from, when they are not this moment's: each figure is marked "as of HH:MM" */
   staleAt?: number | null;
+  /** the latest read failed and these are kept from an earlier one: the line above the hero says so */
+  silent?: boolean;
   /** a reader without one of the account's owner keys on this device: reads only, no Stop, no actions */
   guest?: boolean;
   /** the agent's key address, for its mark beside "the agent" (never rendered as text) */
@@ -262,7 +264,7 @@ export function OwnerView(p: OwnerViewProps) {
   const items = needs(p.inbox);
   return (
     <div className="flex flex-col gap-(--space-6)">
-      {p.staleAt && (
+      {p.staleAt && p.silent && (
         <div role="status" className={`${plate} flex flex-wrap items-center gap-x-(--space-4) gap-y-(--space-2) p-(--space-5)`}>
           <p className="row m-0 min-w-0 flex-1">{COPY.stale(asOf(p.staleAt))}</p>
           {p.onRetry && (
