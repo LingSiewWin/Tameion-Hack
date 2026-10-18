@@ -1,6 +1,9 @@
 # Tameion: the service (crates/operator/src/bin/tameion-app.rs) and the console it serves at /.
 # Multi-stage: build with the pinned lockfiles, run on a slim image. No secret enters the image:
 # Fly hands them to the process as environment variables (scripts/deploy_fly.sh sets them by file).
+# docs/122 D-RC-3: with TAMEION_HOME_URL set the service redirects /, /agent, /pay and /watch to the home app instead of
+# serving them from this export; it is still built so the host works with the switch off. Remove this stage and the
+# `COPY --from=console` line below once the founder retires the console for good.
 FROM node:22-bookworm-slim AS console
 WORKDIR /console
 COPY apps/console/package.json apps/console/package-lock.json ./
@@ -21,6 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 # proof/<name> (the two files the console links to; the rest of proof/ stays out of the image).
 WORKDIR /app
 COPY --from=build /src/target/release/tameion-app /usr/local/bin/tameion-app
+# docs/122 D-RC-3: goes with the console stage above.
 COPY --from=console /console/out /app/apps/console/out
 COPY apps/classic /app/apps/classic
 COPY runtime/arc_anchor.addr runtime/arbitrum-sepolia_anchor.addr /app/runtime/
