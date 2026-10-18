@@ -234,6 +234,20 @@ async function stepLighthouse(url, paths = ["/"], view = "owner") {
   return { name: "lighthouse", sev, lines };
 }
 
+// DESIGN §Rules: "No hard-coded strings in components." A heuristic read of the .tsx files: a run of words between tags on one line, or a literal of two words or more in
+// aria-label, placeholder, title or alt. Strings belong in a copy module; this lists what is still inline, it does not know which are fine.
+function stepStrings() {
+  const walk = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]));
+  const hits = [];
+  for (const f of walk(join(APP, "src")).filter((p) => /\.tsx$/.test(p)))
+    readFileSync(f, "utf8").split("\n").forEach((line, i) => {
+      if (/^\s*(\/\/|\*|\/\*|import |export type|type )/.test(line)) return;
+      const t = />\s*([A-Za-z][A-Za-z ,.'’!?:;-]*[A-Za-z.!?])\s*</.exec(line) ?? /(?:aria-label|placeholder|title|alt)="([^"{}]+ [^"{}]+)"/.exec(line);
+      if (t && /\s/.test(t[1].trim())) hits.push(`${relative(APP, f)}:${i + 1}  "${t[1].trim().slice(0, 44)}"`);
+    });
+  return { name: "strings", sev: hits.length ? "warn" : "pass", lines: hits.length ? [`${hits.length} inline strings in .tsx (DESIGN: none in components):`, ...hits.slice(0, 8), ...(hits.length > 8 ? [`... ${hits.length - 8} more`] : [])] : [] };
+}
+
 // Steps another seat builds, wired in as soon as the npm script exists (DESIGN §Acceptance: the tokens-only hex lint, `21st review` with zero errors).
 function stepScripts(name, keys, missing, strict) {
   const pkg = JSON.parse(readFileSync(join(APP, "package.json"), "utf8"));
@@ -1170,7 +1184,7 @@ async function main() {
     return 0;
   }
   const steps = [
-    stepTokens(), run("contrast", ["scripts/contrast.mjs"], "scripts/contrast.mjs is missing (H1: WCAG 4.5:1 for every pair in both views)"), stepZeroHash(), stepLiterals(),
+    stepTokens(), stepStrings(), run("contrast", ["scripts/contrast.mjs"], "scripts/contrast.mjs is missing (H1: WCAG 4.5:1 for every pair in both views)"), stepZeroHash(), stepLiterals(),
     stepScripts("hex-lint", ["lint:tokens", "lint:hex", "tokens:lint", "lint-tokens"], "no tokens-only hex lint script yet (H1 writes it: no literal colour outside src/tokens.*; npm script lint:tokens)", cfg.strict),
     stepScripts("21st-review", ["review", "review:21st", "21st:review", "21st-review", "design:review"], "no `21st review` script yet (npm script review: `21st review src`, 0 errors expected)", cfg.strict),
   ];
