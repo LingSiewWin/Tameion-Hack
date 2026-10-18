@@ -3,9 +3,9 @@
 
 export const guest = {
   title: "Open the book",
-  word: "The word from the judges' form",
-  demo: "Open the demo account",
-  own: "Make your own",
+  word: "Invite word (judges: it is in the submission form's notes)",
+  demo: "See the demo account (no word needed)",
+  own: "Make your own account (needs the word)",
   noWord: "This host has no invite word set, so it opens nothing yet.",
   wrongWord: "That is not the word from the judges' form.",
   noDemo: "The word is right, but this host names no demo account. Make your own instead.",
