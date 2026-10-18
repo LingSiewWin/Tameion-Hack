@@ -6,9 +6,9 @@ The account an agent operator gives its agents: they pay inside the mandate you 
 
 ## Try it in 5 minutes
 
-**Live:** https://tameion-home-production.up.railway.app — `/a/guest-demo-arc` is a demo account on Arc testnet (guest, read-only); `/` is the front page. The invite word is in the submission form.
+**Live:** https://tameion-home-production.up.railway.app — the front page; "Open the book" opens a demo account on Arc testnet (guest, read-only). The invite word is in the submission form.
 
-1. Open https://tameion-home-production.up.railway.app/a/guest-demo-arc — the owner's statement: what the agents may spend today, what they paid and to whom, the reason beside each row, not one hash on the page.
+1. Open https://tameion-home-production.up.railway.app and tap "Open the book" — the owner's statement: what the agents may spend today, what they paid and to whom, the reason beside each row, not one hash on the page.
 2. Tap the toggle, or add `?view=agent` — the same account as the agent's terminal: every record with its three signature slots (agent, counterparty, witness) and the chain it is anchored on.
 3. On https://tameion-home-production.up.railway.app/ type the invite word and tap "Make your own" — name an account, one passkey tap; it arrives funded with test USDC, with a receipt and an address to receive more.
 4. Tap "Console" on your account page — every owner action lives there: approve the demo vendor, save the bill, turn on Autopilot; from the next due time the agent pays by itself, every two minutes, and each row carries its reason.
