@@ -533,6 +533,7 @@ function focusInfo(e) {
     portal: !!e.closest("nextjs-portal") || e.tagName === "NEXTJS-PORTAL",
     visible: e.matches(":focus-visible"), outline: `${s.outlineStyle} ${s.outlineWidth} ${s.outlineColor} +${s.outlineOffset}`, shadow: s.boxShadow === "none" ? "" : s.boxShadow.slice(0, 40),
     ow: parseFloat(s.outlineWidth), os: s.outlineStyle, oc: s.outlineColor, tab: e.tabIndex,
+    field: /^(INPUT|TEXTAREA|SELECT)$/.test(e.tagName) && !/^(radio|checkbox|submit|button)$/.test(e.type || ""), bw: parseFloat(s.borderTopWidth), bc: s.borderTopColor,
   };
 }
 
@@ -816,6 +817,11 @@ async function focusWalk(browser, sc, cfg) {
       if (cfg.shots) writeFileSync(join(cfg.shotsDir, "focus", `${sc.route}-${sc.view}-${sc.width}-${String(R.stops).padStart(2, "0")}.png`), on);
       if (on.equals(off)) R.findings.push({ sev: "fail", rule: "focus-ring-missing", sel: info.sel, text: info.name, detail: `no visible change when focused (outline ${info.outline}; shadow ${info.shadow || "none"})` });
       else if (!(info.ow >= 2) && !info.shadow) R.findings.push({ sev: "warn", rule: "focus-ring-thin", sel: info.sel, text: info.name, detail: `outline ${info.outline}` });
+      // D-FIELD-1 (PM, under delegation): a text field has a 1 px ink-2 edge, ink while it has focus
+      if (info.field) {
+        const ink = (cfg.palette[sc.view]["--ink"] ?? "").toUpperCase();
+        if (!(info.bw >= 1) || hexNorm(info.bc) !== ink) R.findings.push({ sev: "warn", rule: "field-edge-on-focus", sel: info.sel, text: info.name, detail: `a focused text field's edge is ${info.bw}px ${info.bc}; D-FIELD-1: 1 px, ink while focused (${ink})` });
+      }
       if (info.tab > 0) R.findings.push({ sev: "warn", rule: "tabindex-positive", sel: info.sel, text: info.name, detail: `tabindex=${info.tab} bends the order` });
       if (info.y < prevY - 40) R.findings.push({ sev: "warn", rule: "focus-order", sel: info.sel, text: info.name, detail: "focus jumped up the page" });
       prevY = info.y;
