@@ -5,7 +5,7 @@
 import { Sheet } from "../../components/sheet.tsx";
 import { Mark } from "../../lib/mark.ts";
 import type { Inbox } from "../../lib/types.ts";
-import { asOf, authority, COPY, facts, halvesWords, lines, needs, pendingWords, phaseText, type Halves, type Line, type Need } from "./words.ts";
+import { asOf, authority, COPY, facts, foldRuns, halvesWords, lines, needs, payeeName, pendingWords, phaseText, type Entry, type Halves, type Line, type Need, type Run } from "./words.ts";
 
 /** A control in flight: its phase and since when (DESIGN §Money lifecycle); it never looks disabled. */
 export type Phase = { label: string; since: number } | null;
@@ -119,14 +119,15 @@ function Hero(p: OwnerViewProps) {
   );
 }
 
-function Facts(p: OwnerViewProps) {
+function Facts(p: OwnerViewProps & { className?: string }) {
   return (
-    <dl className="m-0 grid grid-cols-2 gap-(--space-3) md:grid-cols-4" aria-label={COPY.factsLabel}>
+    <dl className={`m-0 grid grid-cols-1 gap-(--space-3) sm:grid-cols-2 lg:grid-cols-1 ${p.className ?? ""}`} aria-label={COPY.factsLabel}>
       {facts(p.inbox, p.byRateDays, p.nowSecs).map((f) => (
-        <div key={f.label} className={`${plate} flex min-w-0 flex-col gap-(--space-2) p-(--space-5)`}>
+        <div key={f.label} className={`${plate} flex min-w-0 flex-col gap-(--space-1) p-(--space-5)`}>
           <dt className="meta">{f.label}</dt>
-          <dd className={`m-0 flex min-w-0 flex-wrap items-baseline gap-x-(--space-2) [overflow-wrap:anywhere] ${f.attention ? "text-(--attention)" : ""}`}>
-            {f.figure !== undefined ? <span className="balance money">{f.figure}</span> : <span className="row-title">{f.words}</span>}
+          {/* the figure hierarchy (founder): the amount at 39/44, its unit at 16 beside it on the baseline, the label at 13 above */}
+          <dd className={`m-0 flex min-w-0 items-baseline gap-x-(--space-2) whitespace-nowrap ${f.attention ? "text-(--attention)" : ""}`}>
+            {f.figure !== undefined ? <span className="balance money">{f.figure}</span> : <span className="row-title whitespace-normal">{f.words}</span>}
             {f.unit && <span className="row">{f.unit}</span>}
           </dd>
           {p.staleAt && <dd className="meta m-0">{asOf(p.staleAt)}</dd>}
@@ -136,43 +137,54 @@ function Facts(p: OwnerViewProps) {
   );
 }
 
-/** One payment as a ledger line: stacked on a phone; the book's columns (date, who, amount, why, state) from 768 px. */
-const LINE = "grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-(--space-4) gap-y-(--space-1) md:grid-cols-[7rem_minmax(8rem,12rem)_7rem_minmax(0,1fr)_9rem] md:items-center";
+/** One payment as a ledger line: stacked on a phone; from 768 px the book's columns (date, who and why, amount, state). */
+const LINE = "grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-(--space-4) gap-y-(--space-1) md:grid-cols-[6rem_minmax(0,1fr)_auto_7rem] md:items-start";
+const CELL = {
+  date: "meta order-5 md:col-start-1 md:row-start-1 md:pt-(--space-1)",
+  who: "row-title order-1 flex min-w-0 items-center gap-(--space-2) md:col-start-2 md:row-start-1",
+  amount: "row-title money order-2 text-right md:col-start-3 md:row-start-1",
+  why: "row order-3 col-span-2 md:col-start-2 md:row-start-2 md:col-span-1",
+  state: "meta order-6 flex items-center justify-end gap-(--space-1) md:col-start-4 md:row-start-1 md:pt-(--space-1)",
+  stale: "meta order-7 col-span-2 md:col-start-2 md:row-start-3 md:col-span-1",
+};
 
-function Paid(p: OwnerViewProps & { rows: Line[] }) {
+function Paid(p: OwnerViewProps & { entries: Entry[]; className?: string }) {
   return (
-    <section aria-labelledby="paid-title" className="flex flex-col gap-(--space-3)">
+    <section aria-labelledby="paid-title" className={`flex min-w-0 flex-col gap-(--space-3) ${p.className ?? ""}`}>
       <h2 id="paid-title" className="row-title m-0">
         {COPY.paidTitle}
       </h2>
-      {p.rows.length ? (
+      {p.entries.length ? (
         <div className={`${plate} px-(--space-5)`}>
           <div aria-hidden className={`${LINE} meta hidden border-b border-(--rule) py-(--space-3) md:grid`}>
-            <span>{COPY.paidColumns[0]}</span>
-            <span>{COPY.paidColumns[1]}</span>
-            <span className="text-right">{COPY.paidColumns[2]}</span>
-            <span>{COPY.paidColumns[3]}</span>
-            <span className="text-right">{COPY.paidColumns[4]}</span>
+            <span className="md:col-start-1">{COPY.paidColumns[0]}</span>
+            <span className="md:col-start-2">{COPY.paidColumns[1]}</span>
+            <span className="text-right md:col-start-3">{COPY.paidColumns[2]}</span>
+            <span className="text-right md:col-start-4">{COPY.paidColumns[3]}</span>
           </div>
           <ul className="m-0 list-none p-0">
-            {p.rows.map((r) => (
-              <li key={r.key} className="border-b border-(--rule) last:border-b-0">
-                <button type="button" onClick={() => p.onOpen?.(r.key)} className={`${LINE} min-h-(--touch) bg-transparent py-(--space-4) text-left text-(--ink)`}>
-                  <span className="meta order-5 md:order-1">{r.when}</span>
-                  <span className="row-title order-1 flex min-w-0 items-center gap-(--space-2) md:order-2">
-                    <Mark id={r.payeeId} kind="payee" size={24} />
-                    <span className="min-w-0">{r.payee}</span>
-                  </span>
-                  <span className="row-title money order-2 text-right md:order-3">{r.amount}</span>
-                  <span className="row order-3 col-span-2 md:order-4 md:col-span-1">{r.why}</span>
-                  <span className={`meta order-6 flex items-center justify-end gap-(--space-1) md:order-5 ${r.state === "Refused" ? "text-(--attention)" : ""}`}>
-                    {r.sealed && <SealMark />}
-                    {r.state}
-                  </span>
-                  {p.staleAt && <span className="meta order-7 col-span-2 md:col-span-5">{asOf(p.staleAt)}</span>}
-                </button>
-              </li>
-            ))}
+            {p.entries.map((e) => {
+              const first = e.run ? e.run.lines[0] : e.line;
+              const key = e.run ? e.run.key : e.line.key;
+              return (
+                <li key={key} className="border-b border-(--rule) last:border-b-0">
+                  <button type="button" onClick={() => p.onOpen?.(key)} className={`${LINE} min-h-(--touch) bg-transparent py-(--space-4) text-left text-(--ink)`}>
+                    <span className={CELL.date}>{first.when}</span>
+                    <span className={`${CELL.who} ${e.run ? "col-span-2 md:col-span-2" : ""}`}>
+                      <Mark id={first.payeeId} kind="payee" size={24} />
+                      <span className="min-w-0">{e.run ? e.run.title : first.payee}</span>
+                    </span>
+                    {!e.run && <span className={CELL.amount}>{first.amount}</span>}
+                    <span className={CELL.why}>{first.why}</span>
+                    <span className={`${CELL.state} ${first.state === "Refused" ? "text-(--attention)" : ""}`}>
+                      {first.sealed && <SealMark />}
+                      {first.state}
+                    </span>
+                    {p.staleAt && <span className={CELL.stale}>{asOf(p.staleAt)}</span>}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </div>
       ) : (
@@ -182,9 +194,36 @@ function Paid(p: OwnerViewProps & { rows: Line[] }) {
   );
 }
 
-function Needs(p: OwnerViewProps & { items: Need[] }) {
+/** Who is who: the agent's mark and each approved payee's seal, by name (the marks the rows and the sheet wear). */
+function Marks(p: OwnerViewProps & { className?: string }) {
+  const payees = p.inbox.payees ?? [];
+  if (!p.agentId && !payees.length) return null;
   return (
-    <section aria-labelledby="needs-title" className="flex flex-col gap-(--space-3)">
+    <section aria-labelledby="marks-title" className={`flex min-w-0 flex-col gap-(--space-3) ${p.className ?? ""}`}>
+      <h2 id="marks-title" className="row-title m-0">
+        {COPY.marksTitle}
+      </h2>
+      <ul className={`${plate} m-0 flex list-none flex-col gap-(--space-3) p-(--space-5)`}>
+        {p.agentId && (
+          <li className="row flex items-center gap-(--space-3)">
+            <Mark id={p.agentId} kind="agent" size={24} />
+            {COPY.theAgent}
+          </li>
+        )}
+        {payees.map((y) => (
+          <li key={y.address} className="row flex items-center gap-(--space-3)">
+            <Mark id={y.address.toLowerCase()} kind="payee" size={24} />
+            {payeeName(p.inbox, y.address)}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function Needs(p: OwnerViewProps & { items: Need[]; className?: string }) {
+  return (
+    <section aria-labelledby="needs-title" className={`flex min-w-0 flex-col gap-(--space-3) ${p.className ?? ""}`}>
       <h2 id="needs-title" className={`row-title m-0 ${p.items.length ? "text-(--attention)" : ""}`}>
         {COPY.needsTitle}
       </h2>
@@ -217,10 +256,12 @@ function Needs(p: OwnerViewProps & { items: Need[] }) {
   );
 }
 
-function Disclosure(p: OwnerViewProps & { line?: Line }) {
-  const l = p.line;
+function Disclosure(p: OwnerViewProps & { line?: Line; run?: Run }) {
+  const run = p.run;
+  // A folded run opens one sheet: its payments, newest first, and the newest one's record in the Agent view.
+  const l = run ? run.lines[0] : p.line;
   return (
-    <Sheet open={!!l} onClose={() => p.onOpen?.(null)} title={l ? `${l.amount} to ${l.payee}` : ""}>
+    <Sheet open={!!l} onClose={() => p.onOpen?.(null)} title={run ? run.title : l ? `${l.amount} to ${l.payee}` : ""}>
       {l && (
         <div className="flex flex-col gap-(--space-4)">
           <p className="row-title m-0 flex items-center gap-(--space-3)">
@@ -232,6 +273,16 @@ function Disclosure(p: OwnerViewProps & { line?: Line }) {
             <span>{l.state === "Refused" ? COPY.refusedSheet(l.when) : COPY.paidSheet(l.state, l.by, l.when)}</span>
           </p>
           <p className="row m-0">{l.why}</p>
+          {run && (
+            <ul className="m-0 list-none p-0">
+              {run.lines.map((x) => (
+                <li key={x.key} className="row flex items-baseline justify-between gap-(--space-4) border-b border-(--rule) py-(--space-2) last:border-b-0">
+                  <span className="meta">{x.when}</span>
+                  <span className="money">{x.amount}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           {l.state !== "Refused" && <p className="row m-0">{halvesWords(l.halves, l.payee)}</p>}
           {l.state !== "Refused" && (
             <button type="button" onClick={() => p.onAgentView?.(l)} className="row self-start bg-transparent px-0 py-(--space-3) text-(--ink) underline underline-offset-4">
@@ -261,7 +312,9 @@ export function OwnerError({ missing, onRetry }: { missing: boolean; onRetry?: (
 
 export function OwnerView(p: OwnerViewProps) {
   const rows = lines(p.inbox, p.nowSecs, p.halves);
+  const entries = foldRuns(rows, p.nowSecs);
   const items = needs(p.inbox);
+  const run = entries.find((e) => e.run?.key === p.openKey)?.run;
   return (
     <div className="flex flex-col gap-(--space-6)">
       {p.staleAt && p.silent && (
@@ -275,10 +328,15 @@ export function OwnerView(p: OwnerViewProps) {
         </div>
       )}
       <Hero {...p} />
-      <Facts {...p} />
-      <Paid {...p} rows={rows} />
-      <Needs {...p} items={items} />
-      <Disclosure {...p} line={rows.find((r) => r.key === p.openKey)} />
+      {/* From 1024 px two columns (founder): the statement left (at most 680 px), a rail on the right with the four facts, Needs
+          you and the marks; the authority sentence above spans both. Below that, one column in reading order. */}
+      <div className="grid grid-cols-1 gap-(--space-6) lg:grid-cols-[minmax(0,680px)_minmax(0,1fr)] lg:grid-rows-[auto_auto_1fr] lg:items-start">
+        <Facts {...p} className="lg:col-start-2 lg:row-start-1" />
+        <Paid {...p} entries={entries} className="lg:col-start-1 lg:row-span-3 lg:row-start-1" />
+        <Needs {...p} items={items} className="lg:col-start-2 lg:row-start-2" />
+        <Marks {...p} className="lg:col-start-2 lg:row-start-3" />
+      </div>
+      <Disclosure {...p} run={run} line={run ? undefined : rows.find((r) => r.key === p.openKey)} />
     </div>
   );
 }

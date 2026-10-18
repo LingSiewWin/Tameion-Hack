@@ -39,8 +39,6 @@ export function whenText(unixSecs: number, nowMs = Date.now()): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
 }
 
-/** An address in groups of four, so a person can compare it with what their wallet shows; Copy takes it unspaced. */
-export const grouped = (address: string) => [address.slice(0, 6), ...(address.slice(6).match(/.{1,4}/g) ?? [])].join(" ");
 
 /** What the page last read of the account and when (ms), kept on this device so a service that stops answering leaves
  *  the figures at full ink, marked stale with their time (DESIGN §States, Offline). */

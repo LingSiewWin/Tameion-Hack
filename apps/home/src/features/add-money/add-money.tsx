@@ -11,13 +11,13 @@ import { fetchDemo, fetchInbox, fetchTenant } from "../../lib/api.ts";
 import type { Demo, Inbox, Tenant } from "../../lib/types.ts";
 import { useView } from "../../lib/view.ts";
 import { byKey, USDC_MARK, type CctpChain } from "./cctp.ts";
-import { asOfText, grouped, ledgerText, parseHeld, usdcText, whenText, type Held } from "./format.ts";
+import { asOfText, ledgerText, parseHeld, usdcText, whenText, type Held } from "./format.ts";
 import { Mark } from "./mark.tsx";
 import { MovePlate } from "./move-plate.tsx";
 import { explorer, FAUCET, plate, quiet, rowLink } from "./ui.ts";
 import { demoFunding } from "./wallet.ts";
 
-/** The account as the server resolved it from its name; `addressText` is its address grouped by four (format.ts `grouped`). */
+/** The account as the server resolved it from its name; `addressText` is its address, whole (the receive address exception). */
 export type AddProps = { name: string; addressText: string; chain: string };
 /** The same with the address joined back, for Copy, calldata and chain reads in the browser. */
 export type AddAccount = { name: string; address: Address; chain: string };
@@ -137,7 +137,8 @@ function Unsupported({ chain }: { chain: string }) {
   );
 }
 
-/** The account's address on its own chain, as text with Copy (PM ruling 2026-10-18). Grouped by four in the Owner view. */
+/** The account's address on its own chain, whole, with Copy beside it (founder, 2026-10-18): with ReceiveAddress on /receive, the
+ *  zero-hash rule's one allowed exception, marked data-hash-allowed so the checks can tell it from a leak. */
 function AddressPlate({ dest, address }: { dest: CctpChain; address: Address }) {
   const view = useView();
   const [copied, setCopied] = useState<"yes" | "no" | null>(null);
@@ -156,8 +157,9 @@ function AddressPlate({ dest, address }: { dest: CctpChain; address: Address }) 
         {view === "owner" && <Mark src={dest.mark} />}
         <span>The account&apos;s address on {dest.name}</span>
       </h2>
-      {/* grouped, the Owner view's address wraps between groups; the Agent view's unbroken hex wraps anywhere */}
-      <p className={`row money ${view === "agent" ? "break-all" : "break-words"}`}>{view === "agent" ? address : grouped(address)}</p>
+      <p data-hash-allowed="AddressPlate" className="row money break-all">
+        {address}
+      </p>
       <div className="flex flex-wrap items-center gap-(--space-3)">
         <button type="button" className={quiet} onClick={copy}>
           Copy

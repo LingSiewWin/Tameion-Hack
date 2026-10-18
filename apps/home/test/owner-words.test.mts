@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { calls, challengeFor, checkSettle, hex, invoiceDecideChallenge, keccak256, raiseCap } from "../src/features/owner/owner-call.ts";
-import { agentAnchor, amount, authority, dateWords, facts, halvesByPayment, halvesWords, lines, minor, money, needs, payeesWords, pendingWords, plain } from "../src/features/owner/words.ts";
+import { agentAnchor, amount, authority, dateWords, facts, foldRuns, halvesByPayment, halvesWords, lines, minor, money, needs, payeesWords, pendingWords, plain } from "../src/features/owner/words.ts";
 import type { Inbox, Status } from "../src/lib/types.ts";
 
 process.env.TZ = "Asia/Kuala_Lumpur";
@@ -81,6 +81,20 @@ test("rows name the payee, never an address, and say the state in words", () => 
     "Paying 0.006 USDC to Demo Vendor would leave the balance unable to cover bills ahead, so I am not paying it.",
   );
   assert.equal(plain(unnamed, "to 0xe5e2d8...e33854 now"), "To ••3854 now");
+});
+
+test("runs of more than three identical rows fold into one, in the founder's words; three or fewer stay rows", () => {
+  const rows = lines(inbox, 1792276548);
+  const folded = foldRuns(rows, 1792276548);
+  assert.equal(folded.length, 1);
+  assert.equal(folded[0].run?.title, "Demo Vendor · paid 8 times today · 0.016 USDC");
+  assert.equal(folded[0].run?.lines.length, 8);
+  assert.equal(foldRuns(rows.slice(0, 3), 1792276548).filter((e) => e.line).length, 3, "three identical rows stay three rows");
+  assert.equal(foldRuns(rows.slice(0, 4), 1792276548).length, 1, "a fourth folds them");
+  const broken = [...rows.slice(0, 2), { ...rows[2], why: "Another reason" }, ...rows.slice(3, 5)];
+  assert.deepEqual(foldRuns(broken, 1792276548).map((e) => (e.run ? "run" : "line")), ["line", "line", "line", "line", "line"], "a different why breaks the run");
+  const longAgo = rows.map((r, i) => ({ ...r, at: 1792276548 - 86_400 * (i + 1) }));
+  assert.match(foldRuns(longAgo, 1792276548)[0].run!.title, /paid 8 times since 10 Oct/);
 });
 
 test("sealed only when all three halves verify on the settlement's record; the sheet says which are there", () => {

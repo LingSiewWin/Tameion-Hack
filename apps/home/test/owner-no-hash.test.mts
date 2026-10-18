@@ -34,6 +34,7 @@ const cases: [string, string][] = [
   ["at rest", render()],
   ["the Stop question", render({ asking: true })],
   ["a row's sheet open, the agent's mark beside it", render({ openKey: lines(inbox, NOW)[0].key, agentId: "0x270d9f049e75b5eead616975196edf80b756b3cb" })],
+  ["a folded run's sheet open", render({ openKey: `run-${lines(inbox, NOW)[0].key}` })],
   ["sealed, its sheet open", render({ halves: sealedHalves(), openKey: lines(inbox, NOW)[0].key })],
   ["stale, the service silent", render({ staleAt: NOW * 1000 - 360_000, silent: true, onRetry: () => {} })],
   ["stale, served by the service", render({ staleAt: NOW * 1000 - 20_000 })],
@@ -55,11 +56,15 @@ test("the seeded page shows what it is for (so the empty check above is not vacu
   assert.match(html, /Your agents may spend 0\.05 USDC a day, 0\.005 at a time, only on Demo Vendor\./);
   assert.match(html, />Stop the agent</);
   assert.match(html, /What the agent paid, and why/);
-  assert.equal((html.match(/>Demo Vendor</g) ?? []).length, 8, "eight paid rows, each by name");
-  assert.equal((html.match(/<svg width="24" height="24" viewBox="0 0 16 16"/g) ?? []).length, 8, "each paid row wears its payee's mark");
+  // eight identical payments in a row fold into one row in the founder's words (never more than three identical rows)
+  assert.match(html, /Demo Vendor · paid 8 times today · 0\.016 USDC/);
+  assert.equal((html.match(/<li class="border-b/g) ?? []).length, 1, "one row stands for the run");
+  assert.equal((html.match(/<svg width="24" height="24" viewBox="0 0 16 16"/g) ?? []).length, 2, "the run's payee mark, and the payee in Who is who");
+  assert.match(page["a folded run's sheet open"], /0\.002 USDC<\/span><\/li>/, "the run's sheet lists its payments");
+  assert.equal((page["a folded run's sheet open"].match(/>Today 06:\d\d</g) ?? []).length >= 8, true, "all eight, by time");
   const sheet = page["a row's sheet open, the agent's mark beside it"];
   assert.match(sheet, /<svg width="40" height="40" viewBox="0 0 16 16"/, "the sheet: the payee's seal at 40 px");
-  assert.equal((sheet.match(/<svg width="24" height="24" viewBox="0 0 16 16"/g) ?? []).length, 9, "and the agent's mark beside its line");
+  assert.equal((sheet.match(/<svg width="24" height="24" viewBox="0 0 16 16"/g) ?? []).length, 4, "the run row, the agent and payee in Who is who, and the agent beside its line in the sheet");
   assert.match(page["sealed, its sheet open"], /Paid and sealed/);
   assert.doesNotMatch(page["guest"], /Stop the agent/, "a guest has no Stop");
   const empty = page["empty (a fresh account)"];

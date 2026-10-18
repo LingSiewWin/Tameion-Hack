@@ -1,8 +1,9 @@
 "use client";
 // `/a/<name>/receive` (H4): the account's address as a QR, its name under it the way a person reads it (`name@chain`,
 // ERC-7828's shape, as apps/console/src/lib/names.ts shows a party), Copy and Share, and one line naming the chain.
-// The QR is the address (that is the point of this page, ruled 2026-10-18); the Owner home's DOM never carries it, and
-// here the address is text only in the Agent view (DESIGN Rule 6). The name resolves through the /api proxy
+// The QR is the address (that is the point of this page, ruled 2026-10-18); the Owner home's DOM never carries it. Here it is
+// also text, whole, in both views (founder, 2026-10-18: the receive address is the zero-hash rule's one allowed exception, with
+// /add's AddressPlate; test/zero-hash-exceptions.test.mts names exactly those two). The name resolves through the /api proxy
 // (lib/api.ts `resolveAccount`); a shown skeleton holds at least 300 ms (`useSkeleton`). Share only where the browser has it.
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { encode } from "uqr";
@@ -107,7 +108,10 @@ function Address({ rec }: { rec: Account }) {
       </svg>
       <p className={`${T.rowTitle} text-center break-all`}>{handle}</p>
       <div className="flex w-full flex-col gap-(--space-3)">
-        {view === "agent" && <p className={`${T.mono} break-all text-center`}>{address}</p>}
+        {/* the address whole, Copy right under it: with AddressPlate on /add, the zero-hash rule's one allowed exception */}
+        <p data-hash-allowed="ReceiveAddress" className={`${view === "agent" ? T.mono : `${T.row} money`} break-all text-center`}>
+          {address}
+        </p>
         <div className="flex w-full gap-(--space-3)">
           <button type="button" className={CTA} onClick={copy} aria-live="polite">
             {copied ? words.copied : words.copy}
