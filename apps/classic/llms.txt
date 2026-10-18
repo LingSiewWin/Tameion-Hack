@@ -1,4 +1,6 @@
-# Tameion
+# Tami
+
+Tami was named Tameion until 2026-10-18; the service, its binaries and its routes still answer as `tameion`.
 
 > A treasury account for onchain companies that keeps itself solvent: bills
 > paid on time inside a limit a smart contract enforces, the owner's passkey
@@ -7,7 +9,7 @@
 The agent's key can pay payees the owner approved, under a cap, and nothing
 else. It cannot add a payee, raise its own limit, or withdraw. Adding a payee
 or withdrawing needs the owner's passkey; raising a cap waits a delay the
-owner can cancel. Tameion's service holds no key that can take the owner's
+owner can cancel. Tami's service holds no key that can take the owner's
 money: it prepares calls, the owner's passkey signs them, the chain enforces
 them.
 
@@ -178,7 +180,7 @@ The codes:
   30% fall would cost in days of bills. Report it in those words; protection
   needs a trade-only venue key the owner chooses to give.
 
-## Bill a Tameion account (for a vendor, or a vendor's agent)
+## Bill a Tami account (for a vendor, or a vendor's agent)
 
 Send an invoice the PAYEE signed; nothing is paid on receipt. The account's
 agent checks it against its history and approved payees and puts it in the
@@ -234,7 +236,7 @@ owner's tap, once, keyed by the invoice's ref) or declines.
 ## Price
 
 Watch is free. An account is a flat monthly fee per protected account (free
-while on testnet); Tameion takes nothing per payment.
+while on testnet); Tami takes nothing per payment.
 
 ## Reference
 

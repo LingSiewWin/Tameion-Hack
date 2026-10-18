@@ -1,4 +1,6 @@
-# Tameion
+# Tami
+
+_Tami — named Tameion until 2026-10-18. The repository, the crates, the binaries (`tameion-app`, `tameion-mcp`), the SDK and the hosts still say `tameion` until the rename lands after submission; the symbolon stays the name of the record._
 > "Each party kept half; the agreement was real only when the halves fit." — the symbolon (the organiser's brief, Prior Art 03)<br>
 > "Officials kept the standard measures in the marketplace, and the seller's cup was checked against them." — the agoranomoi (Prior Art 06)<br>
 > "Every official faced an audit when his term ended, and could not leave the city until it cleared." — the euthyna (Prior Art 01)<br>
@@ -13,13 +15,13 @@
 Your agents pay their bills around the clock in USDC — and can never spend past the mandate you signed. Raising it takes a delay
 anyone can see; every payment lands in a book of what was owed and why.
 
-Tameion is the account an agent operator — a team whose agents pay for things in USDC (APIs over x402, vendors, hosting) — gives its agents. No key we hold can send your money anywhere you did not approve: an agent's
+Tami is the account an agent operator — a team whose agents pay for things in USDC (APIs over x402, vendors, hosting) — gives its agents. No key we hold can send your money anywhere you did not approve: an agent's
 key can pay payees you approved, up to a cap, and nothing else, and a contract — not our server, not the prompt — refuses the rest.
 Approving a payee, raising a limit and withdrawing need your passkey; if you lose the passkey, two guardians can bring it back. Every
 payment and every refusal goes into a double-entry book anchored on chain, which anyone can re-check without trusting us.
 
-**State, 2026-10-17 00:05 +08:** testnet only (Arc testnet and Arbitrum Sepolia). Every account so far was made by the team; **no outside operator
-has used it yet.** Each claim below names the file in `proof/` that holds its run.
+**State, 2026-10-18 10:04 +08:** testnet only (Arc testnet and Arbitrum Sepolia). Every account so far was made by the team; **no outside operator
+has used it yet.** The judges' demo account lives on Arc testnet. Each claim below names the file in `proof/` that holds its run.
 
 ![The account: what the agents may spend right now, what they paid and why](proof/uat-u1-26-final-account-1280-2026-10-16.png)
 
@@ -107,7 +109,7 @@ period, a recipient allowlist and an expiry in the protocol; [Coinbase's Spend P
 enforce a per-period allowance in a contract on Base; Stripe, Visa, Mastercard and Wise enforce on their own servers or card network,
 keep the record themselves and settle in ways that can be reversed.
 
-What none of those pages documents, and Tameion does:
+What none of those pages documents, and Tami does:
 - **One contract holds the whole mandate** — a cap on one payment, a trailing 24-hour cap, a reserve floor, a payee list with a
   cooling-off, and Watch → Propose → Autopilot as contract state. **A raise waits and anyone can see it coming; a cut is instant.**
 - **An owner who can lose a device.** The passkey owner plus two guardians; two guardians together can replace a lost passkey after a
