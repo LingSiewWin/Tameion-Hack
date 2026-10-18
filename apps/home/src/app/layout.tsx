@@ -10,7 +10,7 @@ const sans = IBM_Plex_Sans({ subsets: ["latin"], weight: ["400", "500", "600"], 
 const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], display: "swap", variable: "--font-plex-mono", preload: false });
 
 export const metadata: Metadata = {
-  title: "Tameion",
+  title: "Tami",
   description: "Your agents pay their bills in USDC, up to the mandate you signed.",
 };
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };
