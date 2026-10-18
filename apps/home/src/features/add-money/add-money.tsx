@@ -13,7 +13,7 @@ import { useView } from "../../lib/view.ts";
 import { byKey, type CctpChain } from "./cctp.ts";
 import { asOfText, grouped, ledgerText, parseHeld, usdcText, whenText, type Held } from "./format.ts";
 import { MovePlate } from "./move-plate.tsx";
-import { explorer, FAUCET, link, plate, quiet } from "./ui.ts";
+import { explorer, FAUCET, plate, quiet, rowLink } from "./ui.ts";
 import { demoFunding } from "./wallet.ts";
 
 /** The account as the server resolved it from its name; `addressText` is its address grouped by four (format.ts `grouped`). */
@@ -159,7 +159,7 @@ function AddressPlate({ dest, address }: { dest: CctpChain; address: Address }) 
           {copied === "yes" ? "Copied" : copied === "no" ? "Not copied: select the address above" : ""}
         </span>
         {view === "agent" && (
-          <a className={link} href={explorer(dest, "address", address)} target="_blank" rel="noreferrer">
+          <a className={rowLink} href={explorer(dest, "address", address)} target="_blank" rel="noreferrer">
             explorer
           </a>
         )}
@@ -210,7 +210,7 @@ function FaucetPlate({ dest, address, tenant, demo }: { dest: CctpChain; address
               <p className="row">Funded by the demo: {usdcText(funding.amount)}</p>
               <p className="meta">Arrived {whenText(funding.at)}</p>
               {view === "agent" && (
-                <a className={`${link} break-all`} href={explorer(dest, "tx", funding.tx)} target="_blank" rel="noreferrer">
+                <a className={`${rowLink} break-all`} href={explorer(dest, "tx", funding.tx)} target="_blank" rel="noreferrer">
                   {funding.tx}
                 </a>
               )}
@@ -233,7 +233,7 @@ function FaucetPlate({ dest, address, tenant, demo }: { dest: CctpChain; address
         </div>
       )}
       <div className="flex flex-col gap-(--space-1)">
-        <a className={`${link} row`} href={FAUCET} target="_blank" rel="noreferrer">
+        <a className={`${rowLink} row`} href={FAUCET} target="_blank" rel="noreferrer">
           Get 20 USDC from Circle&apos;s faucet
         </a>
         <p className="meta">Choose {dest.name} there and paste the account&apos;s address. Once every 2 hours.</p>

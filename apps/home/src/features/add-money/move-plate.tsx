@@ -24,7 +24,7 @@ import {
   type Move,
 } from "./cctp.ts";
 import { asOfText, ledgerText, parseUsdc, usdcText, whenText, type Held } from "./format.ts";
-import { cta, explorer, FAUCET, inner, link, mark, plate, quiet } from "./ui.ts";
+import { cta, explorer, FAUCET, inner, mark, plate, quiet, rowLink } from "./ui.ts";
 import { allowed, codeOf, connect, gasHeld, injected, minted, receiptStatus, send, usdcHeld, type Phase } from "./wallet.ts";
 
 const KEY = (address: string) => `tameion.home.move.${address.toLowerCase()}`;
@@ -295,7 +295,7 @@ export function MovePlate({
             }
             agent={
               view === "agent" && (
-                <a className={link} href={explorer(moveFrom, "tx", move.burnTx)} target="_blank" rel="noreferrer">
+                <a className={rowLink} href={explorer(moveFrom, "tx", move.burnTx)} target="_blank" rel="noreferrer">
                   {move.burnTx}
                 </a>
               )
@@ -323,7 +323,7 @@ export function MovePlate({
                   view === "agent" &&
                   track?.burn === "success" && (
                     <span className="flex flex-col">
-                      <a className={link} href={`${IRIS}/v2/messages/${move.from}?transactionHash=${move.burnTx}`} target="_blank" rel="noreferrer">
+                      <a className={rowLink} href={`${IRIS}/v2/messages/${move.from}?transactionHash=${move.burnTx}`} target="_blank" rel="noreferrer">
                         iris /v2/messages/{move.from}
                       </a>
                       {burn && <span>nonce {burn.nonce}</span>}
@@ -338,7 +338,7 @@ export function MovePlate({
                 agent={
                   view === "agent" &&
                   mintTx && (
-                    <a className={link} href={explorer(dest, "tx", mintTx)} target="_blank" rel="noreferrer">
+                    <a className={rowLink} href={explorer(dest, "tx", mintTx)} target="_blank" rel="noreferrer">
                       {mintTx}
                     </a>
                   )
@@ -381,7 +381,7 @@ export function MovePlate({
           <p className="row text-(--attention)">{failure.words}</p>
           <p className="meta">{failure.moved}</p>
           <details className="meta">
-            <summary className="cursor-pointer">What the wallet said</summary>
+            <summary className="min-h-(--touch) cursor-pointer py-(--space-3)">What the wallet said</summary>
             <p className="break-all">{failure.detail}</p>
           </details>
         </div>
@@ -431,7 +431,7 @@ function MintStep({
           Your wallet holds no {dest.gas} on {dest.name} to pay the mint&apos;s gas.
         </p>
         {dest.gas === "USDC" && (
-          <a className={`${link} row`} href={FAUCET} target="_blank" rel="noreferrer">
+          <a className={`${rowLink} row`} href={FAUCET} target="_blank" rel="noreferrer">
             Get USDC on {dest.name} from Circle&apos;s faucet
           </a>
         )}
@@ -536,12 +536,12 @@ function MoveForm({
 function Hashes({ from, dest, move, mintTx, nonce }: { from: CctpChain; dest: CctpChain; move: Move; mintTx: Hex | null; nonce?: Hex }) {
   return (
     <span className="flex flex-col break-all">
-      <a className={link} href={explorer(from, "tx", move.burnTx)} target="_blank" rel="noreferrer">
+      <a className={rowLink} href={explorer(from, "tx", move.burnTx)} target="_blank" rel="noreferrer">
         burn {move.burnTx}
       </a>
       {nonce && <span>nonce {nonce} used on {dest.name}</span>}
       {mintTx && (
-        <a className={link} href={explorer(dest, "tx", mintTx)} target="_blank" rel="noreferrer">
+        <a className={rowLink} href={explorer(dest, "tx", mintTx)} target="_blank" rel="noreferrer">
           mint {mintTx}
         </a>
       )}
