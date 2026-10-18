@@ -1,0 +1,9 @@
+# Made, not committed.
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# The synthetic replay is for layout in dev only, never shipped.
+public/hero/*.synthetic.*

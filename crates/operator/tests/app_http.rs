@@ -2223,3 +2223,173 @@ fn the_status_lists_each_rail_with_its_last_measured_finality() {
     );
     assert!(r[1]["finalitySecs"].is_null(), "{b}");
 }
+
+/// The read-only symbolon projection: each record with its three slots. The
+/// chain is unreachable here, so the witness is absent and its root listed
+/// apart; the payee-signed invoice the settlement paid fills the counterparty
+/// slot. On a locked account an outsider gets root, seq and leaf only.
+#[test]
+fn the_symbolon_route_shows_each_records_slots_and_outsiders_only_leaves() {
+    use alloy::signers::SignerSync;
+    use ledger::{EventBody, log::DecisionLog, money::Money, time::Timestamp};
+    let srv = start_with(181, &[("TAMEION_RPC_ARC", "http://127.0.0.1:9")]);
+    let p = srv.port;
+    let dir = std::env::temp_dir().join(format!("tameion-app-test-{}-181", std::process::id()));
+    let a = "0x00000000000000000000000000000000000000e1";
+    let policy: alloy::primitives::Address = a.parse().unwrap();
+    let log = dir.join("tenants").join(a).join("log");
+    std::fs::create_dir_all(&log).unwrap();
+    let read = operator::level1::token_hash("k-read");
+    let tenant = |tokens: &str| {
+        std::fs::write(
+            dir.join("tenants").join(format!("{a}.json")),
+            format!(
+                r#"{{"chain":"arc-testnet","owner":"0x0000000000000000000000000000000000000001","policy":"{a}","agent":"0x0000000000000000000000000000000000000003","operator":"0x0000000000000000000000000000000000000004","watched":"0x0000000000000000000000000000000000000005","recovery":"0x0000000000000000000000000000000000000000","per_action":"1","daily":"1","floor":"0","delay_secs":60,"mode":1,"created_block":0,"history_from_block":0,"created":0,"deployed":true,"agent_tokens":[{tokens}]}}"#
+            ),
+        )
+        .unwrap();
+    };
+    tenant("");
+    let vendor = alloy::signers::local::PrivateKeySigner::random();
+    let payee = format!("{:#x}", vendor.address());
+    let due = 1_792_000_000u64;
+    let inv = operator::invoice::Invoice {
+        payee: vendor.address(),
+        policy,
+        amount: 2_000,
+        due_at: due,
+        every_days: 30,
+        discount_bps: 0,
+        early_days: 0,
+        reference: alloy::primitives::keccak256("INV-1"),
+        issued_at: due - 86_400,
+        issuer: None,
+        alg: None,
+        key_hash: None,
+    };
+    let chain_id = operator::watch::chain("arc-testnet").unwrap().chain_id;
+    let s = vendor
+        .sign_hash_sync(&operator::invoice::digest(chain_id, &inv))
+        .unwrap();
+    std::fs::write(
+        dir.join("tenants").join(format!("{a}.invoices.jsonl")),
+        format!("{}\n", operator::invoice::to_json(&inv, &s.as_bytes())),
+    )
+    .unwrap();
+    let usdc = |s: &str| Money::parse(s, ledger::Currency::Usdc).unwrap();
+    let mut pass = DecisionLog::new();
+    pass.append(
+        Timestamp::from_unix(1_792_100_000),
+        EventBody::Observation {
+            balance: usdc("1"),
+            transfers_seen: 1,
+            obligations_found: 1,
+            total_due: usdc("0.002"),
+            note: "a secret note".into(),
+        },
+    );
+    pass.append(
+        Timestamp::from_unix(1_792_100_001),
+        EventBody::Settlement {
+            counterparty: ledger::Counterparty::new(&payee),
+            cycle_key: format!("{payee}@{}", due + 30 * 86_400),
+            amount: usdc("0.002"),
+            tx_hash: "0xfeed".into(),
+            action_hash: ledger::ActionHash::from_bytes([1; 32]),
+            settlement_key: ledger::ActionHash::from_bytes([2; 32]),
+            note: "paid the secret vendor".into(),
+        },
+    );
+    let file = operator::audit::persist(&log, &pass).unwrap();
+    let root = operator::audit::root_from_filename(&file).unwrap();
+    let tx = format!("0x{}", "ab".repeat(32));
+    operator::audit::append_anchor(
+        &log,
+        root,
+        Some(tx.clone()),
+        Some("0x0000000000000000000000000000000000000003".into()),
+        "0x0000000000000000000000000000000000000004".into(),
+        1_792_100_002,
+        2,
+    )
+    .unwrap();
+    let get = |path: &str, who: &str| {
+        let (st, _, body) = http_with(p, "GET", path, "", who);
+        (
+            st,
+            serde_json::from_str::<serde_json::Value>(&body).unwrap(),
+        )
+    };
+    let path = format!("/api/level1/symbolon?policy={a}");
+
+    let (st, v) = get(&path, "");
+    assert_eq!(st, 200, "{v}");
+    assert_eq!(
+        (v["ok"].as_bool(), v["locked"].as_bool()),
+        (Some(true), Some(false))
+    );
+    assert_eq!(
+        v["counts"],
+        serde_json::json!({ "unsigned": 0, "single": 1, "double": 0, "triple": 0 })
+    );
+    assert_eq!(v["chainReadFailed"], serde_json::json!([root.to_hex()]));
+    let r = &v["records"][0];
+    assert_eq!(
+        v["records"].as_array().unwrap().len(),
+        1,
+        "an observation is not a record"
+    );
+    assert_eq!(
+        (r["root"].as_str(), r["seq"].as_u64()),
+        (Some(root.to_hex().as_str()), Some(1))
+    );
+    assert_eq!(r["kind"], "SETTLEMENT");
+    assert_eq!(
+        (r["counterparty"].as_str(), r["minor"].as_str()),
+        (Some(payee.as_str()), Some("2000"))
+    );
+    assert_eq!(r["anchorTx"].as_str(), Some(tx.as_str()));
+    assert!(r["agent"].is_null() && r["witness"].is_null(), "{r}");
+    assert_eq!(
+        r["counterpartySlot"],
+        serde_json::json!({ "alg": "secp256k1-eip712", "keyId": payee, "verified": true })
+    );
+    let leaf = r["leaf"].as_str().unwrap().to_string();
+    assert_eq!(leaf, pass.events()[1].leaf().to_hex());
+
+    // One root by name; an unknown root and a bad policy are refused.
+    let (st, v) = get(&format!("{path}&root={}", root.to_hex()), "");
+    assert_eq!((st, v["records"].as_array().map(Vec::len)), (200, Some(1)));
+    let (st, v) = get(&format!("{path}&root=0x{}", "11".repeat(32)), "");
+    assert_eq!(
+        (st, v["error"]["code"].as_str()),
+        (404, Some("not_found")),
+        "{v}"
+    );
+    let (st, v) = get("/api/level1/symbolon?policy=nope", "");
+    assert_eq!(
+        (st, v["error"]["code"].as_str()),
+        (400, Some("invalid_body")),
+        "{v}"
+    );
+
+    // Locked: an outsider gets root, seq and leaf; a read key gets the rest.
+    tenant(&format!(
+        r#"{{"id":"r1","label":"reader","scopes":["read"],"expires":4102444800,"issued":0,"hash":"{read}"}}"#
+    ));
+    let (st, v) = get(&path, "");
+    assert_eq!(st, 200);
+    assert_eq!(
+        (v["locked"].as_bool(), v["counts"].is_null()),
+        (Some(true), true),
+        "{v}"
+    );
+    let mut keys: Vec<&String> = v["records"][0].as_object().unwrap().keys().collect();
+    keys.sort();
+    assert_eq!(keys, ["leaf", "root", "seq"], "{v}");
+    assert_eq!(v["records"][0]["leaf"].as_str(), Some(leaf.as_str()));
+    assert!(!v.to_string().contains("secret") && !v.to_string().contains(&payee));
+    let (_, v) = get(&path, "Authorization: Bearer k-read\r\n");
+    assert_eq!(v["locked"].as_bool(), Some(false), "{v}");
+    assert_eq!(v["records"][0]["counterpartySlot"]["verified"], true);
+}

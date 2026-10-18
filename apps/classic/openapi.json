@@ -1044,6 +1044,79 @@
         }
       }
     },
+    "/api/level1/symbolon": {
+      "get": {
+        "summary": "Each record of the account (settlement, decision, flow, meter or price check) with its three slots, as `operator --example symbolon_count --show` prints them: agent (none yet: no record carries the agent's own signature), counterpartySlot (a payee-signed invoice whose EIP-712 or ML-DSA-65 signature recovers the payee, for the bill cycle the settlement paid) and witness (the root's anchoring transaction, read back on the account's chain: it succeeded, the agent sent it to the anchor, the root is in its calldata). A slot is present only when its check passed in this read, so a present slot is verified; null is none. A record persisted again in a later root counts once, with its best slots. `counts` says how many records stand behind none, one, two or three slots; `chainReadFailed` lists roots whose anchoring could not be read this time (their records show no witness, which is not the same as not witnessed). Open like /api/level1/record: on an account with agent keys, the fields and slots need a read key or the owner's device; anyone gets each record's root, seq and leaf (`locked: true`, `counts: null`).",
+        "parameters": [
+          {
+            "name": "policy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "root",
+            "in": "query",
+            "required": false,
+            "description": "one record's root (from /api/level1/records); default: every root the account has written",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{ policy, chain, explorer, locked, counts, records: [...], chainReadFailed }",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Symbolon"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "no policy, or a root that is not 32 bytes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "no such account, or no record with that root",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "a refusal (docs/115 §2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Refusal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/level1/inbox": {
       "get": {
         "summary": "One screen for a treasurer: deployed (false while only reserved; status then reads what the reserved address can reach); agentTokens [{id, label, scopes, expires, issued}] and gated (true once a key exists — then this route needs Authorization: Bearer with the read scope); guardians {list, threshold, pendingEta}; terms {perActionCap, dailyCap, reserveFloor, mode, agent, operator, delay, agentExpiry, pendingEta, pendingKinds, fingerprint, recomputed, consistent} — the fields the owner's approvals are bound to, and needsYou rows whose to/data/attest are settleAsPrincipalIf / setPayeesIf bound to that fingerprint for ten minutes (boundUntil); standingOrders [{id, payee, amount, everySecs, nextDue, active, due}] and standingOrderCandidates (confirmed bills the agent suggests making standing orders); kind (hold | pull) and, for pull tenants, pull {wallet, usdc, allowance, walletBalance, suggestedAllowance, approveData, revokeData} — the money stays in the bill wallet and balance = the smaller of its balance and the allowance; mode, caps, balance, pending change, protectedPerDay = min(daily cap, balance - floor), lastPass, running (with progress), needsYou (prepared payments with why the agent asked), paid (settled by the agent across passes) and paidTotal, nextPassSecs when a scheduler runs. Also runway: {days, horizonDays, firstAtRisk {counterparty, amount, onUnix}, billsInHorizon, basis} projected from the last pass's obligationsList against the balance above the floor. halted {reason, clear} when a post-pay read-back mismatch left HALT beside the tenant's log (nothing is paid until a human removes it). And holdingsElsewhere: the bill wallet's USDC in Circle Gateway on every chain Gateway serves — {source, total, chains [{domain, chain, balance}], arriving [{domain, chain, amount, tx, since}] (deposits Gateway has seen but not credited yet)} or {source, error}; read with no key, shown beside the balance, never counted as the policy's. run (PLAN 5.39: every waiting bill as one call the owner approves with one tap; null on policies without settleRunIf), refused (what the checks refused on the last pass, and why), keyless (PLAN 5.38), runway.idleCover (PLAN 5.36). delegation (PLAN 5.28, wallet accounts): {implementation, wallet, initializeData, active}. invoices (PLAN 5.60): invoices vendors sent and the owner has not answered — the vendor's signed body plus status, at, amountText, approvedPayee (read live), frozen, notes (the agent's checks in words) and, for a one-off invoice on a deployed account, pay {to, data, summary}: the owner's payment bound to the terms for ten minutes, keyed by the invoice's ref so it pays once. preview (PLAN 5.59, before the first pass): {status reading|done|failed, at, readMs, days, transfers, bills [{counterparty, amount, every, intervalSecs, nextDue, confidence}], next30, fundMinor (USDC minor units that cover the next 30 days), suggestedLimit, usdc (the token to send)} — the read-only report of the bill wallet, kept an hour; chosenDaily: the daily limit the owner chose, before the contract holds it.",
@@ -6684,6 +6757,237 @@
           "verified",
           "unverified",
           "unknown"
+        ]
+      },
+      "Symbolon": {
+        "type": "object",
+        "properties": {
+          "policy": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string"
+          },
+          "explorer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the chain's explorer; a transaction is <explorer>/tx/<hash>. null when locked"
+          },
+          "locked": {
+            "type": "boolean",
+            "description": "true: this caller may not read the account; records carry root, seq and leaf only"
+          },
+          "counts": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "unsigned": {
+                    "type": "integer"
+                  },
+                  "single": {
+                    "type": "integer"
+                  },
+                  "double": {
+                    "type": "integer"
+                  },
+                  "triple": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "unsigned",
+                  "single",
+                  "double",
+                  "triple"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "records": {
+            "type": "array",
+            "description": "oldest first",
+            "items": {
+              "type": "object",
+              "properties": {
+                "root": {
+                  "type": "string"
+                },
+                "seq": {
+                  "type": "integer",
+                  "description": "the event's seq in that root's record (evt:<seq>)"
+                },
+                "leaf": {
+                  "type": "string",
+                  "description": "keccak256(0x00 || canonical): the record hash an inclusion proof starts from"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "SETTLEMENT",
+                    "DECISION",
+                    "FLOWCHECK",
+                    "METERCHECK",
+                    "PRICETABLE"
+                  ]
+                },
+                "at": {
+                  "type": "integer"
+                },
+                "counterparty": {
+                  "type": "string",
+                  "description": "the payee, for a settlement or a decision"
+                },
+                "amount": {
+                  "$ref": "#/components/schemas/Money"
+                },
+                "minor": {
+                  "type": "string",
+                  "description": "the amount in minor units (USDC: 6 decimals)"
+                },
+                "decision": {
+                  "type": "string",
+                  "enum": [
+                    "ALLOW",
+                    "REVIEW",
+                    "BLOCK"
+                  ],
+                  "description": "a decision's verdict; BLOCK is a refusal"
+                },
+                "tx": {
+                  "type": "string",
+                  "description": "a settlement's own transaction"
+                },
+                "note": {
+                  "type": "string",
+                  "description": "the words inside the hashed bytes"
+                },
+                "anchorTx": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "the transaction that witnessed the root, else the one the anchors index names; null when never anchored"
+                },
+                "agent": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "alg": {
+                          "type": "string",
+                          "description": "secp256k1-eip712 | ml-dsa-65 | p256-webauthn for a signature; chain-receipt for a witness read back"
+                        },
+                        "keyId": {
+                          "type": "string",
+                          "description": "the payee's address or sha256 of its ML-DSA-65 key; chain:<chainId> for a witness"
+                        },
+                        "verified": {
+                          "const": true,
+                          "description": "a slot is present only after its check passed"
+                        }
+                      },
+                      "required": [
+                        "alg",
+                        "keyId",
+                        "verified"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "counterpartySlot": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "alg": {
+                          "type": "string",
+                          "description": "secp256k1-eip712 | ml-dsa-65 | p256-webauthn for a signature; chain-receipt for a witness read back"
+                        },
+                        "keyId": {
+                          "type": "string",
+                          "description": "the payee's address or sha256 of its ML-DSA-65 key; chain:<chainId> for a witness"
+                        },
+                        "verified": {
+                          "const": true,
+                          "description": "a slot is present only after its check passed"
+                        }
+                      },
+                      "required": [
+                        "alg",
+                        "keyId",
+                        "verified"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "witness": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "alg": {
+                          "type": "string",
+                          "description": "secp256k1-eip712 | ml-dsa-65 | p256-webauthn for a signature; chain-receipt for a witness read back"
+                        },
+                        "keyId": {
+                          "type": "string",
+                          "description": "the payee's address or sha256 of its ML-DSA-65 key; chain:<chainId> for a witness"
+                        },
+                        "verified": {
+                          "const": true,
+                          "description": "a slot is present only after its check passed"
+                        }
+                      },
+                      "required": [
+                        "alg",
+                        "keyId",
+                        "verified"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "root",
+                "seq",
+                "leaf"
+              ]
+            }
+          },
+          "chainReadFailed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "roots whose anchoring could not be read back this time"
+          }
+        },
+        "required": [
+          "policy",
+          "chain",
+          "locked",
+          "counts",
+          "records",
+          "chainReadFailed"
         ]
       },
       "BuyReply": {

@@ -23,61 +23,15 @@
 //! Reads no key. RPCs are the chain presets' (`TAMEION_RPC_ARC`,
 //! `TAMEION_RPC_ARBITRUM_SEPOLIA` override the public endpoints).
 
-use alloy::primitives::{Address, B256};
+use alloy::primitives::Address;
 use arc::ArcClient;
-use ledger::symbolon::{Extras, Signedness, SlotSig, Symbolon, project, record_hash};
-use ledger::{Event, EventBody};
-use operator::sig::{self, Alg, KeyRef};
-use operator::{audit, invoice, level1, watch};
-use serde_json::Value;
+use ledger::symbolon::{SlotSig, Symbolon};
+use operator::symbolon::{account, anchorings, signed_invoices};
+use operator::{level1, watch};
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
-
-/// A received invoice whose signature recovers its payee: payee, first due
-/// time, interval in seconds (0 = one-off), and the slot it fills.
-type Signed = (String, u64, u64, SlotSig);
-
-fn signed_invoices(app: &Path, policy: Address, chain_id: u64) -> Vec<Signed> {
-    let path = level1::tenants_dir(app).join(format!("{policy:#x}.invoices.jsonl"));
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return Vec::new();
-    };
-    text.lines()
-        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
-        .filter_map(|v| {
-            let issued = v["issuedAt"].as_u64()?;
-            // Checked as of its issue date: the signature and the terms.
-            let inv = invoice::verify(chain_id, policy, &v, issued).ok()?;
-            let hex = |k: &str| alloy::hex::decode(v[k].as_str()?.trim_start_matches("0x")).ok();
-            let sig = hex("signature")?;
-            // The slot says how it was signed (`sig::slot_sig`): by the payee's
-            // address, or by the ML-DSA-65 key the payee bound on this account.
-            let pk = match inv.alg {
-                Some(Alg::MlDsa65) => {
-                    let bound = invoice::binding_for(app, &format!("{policy:#x}"), inv.payee);
-                    invoice::floor(&inv, bound.as_ref()).ok()?;
-                    Some(hex("publicKey")?)
-                }
-                _ => None,
-            };
-            let key = match &pk {
-                Some(pk) => KeyRef::MlDsa65(pk),
-                None => KeyRef::Address(inv.payee),
-            };
-            let alg = inv.alg.unwrap_or(Alg::Secp256k1Eip712);
-            let d = invoice::digest(chain_id, &inv);
-            let slot = sig::slot_sig(alg, &key, &d.0, &sig, issued as i64).ok()?;
-            Some((
-                format!("{:#x}", inv.payee),
-                inv.due_at,
-                u64::from(inv.every_days) * 86_400,
-                slot,
-            ))
-        })
-        .collect()
-}
 
 /// One slot of `--show`: hashes are fine on this surface (an operator's terminal).
 fn print_slot(name: &str, s: Option<&SlotSig>) {
@@ -96,19 +50,6 @@ fn print_slot(name: &str, s: Option<&SlotSig>) {
         "  {name:<12} {:<19} verified yes  key {}  {sig}  at {}",
         s.alg, s.key_id, s.at
     );
-}
-
-/// The invoice whose bill cycle `cycle_key` (`<payee>@<due>`) is.
-fn invoice_paid<'a>(invoices: &'a [Signed], cycle_key: &str) -> Option<&'a SlotSig> {
-    let (payee, due) = cycle_key.split_once('@')?;
-    let due: u64 = due.parse().ok()?;
-    invoices
-        .iter()
-        // `is_multiple_of(0)` holds only for 0: a one-off has one cycle.
-        .find(|(p, first, every, _)| {
-            p == payee && due >= *first && (due - first).is_multiple_of(*every)
-        })
-        .map(|(_, _, _, s)| s)
 }
 
 #[tokio::main]
@@ -159,108 +100,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let invoices = signed_invoices(&app, policy, chain.chain_id);
         invoices_signed += invoices.len();
         let log = dir.join("log");
-        let anchors = audit::anchors(&log)?;
-        let mut files: Vec<PathBuf> = std::fs::read_dir(&log)?
-            .filter_map(|e| e.ok().map(|e| e.path()))
-            .filter(|p| audit::root_from_filename(p).is_some())
-            .collect();
-        files.sort();
-        let mut best: BTreeMap<[u8; 32], Signedness> = BTreeMap::new();
-        for f in files {
-            files_seen += 1;
-            let lines = audit::load(&f)?;
-            let (_, root) = audit::recompute(&lines);
-            let mut extras = Extras::default();
-            let mut failed = false;
-            // Only a file whose bytes recompute to its name can be witnessed.
-            if audit::root_from_filename(&f) == Some(root) {
-                let want = root.to_hex();
-                for a in anchors
-                    .iter()
-                    .filter(|a| a["root"].as_str() == Some(want.as_str()))
-                {
-                    let field = |k: &str| a[k].as_str().unwrap_or_default().trim().to_string();
-                    let (Ok(tx), Ok(anchor), Ok(agent)) = (
-                        B256::from_str(&field("anchorTx")),
-                        Address::from_str(&field("anchor")),
-                        Address::from_str(&field("agent")),
-                    ) else {
-                        continue;
-                    };
-                    let root_b = B256::from(*root.as_bytes());
-                    // One retry: the public endpoints rate-limit (docs/60 P-12, P-14).
-                    let mut read = client.anchored_in(tx, anchor, agent, root_b).await;
-                    if read.is_err() {
-                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                        read = client.anchored_in(tx, anchor, agent, root_b).await;
-                    }
-                    match read {
-                        Ok(true) => {
-                            extras.anchored = Some(SlotSig {
-                                alg: "chain-receipt".into(),
-                                key_id: format!("chain:{}", chain.chain_id),
-                                sig: tx.to_vec(),
-                                at: a["at"].as_i64().unwrap_or(0),
-                            });
-                            break;
-                        }
-                        Ok(false) => {}
-                        Err(e) => {
-                            failed = true;
-                            eprintln!("{name}: {want}: chain read failed: {e}");
-                        }
-                    }
-                }
+        let mut read = Vec::new();
+        for a in anchorings(&log, None)? {
+            // One retry: the public endpoints rate-limit (docs/60 P-12, P-14).
+            let mut r = client.anchored_in(a.tx, a.anchor, a.agent, a.root).await;
+            if r.is_err() {
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                r = client.anchored_in(a.tx, a.anchor, a.agent, a.root).await;
             }
-            if extras.anchored.is_none() {
-                if failed {
-                    read_failed += 1;
-                } else {
-                    not_witnessed += 1;
-                }
-            }
-            let events: Vec<Event> = lines
-                .iter()
-                .filter_map(|l| Event::decode(&l.canonical))
-                .collect();
-            undecodable += lines.len() - events.len();
-            for e in &events {
-                if let EventBody::Settlement { cycle_key, .. } = &e.body
-                    && let Some(s) = invoice_paid(&invoices, cycle_key)
-                {
-                    invoices_paid += 1;
-                    extras.counterparty.insert(record_hash(e), s.clone());
-                }
-            }
-            let seqs: BTreeMap<[u8; 32], u64> =
-                events.iter().map(|e| (record_hash(e), e.seq)).collect();
-            for s in project(&events, &extras) {
-                let b = best.entry(s.record_hash).or_insert(Signedness::Unsigned);
-                *b = (*b).max(s.signedness());
-                let seq = seqs.get(&s.record_hash).copied().unwrap_or_default();
-                let wanted = show.as_deref().is_some_and(|w| {
-                    w == seq.to_string() || w == alloy::hex::encode(s.record_hash)
-                });
-                let key = (name.clone(), s.record_hash);
-                if wanted
-                    && shown
-                        .get(&key)
-                        .is_none_or(|(_, o)| o.signedness() < s.signedness())
-                {
-                    shown.insert(key, (seq, s));
+            read.push((a, r.map_err(|e| e.to_string())));
+        }
+        let acc = account(&log, &invoices, chain.chain_id, None, &read)?;
+        for (root, e) in &acc.read_failed {
+            eprintln!("{name}: {}: chain read failed: {e}", root.to_hex());
+        }
+        files_seen += acc.files;
+        not_witnessed += acc.not_witnessed;
+        read_failed += acc.read_failed.len();
+        undecodable += acc.undecodable;
+        invoices_paid += acc.invoices_paid;
+        if let Some(w) = show.as_deref() {
+            for (h, f) in &acc.records {
+                if w == f.seq.to_string() || w == alloy::hex::encode(h) {
+                    shown.insert((name.clone(), *h), (f.seq, f.symbolon.clone()));
                 }
             }
         }
-        let mut counts = [0usize; 4];
-        for s in best.values() {
-            counts[*s as usize] += 1;
-        }
+        let counts = acc.counts();
         for (t, c) in total.iter_mut().zip(counts) {
             *t += c;
         }
         println!(
             "{name:<42} {:>7} {:>8} {:>6} {:>6} {:>6}  {}",
-            best.len(),
+            acc.records.len(),
             counts[0],
             counts[1],
             counts[2],

@@ -1,0 +1,40 @@
+{
+  "name": "tameion-home",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "next dev -p 3010",
+    "prebuild": "node scripts/contrast.mjs && node scripts/tokens-lint.mjs && 21st review src",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "node --test test/*.test.mts",
+    "lint:tokens": "node scripts/tokens-lint.mjs",
+    "review": "21st review src",
+    "ci": "node scripts/ci.mjs"
+  },
+  "dependencies": {
+    "next": "16.4.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "uqr": "^0.1.3",
+    "viem": "2.57.6"
+  },
+  "devDependencies": {
+    "@21st-dev/cli": "1.18.0",
+    "@axe-core/playwright": "^4.14.0",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.0",
+    "playwright-core": "^1.64.1",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

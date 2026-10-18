@@ -1,0 +1,703 @@
+Lane HOME preflight log (seat H6). Started 2026-10-18 06:35 +0800.
+Each block below is one run of `npm run ci -- --shots --log` (apps/home/scripts/ci.mjs): time, the commit the server on :3010 runs, what passed,
+what failed with the element, and what changed since the previous run. Screenshots: <route>-<state>-<view>-<width>.png in this folder; focus-ring
+crops in focus/; the last run's findings as data in preflight-last.json.
+
+How to run it in the lane (the app must be up: `cd apps/home && npm run dev` serves :3010):
+  cd <your worktree>/apps/home && npm ci            # playwright-core + @axe-core/playwright are dev dependencies; Chrome is the system one
+  npm run ci                                        # the gate: tokens vs DESIGN.md, contrast, zero-hash test, colour literals, then axe + DESIGN rules,
+                                                    # focus ring, reduced motion over every route x state x view x width. Exit 1 on any FAIL.
+  npm run ci -- --shots --log                       # also write the screenshots here and append a block to this file
+  npm run ci -- --route account --state loading,error --view owner --width 390     # a slice
+  POLICY=<account name> POLICY_EMPTY=<account with no bills> npm run ci            # POLICY defaults to northwind-agents (lane service :7890)
+It opens its own headless Chrome, never the shared Playwright MCP session, and only reads: it never presses Stop, Approve, Decline or Raise.
+
+== 2026-10-18 06:45:12 +08  lane/home f4c0053 at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home  seat H6  http://localhost:3010
+PASS  tokens
+PASS  contrast  contrast/tokens: every pair >= 4.5:1 in both views; tokens.css matches tokens.ts
+FAIL  zero-hash  test/owner-no-hash.test.mts is missing (H2: DESIGN Rule 1, a seeded Owner page with no /0x[0-9a-fA-F]{8,}/ in the DOM)
+PASS  literals
+browser: 1 checks, 2 FAIL, 1 WARN (2 + 1 distinct), 0 note
+  FAIL one-hero    0 h1 on the page (DESIGN: one hero per surface)
+       in 1: account/rest/owner/390
+  FAIL axe:page-has-heading-one  html  moderate: Page must have a level-one heading
+       in 1: account/rest/owner/390
+  WARN off-token-colour  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable "northwind-agents Testnet Owner Agent"  color #000000 x1: a colour literal, not a token
+       in 1: account/rest/owner/390
+measured:
+  account/rest/owner/390: h1 none; main 0..390 (390 wide)
+
+== 2026-10-18 06:47:52 +08  lane/home f4c0053 (+2 uncommitted) at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home  seat H6  http://localhost:3010
+PASS  tokens
+PASS  contrast  contrast/tokens: every pair >= 4.5:1 in both views; tokens.css matches tokens.ts
+FAIL  zero-hash  test/owner-no-hash.test.mts is missing (H2: DESIGN Rule 1, a seeded Owner page with no /0x[0-9a-fA-F]{8,}/ in the DOM)
+PASS  literals
+browser: 55 checks, 82 FAIL, 0 WARN (4 + 0 distinct), 3 note
+  FAIL one-hero    0 h1 on the page (DESIGN: one hero per surface)
+       in 36: guest/rest/owner/1280, guest/rest/owner/390, guest/rest/agent/1280, guest/rest/agent/390, ...
+  FAIL axe:page-has-heading-one  html  moderate: Page must have a level-one heading
+       in 36: guest/rest/owner/1280, guest/rest/owner/390, guest/rest/agent/1280, guest/rest/agent/390, ...
+  FAIL moves-at-rest  div.flex.flex-col > div.flex.flex-col > div.skeleton.h-12  11 animation(s) still run on a settled page (pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity, pulse-opacity); nothing moves that is not a state change
+       in 2: motion/normal/account/1280, motion/normal/account/390
+  FAIL flip-not-opacity  ::view-transition-new(root)  the flip animates mixBlendMode; DESIGN: crossfade only, no slide, no scale
+       in 8: motion/normal/account/1280, motion/normal/account/1280, motion/reduced/account/1280, motion/reduced/account/1280, ...
+  NOTE not-built-yet    no text input on /new yet
+       in 2: typing-v/new/owner/390, keyboard/new/375
+  NOTE not-built-yet    no text input on /add yet
+       in 1: keyboard/add/375
+measured:
+  guest/rest/owner/1280: h1 none; main 280..1000 (720 wide)
+  guest/rest/owner/390: h1 none; main 0..390 (390 wide)
+  guest/rest/agent/1280: h1 none; main 0..1280 (1280 wide)
+  guest/rest/agent/390: h1 none; main 0..390 (390 wide)
+  account/rest/owner/1280: h1 none; main 280..1000 (720 wide)
+  account/rest/owner/390: h1 none; main 0..390 (390 wide)
+  account/rest/agent/1280: h1 none; main 0..1280 (1280 wide)
+  account/rest/agent/390: h1 none; main 0..390 (390 wide)
+  new/rest/owner/1280: h1 none; main 280..1000 (720 wide)
+  new/rest/owner/390: h1 none; main 0..390 (390 wide)
+  new/rest/agent/1280: h1 none; main 0..1280 (1280 wide)
+  new/rest/agent/390: h1 none; main 0..390 (390 wide)
+  add/rest/owner/1280: h1 none; main 280..1000 (720 wide)
+  add/rest/owner/390: h1 none; main 0..390 (390 wide)
+  add/rest/agent/1280: h1 none; main 0..1280 (1280 wide)
+  add/rest/agent/390: h1 none; main 0..390 (390 wide)
+  receive/rest/owner/1280: h1 none; main 280..1000 (720 wide)
+  receive/rest/owner/390: h1 none; main 0..390 (390 wide)
+  receive/rest/agent/1280: h1 none; main 0..1280 (1280 wide)
+  receive/rest/agent/390: h1 none; main 0..390 (390 wide)
+since the last run: 1 fixed, 76 new
+
+== 2026-10-18 06:53:17 +08  lane/home-h6 a574594 (+1 uncommitted) at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home-h6  seat H6  http://localhost:3011
+PASS  tokens
+PASS  contrast  contrast/tokens: every pair >= 4.5:1 in both views; tokens.css matches tokens.ts
+FAIL  zero-hash  test/owner-no-hash.test.mts is missing (H2: DESIGN Rule 1, a seeded Owner page with no /0x[0-9a-fA-F]{8,}/ in the DOM)
+PASS  literals
+browser: 32 checks, 13 FAIL, 60 WARN (4 + 8 distinct), 6 note
+  FAIL console    pageerror: Hydration failed because the server rendered HTML didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed 
+       in 8: account/rest/owner/1280, account/rest/owner/390, account/rest/agent/1280, account/rest/agent/390, ...
+  FAIL one-hero    0 h1 on the page (DESIGN: one hero per surface)
+       in 2: account/error/owner/1280, account/error/owner/390
+  FAIL axe:page-has-heading-one  html  moderate: Page must have a level-one heading
+       in 2: account/error/owner/1280, account/error/owner/390
+  FAIL touch-target  div.flex.flex-col > div.flex.flex-col > button.row.self-start "Open in Agent view"  129x22 px; DESIGN touch targets are >= 44
+       in 1: account/detail/owner/390
+  WARN money-not-tabular  h1#authority "Your agents may spend 0.05 USDC a day, 0.005 at a "  "0.05 USDC": tabular lining figures wherever money appears
+       in 2: account/rest/owner/1280, account/rest/owner/390
+  WARN console    Encountered a script tag while rendering React component. Scripts inside React components are never executed when rendering on the client. Consider using templa
+       in 8: account/rest/owner/1280, account/rest/owner/390, account/rest/agent/1280, account/rest/agent/390, ...
+  WARN console    404 /api/level1/symbolon
+       in 41: account/rest/owner/1280, account/rest/owner/1280, account/rest/owner/390, account/rest/owner/390, ...
+  WARN console    ./src/app/a/[policy]/page.tsx Error: Module not found: Can't resolve './page.tsx' https://nextjs.org/docs/messages/module-not-found
+       in 2: account/empty/agent/390, account/empty/agent/390
+  WARN money-not-tabular  ul.rounded-(--radius-plate).border > li.flex.flex-col > p.row-title.m-0 "The agent prepared 0.002 USDC to a payee you have "  "0.002 USDC": tabular lining figures wherever money appears
+       in 2: account/needs-you/owner/1280, account/needs-you/owner/390
+  WARN red-outside-allowed  div.rounded-(--radius-plate).border > dd.m-0.flex > span.balance "1"  --red is for Needs you, Stop and refusals only
+       in 2: account/needs-you/owner/1280, account/needs-you/owner/390
+  WARN money-not-tabular  h2#_r_0_ "0.002 USDC to Demo Vendor"  "0.002 USDC": tabular lining figures wherever money appears
+       in 2: account/detail/owner/1280, account/detail/owner/390
+  WARN console    WebSocket connection to 'ws://localhost:3011/_next/hmr?id=tSSCYNOnQJ20-mlPrJRzl' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED
+       in 1: account/detail/agent/390
+  NOTE not-built-yet    the route still shows its skeleton after settling: no content yet
+       in 2: account/rest/agent/1280, account/rest/agent/390
+  NOTE not-built-yet    the route is still a skeleton: nothing to mark stale
+       in 2: account/offline/agent/1280, account/offline/agent/390
+  NOTE not-built-yet    no row disclosure to open yet
+       in 2: account/detail/agent/1280, account/detail/agent/390
+  mocked replies (a fixture, not a real account): account/empty/agent/1280, account/empty/agent/390, account/needs-you/owner/1280, account/needs-you/owner/390, account/needs-you/agent/1280, account/needs-you/agent/390
+measured:
+  account/rest/owner/1280: h1 44px/48px/500; main 280..1000 (720 wide)
+  account/rest/owner/390: h1 44px/48px/500; main 0..390 (390 wide)
+  account/rest/agent/1280: h1 none; main 0..1280 (1280 wide)
+  account/rest/agent/390: h1 none; main 0..390 (390 wide)
+
+== 2026-10-18 06:56:49 +08  lane/home-h2 65cae95 (+1 uncommitted) at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home-h2  seat H6  http://localhost:3011
+PASS  tokens
+PASS  contrast  contrast/tokens: every pair >= 4.5:1 in both views; tokens.css matches tokens.ts
+FAIL  zero-hash  test/owner-no-hash.test.mts is missing (H2: DESIGN Rule 1, a seeded Owner page with no /0x[0-9a-fA-F]{8,}/ in the DOM)
+PASS  literals
+browser: 2 checks, 0 FAIL, 2 WARN (0 + 1 distinct), 0 note
+  WARN money-not-tabular  h1#authority "Your agents may spend 0.05 USDC a day, 0.005 at a "  "0.05 USDC": tabular lining figures wherever money appears
+       in 2: account/rest/owner/390, account/guest/owner/390
+measured:
+  account/rest/owner/390: h1 44px/48px/500; main 0..390 (390 wide); 1 element(s) in --red
+since the last run: 50 fixed, 1 new
+
+== 2026-10-18 06:58:35 +08  lane/home-h2 65cae95 (+1 uncommitted) at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home-h2  seat H6  http://localhost:3011
+PASS  tokens
+PASS  contrast  contrast/tokens: every pair >= 4.5:1 in both views; tokens.css matches tokens.ts
+FAIL  zero-hash  test/owner-no-hash.test.mts is missing (H2: DESIGN Rule 1, a seeded Owner page with no /0x[0-9a-fA-F]{8,}/ in the DOM)
+PASS  literals
+browser: 12 checks, 1 FAIL, 6 WARN (1 + 2 distinct), 0 note
+  FAIL touch-target  div.flex.flex-col > div.flex.flex-col > button.row.self-start "Open in Agent view"  129x22 px; DESIGN touch targets are >= 44
+       in 1: account/detail/owner/390
+  WARN money-not-tabular  h1#authority "Your agents may spend 0.05 USDC a day, 0.005 at a "  "0.05 USDC": tabular lining figures wherever money appears
+       in 4: account/rest/owner/1280, account/rest/owner/390, account/detail/owner/1280, account/detail/owner/390
+  WARN money-not-tabular  h2#_r_0_ "0.002 USDC to Demo Vendor"  "0.002 USDC": tabular lining figures wherever money appears
+       in 2: account/detail/owner/1280, account/detail/owner/390
+measured:
+  account/rest/owner/1280: h1 44px/48px/500; main 280..1000 (720 wide); 1 element(s) in --red
+  account/rest/owner/390: h1 44px/48px/500; main 0..390 (390 wide); 1 element(s) in --red
+since the last run: 1 fixed, 6 new
+
+== 2026-10-18 07:00:47 +08  lane/home-h2 a6b0999 (+1 uncommitted) at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home-h2  seat H6  http://localhost:3011
+PASS  tokens
+PASS  contrast  contrast/tokens: every pair >= 4.5:1 in both views; tokens.css matches tokens.ts
+FAIL  zero-hash  test/owner-no-hash.test.mts is missing (H2: DESIGN Rule 1, a seeded Owner page with no /0x[0-9a-fA-F]{8,}/ in the DOM)
+PASS  literals
+browser: 18 checks, 5 FAIL, 18 WARN (3 + 3 distinct), 0 note
+  FAIL one-hero    0 h1 on the page (DESIGN: one hero per surface)
+       in 2: account/error/owner/1280, account/error/owner/390
+  FAIL axe:page-has-heading-one  html  moderate: Page must have a level-one heading
+       in 2: account/error/owner/1280, account/error/owner/390
+  FAIL touch-target  div.flex.flex-col > div.flex.flex-col > button.row.self-start "Open in Agent view"  129x22 px; DESIGN touch targets are >= 44
+       in 1: account/detail/owner/390
+  WARN money-not-tabular  h1#authority "Your agents may spend 0.05 USDC a day, 0.005 at a "  "0.05 USDC": tabular lining figures wherever money appears
+       in 14: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  WARN money-not-tabular  ul.rounded-(--radius-plate).border > li.flex.flex-col > p.row-title.m-0 "The agent prepared 0.002 USDC to a payee you have "  "0.002 USDC": tabular lining figures wherever money appears
+       in 2: account/needs-you/owner/1280, account/needs-you/owner/390
+  WARN money-not-tabular  h2#_r_0_ "0.002 USDC to Demo Vendor"  "0.002 USDC": tabular lining figures wherever money appears
+       in 2: account/detail/owner/1280, account/detail/owner/390
+  mocked replies (a fixture, not a real account): account/empty/owner/1280, account/empty/owner/390, account/needs-you/owner/1280, account/needs-you/owner/390
+measured:
+  account/rest/owner/1280: h1 44px/48px/500; main 280..1000 (720 wide); 1 element(s) in --red
+  account/rest/owner/390: h1 44px/48px/500; main 0..390 (390 wide); 1 element(s) in --red
+since the last run: 0 fixed, 16 new
+
+== 2026-10-18 07:07:20 +08  lane/home cd436b6 at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home  seat H6  http://localhost:3010
+FAIL  tokens  owner --plate-2: DESIGN #E4EAE1, tokens.css missing
+        owner --ink: DESIGN #000000, tokens.css #101410
+        owner --ink-2: DESIGN #5B625B, tokens.css missing
+        owner --attention: DESIGN #B3261E, tokens.css missing
+        owner --transit: DESIGN #3FB8B0, tokens.css missing
+        owner --up: DESIGN #2F7A00, tokens.css #1E5F46
+        owner --down: DESIGN #B3261E, tokens.css #7A4B1E
+        owner --scrim: DESIGN #000000B3, tokens.css missing
+PASS  contrast  contrast/tokens: every pair >= 4.5:1 in both views; tokens.css matches tokens.ts
+FAIL  zero-hash  test/owner-no-hash.test.mts is missing (H2: DESIGN Rule 1, a seeded Owner page with no /0x[0-9a-fA-F]{8,}/ in the DOM)
+PASS  literals
+NOTE  hex-lint  no tokens-only hex lint script yet (H1 writes it: no literal colour outside src/tokens.*; npm script lint:tokens)
+NOTE  21st-review  no `21st review` script yet (H1 finds the CLI; npm script review:21st)
+browser: 16 checks, 66 FAIL, 59 WARN (6 + 9 distinct), 4 note
+  FAIL border-on-content  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule) "northwind-agents Testnet Owner Agent"  Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)
+       in 12: account/rest/agent/1280, account/rest/agent/390, account/loading/agent/1280, account/loading/agent/390, ...
+  FAIL border-on-content  header.border-b.border-(--rule) > div.surface.flex > span.pill.meta "Testnet"  Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)
+       in 12: account/rest/agent/1280, account/rest/agent/390, account/loading/agent/1280, account/loading/agent/390, ...
+  FAIL border-on-content  header.border-b.border-(--rule) > div.surface.flex > div.capsule "Owner Agent"  Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)
+       in 12: account/rest/agent/1280, account/rest/agent/390, account/loading/agent/1280, account/loading/agent/390, ...
+  FAIL off-token-colour  div.surface.flex > div.capsule > button "Agent"  background #7FD1A8 x1: a saturated colour that is no token
+       in 12: account/rest/agent/1280, account/rest/agent/390, account/loading/agent/1280, account/loading/agent/390, ...
+  FAIL content-max  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > main.surface.py-(--space-5) "tameion top 0x907a9f4fe960017ee9c31550d2f1956e07e2"  main is 1280 px wide; content max is 1120
+       in 6: account/rest/agent/1280, account/loading/agent/1280, account/error/agent/1280, account/offline/agent/1280, ...
+  FAIL network-pill-dashed  header.border-b.border-(--rule) > div.surface.flex > span.pill.meta "Testnet"  Testnet is a dashed capsule; the border is solid
+       in 12: account/rest/agent/1280, account/rest/agent/390, account/loading/agent/1280, account/loading/agent/390, ...
+  WARN off-token-colour  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body "northwind-agents Testnet Owner Agent tameion top 0"  color #E8EEE6 x28: a colour literal, not a token
+       in 10: account/rest/agent/1280, account/rest/agent/390, account/error/agent/1280, account/error/agent/390, ...
+  WARN off-token-colour  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body "northwind-agents Testnet Owner Agent tameion top 0"  background #0F1511 x1: a colour literal, not a token
+       in 12: account/rest/agent/1280, account/rest/agent/390, account/loading/agent/1280, account/loading/agent/390, ...
+  WARN off-token-colour  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule) "northwind-agents Testnet Owner Agent"  border #2A332C x10: a colour literal, not a token
+       in 10: account/rest/agent/1280, account/rest/agent/390, account/error/agent/1280, account/error/agent/390, ...
+  WARN off-token-colour  header.border-b.border-(--rule) > div.surface.flex > div.capsule "Owner Agent"  background #161D18 x2: a colour literal, not a token
+       in 12: account/rest/agent/1280, account/rest/agent/390, account/loading/agent/1280, account/loading/agent/390, ...
+  WARN off-token-colour  div.mono.flex > div.flex.flex-wrap > span.meta "as of 07:06:17"  color #9AA69C x9: a colour literal, not a token
+       in 8: account/rest/agent/1280, account/rest/agent/390, account/offline/agent/1280, account/offline/agent/390, ...
+  WARN off-token-colour  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body "Testnet Owner Agent"  color #E8EEE6 x7: a colour literal, not a token
+       in 2: account/loading/agent/1280, account/loading/agent/390
+  WARN off-token-colour  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule) "Testnet Owner Agent"  border #2A332C x14: a colour literal, not a token
+       in 2: account/loading/agent/1280, account/loading/agent/390
+  WARN measure  div.mono.flex > section.flex.flex-col > p.meta.m-0 "– the service gave no figure: inbox.balance, inbox"  about 81 characters per line (DESIGN: measure <= 68 ch)
+       in 1: account/error/agent/1280
+  WARN off-token-colour  tr.meta.border-b > th.pb-(--space-1).pr-(--space-5) > span.sr-only "source"  color #9AA69C x8: a colour literal, not a token
+       in 2: account/error/agent/1280, account/error/agent/390
+  NOTE not-built-yet    no row disclosure to open yet
+       in 2: account/detail/agent/1280, account/detail/agent/390
+  NOTE not-built-yet    no row disclosure to open
+       in 2: sheet/account/agent/1280, sheet/account/agent/390
+measured:
+  account/rest/agent/1280: h1 13px/20px/400; main 0..1280 (1280 wide)
+  account/rest/agent/390: h1 13px/20px/400; main 0..390 (390 wide); main padding-left 16px (DESIGN 20px)
+
+== 2026-10-18 07:10:21 +08  lane/home-h6 eaecfdc (+2 uncommitted) at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home-h6  seat H6  http://localhost:3015
+FAIL  tokens  owner --plate-2: DESIGN #E4EAE1, tokens.css missing
+        owner --ink: DESIGN #000000, tokens.css #101410
+        owner --ink-2: DESIGN #5B625B, tokens.css missing
+        owner --attention: DESIGN #B3261E, tokens.css missing
+        owner --transit: DESIGN #3FB8B0, tokens.css missing
+        owner --up: DESIGN #2F7A00, tokens.css #1E5F46
+        owner --down: DESIGN #B3261E, tokens.css #7A4B1E
+        owner --scrim: DESIGN #000000B3, tokens.css missing
+PASS  contrast  contrast/tokens: every pair >= 4.5:1 in both views; tokens.css matches tokens.ts
+FAIL  zero-hash  test/owner-no-hash.test.mts is missing (H2: DESIGN Rule 1, a seeded Owner page with no /0x[0-9a-fA-F]{8,}/ in the DOM)
+PASS  literals
+NOTE  hex-lint  no tokens-only hex lint script yet (H1 writes it: no literal colour outside src/tokens.*; npm script lint:tokens)
+NOTE  21st-review  no `21st review` script yet (H1 finds the CLI; npm script review:21st)
+WARN  owner-mode  could not read acme-agents-8433's owner key through http://localhost:3015: every account page is rendered as a guest (read-only)
+browser: 20 checks, 42 FAIL, 64 WARN (7 + 12 distinct), 10 note
+  FAIL border-on-content  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule) "Tameion Testnet Owner Agent"  Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)
+       in 8: account/rest/owner/1280, account/rest/owner/390, account/rest/agent/1280, account/rest/agent/390, ...
+  FAIL border-on-content  header.border-b.border-(--rule) > div.surface.flex > span.pill.meta "Testnet"  Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)
+       in 8: account/rest/owner/1280, account/rest/owner/390, account/rest/agent/1280, account/rest/agent/390, ...
+  FAIL border-on-content  header.border-b.border-(--rule) > div.surface.flex > div.capsule "Owner Agent"  Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)
+       in 8: account/rest/owner/1280, account/rest/owner/390, account/rest/agent/1280, account/rest/agent/390, ...
+  FAIL off-token-colour  div.surface.flex > div.capsule > button "Owner"  background #1E5F46 x1: a saturated colour that is no token
+       in 4: account/rest/owner/1280, account/rest/owner/390, account/detail/owner/1280, account/detail/owner/390
+  FAIL network-pill-dashed  header.border-b.border-(--rule) > div.surface.flex > span.pill.meta "Testnet"  Testnet is a dashed capsule; the border is solid
+       in 8: account/rest/owner/1280, account/rest/owner/390, account/rest/agent/1280, account/rest/agent/390, ...
+  FAIL off-token-colour  div.surface.flex > div.capsule > button "Agent"  background #7FD1A8 x1: a saturated colour that is no token
+       in 4: account/rest/agent/1280, account/rest/agent/390, account/detail/agent/1280, account/detail/agent/390
+  FAIL content-max  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > main.surface.py-(--space-5) "tameion top status did not answer (No account has "  main is 1280 px wide; content max is 1120
+       in 2: account/rest/agent/1280, account/detail/agent/1280
+  WARN off-token-colour  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body "Tameion Testnet Owner Agent"  color #101410 x8: a colour literal, not a token
+       in 4: account/rest/owner/1280, account/rest/owner/390, account/detail/owner/1280, account/detail/owner/390
+  WARN console    404 /api/level1/name/acme-agents-8433
+       in 16: account/rest/owner/1280, account/rest/owner/1280, account/rest/owner/390, account/rest/owner/390, ...
+  WARN measure  div.mono.flex > div.flex.flex-wrap > p.m-0 "status did not answer (No account has that name.)."  about 151 characters per line (DESIGN: measure <= 68 ch)
+       in 2: account/rest/agent/1280, account/detail/agent/1280
+  WARN measure  div.mono.flex > section.flex.flex-col > p.meta.m-0 "– the service gave no figure: inbox.balance, inbox"  about 81 characters per line (DESIGN: measure <= 68 ch)
+       in 2: account/rest/agent/1280, account/detail/agent/1280
+  WARN off-token-colour  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body "Tameion Testnet Owner Agent tameion top status did"  color #E8EEE6 x28: a colour literal, not a token
+       in 4: account/rest/agent/1280, account/rest/agent/390, account/detail/agent/1280, account/detail/agent/390
+  WARN off-token-colour  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body "Tameion Testnet Owner Agent tameion top status did"  background #0F1511 x1: a colour literal, not a token
+       in 4: account/rest/agent/1280, account/rest/agent/390, account/detail/agent/1280, account/detail/agent/390
+  WARN off-token-colour  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule) "Tameion Testnet Owner Agent"  border #2A332C x10: a colour literal, not a token
+       in 4: account/rest/agent/1280, account/rest/agent/390, account/detail/agent/1280, account/detail/agent/390
+  WARN off-token-colour  header.border-b.border-(--rule) > div.surface.flex > div.capsule "Owner Agent"  background #161D18 x2: a colour literal, not a token
+       in 4: account/rest/agent/1280, account/rest/agent/390, account/detail/agent/1280, account/detail/agent/390
+  WARN off-token-colour  tr.meta.border-b > th.pb-(--space-1).pr-(--space-5) > span.sr-only "source"  color #9AA69C x8: a colour literal, not a token
+       in 4: account/rest/agent/1280, account/rest/agent/390, account/detail/agent/1280, account/detail/agent/390
+  WARN console    404 /api/level1/inbox
+       in 8: account/rest/agent/1280, account/rest/agent/1280, account/rest/agent/390, account/rest/agent/390, ...
+  WARN console    404 /api/level1/status
+       in 8: account/rest/agent/1280, account/rest/agent/1280, account/rest/agent/390, account/rest/agent/390, ...
+  WARN reduced-motion-crossfade  ::view-transition-new(root)  a 200 ms crossfade still runs under reduced motion; DESIGN (founder 07:01): the capsule swaps instantly (the lane brief had said crossfade only: a ruling is needed)
+       in 4: motion/reduced/account/1280, motion/reduced/account/1280, motion/reduced/account/390, motion/reduced/account/390
+  NOTE not-built-yet    the route still shows its skeleton after settling: no content yet
+       in 2: account/rest/owner/1280, account/rest/owner/390
+  NOTE not-built-yet    no row disclosure to open yet
+       in 4: account/detail/owner/1280, account/detail/owner/390, account/detail/agent/1280, account/detail/agent/390
+  NOTE not-built-yet    no row disclosure to open
+       in 4: sheet/account/owner/1280, sheet/account/owner/390, sheet/account/agent/1280, sheet/account/agent/390
+measured:
+  account/rest/owner/1280: h1 none; main 280..1000 (720 wide)
+  account/rest/owner/390: h1 none; main 0..390 (390 wide); main padding-left 16px (DESIGN 20px)
+  account/rest/agent/1280: h1 13px/20px/400; main 0..1280 (1280 wide)
+  account/rest/agent/390: h1 13px/20px/400; main 0..390 (390 wide); main padding-left 16px (DESIGN 20px)
+
+== 2026-10-18 07:13:28 +08  lane/home-h6 eaecfdc (+2 uncommitted) at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home-h6  seat H6  http://localhost:3015
+FAIL  tokens  owner --plate-2: DESIGN #E4EAE1, tokens.css missing
+        owner --ink: DESIGN #000000, tokens.css #101410
+        owner --ink-2: DESIGN #5B625B, tokens.css missing
+        owner --attention: DESIGN #B3261E, tokens.css missing
+        owner --transit: DESIGN #3FB8B0, tokens.css missing
+        owner --up: DESIGN #2F7A00, tokens.css #1E5F46
+        owner --down: DESIGN #B3261E, tokens.css #7A4B1E
+        owner --scrim: DESIGN #000000B3, tokens.css missing
+PASS  contrast  contrast/tokens: every pair >= 4.5:1 in both views; tokens.css matches tokens.ts
+FAIL  zero-hash  test/owner-no-hash.test.mts is missing (H2: DESIGN Rule 1, a seeded Owner page with no /0x[0-9a-fA-F]{8,}/ in the DOM)
+PASS  literals
+NOTE  hex-lint  no tokens-only hex lint script yet (H1 writes it: no literal colour outside src/tokens.*; npm script lint:tokens)
+NOTE  21st-review  no `21st review` script yet (H1 finds the CLI; npm script review:21st)
+browser: 22 checks, 52 FAIL, 30 WARN (7 + 7 distinct), 10 note
+  FAIL border-on-content  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule) "acme-agents-1541 Testnet Owner Agent"  Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)
+       in 10: account/rest/owner/1280, account/rest/owner/390, account/rest/agent/1280, account/rest/agent/390, ...
+  FAIL border-on-content  header.border-b.border-(--rule) > div.surface.flex > span.pill.meta "Testnet"  Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)
+       in 10: account/rest/owner/1280, account/rest/owner/390, account/rest/agent/1280, account/rest/agent/390, ...
+  FAIL border-on-content  header.border-b.border-(--rule) > div.surface.flex > div.capsule "Owner Agent"  Top+Right+Bottom+Left solid 1px; depth is one step of fill, never a border (rule is for table rows only)
+       in 10: account/rest/owner/1280, account/rest/owner/390, account/rest/agent/1280, account/rest/agent/390, ...
+  FAIL off-token-colour  div.surface.flex > div.capsule > button "Owner"  background #1E5F46 x1: a saturated colour that is no token
+       in 6: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL network-pill-dashed  header.border-b.border-(--rule) > div.surface.flex > span.pill.meta "Testnet"  Testnet is a dashed capsule; the border is solid
+       in 10: account/rest/owner/1280, account/rest/owner/390, account/rest/agent/1280, account/rest/agent/390, ...
+  FAIL off-token-colour  div.surface.flex > div.capsule > button "Agent"  background #7FD1A8 x1: a saturated colour that is no token
+       in 4: account/rest/agent/1280, account/rest/agent/390, account/detail/agent/1280, account/detail/agent/390
+  FAIL content-max  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > main.surface.py-(--space-5) "tameion top 0xb1da17cf2b327cacf2acd7418f3debb24ff4"  main is 1280 px wide; content max is 1120
+       in 2: account/rest/agent/1280, account/detail/agent/1280
+  WARN off-token-colour  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body "acme-agents-1541 Testnet Owner Agent"  color #101410 x8: a colour literal, not a token
+       in 6: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  WARN off-token-colour  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body "acme-agents-1541 Testnet Owner Agent tameion top 0"  color #E8EEE6 x28: a colour literal, not a token
+       in 4: account/rest/agent/1280, account/rest/agent/390, account/detail/agent/1280, account/detail/agent/390
+  WARN off-token-colour  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body "acme-agents-1541 Testnet Owner Agent tameion top 0"  background #0F1511 x1: a colour literal, not a token
+       in 4: account/rest/agent/1280, account/rest/agent/390, account/detail/agent/1280, account/detail/agent/390
+  WARN off-token-colour  html.ibm_plex_sans_10f87d67-module__zwgEUW__variable.ibm_plex_mono_fa71ebd1-module__yX0iMG__variable > body > header.border-b.border-(--rule) "acme-agents-1541 Testnet Owner Agent"  border #2A332C x10: a colour literal, not a token
+       in 4: account/rest/agent/1280, account/rest/agent/390, account/detail/agent/1280, account/detail/agent/390
+  WARN off-token-colour  header.border-b.border-(--rule) > div.surface.flex > div.capsule "Owner Agent"  background #161D18 x2: a colour literal, not a token
+       in 4: account/rest/agent/1280, account/rest/agent/390, account/detail/agent/1280, account/detail/agent/390
+  WARN off-token-colour  div.mono.flex > div.flex.flex-wrap > span.meta "as of 07:12:19"  color #9AA69C x9: a colour literal, not a token
+       in 4: account/rest/agent/1280, account/rest/agent/390, account/detail/agent/1280, account/detail/agent/390
+  WARN reduced-motion-crossfade  ::view-transition-new(root)  a 200 ms crossfade still runs under reduced motion; DESIGN (founder 07:01): the capsule swaps instantly (the lane brief had said crossfade only: a ruling is needed)
+       in 4: motion/reduced/account/1280, motion/reduced/account/1280, motion/reduced/account/390, motion/reduced/account/390
+  NOTE not-built-yet    the route still shows its skeleton after settling: no content yet
+       in 2: account/rest/owner/1280, account/rest/owner/390
+  NOTE not-built-yet    no row disclosure to open yet
+       in 4: account/detail/owner/1280, account/detail/owner/390, account/detail/agent/1280, account/detail/agent/390
+  NOTE not-built-yet    no row disclosure to open
+       in 4: sheet/account/owner/1280, sheet/account/owner/390, sheet/account/agent/1280, sheet/account/agent/390
+measured:
+  account/rest/owner/1280: h1 none; main 280..1000 (720 wide)
+  account/rest/owner/390: h1 none; main 0..390 (390 wide); main padding-left 16px (DESIGN 20px)
+  account/rest/agent/1280: h1 13px/20px/400; main 0..1280 (1280 wide)
+  account/rest/agent/390: h1 13px/20px/400; main 0..390 (390 wide); main padding-left 16px (DESIGN 20px)
+since the last run: 24 fixed, 16 new
+
+== 2026-10-18 07:16:37 +08  lane/home f3e08d1 at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home  seat H6  http://localhost:3010
+FAIL  tokens  owner --plate-2: DESIGN #E4EAE1, tokens.css missing
+        owner --ink: DESIGN #000000, tokens.css #101410
+        owner --ink-2: DESIGN #5B625B, tokens.css missing
+        owner --attention: DESIGN #B3261E, tokens.css missing
+        owner --transit: DESIGN #3FB8B0, tokens.css missing
+        owner --up: DESIGN #2F7A00, tokens.css #1E5F46
+        owner --down: DESIGN #B3261E, tokens.css #7A4B1E
+        owner --scrim: DESIGN #000000B3, tokens.css missing
+PASS  contrast  contrast/tokens: every pair >= 4.5:1 in both views; tokens.css matches tokens.ts
+FAIL  zero-hash  test/owner-no-hash.test.mts is missing (H2: DESIGN Rule 1, a seeded Owner page with no /0x[0-9a-fA-F]{8,}/ in the DOM)
+PASS  literals
+NOTE  hex-lint  no tokens-only hex lint script yet (H1 writes it: no literal colour outside src/tokens.*; npm script lint:tokens)
+NOTE  21st-review  no `21st review` script yet (H1 finds the CLI; npm script review:21st)
+browser: 42 checks, 178 FAIL, 2 WARN (8 + 2 distinct), 8 note
+  FAIL touch-target  div.surface.flex > div.capsule > button "Owner"  73x36 px; DESIGN touch targets are >= 44
+       in 9: account/rest/owner/390, account/guest/owner/390, account/loading/owner/390, account/empty/owner/390, ...
+  FAIL touch-target  div.surface.flex > div.capsule > button "Agent"  66x36 px; DESIGN touch targets are >= 44
+       in 9: account/rest/owner/390, account/guest/owner/390, account/loading/owner/390, account/empty/owner/390, ...
+  FAIL font-weight  div.surface.flex > div.capsule > button "Agent"  1 text elements use weights outside 400/500 (first: 600)
+       in 12: account/rest/agent/1280, account/rest/agent/390, account/loading/agent/1280, account/loading/agent/390, ...
+  FAIL touch-target  div.surface.flex > div.capsule > button "Owner"  63x36 px; DESIGN touch targets are >= 44
+       in 12: account/rest/agent/390, account/rest/agent/390, account/loading/agent/390, account/loading/agent/390, ...
+  FAIL touch-target  tr.border-b.border-(--rule) > td > a.text-(--accent).underline "0x75e7…871c"  86x17 px; DESIGN touch targets are >= 44
+       in 132: account/rest/agent/390, account/rest/agent/390, account/rest/agent/390, account/rest/agent/390, ...
+  FAIL touch-target  tr > td > a.text-(--accent).underline "0xb999…3924"  86x17 px; DESIGN touch targets are >= 44
+       in 1: account/detail/agent/390
+  FAIL touch-target  div.flex.flex-col > div.grid.grid-cols-[14ch_1fr] > a.text-(--accent).underline "0xb999041a40301e2abed13b4c256a6384983168733852b1f1"  776x20 px; DESIGN touch targets are >= 44
+       in 1: account/detail/agent/390
+  FAIL scenario-error    page.evaluate: TypeError: Cannot read properties of null (reading 'getBoundingClientRect')
+       in 2: sheet/account/agent/1280, sheet/account/agent/390
+  WARN measure  div.mono.flex > section.flex.flex-col > p.meta.m-0 "– the service gave no figure: inbox.balance, inbox"  about 81 characters per line (DESIGN: measure <= 68 ch)
+       in 1: account/error/agent/1280
+  WARN not-reachable-by-tab  tr.border-b.border-(--rule) > td > a.text-(--accent).underline  34 interactive element(s) were never a Tab stop
+       in 1: focus/account/agent/390
+  NOTE not-built-yet    the route still shows its skeleton after settling: no content yet
+       in 2: account/rest/owner/1280, account/rest/owner/390
+  NOTE not-built-yet    the route is still a skeleton: nothing to mark stale
+       in 2: account/offline/owner/1280, account/offline/owner/390
+  NOTE not-built-yet    no row disclosure to open yet
+       in 2: account/detail/owner/1280, account/detail/owner/390
+  NOTE not-built-yet    no row disclosure to open
+       in 2: sheet/account/owner/1280, sheet/account/owner/390
+  mocked replies (a fixture, not a real account): account/sealed/agent/1280, account/sealed/agent/390
+measured:
+  account/rest/owner/1280: h1 none; main 80..1200 (1120 wide)
+  account/rest/owner/390: h1 none; main 0..390 (390 wide)
+  account/rest/agent/1280: h1 13px/20px/400; main 80..1200 (1120 wide)
+  account/rest/agent/390: h1 13px/20px/400; main 0..390 (390 wide)
+since the last run: 124 fixed, 45 new
+
+== 2026-10-18 07:32:29 +08  lane/home 0f71a17 at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home  seat H6  http://localhost:3010
+PASS  tokens  owner --up: DESIGN #2F7A00, tokens.css #2E7800 (deliberate: DESIGN's value reads 4.39:1 on its surfaces, this one 4.51:1)
+PASS  contrast  contrast/tokens: every pair >= 4.5:1 in both views; tokens.css matches tokens.ts
+FAIL  zero-hash  test/owner-no-hash.test.mts is missing (H2: DESIGN Rule 1, a seeded Owner page with no /0x[0-9a-fA-F]{8,}/ in the DOM)
+PASS  literals
+PASS  hex-lint  legacy names still in use (11; rename, then delete the legacy block in tokens.css):
+        tokens-lint: no colour literal outside the tokens files; every token used is defined
+PASS  21st-review  src/tokens.css:43:12 info design-hardcoded-color Hardcoded color may drift from project design tokens.
+        21 file(s), 25 finding(s), 0 fixed.
+browser: 109 checks, 212 FAIL, 9 WARN (20 + 7 distinct), 35 note
+  FAIL font-weight  div.surface.flex > div.capsule > button "Agent"  1 text elements use weights outside 400/500 (first: 600)
+       in 40: guest/rest/agent/1280, guest/rest/agent/390, guest/loading/agent/1280, guest/loading/agent/390, ...
+  FAIL touch-target  tr.border-b.border-(--rule) > td > a.text-(--accent).underline "0x6ecf…5702"  86x17 px; DESIGN touch targets are >= 44
+       in 38: account/rest/agent/390, account/rest/agent/390, account/rest/agent/390, account/rest/agent/390, ...
+  FAIL touch-target  div.flex.flex-col > details.meta > summary.cursor-pointer "What the service said"  350x20 px; DESIGN touch targets are >= 44
+       in 1: account/error/agent/390
+  FAIL touch-target  tr.border-b.border-(--rule) > td > a.text-(--ink).underline "0xbe6e…0e41"  86x17 px; DESIGN touch targets are >= 44
+       in 116: account/offline/agent/390, account/offline/agent/390, account/offline/agent/390, account/offline/agent/390, ...
+  FAIL touch-target  tr > td > a.text-(--ink).underline "0xbe6e…0e41"  86x17 px; DESIGN touch targets are >= 44
+       in 1: account/detail/agent/390
+  FAIL touch-target  div.flex.flex-col > div.grid.grid-cols-[14ch_1fr] > a.text-(--ink).underline "0xbe6e65d7d7bddbfd5599ae09e534a510569ddb1491440e30"  776x20 px; DESIGN touch targets are >= 44
+       in 1: account/detail/agent/390
+  FAIL set-view    could not switch to owner
+       in 1: add/offline/owner/390
+  FAIL owner-mono  html > body > pre "Internal Server Error"  monospace
+       in 1: add/offline/owner/390
+  FAIL font-not-loaded    IBM Plex Sans is not loaded (loaded: none); the page is in a fallback face
+       in 1: add/offline/owner/390
+  FAIL one-hero    0 h1 on the page (DESIGN: one hero per surface)
+       in 1: add/offline/owner/390
+  FAIL network-word    the header does not say "Testnet"
+       in 1: add/offline/owner/390
+  FAIL capsule    the header has no Owner | Agent capsule
+       in 1: add/offline/owner/390
+  FAIL data-view    html[data-view]=undefined, expected owner
+       in 1: add/offline/owner/390
+  FAIL axe:document-title  html  serious: Document does not have a non-empty <title> element
+       in 1: add/offline/owner/390
+  FAIL axe:html-has-lang  html  serious: The <html> element does not have a lang attribute
+       in 1: add/offline/owner/390
+  FAIL axe:landmark-one-main  html  moderate: Document does not have a main landmark
+       in 1: add/offline/owner/390
+  FAIL axe:page-has-heading-one  html  moderate: Page must have a level-one heading
+       in 1: add/offline/owner/390
+  FAIL axe:region  pre  moderate: Some page content is not contained by landmarks
+       in 1: add/offline/owner/390
+  FAIL touch-target  section.flex.flex-col > div.flex.flex-wrap > a.text-(--ink).underline "explorer"  62x20 px; DESIGN touch targets are >= 44
+       in 1: add/offline/agent/390
+  FAIL scenario-error    page.evaluate: TypeError: Cannot read properties of null (reading 'getBoundingClientRect')
+       in 2: sheet/account/agent/1280, sheet/account/agent/390
+  WARN measure  div.mono-dense.flex > section.flex.flex-col > p.mono-read.m-0 "– the service gave no figure: inbox.balance, inbox"  about 81 characters per line (DESIGN: measure <= 68 ch)
+       in 1: account/error/agent/1280
+  WARN offline-no-stale-marker    no "as of HH:MM" on the page 30 s after the connection dropped (DESIGN: cached values at full ink, each marked stale with its time)
+       in 3: add/offline/owner/390, add/offline/agent/1280, add/offline/agent/390
+  WARN touch-target  section.flex.flex-col > div.flex.flex-col > a.text-(--ink).underline "0xfc3a9882ca8e722f0df0c3ae45d71cd6c245308ee9807780"  302x40 px; DESIGN touch targets are >= 44
+       in 1: add/offline/agent/390
+  WARN touch-target  section.flex.flex-col > div.flex.flex-col > a.text-(--ink).underline "Get 20 USDC from Circle's faucet"  302x22 px; DESIGN touch targets are >= 44
+       in 1: add/offline/agent/390
+  WARN not-reachable-by-tab  tr.border-b.border-(--rule) > td.py-(--space-1).pr-(--space-4) > button.min-h-(--touch).cursor-pointer  12 interactive element(s) were never a Tab stop
+       in 1: focus/account/agent/1280
+  WARN not-reachable-by-tab  tr.border-b.border-(--rule) > td > a.text-(--ink).underline  50 interactive element(s) were never a Tab stop
+       in 1: focus/account/agent/390
+  WARN cta-plate  button "Copy"  CTA is 68x44 px; DESIGN: a 52 px plate (44 compact), full width on mobile
+       in 1: keyboard/add/375
+  NOTE not-built-yet    the route still shows its skeleton after settling: no content yet
+       in 18: guest/rest/owner/1280, guest/rest/owner/390, guest/rest/agent/1280, guest/rest/agent/390, ...
+  NOTE not-built-yet    the route is still a skeleton: nothing to mark stale
+       in 11: guest/offline/owner/1280, guest/offline/owner/390, guest/offline/agent/1280, guest/offline/agent/390, ...
+  NOTE not-built-yet    no row disclosure to open yet
+       in 2: account/detail/owner/1280, account/detail/owner/390
+  NOTE not-built-yet    no row disclosure to open
+       in 2: sheet/account/owner/1280, sheet/account/owner/390
+  NOTE not-built-yet    no text input on /new yet
+       in 2: typing-v/new/owner/390, keyboard/new/375
+  mocked replies (a fixture, not a real account): account/sealed/agent/1280, account/sealed/agent/390
+measured:
+  guest/rest/owner/1280: h1 none; main 80..1200 (1120 wide)
+  guest/rest/owner/390: h1 none; main 0..390 (390 wide)
+  guest/rest/agent/1280: h1 none; main 80..1200 (1120 wide)
+  guest/rest/agent/390: h1 none; main 0..390 (390 wide)
+  account/rest/owner/1280: h1 none; main 80..1200 (1120 wide)
+  account/rest/owner/390: h1 none; main 0..390 (390 wide)
+  account/rest/agent/1280: h1 13px/20px/400; main 80..1200 (1120 wide)
+  account/rest/agent/390: h1 13px/20px/400; main 0..390 (390 wide)
+  new/rest/owner/1280: h1 none; main 80..1200 (1120 wide)
+  new/rest/owner/390: h1 none; main 0..390 (390 wide)
+  new/rest/agent/1280: h1 none; main 80..1200 (1120 wide)
+  new/rest/agent/390: h1 none; main 0..390 (390 wide)
+  add/rest/owner/1280: h1 none; main 80..1200 (1120 wide)
+  add/rest/owner/390: h1 none; main 0..390 (390 wide)
+  add/rest/agent/1280: h1 none; main 80..1200 (1120 wide)
+  add/rest/agent/390: h1 none; main 0..390 (390 wide)
+  receive/rest/owner/1280: h1 none; main 80..1200 (1120 wide)
+  receive/rest/owner/390: h1 none; main 0..390 (390 wide)
+  receive/rest/agent/1280: h1 none; main 80..1200 (1120 wide)
+  receive/rest/agent/390: h1 none; main 0..390 (390 wide)
+since the last run: 31 fixed, 56 new
+
+== 2026-10-18 07:48:18 +08  lane/home e2f05b7 at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home  seat H6  http://localhost:3010
+PASS  tokens  owner --up: DESIGN #2F7A00, tokens.css #2E7800 (deliberate: DESIGN's value reads 4.39:1 on its surfaces, this one 4.51:1)
+PASS  contrast  contrast/tokens: every pair >= 4.5:1 in both views; tokens.css matches tokens.ts
+PASS  zero-hash  ℹ tests 9  ℹ pass 9  ℹ fail 0
+PASS  literals
+PASS  hex-lint  tokens-lint: no colour literal outside the tokens files; every token used is defined
+PASS  21st-review  src/tokens.css:43:12 info design-hardcoded-color Hardcoded color may drift from project design tokens.
+        34 file(s), 25 finding(s), 0 fixed.
+browser: 75 checks, 838 FAIL, 37 WARN (82 + 9 distinct), 9 note
+  FAIL figures-not-tabular  h1#authority "Your agents may spend 0.05 USDC a day, 0.006 at a "  "0.05 USDC": tabular lining figures wherever money or time appears
+       in 14: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.row.order-3 "Paying 0.006 USDC to 0xe5e2d8…e33854 now would lea"  "0.006 USDC": tabular lining figures wherever money or time appears
+       in 228: account/rest/owner/1280, account/rest/owner/1280, account/rest/owner/1280, account/rest/owner/1280, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.meta.order-5 "Today 07:32"  "07:32": tabular lining figures wherever money or time appears
+       in 12: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.meta.order-5 "Today 07:30"  "07:30": tabular lining figures wherever money or time appears
+       in 12: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.meta.order-5 "Today 07:28"  "07:28": tabular lining figures wherever money or time appears
+       in 12: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.meta.order-5 "Today 07:10"  "07:10": tabular lining figures wherever money or time appears
+       in 12: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.meta.order-5 "Today 06:46"  "06:46": tabular lining figures wherever money or time appears
+       in 12: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.meta.order-5 "Today 06:44"  "06:44": tabular lining figures wherever money or time appears
+       in 12: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.meta.order-5 "Today 06:42"  "06:42": tabular lining figures wherever money or time appears
+       in 12: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.meta.order-5 "Today 06:40"  "06:40": tabular lining figures wherever money or time appears
+       in 12: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.meta.order-5 "Today 06:38"  "06:38": tabular lining figures wherever money or time appears
+       in 12: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.meta.order-5 "Today 06:36"  "06:36": tabular lining figures wherever money or time appears
+       in 12: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.meta.order-5 "Today 06:34"  "06:34": tabular lining figures wherever money or time appears
+       in 12: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.meta.order-5 "Today 06:32"  "06:32": tabular lining figures wherever money or time appears
+       in 12: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.meta.order-5 "Today 06:30"  "06:30": tabular lining figures wherever money or time appears
+       in 12: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.meta.order-5 "Today 06:28"  "06:28": tabular lining figures wherever money or time appears
+       in 12: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.meta.order-5 "Today 06:26"  "06:26": tabular lining figures wherever money or time appears
+       in 12: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.meta.order-5 "Today 06:24"  "06:24": tabular lining figures wherever money or time appears
+       in 12: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.meta.order-5 "Today 06:22"  "06:22": tabular lining figures wherever money or time appears
+       in 12: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.meta.order-5 "Today 06:20"  "06:20": tabular lining figures wherever money or time appears
+       in 12: account/rest/owner/1280, account/rest/owner/390, account/guest/owner/1280, account/guest/owner/390, ...
+  FAIL border-on-content  section.flex.flex-col > div.rounded-(--radius-plate).bg-(--plate) > div.grid.w-full "Date Who Amount Why State"  Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)
+       in 6: account/rest/owner/1280, account/guest/owner/1280, account/offline/owner/1280, account/needs-you/owner/1280, ...
+  FAIL font-weight  div.surface.flex > div.capsule > button "Agent"  1 text elements use weights outside 400/500 (first: 600)
+       in 24: account/rest/agent/1280, account/rest/agent/390, account/loading/agent/1280, account/loading/agent/390, ...
+  FAIL touch-target  tr.border-b.border-(--rule) > td > a.text-(--ink).underline "0x80fa…e125"  86x17 px; DESIGN touch targets are >= 44
+       in 135: account/rest/agent/390, account/rest/agent/390, account/rest/agent/390, account/rest/agent/390, ...
+  FAIL one-hero    0 h1 on the page (DESIGN: one hero per surface)
+       in 9: account/error/owner/1280, account/error/owner/390, receive/error/owner/390, receive/error/agent/1280, ...
+  FAIL axe:page-has-heading-one  html  moderate: Page must have a level-one heading
+       in 9: account/error/owner/1280, account/error/owner/390, receive/error/owner/390, receive/error/agent/1280, ...
+  FAIL touch-target  div.flex.flex-col > details.meta > summary.cursor-pointer "What the service said"  350x20 px; DESIGN touch targets are >= 44
+       in 1: account/error/agent/390
+  FAIL figures-not-tabular  div.flex.flex-col > div.rounded-(--radius-plate).bg-(--plate) > p.row.m-0 "The service did not answer. The figures below are "  "07:38": tabular lining figures wherever money or time appears
+       in 2: account/offline/owner/1280, account/offline/owner/390
+  FAIL figures-not-tabular  dl.m-0.grid > div.rounded-(--radius-plate).bg-(--plate) > dd.meta.m-0 "as of 07:38"  "07:38": tabular lining figures wherever money or time appears
+       in 8: account/offline/owner/1280, account/offline/owner/1280, account/offline/owner/1280, account/offline/owner/1280, ...
+  FAIL figures-not-tabular  li.border-b.border-(--rule) > button.grid.w-full > span.meta.order-7 "as of 07:38"  "07:38": tabular lining figures wherever money or time appears
+       in 38: account/offline/owner/1280, account/offline/owner/1280, account/offline/owner/1280, account/offline/owner/1280, ...
+  FAIL figures-not-tabular  ul.rounded-(--radius-plate).bg-(--plate) > li.flex.flex-col > p.row-title.m-0 "The agent prepared 0.002 USDC to a payee you have "  "0.002 USDC": tabular lining figures wherever money or time appears
+       in 2: account/needs-you/owner/1280, account/needs-you/owner/390
+  FAIL touch-target  tr#pass-1792280315 > td > a.text-(--ink).underline "0x074c…70f9"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792280193 > td > a.text-(--ink).underline "0x80fa…e125"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792280073 > td > a.text-(--ink).underline "0x0425…3e8e"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792279954 > td > a.text-(--ink).underline "0x0382…35f6"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792279834 > td > a.text-(--ink).underline "0x743e…0f11"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792279748 > td > a.text-(--ink).underline "0xcb11…1e4b"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792279593 > td > a.text-(--ink).underline "0x2324…a77d"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792279473 > td > a.text-(--ink).underline "0xbe6e…0e41"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792279389 > td > a.text-(--ink).underline "0x6ecf…5702"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792279233 > td > a.text-(--ink).underline "0x67a2…b0b1"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792279113 > td > a.text-(--ink).underline "0x31b9…a855"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792278994 > td > a.text-(--ink).underline "0xdd83…c39f"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792278909 > td > a.text-(--ink).underline "0xb999…3924"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792278782 > td > a.text-(--ink).underline "0x75e7…871c"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792278586 > td > a.text-(--ink).underline "0xec5f…0b5c"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792277208 > td > a.text-(--ink).underline "0x28f4…93b0"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792277089 > td > a.text-(--ink).underline "0xf197…2fe7"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792276968 > td > a.text-(--ink).underline "0x10ce…c1f4"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792276849 > td > a.text-(--ink).underline "0x9154…e831"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792276728 > td > a.text-(--ink).underline "0x6a20…a414"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792276609 > td > a.text-(--ink).underline "0x6840…424b"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792276488 > td > a.text-(--ink).underline "0x33ff…9f0f"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792276369 > td > a.text-(--ink).underline "0x1703…b09a"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792276248 > td > a.text-(--ink).underline "0x23fe…919d"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792276128 > td > a.text-(--ink).underline "0x700b…3285"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792276009 > td > a.text-(--ink).underline "0x6cd4…6bd1"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792275963 > td > a.text-(--ink).underline "0x6532…178e"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792275768 > td > a.text-(--ink).underline "0x13da…614a"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792275648 > td > a.text-(--ink).underline "0xa47e…d6d4"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL touch-target  tr#pass-1792275529 > td > a.text-(--ink).underline "0xd298…41ea"  86x17 px; DESIGN touch targets are >= 44
+       in 2: account/sealed/agent/390, account/detail/agent/390
+  FAIL figures-not-tabular  h2#_r_0_ "0.006 USDC to Demo Vendor"  "0.006 USDC": tabular lining figures wherever money or time appears
+       in 2: account/detail/owner/1280, account/detail/owner/390
+  FAIL figures-not-tabular  div.flex.flex-col > div.flex.flex-col > p.row.m-0 "Paying 0.006 USDC to 0xe5e2d8…e33854 would leave t"  "0.006 USDC": tabular lining figures wherever money or time appears
+       in 2: account/detail/owner/1280, account/detail/owner/390
+  FAIL touch-target  div.flex.flex-col > div.grid.grid-cols-[14ch_1fr] > a.text-(--ink).underline "0x074c815a161db7314c762029d276a7f977491987d479dfbf"  823x20 px; DESIGN touch targets are >= 44
+       in 1: account/detail/agent/390
+  FAIL figures-not-tabular  section.flex.flex-col > div.flex.flex-col > p.row "Funded by the demo: 0.05 USDC"  "0.05 USDC": tabular lining figures wherever money or time appears
+       in 4: add/rest/owner/1280, add/rest/owner/390, add/offline/owner/1280, add/offline/owner/390
+  FAIL figures-not-tabular  section.flex.flex-col > div.flex.flex-col > p.meta "Arrived Today 06:15"  "06:15": tabular lining figures wherever money or time appears
+       in 4: add/rest/owner/1280, add/rest/owner/390, add/offline/owner/1280, add/offline/owner/390
+  FAIL figures-not-tabular  section.flex.flex-col > div.flex.flex-col > a.text-(--ink).underline "Get 20 USDC from Circle's faucet"  "20 USDC": tabular lining figures wherever money or time appears
+       in 6: add/rest/owner/1280, add/rest/owner/390, add/error/owner/1280, add/error/owner/390, ...
+  FAIL touch-target  section.flex.flex-col > div.flex.flex-wrap > a.text-(--ink).underline "explorer"  62x20 px; DESIGN touch targets are >= 44
+       in 3: add/rest/agent/390, add/error/agent/390, add/offline/agent/390
+  FAIL set-view    could not switch to owner
+       in 3: receive/error/owner/390, receive/offline/owner/1280, receive/offline/owner/390
+  FAIL font-not-loaded    IBM Plex Sans is not loaded (loaded: __nextjs-Geist, __nextjs-Geist Mono); the page is in a fallback face
+       in 3: receive/error/owner/390, receive/offline/owner/1280, receive/offline/owner/390
+  FAIL network-word    the header does not say "Testnet"
+       in 7: receive/error/owner/390, receive/error/agent/1280, receive/error/agent/390, receive/offline/owner/1280, ...
+  FAIL capsule    the header has no Owner | Agent capsule
+       in 7: receive/error/owner/390, receive/error/agent/1280, receive/error/agent/390, receive/offline/owner/1280, ...
+  FAIL data-view    html[data-view]=undefined, expected owner
+       in 3: receive/error/owner/390, receive/offline/owner/1280, receive/offline/owner/390
+  FAIL axe:document-title  html  serious: Document does not have a non-empty <title> element
+       in 7: receive/error/owner/390, receive/error/agent/1280, receive/error/agent/390, receive/offline/owner/1280, ...
+  FAIL axe:html-has-lang  html  serious: The <html> element does not have a lang attribute
+       in 7: receive/error/owner/390, receive/error/agent/1280, receive/error/agent/390, receive/offline/owner/1280, ...
+  FAIL axe:landmark-one-main  html  moderate: Document does not have a main landmark
+       in 7: receive/error/owner/390, receive/error/agent/1280, receive/error/agent/390, receive/offline/owner/1280, ...
+  FAIL set-view    could not switch to agent
+       in 4: receive/error/agent/1280, receive/error/agent/390, receive/offline/agent/1280, receive/offline/agent/390
+  FAIL font-not-loaded    IBM Plex Mono is not loaded (loaded: __nextjs-Geist, __nextjs-Geist Mono); the page is in a fallback face
+       in 2: receive/error/agent/1280, receive/error/agent/390
+  FAIL data-view    html[data-view]=undefined, expected agent
+       in 4: receive/error/agent/1280, receive/error/agent/390, receive/offline/agent/1280, receive/offline/agent/390
+  FAIL font-not-loaded    IBM Plex Mono is not loaded (loaded: none); the page is in a fallback face
+       in 2: receive/offline/agent/1280, receive/offline/agent/390
+  FAIL capsule    capsule segment agent not found
+       in 4: motion/normal/account/1280, motion/reduced/account/1280, motion/normal/account/390, motion/reduced/account/390
+  FAIL v-key    pressing v did not flip the view
+       in 2: motion/normal/account/1280, motion/normal/account/390
+  FAIL view-remembered    localStorage tameion.home.view is owner, the view is undefined
+       in 2: motion/normal/account/1280, motion/normal/account/390
+  WARN direction-alone  div.flex.flex-col > section.flex.flex-col > button.inline-flex.min-h-(--button) "Stop the agent"  up and down colour a direction; with a sign or a word, never alone
+       in 12: account/rest/owner/1280, account/rest/owner/390, account/empty/owner/1280, account/empty/owner/390, ...
+  WARN measure  div.mono-dense.flex > section.flex.flex-col > p.mono-read.m-0 "– the service gave no figure: inbox.balance, inbox"  about 81 characters per line (DESIGN: measure <= 68 ch)
+       in 1: account/error/agent/1280
+  WARN direction-alone  div.rounded-(--radius-plate).bg-(--plate) > dd.m-0.flex > span.balance.money "1"  up and down colour a direction; with a sign or a word, never alone
+       in 2: account/needs-you/owner/1280, account/needs-you/owner/390
+  WARN direction-alone  h2#needs-title "Needs you"  up and down colour a direction; with a sign or a word, never alone
+       in 2: account/needs-you/owner/1280, account/needs-you/owner/390
+  WARN touch-target  section.flex.flex-col > div.flex.flex-col > a.text-(--ink).underline "Get 20 USDC from Circle's faucet"  302x24 px; DESIGN touch targets are >= 44
+       in 3: add/rest/owner/390, add/error/owner/390, add/offline/owner/390
+  WARN touch-target  section.flex.flex-col > div.flex.flex-col > a.text-(--ink).underline "0xfc3a9882ca8e722f0df0c3ae45d71cd6c245308ee9807780"  302x40 px; DESIGN touch targets are >= 44
+       in 2: add/rest/agent/390, add/offline/agent/390
+  WARN touch-target  section.flex.flex-col > div.flex.flex-col > a.text-(--ink).underline "Get 20 USDC from Circle's faucet"  302x22 px; DESIGN touch targets are >= 44
+       in 3: add/rest/agent/390, add/error/agent/390, add/offline/agent/390
+  WARN offline-no-stale-marker    no "as of HH:MM" on the page 30 s after the connection dropped (DESIGN: cached values at full ink, each marked stale with its time)
+       in 8: add/offline/owner/1280, add/offline/owner/390, add/offline/agent/1280, add/offline/agent/390, ...
+  WARN off-token-colour  html > body "{"props":{"pageProps":{"statusCode":500,"hostname""  color #000000 x1: a colour literal, not a token
+       in 4: receive/error/agent/1280, receive/error/agent/390, receive/offline/agent/1280, receive/offline/agent/390
+  NOTE not-built-yet    the route still shows its skeleton after settling: no content yet
+       in 4: receive/rest/owner/1280, receive/rest/owner/390, receive/rest/agent/1280, receive/rest/agent/390
+  NOTE not-built-yet    no row disclosure to open
+       in 4: sheet/account/owner/1280, sheet/account/owner/390, sheet/account/agent/1280, sheet/account/agent/390
+  NOTE not-built-yet    no text input on /add yet
+       in 1: keyboard/add/375
+  mocked replies (a fixture, not a real account): account/empty/owner/1280, account/empty/owner/390, account/needs-you/owner/1280, account/needs-you/owner/390, account/sealed/owner/1280, account/sealed/owner/390, account/sealed/agent/1280, account/sealed/agent/390
+measured:
+  account/rest/owner/1280: h1 31px/38px/500; main 80..1200 (1120 wide); 1 element(s) in --red
+  account/rest/owner/390: h1 31px/38px/500; main 0..390 (390 wide); 1 element(s) in --red
+  account/rest/agent/1280: h1 15px/22px/500; main 80..1200 (1120 wide); 2 element(s) in --red
+  account/rest/agent/390: h1 15px/22px/500; main 0..390 (390 wide); 2 element(s) in --red
+  add/rest/owner/1280: h1 16px/24px/600; main 80..1200 (1120 wide)
+  add/rest/owner/390: h1 16px/24px/600; main 0..390 (390 wide)
+  add/rest/agent/1280: h1 15px/22px/500; main 80..1200 (1120 wide)
+  add/rest/agent/390: h1 15px/22px/500; main 0..390 (390 wide)
+  receive/rest/owner/1280: h1 none; main 80..1200 (1120 wide)
+  receive/rest/owner/390: h1 none; main 0..390 (390 wide)
+  receive/rest/agent/1280: h1 none; main 80..1200 (1120 wide)
+  receive/rest/agent/390: h1 none; main 0..390 (390 wide)
+since the last run: 36 fixed, 451 new
+

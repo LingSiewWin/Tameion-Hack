@@ -263,3 +263,15 @@ while on testnet); Tameion takes nothing per payment.
   The agent's own sentences cite the events they rest on as `[evt:N]`; a
   sentence citing an event its case was not given is refused and the rule
   decides.
+- See who stands behind each record: `GET /api/level1/symbolon?policy=…[&root=…]`.
+  Per record (settlement, decision, flow, meter or price check): its `root`,
+  `seq`, `leaf`, `kind`, counterparty and amount, and three slots — `agent`,
+  `counterpartySlot`, `witness` — each `{alg, keyId, verified}` or null. A
+  slot is there only when its check passed in this read: the witness is the
+  root's anchoring transaction read back on chain, the counterparty a
+  payee-signed invoice the settlement paid; no record carries the agent's own
+  signature yet. `counts` says how many records stand behind none, one, two or
+  three; `chainReadFailed` lists roots whose anchoring could not be read this
+  time (not the same as not witnessed). On an account with agent keys the
+  fields and slots need a read key or the owner's device; anyone gets root,
+  seq and leaf.

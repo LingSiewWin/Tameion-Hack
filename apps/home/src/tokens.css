@@ -1,0 +1,116 @@
+/* Every value DESIGN.md names, as CSS variables (the founder's design, D-HOME-1). src/tokens.ts carries the same values
+   typed; scripts/contrast.mjs fails the build when the two files disagree, scripts/tokens-lint.mjs when a colour literal
+   appears anywhere else. The view lives on <html data-view>: Owner = light, "land"; Agent = dark, "sea". */
+
+:root {
+  --radius-mark: 4px;
+  --radius-inner: 8px;
+  --radius-button: 12px;
+  --radius-plate: 16px;
+  --radius-sheet: 24px;
+  --radius-capsule: 999px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --gutter-narrow: 20px;
+  --gutter-wide: 32px;
+  --content-max: 1120px;
+  --measure: 68ch;
+  --touch: 44px;
+  --button: 52px;
+  --button-compact: 44px;
+  --drawer-width: 400px;
+  --press-in: 100ms;
+  --press-out: 160ms;
+  --press-scale: 0.98;
+  --crossfade: 200ms;
+  --roll: 160ms;
+  --sheet-in: 320ms;
+  --sheet-out: 200ms;
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  /* next/font sets --font-plex-sans and --font-plex-mono on <html> (src/app/layout.tsx). */
+  --font-sans: var(--font-plex-sans), system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+}
+
+:root,
+:root[data-view="owner"] {
+  --paper: #EEF2EA;
+  --plate: #FFFFFF;
+  --plate-2: #E4EAE1;
+  --ink: #000000;
+  --ink-2: #5B625B;
+  --rule: #D5DCD2;
+  --attention: #B3261E;
+  --transit: #3FB8B0;
+  --up: #2E7800;
+  --down: #B3261E;
+  --scrim: #000000B3;
+  --skeleton: #DEE4DA;
+  color-scheme: light;
+}
+
+:root[data-view="agent"] {
+  --paper: #0E1B22;
+  --plate: #15242C;
+  --plate-2: #1D2F38;
+  --ink: #EEF2EA;
+  --ink-2: #A9B4AD;
+  --rule: #2A3C45;
+  --attention: #FF6B5E;
+  --transit: #3FB8B0;
+  --up: #9FD66A;
+  --down: #FF6B5E;
+  --scrim: #000000B3;
+  --skeleton: #22343D;
+  color-scheme: dark;
+}
+
+:root {
+  --sealed: var(--ink); /* the symbolon mark when all three halves are present: drawn, not coloured */
+  --sheet-shadow: 0 -4px 16px #0000001F;
+  /* Legacy names from the first draft, kept so the seats' branches build while they move to the names above;
+     scripts/tokens-lint.mjs lists every use. Delete this block when that list is empty. */
+  --text-2: var(--ink-2);
+  --red: var(--attention);
+  --accent: var(--ink);
+  --cta: var(--button);
+  --content-owner: var(--content-max);
+}
+
+/* Type roles: base 16, ratio 1.25. Sentence case; tracking 0 except the hero statement. Money and time are tabular. */
+.hero-statement { font: 500 49px/56px var(--font-sans); letter-spacing: -0.01em; }
+@media (max-width: 639.98px) {
+  .hero-statement { font-size: 31px; line-height: 38px; }
+}
+.authority { font: 500 31px/38px var(--font-sans); }
+.balance { font: 500 39px/44px var(--font-sans); font-variant-numeric: tabular-nums lining-nums; }
+.sheet-title { font: 500 25px/32px var(--font-sans); }
+.row-title { font: 600 16px/24px var(--font-sans); }
+.row { font: 400 16px/24px var(--font-sans); }
+.meta { font: 400 13px/18px var(--font-sans); color: var(--ink-2); }
+.mono-dense { font: 400 13px/20px var(--font-mono); }
+.mono-read { font: 400 15px/22px var(--font-mono); }
+.hero-figure { font: 500 61px/64px var(--font-sans); font-variant-numeric: tabular-nums lining-nums; }
+.money { font-variant-numeric: tabular-nums lining-nums; }
+/* legacy role names from the first draft (see the legacy block above) */
+.statement-line { font: 500 31px/38px var(--font-sans); }
+.mono { font: 400 13px/20px var(--font-mono); }
+
+/* The Agent view is Plex Mono, the whole surface: dense by default, the reading roles at 15 / 22. */
+:root[data-view="agent"] body,
+:root[data-view="agent"] :is(.meta, .mono, .mono-dense) {
+  font: 400 13px/20px var(--font-mono);
+}
+:root[data-view="agent"] :is(.row, .mono-read) {
+  font: 400 15px/22px var(--font-mono);
+}
+:root[data-view="agent"] :is(.row-title, .hero-statement, .authority, .balance, .sheet-title, .statement-line) {
+  font: 500 15px/22px var(--font-mono);
+  letter-spacing: 0;
+}

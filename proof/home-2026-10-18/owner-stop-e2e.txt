@@ -1,0 +1,109 @@
+Owner home, "Stop the agent", end to end on the lane service (2026-10-18 06:50 +08, seat H2)
+
+Account: northwind-agents (a demo account opened on the lane service http://127.0.0.1:7890 at 06:15 +08, Arbitrum Sepolia; funded 0.05 USDC
+by the demo; Demo Vendor approved, its 0.002 USDC / 2 min bill saved, limits lowered to 0.005 per payment and 0.05 a day, Autopilot asked and
+applied by the service after the 30 s delay; 15 payments landed 06:20–06:48).
+
+What ran: the Owner home's own flow code, apps/home/src/features/owner/owner-call.ts — prepare-mode {mode: 0} through the home app's proxy
+(http://localhost:3011/api/…, the account named, the proxy turning the name into the address) → the prepared call compared byte for byte with
+calls.setMode(0) built on the page → POST /api/level1/challenge → the challenge recomputed on the page (PasskeyPrincipal.challengeFor) and
+compared → the passkey assertion → POST /api/level1/execute. Only the browser's passkey prompt was replaced, by a software authenticator holding
+the account's throwaway owner key and signing the WebAuthn assertion as a browser does for origin http://localhost:3011 (rpId localhost).
+The click path in the browser (Stop → the question in words → Stop the agent) was screenshotted (owner-home-stop-question-owner-390.png) but not
+signed in the browser: loading the owner key into Playwright's virtual authenticator was refused by the session's permission classifier.
+
+Output (scratchpad stop-e2e.mts):
+{
+ "account": "northwind-agents",
+ "startedAt": "2026-10-17T22:50:27.017Z",
+ "modeBefore": "Autopilot",
+ "asked": 0,
+ "phases": ["Signing", "Sent"],
+ "executed": {
+  "explorer": "https://sepolia.arbiscan.io/tx/0x2d244f0dbcd4983a8d60d9a5e85c628916a9218a9bb9dc4fa86d3c64ef8c8098",
+  "tx": "0x2d244f0dbcd4983a8d60d9a5e85c628916a9218a9bb9dc4fa86d3c64ef8c8098"
+ },
+ "modeAfter": "Watch"
+}
+
+Earlier owner calls on the same account, signed the same way by the seat's harness against the lane service directly:
+  approve Demo Vendor (setPayees)  https://sepolia.arbiscan.io/tx/0xf3b36981a4d711d64748a865d1d9dc827f59e1176910b5d21e242af26c99a260
+  limits 0.005 / 0.05 (setLimits)  https://sepolia.arbiscan.io/tx/0x8d8f129250bcb9b7f113818b5b7533921a7f0f3ce3088bdd53cee7396d8222d0
+  ask Autopilot (setMode 2)        https://sepolia.arbiscan.io/tx/0x296aa340172662c18857d4097e5a5ea15c8dec1eb5ffb27103f9cc2fd617a5f3
+  demo funding 0.05 USDC           https://sepolia.arbiscan.io/tx/0xfc3a9882ca8e722f0df0c3ae45d71cd6c245308ee9807780b7b2f0b8f2f5826a
+  first agent payment 0.002 USDC   https://sepolia.arbiscan.io/tx/0xbd5bb78b3f5e7ed6bda96455a611844c2dbf27d77ab5ffd2a3a66c36c539d0f5
+
+"Start the agent" (setMode 1, a trust-raising change: it waits the account's 30 s delay), the same flow, 06:54 +08:
+{
+ "account": "northwind-agents",
+ "startedAt": "2026-10-17T22:54:12.365Z",
+ "modeBefore": "Watch",
+ "asked": 1,
+ "phases": ["Signing", "Sent"],
+ "executed": {
+  "explorer": "https://sepolia.arbiscan.io/tx/0xc316ee80492f74b1687ed582d357edfd7de4b60eda57deb5e73c6482324db937",
+  "tx": "0xc316ee80492f74b1687ed582d357edfd7de4b60eda57deb5e73c6482324db937"
+ },
+ "modeAfter": "Watch"
+}
+modeAfter is still Watch: the raise waits its delay, and the inbox carried pending {mode: Propose, eta 1792277686}; the Owner home showed
+"At 06:54 the agent starts again, asking before each payment." (owner-home-start-pending-owner-390.png) and no second Start.
+
+Needs you → "Approve" on a payment the agent prepared, the same flow (owner-e2e.mts approve), 07:10 +08. The account on Propose, a new
+Demo Vendor bill saved at 07:08 (0.002 USDC every 2 min); at 07:09:46 the agent's due check prepared the payment and it waited for the owner
+(waitingCount 1). The Owner home's checks before signing: the prepared call goes to this account, and it pays exactly the row's payee and
+amount (checkSettle), then the recomputed challenge, then the passkey.
+{
+ "action": "approve",
+ "what": { "counterparty": "Demo Vendor (…3854)", "amount": "0.002000 USDC" },
+ "modeBefore": "Propose",
+ "waitingBefore": 1,
+ "phases": ["Signing", "Sent"],
+ "executed": {
+  "explorer": "https://sepolia.arbiscan.io/tx/0xfcc52080bac0f4ec688230a795e94e813e4d9804795a68899f20135db62e4eaa",
+  "tx": "0xfcc52080bac0f4ec688230a795e94e813e4d9804795a68899f20135db62e4eaa"
+ },
+ "modeAfter": "Propose",
+ "waitingAfter": 0,
+ "paidAfter": 15
+}
+
+Needs you → "Raise the cap", pressed IN A BROWSER, 07:26 +08 (owner-click-e2e.mjs: the seat's own headless Chromium, the account's throwaway
+owner key in that browser's CDP virtual authenticator, rpId localhost; the production build of the home app on :3011, lane/home-h2).
+Setup: the account back on Autopilot (setMode 2 through the same flow, 07:12, tx 0x96ec7c43798d4e7ca9f8407c021db074235008f747bd62087f74ba8dcf5dc523),
+a 0.006 USDC / 2 min Demo Vendor bill saved at 07:13; at 07:14:28 the agent could not pay it (0.006 over the 0.005 cap) and it waited for the owner:
+"This bill of 0.006 USDC is over what the agent may pay at once, so the contract blocks it and only you can decide. · per-action-cap: …".
+The Owner home showed "0.006 USDC to Demo Vendor is more than one payment may be." with one action, "Raise the cap" (screenshots
+owner-home-needs-you-owner-1280.png / -390.png). The click: prepare-limits {perAction 0.006, daily 0.05, floor 0} → compared with setLimits(6000,
+50000, 0) built on the page → challenge recomputed → the browser's passkey → execute.
+{
+ "startedAt": "2026-10-17T23:26:38.827Z",
+ "pressed": "Raise the cap",
+ "pendingLine": ["At 07:28 the limits rise to 0.05 USDC a day, 0.006 at a time."],
+ "execute": [{ "status": 200,
+   "tx": "0xfd7f3b53099e4e751b0f21011c84e8b53850fe65354157974a132fa375633ea5",
+   "explorer": "https://sepolia.arbiscan.io/tx/0xfd7f3b53099e4e751b0f21011c84e8b53850fe65354157974a132fa375633ea5" }],
+ "hashesInOwnerDom": 0
+}
+Then, with no human: the raise applied at 07:28 (anyone could see it coming on the page), and the agent paid the 0.006 bill itself at 07:28:33,
+07:30:33 and 07:32:33 (inbox paid[], by the agent); waitingCount back to 0; the hero now reads "Your agents may spend 0.05 USDC a day, 0.006 at a
+time, only on Demo Vendor." (owner-home-rest-v2-owner-1280.png / -390.png).
+Known gap in that run: the success sentence was keyed to the Needs-you item, and the read after the tap replaced the item (a new cycle), so the page
+showed only the pending line; fixed in 5f21bce (success is a toast; a raise already asked answers its item with when, and offers no second ask).
+
+"Stop the agent", PRESSED IN A BROWSER, 07:40 +08 — the brief's own flow, end to end (owner-click-e2e.mjs "Stop the agent|Stop the agent":
+the control, then the question's confirm; the seat's own headless Chromium with the owner key in its CDP virtual authenticator; production build).
+The page asked once, in words: "Stop the agent now? Payments wait for your tap until you start it again." (owner-home-stop-click-390-asked.png),
+then prepare-mode {mode 0} → compared with setMode(0) → recomputed challenge → the browser's passkey → execute → toast "Stopped", hero
+"The agent is stopped. It pays nothing until you start it again." with "Start the agent" (owner-home-stop-click-390-after.png).
+{
+ "startedAt": "2026-10-17T23:40:55.448Z",
+ "pressed": "Stop the agent|Stop the agent",
+ "pageSaid": "Stopped",
+ "execute": [{ "status": 200,
+   "tx": "0x54e9cea0f5d4fea3c38c1da613b7bcb261a83b48d41de7b0085b7580de782200",
+   "explorer": "https://sepolia.arbiscan.io/tx/0x54e9cea0f5d4fea3c38c1da613b7bcb261a83b48d41de7b0085b7580de782200" }],
+ "hashesInOwnerDom": 0
+}
+The account is left stopped (balance 0.002 USDC; the agent's last check refused the 0.006 bill: "solvency … daily-cap …", shown on the page as a
+Refused line in the owner's words).

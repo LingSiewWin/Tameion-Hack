@@ -1,0 +1,149 @@
+# GET /api/level1/symbolon on the lane service, H3's build (branch lane/home-h3), read end to end
+# written 2026-10-18 06:49:22 +0800 by seat H3
+# service: target/debug/tameion-app from lane/home-h3 on 127.0.0.1:7891, TAMEION_APP_DIR=runtime/home-app-h3 holding copies of two open
+#   accounts' public files from runtime/app (tenant record with notify_secret and reserve_token_hash removed, events logs, anchors.jsonl,
+#   invoices); no key file copied, no pass runs there (no TAMEION_LEVEL1_WATCH_SECS, no demo). The witness is read on Arbitrum Sepolia
+#   (sepolia-rollup.arbitrum.io, the chain preset's public RPC) by ArcClient::anchored_in; the counterparty slot is the payee's EIP-712
+#   invoice signature recovered by operator::invoice::verify + sig::slot_sig.
+
+## e1-seller-signed (0xcf57...e2e1): two reads served from the process cache (the cold read is at the end of this file)
+HTTP 200 in 0.010025s
+HTTP 200 in 0.008146s
+{
+    "chain": "arbitrum-sepolia",
+    "chainReadFailed": [],
+    "contractVersion": "2026-10-18.1",
+    "counts": {
+        "double": 1,
+        "single": 3,
+        "triple": 0,
+        "unsigned": 0
+    },
+    "explorer": "https://sepolia.arbiscan.io",
+    "locked": false,
+    "ok": true,
+    "policy": "0xcf57c48b69104c89a462cdb68ddc3f4f0933e2e1",
+    "records": [
+        {
+            "agent": null,
+            "anchorTx": "0xa060c2b2677547ad96a17e04af5550b4e83fe1f4490647c7ae0ed03cc7602e4f",
+            "at": 1792274126,
+            "counterparty_slot": null,
+            "kind": "FLOWCHECK",
+            "leaf": "0xf176523a6ae86599cd05218fe7a87b8a18041386b9872cc56ef922f1231ea965",
+            "note": "Book: 0.000000 USDC at the start + 0.050000 USDC in - 0.000000 USDC out = 0.050000 USDC; the chain holds 0.050000 USDC; difference 0.000000 USDC.",
+            "root": "0xed2a76a76a246228672c9dc1f938d40dfd0f7108f272607ccb286399e20db567",
+            "seq": 0,
+            "witness": {
+                "alg": "chain-receipt",
+                "keyId": "chain:421614",
+                "verified": true
+            }
+        },
+        {
+            "agent": null,
+            "amount": "0.003000 USDC",
+            "anchorTx": "0xa060c2b2677547ad96a17e04af5550b4e83fe1f4490647c7ae0ed03cc7602e4f",
+            "at": 1792274126,
+            "counterparty": "0xe5e2d8dcc2038fd0a010a6e7845378b646e33854",
+            "counterparty_slot": null,
+            "decision": "ALLOW",
+            "kind": "DECISION",
+            "leaf": "0x7b8d437ae5f48f2c7f49810c534de3ebb2b9b344885640276d93249acc2bca23",
+            "minor": "3000",
+            "note": "ALLOW for 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854. only obligation due; no ordering decision to make Basis: 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854 has been paid 0 times every 1.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 1.00). Decided by model claude-sonnet-5-5: ask (new_payee). 0xe5e2d8\u2026e33854 was approved moments ago and never paid, so I'm putting this 0.003 USDC bill you typed in front of you for one tap.",
+            "root": "0xed2a76a76a246228672c9dc1f938d40dfd0f7108f272607ccb286399e20db567",
+            "seq": 2,
+            "witness": {
+                "alg": "chain-receipt",
+                "keyId": "chain:421614",
+                "verified": true
+            }
+        },
+        {
+            "agent": null,
+            "amount": "0.003000 USDC",
+            "anchorTx": "0x661aaac5503e616082b8becc0c57e407c5b4cd23e1b1bebd609abdbbea6cba87",
+            "at": 1792274186,
+            "counterparty": "0xe5e2d8dcc2038fd0a010a6e7845378b646e33854",
+            "counterparty_slot": null,
+            "decision": "ALLOW",
+            "kind": "DECISION",
+            "leaf": "0x87a3c48a0c294f5adb718b6f2ac8d9cc23a4f3b4eb436d51260e1b348d8b3a41",
+            "minor": "3000",
+            "note": "ALLOW for 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854. only obligation due; no ordering decision to make Basis: 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854 has been paid 0 times every 1.0 days, amounts varying by 0.0% and timing by 0.0%, so this reads as a subscription (confidence 1.00). Decided by model claude-sonnet-5-5: pay (due_now). The owner typed this 0.003 USDC bill for an approved payee, it is due today, within the caps, and the runway of 15 days still covers later bills.",
+            "root": "0x5033622a28d6caf728a1517e1b80608dbcb1315760877b005a2e6128718c861a",
+            "seq": 1,
+            "witness": {
+                "alg": "chain-receipt",
+                "keyId": "chain:421614",
+                "verified": true
+            }
+        },
+        {
+            "agent": null,
+            "amount": "0.003000 USDC",
+            "anchorTx": "0x661aaac5503e616082b8becc0c57e407c5b4cd23e1b1bebd609abdbbea6cba87",
+            "at": 1792274186,
+            "counterparty": "0xe5e2d8dcc2038fd0a010a6e7845378b646e33854",
+            "counterparty_slot": {
+                "alg": "secp256k1-eip712",
+                "keyId": "0xe5e2d8dcc2038fd0a010a6e7845378b646e33854",
+                "verified": true
+            },
+            "kind": "SETTLEMENT",
+            "leaf": "0x508d927c137efd782a16b3b22f78b14ce6383e24c33546b51c24f37ce793a968",
+            "minor": "3000",
+            "note": "Paid 0.003000 USDC to 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854, settled in 0xb8b27ebe03757dfb41c6768540250862c54c4b152fad1af5b4ae1f1b856a50be. Read back from the receipt: the policy's Paid event matches.",
+            "root": "0x5033622a28d6caf728a1517e1b80608dbcb1315760877b005a2e6128718c861a",
+            "seq": 2,
+            "tx": "0xb8b27ebe03757dfb41c6768540250862c54c4b152fad1af5b4ae1f1b856a50be",
+            "witness": {
+                "alg": "chain-receipt",
+                "keyId": "chain:421614",
+                "verified": true
+            }
+        }
+    ]
+}
+
+## acme-agents-8433 (0xf0ae...6b85): counts and one record
+HTTP 200 in 0.008808s
+{"counts": {"double": 0, "single": 11, "triple": 0, "unsigned": 0}, "chainReadFailed": [], "locked": false, "explorer": "https://sepolia.arbiscan.io"}
+{
+ "agent": null,
+ "anchorTx": "0x117192e87736e3005c80f5fde36c5f9e087b6684c3334d5eecc4642d8a68a220",
+ "at": 1792272943,
+ "counterparty_slot": null,
+ "kind": "FLOWCHECK",
+ "leaf": "0x6041163c63a1f919f1568481beb662f87335efe2b6f16f410b0dbdad4b518630",
+ "note": "Book: 0.000000 USDC at the start + 0.050000 USDC in - 0.010000 USDC out = 0.040000 USDC; the chain holds 0.040000 USDC; difference 0.000000 USDC.",
+ "root": "0x1dda6890653e92b0771cb31cdd80e78c2961e82671ca9984953cac8d932c6429",
+ "seq": 0,
+ "witness": {
+  "alg": "chain-receipt",
+  "keyId": "chain:421614",
+  "verified": true
+ }
+}
+
+## one root by name, an unknown root, a bad policy (refusal envelope)
+records 2 counts {'double': 1, 'single': 1, 'triple': 0, 'unsigned': 0} HTTP200
+{"contractVersion":"2026-10-18.1","error":{"audience":"agent","by":"input","code":"not_found","executed":"no","meaning":"No such account, job or record on this service.","nextStep":"Check the address or id; an account lives on the service that opened it.","retryAfterSecs":0,"words":"no record of that root for that policy"},"ok":false}
+HTTP 404
+{"contractVersion":"2026-10-18.1","error":{"audience":"agent","by":"input","code":"invalid_body","executed":"no","meaning":"The request is missing a field or carries one this route cannot use.","nextStep":"Fix the request as words says and send it again.","retryAfterSecs":0,"words":"policy (the account's 0x… address) is required"},"ok":false}
+HTTP 400
+
+## through the home app's proxy by NAME (localhost:3012, TAMEION_URL=http://127.0.0.1:7891)
+policy 0xcf57c48b69104c89a462cdb68ddc3f4f0933e2e1 counts {'double': 1, 'single': 3, 'triple': 0, 'unsigned': 0} HTTP200
+# end 06:49:22 +0800
+
+## cold read after a restart (empty cache: both anchorings read back on Arbitrum Sepolia), service PID 3801, 06:49:39 +0800
+HTTP 200 in 1.596734s
+counts {'double': 1, 'single': 3, 'triple': 0, 'unsigned': 0} chainReadFailed []
+0 FLOWCHECK witness {'alg': 'chain-receipt', 'keyId': 'chain:421614', 'verified': True} counterparty_slot None anchorTx 0xa060c2b2677547ad96a17e04af5550b4e83fe1f4490647c7ae0ed03cc7602e4f
+2 DECISION witness {'alg': 'chain-receipt', 'keyId': 'chain:421614', 'verified': True} counterparty_slot None anchorTx 0xa060c2b2677547ad96a17e04af5550b4e83fe1f4490647c7ae0ed03cc7602e4f
+1 DECISION witness {'alg': 'chain-receipt', 'keyId': 'chain:421614', 'verified': True} counterparty_slot None anchorTx 0x661aaac5503e616082b8becc0c57e407c5b4cd23e1b1bebd609abdbbea6cba87
+2 SETTLEMENT witness {'alg': 'chain-receipt', 'keyId': 'chain:421614', 'verified': True} counterparty_slot {'alg': 'secp256k1-eip712', 'keyId': '0xe5e2d8dcc2038fd0a010a6e7845378b646e33854', 'verified': True} anchorTx 0x661aaac5503e616082b8becc0c57e407c5b4cd23e1b1bebd609abdbbea6cba87
+warm read: HTTP 200 in 0.012393s
+# end 06:49:40 +0800
