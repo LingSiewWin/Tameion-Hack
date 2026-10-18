@@ -1,7 +1,7 @@
 {
   "name": "@tameion/sdk",
   "version": "0.1.0",
-  "description": "Client and CLI for a Tameion account: read it, run a check, buy a paid API inside the mandate the owner signed.",
+  "description": "Client and CLI for a Tami account: read it, run a check, buy a paid API inside the mandate the owner signed.",
   "type": "module",
   "sideEffects": false,
   "engines": { "node": ">=20" },
