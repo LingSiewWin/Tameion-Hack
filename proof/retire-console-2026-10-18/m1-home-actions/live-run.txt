@@ -1,0 +1,102 @@
+M1 live run, 2026-10-18 13:42:39 +0800: home dev server (lane/home-actions 27c43ef, next dev -p 3031, TAMEION_URL=https://tameion-lane-production.up.railway.app) driven by a headless Chrome with a CDP virtual authenticator (ctap2, internal, user verified). Account m1-1332 opened through /new; every owner write below is a passkey signature on origin localhost over the service's challenge, recomputed in the page, through home's /api proxy. The invite word was read from a file and never printed; the agent key's secret was not logged.
+
+13:32:44 tap /^Make your own account/
+13:32:45 name m1-1332
+13:32:46 tap /^Continue$/
+13:32:46 tap /^Make my passkey$/
+13:32:59 funded: Let the agent pay Demo Vendor
+13:32:59 account m1-1332 0x259e76137d0c9359ffd1baebcc1d5420b96c1741 on arbitrum-sepolia
+13:33:01   zero-hash strip: bill: clean
+13:33:02   axe strip-bill @1280: 0 violations
+13:33:03   axe strip-bill @390: 0 violations
+13:33:03 tap /^Let the agent pay Demo Vendor 0\.002 USDC every 2 minutes$/
+13:33:08   executed: https://sepolia.arbiscan.io/tx/0x2b0c37b3b308c88db46b10e6cfeb811aad3b2818bf5c23d3cf57fe2aeaf7c95f
+13:33:11 billDone: Demo Vendor approved; the bill saved: 0.002 USDC every 2 minutes.
+13:33:13   inbox: payees [{"payableFrom":1792301617}] typedBills [{"amount":"0.002 USDC","everySecs":120,"nextDue":1792301708,"payee":"0xe5e2d8dcc2038fd0a010a6e7845378b646e33854"}]
+13:33:13 tap /^Turn Autopilot on$/
+13:33:17   executed: https://sepolia.arbiscan.io/tx/0x5470b7e79fc362855f2289a5a8ad5a39f73980d0fa1d8a2bfd6cb9bfdb7a9129
+13:33:19 countdown: "It applies in 0:27 unless you cancel"
+13:33:19   zero-hash strip: countdown: clean
+13:33:21   axe strip-countdown @1280: 0 violations
+13:33:21   axe strip-countdown @390: 0 violations
+13:33:21 tap /^Cancel$/
+13:33:25   executed: https://sepolia.arbiscan.io/tx/0xbca7d7d1f7728207f421cccad4cf6c89be227225bc2fc81e8f1f1f97af0b2ddf
+13:33:27 cancel: Cancelled. Nothing changes.
+13:33:28   inbox pending after cancel: null
+13:33:28 tap /^Turn Autopilot on$/
+13:33:32   executed: https://sepolia.arbiscan.io/tx/0x0a3297ca64dcdc203b4719342d31dae648c42e868d3ac1640dadeb3d8d3caa49
+13:33:34 countdown again: "It applies in 0:28 unless you cancel"
+13:35:09 autopilot on: "The bill is due: the agent is paying Demo Vendor now."
+13:35:24 first payment: "Done. The agent paid Demo Vendor by itself, inside your limits, and said why:"
+13:35:24   first row: "Today 13:35 Demo Vendor 0.002 USDC Paid by the agent: a bill the owner typed: 0.002 USDC Paid"
+13:35:27   inbox paid[oldest]: 0.002000 USDC at 1792301713 by the agent reason "paid by the agent: a bill the owner typed: 0.002000 USDC" https://sepolia.arbiscan.io/tx/0x8a96e469a0165ab6c579b81c6e2e49ee721a4d8f2847b175e5be3184ed5b3cad
+13:35:27   zero-hash strip: done: clean
+13:35:28   axe strip-done @1280: 0 violations
+13:35:28   axe strip-done @390: 0 violations
+13:35:28 tap /^Raise one payment to/
+13:35:34   executed: https://sepolia.arbiscan.io/tx/0xa3c8c7cf368c072d94737eea6824c1d4b75ce5859162486c2877d1be2eb699db
+13:35:36 raise "Raise one payment to 100 USDC": "the limits rise to 100 USDC a day, 100 at a time. It applies in 0:27 unless you cancel." Cancel shown
+13:35:37 tap /^Cut (one payment|the day) to/
+13:35:43   executed: https://sepolia.arbiscan.io/tx/0x53a96f97ecbf2df6449e9d223d2561fd69188b789ba6cfcb2d8c514b516c4c5d (raiseCancelled 0xe24f14be3e36cc9cb36ce748fd085d98454f23fc4bc9c3eb14d8fd64628284ff)
+13:35:47 cut "Cut one payment to 0.002 USDC": "Cut, at once: 0.002 USDC at a time, 100 USDC a day." | hero now: "Your agents may spend 100 USDC a day, 0.002 at a time, only on Demo Vendor." | inbox caps {"daily":"100.000000 USDC","floor":"0.000000 USDC","leftNow":"0.002000 USDC","perAction":"0.002000 USDC","spent24h":"0.002000 USDC"} pending null
+13:35:54   4 s later page: pending line gone; inbox pending null
+13:35:54 tap /^Payees$/
+13:35:55   zero-hash payees sheet: clean
+13:35:56   axe sheet-payees @1280: 0 violations
+13:35:56   axe sheet-payees @390: 0 violations
+13:35:56   zero-hash payees sheet, address typed (allowed in the field only): clean
+13:35:56 tap /^Approve payee$/
+13:36:02   executed: https://sepolia.arbiscan.io/tx/0x06d0982fe990e2e98d09c4d558a12ccf9b6f7bf5ba1e36e17b2104063102a9fc
+13:36:04 approve: Approved. The agent may pay M1 Test Payee once the wait has passed.
+13:36:05   inbox payees: 1 (a payee approved by address alone is not listed until a bill names it: P-405), party name M1 Test Payee
+13:36:06 tap /^Payees$/
+13:36:06 tap /^Stop paying Demo Vendor$/
+13:36:11   executed: https://sepolia.arbiscan.io/tx/0xdb66e32e3beba7de1df24f4c8bce525ca3dc044bd5aa01026a156cae765f144d
+13:36:13 stop: Stopped. The agent can no longer pay Demo Vendor.
+13:36:15   inbox payees after stop: []
+13:36:15 tap /^Payees$/
+13:36:15 tap /^Approve payee$/
+13:36:21   executed: https://sepolia.arbiscan.io/tx/0x1ae5a611b30b52421d4dda256096478686969e833470e9f3d86a5ba4eafe6459
+13:36:22 approve again: Approved. The agent may pay Demo Vendor once the wait has passed.
+13:36:24   inbox payees after approve: [{"address":"0xe5e2d8dcc2038fd0a010a6e7845378b646e33854","approvedAt":1792301779,"payableFrom":1792301809,"payableNow":false}]
+13:36:24 tap /^Payees$/
+13:36:24   sheet: "May be paid from 13:36"
+13:36:25 tap /^Agent keys$/
+13:36:25   zero-hash keys sheet: clean
+13:36:26   axe sheet-keys @1280: 0 violations
+13:36:27   axe sheet-keys @390: 0 violations
+13:36:27 tap /^Make a key$/
+13:36:30 mint: Key for m1 test bot, shown once; it can never sign: [secret, not logged]
+13:36:30   zero-hash keys sheet, secret shown: clean
+13:36:32   inbox agentTokens: [{"label":"m1 test bot","scopes":["read","run"],"expiresInH":24}]
+13:36:32 tap /^Agent keys$/
+13:36:32   secret after reopening: gone
+13:36:32 tap /^Stop m1 test bot$/
+13:36:36 stop key: Stopped m1 test bot. No key is left: the account reads open again.
+13:36:38   inbox agentTokens after stop: []
+13:36:40 tap /^Limits$/
+13:36:41   axe sheet-limits @1280: 0 violations
+13:36:42   axe sheet-limits @390: 0 violations
+13:36:42 tap /^Raise the limits$/
+13:36:46   executed: https://sepolia.arbiscan.io/tx/0xfb7f659a263f0afbc9d1c116a7619be1a88c91f9ef6ba85188aa210ce4ea2c0a
+13:36:49 limits raise: Asked. The new limits apply at 13:37 unless you cancel. / "It applies in 0:26 unless you cancel."
+13:36:49 tap /^Cancel$/
+13:36:53   executed: https://sepolia.arbiscan.io/tx/0xf89cdddb13c7e23029907f33688328d32dc3e181fb7a85afbd5627e54dfaaad0
+13:36:55 limits cancel: Cancelled. Nothing changes.
+13:36:55 tap /^Limits$/
+13:36:55 tap /^Cut the limits$/
+13:37:00   executed: https://sepolia.arbiscan.io/tx/0x4e6667024a0983cc62b3b215eae5203441226070c5355e747cd95f07b6897214
+13:37:05 limits cut: Cut, at once: 0.001 USDC at a time, 100 USDC a day. | hero "Your agents may spend 100 USDC a day, 0.001 at a time, only on Demo Vendor." | inbox {"daily":"100.000000 USDC","floor":"0.000000 USDC","leftNow":"0.001000 USDC","perAction":"0.001000 USDC","spent24h":"0.002000 USDC"}
+13:37:05 tap /^Mode$/
+13:37:06   axe sheet-mode @1280: 0 violations
+13:37:06   axe sheet-mode @390: 0 violations
+13:37:06 tap /^Propose$/
+13:37:11   executed: https://sepolia.arbiscan.io/tx/0xfd90edd72c81a9b68e62c0b280999bec35b64365556c2ca1244ca156325a48ce
+13:37:15 mode lower: Propose, at once. | hero "Your agents may spend 100 USDC a day, 0.001 at a time, only on Demo Vendor, and each payment waits for your tap." | inbox mode Propose
+13:37:15 tap /^Mode$/
+13:37:15 tap /^Autopilot$/
+13:37:20   executed: https://sepolia.arbiscan.io/tx/0xf7a5e6b1e8ef01399614d94c156793862c18b3a04e34009651b9c99cac8544ca
+13:37:22 mode raise: Asked. Autopilot starts at 13:37 unless you cancel. / "It applies in 0:26 unless you cancel."
+13:38:22 mode applied: inbox mode Autopilot | hero "Your agents may spend 100 USDC a day, 0.001 at a time, only on Demo Vendor."
+13:38:22   zero-hash owner home at the end: clean
+13:38:23 account m1-1332; its passkey lived only in this run's virtual authenticator
