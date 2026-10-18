@@ -8,6 +8,7 @@ import { OwnerSkeleton } from "../../components/skeletons.tsx";
 import { fetchDemo, fetchInbox } from "../../lib/api.ts";
 import type { Inbox } from "../../lib/types.ts";
 import { useView } from "../../lib/view.ts";
+import { shared } from "../../tokens.ts";
 import { COPY as OWNER_WORDS, lines } from "../owner/words.ts";
 import { CAPTION, FIGURES, HERO } from "./copy.ts";
 import { clamp01, COLUMN, handBeats, MODULE, phases, placeholderScene, seg, stillAt, STILLS, windowWords, type PortWatch, type Replay, type Scene } from "./model.ts";
@@ -20,10 +21,16 @@ export type Treatment = "A" | "B" | "C";
 type Row = { date: string; who: string; amount: string; why: string; state: string };
 type Props = { treatment: Treatment; scene: Scene | null; replayUrl: string | null; portwatch: PortWatch | null; demo: string | null };
 
-/** Columns of the book on the grid, in px (multiples of 8; the row module is 40): date, who, amount, why, state. */
-const COLS_WIDE = [120, 160, 120, 200, 80];
-// on a phone: who, amount, state (the Owner home's dates and whys need the width; they follow on the book itself)
+/** Columns of the book on the grid, in px (multiples of 8; the row module is 40): date, who, amount, why, state. On a phone,
+ *  or wherever the room right of the plate is short, who, amount, state (the Owner home that follows has the rest). */
 const COLS_NARROW = [0, 144, 120, 0, 80];
+const GUTTER = parseInt(shared["gutter-wide"], 10);
+export function colsFor(L: Pick<Layout, "W" | "rows"> | null): number[] {
+  if (!L || L.W < 640) return COLS_NARROW;
+  const room = L.W - GUTTER - L.rows.x;
+  if (room < 480) return COLS_NARROW;
+  return [120, 160, 120, Math.min(240, Math.floor((room - 480) / MODULE) * MODULE), 80];
+}
 /** The demo account's records as the book's rows, in the Owner home's own words (H2's lines()), so the hand-over reads
  *  exactly like the page it hands over to: payees by name, amounts trimmed, no hash (DESIGN Rule 1). */
 export function rowsOf(inbox: Inbox, vendor?: string, nowSecs = Date.now() / 1000): Row[] {
@@ -205,7 +212,7 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
   }, [treatment, realScene, replay, view, reduced]);
 
   const wide = (layout?.W ?? 1280) >= 640;
-  const cols = wide ? COLS_WIDE : COLS_NARROW;
+  const cols = colsFor(layout);
   const grid = { gridTemplateColumns: cols.filter(Boolean).map((c) => `${c}px`).join(" ") };
   const win = replay ? windowWords(replay) : null;
   const latest = portwatch?.days[0] ?? null;
@@ -282,15 +289,15 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
           </div>
         ) : null}
 
-        <div ref={book} className="absolute inset-0 bg-(--paper) px-(--gutter-narrow) pt-(--space-6) sm:px-(--gutter-wide)" style={{ opacity: 0, pointerEvents: active === 4 ? "auto" : "none" }} inert={active !== 4}>
-          <div className="mx-auto max-w-(--content-max)">
+        <div ref={book} className="absolute inset-0 bg-(--paper) pt-(--space-6)" style={{ opacity: 0, pointerEvents: active === 4 ? "auto" : "none" }} inert={active !== 4}>
+          <div className="surface">
             <p className="meta m-0 mb-(--space-4)">{HERO.bookLabel}</p>
             {demo && bookOn ? <OwnerHome name={demo} /> : <OwnerSkeleton />}
           </div>
         </div>
 
         {/* the plate: its box is where text may sit (labels keep clear of it); each stage's words carry their own paper */}
-        <div ref={plate} className="absolute inset-x-(--gutter-narrow) bottom-(--gutter-narrow) sm:inset-x-auto sm:bottom-auto sm:left-(--gutter-wide) sm:top-1/2 sm:w-[480px] sm:-translate-y-1/2">
+        <div ref={plate} className="absolute inset-x-(--gutter-narrow) bottom-(--gutter-narrow) sm:inset-x-auto sm:bottom-auto sm:left-[max(var(--gutter-wide),calc((100%-var(--content-max))/2+var(--gutter-wide)))] sm:top-1/2 sm:w-[440px] sm:-translate-y-1/2">
           {[0, 1, 2, 3].map((i) => (
             <div
               key={i}

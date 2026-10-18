@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { BBOX, cellAt, fixAt, handBeats, labelOf, otsu, pack, phases, placeholderScene, toPixel, typeWord, type Report } from "../src/features/hero/model.ts";
 
-const { rowsOf } = await import("../src/features/hero/hero.tsx");
+const { rowsOf, colsFor } = await import("../src/features/hero/hero.tsx");
 
 test("every keyframe is whole at its p", () => {
   assert.equal(phases(0).quant, 0);
@@ -26,6 +26,17 @@ test("no amount ever shares a row with a ship: labels are gone before the record
   }
   assert.equal(handBeats(1).records, 1);
   assert.equal(handBeats(0).labels, 1);
+});
+
+test("the book's columns fit the room right of the plate, on the 8 px unit", () => {
+  for (const [W, x] of [[1280, 600], [1440, 680], [1024, 520], [390, 16], [1920, 920]]) {
+    const cols = colsFor({ W, rows: { x, y: 0 } });
+    const total = cols.reduce((a, b) => a + b, 0);
+    assert.ok(x + total <= W - (W < 640 ? 0 : 32), `${W}: ${x} + ${total}`);
+    assert.ok(cols.every((c) => c % 8 === 0), `${W}: ${cols}`);
+  }
+  assert.deepEqual(colsFor({ W: 1280, rows: { x: 600, y: 0 } }), [120, 160, 120, 160, 80]);
+  assert.deepEqual(colsFor({ W: 1024, rows: { x: 520, y: 0 } }), [0, 144, 120, 0, 80], "short room: who, amount, state");
 });
 
 test("Otsu splits dark sea from bright land", () => {
