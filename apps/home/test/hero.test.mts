@@ -2,9 +2,9 @@
 // fields, the projection, and the book's rows carry names and never a hash.
 import "../scripts/tsx.mjs";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { test } from "node:test";
-import { BBOX, cellAt, fixAt, handBeats, labelOf, otsu, pack, phases, placeholderScene, toPixel, typeWord, type Report } from "../src/features/hero/model.ts";
+import { BBOX, cellAt, crossesCoast, fixAt, handBeats, labelOf, otsu, pack, phases, placeholderScene, toPixel, typeWord, type Report } from "../src/features/hero/model.ts";
 
 const { rowsOf, colsFor } = await import("../src/features/hero/hero.tsx");
 
@@ -66,10 +66,48 @@ test("the replay keeps only recorded fixes inside the bbox, and a label only rec
   assert.equal(r.to, Date.parse("2026-10-18T00:20:00Z"));
 });
 
-test("the synthetic replay is 200 lines with MMSIs no country owns", () => {
-  const lines = readFileSync(new URL("./fixtures/ais.synthetic.jsonl", import.meta.url), "utf8").trim().split("\n");
-  assert.equal(lines.length, 200);
-  for (const l of lines) assert.match(String(JSON.parse(l).mmsi), /^999/);
+test("the prebuilt tracks say what they are, keep to the sea, and carry no country's MMSI", () => {
+  const r = JSON.parse(readFileSync(new URL("../public/hero/ais.json", import.meta.url), "utf8"));
+  assert.equal(Object.keys(r)[0], "about", "the note comes first");
+  assert.match(r.about, /^Illustrative tracks/);
+  assert.match(r.about, /OpenStreetMap way 220138792/);
+  assert.equal(r.synthetic, true);
+  assert.equal(r.vessels.length, 8);
+  const coast = JSON.parse(readFileSync(new URL("../public/hero/coastline-hormuz.geojson", import.meta.url), "utf8")).features.flatMap(
+    (f: { geometry: { coordinates: number[][][] } }) => f.geometry.coordinates,
+  );
+  for (const v of r.vessels) {
+    assert.match(v.mmsi, /^999\d{6}$/);
+    assert.ok(v.fixes.length > 20, `${v.mmsi} moves over the scroll`);
+    for (let i = 1; i < v.fixes.length; i++)
+      assert.ok(!crossesCoast(v.fixes[i - 1].slice(1, 3), v.fixes[i].slice(1, 3), coast), `${v.mmsi} crosses the coast at fix ${i}`);
+  }
+});
+
+test("a segment across Musandam crosses the coast; one in open water does not", () => {
+  const coast = JSON.parse(readFileSync(new URL("../public/hero/coastline-hormuz.geojson", import.meta.url), "utf8")).features.flatMap(
+    (f: { geometry: { coordinates: number[][][] } }) => f.geometry.coordinates,
+  );
+  assert.equal(crossesCoast([56.0, 26.0], [56.8, 26.0], coast), true, "west to east over the peninsula");
+  assert.equal(crossesCoast([56.6, 25.9], [56.8, 26.1], coast), false, "the Gulf of Oman");
+});
+
+test("the scene is at most 350 KB with a phone variant, and names its source", () => {
+  const scene = JSON.parse(readFileSync(new URL("../public/hero/scene.json", import.meta.url), "utf8"));
+  assert.ok(scene.credit && scene.date && scene.source?.startsWith("https://gibs.earthdata.nasa.gov/"), "credit, date and source");
+  assert.equal(scene.crs, "EPSG:3857");
+  assert.ok(statSync(new URL("../public/hero/scene.avif", import.meta.url)).size <= 350_000);
+  assert.ok(statSync(new URL("../public/hero/scene-828.avif", import.meta.url)).size <= 120_000);
+});
+
+test("no word the reader sees calls the ships or the scene live, recorded, tracked or real", async () => {
+  const { CAPTION, FIGURES, HERO } = await import("../src/features/hero/copy.ts");
+  const words = [
+    ...Object.values(HERO).flat(),
+    ...Object.values(CAPTION).map((c) => (typeof c === "function" ? (c as (a: string, b: string) => string)("x", "y") : c)),
+    ...Object.values(FIGURES).flatMap((c) => (typeof c === "function" ? [(c as (a: string) => string)("x")] : typeof c === "string" ? [c] : Object.values(c))),
+  ].join(" ");
+  assert.doesNotMatch(words, /\b(live|recorded|recording|tracked|real)\b/i);
 });
 
 test("the placeholder frame maps the bbox corners to the image corners", () => {

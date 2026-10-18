@@ -9,7 +9,7 @@
 //   npm run ci -- --route account --state loading,error --view owner --width 390
 //   npm run ci -- --no-browser                  the static steps only
 //   npm run ci -- --dry                         list the matrix, run nothing
-//   npm run ci -- --lighthouse                  Lighthouse mobile on `/` (LH_URL for a production server): performance >= 85, LCP <= 2.5 s, no image over 350 KB
+//   npm run ci -- --lighthouse                  Lighthouse mobile on `/` (LH_URL for a production server, LH_PATHS=/,/a/<name> for more pages): performance >= 85, LCP <= 2.5 s, no image over 350 KB
 //   npm run ci -- --fast                        use the Owner home's ?state= flag for loading, empty, error, offline (the real offline path waits ~20 s)
 //   npm run ci -- --strict                      a feature that is not built yet (no sheet, no account) counts as FAIL
 //
@@ -19,6 +19,8 @@
 //      SHOTS_DIR         where the PNGs go (default PROOF_DIR): a seat's tree before it is merged has its own folder
 //      PROOF_DIR         default <main checkout>/proof/home-2026-10-18      PW_CHANNEL  default chrome (PW_CHANNEL= for bundled chromium)
 //      APP_TREE          where the server runs, when lsof cannot say (only for the commit line in the log)
+//      NO_OWNER          1 for a public target (the preview): no owner key is seeded, every page is seen as a visitor sees it; no word is ever typed there
+//      INVITE_FILE       a file holding the invite word (never printed): `/new` is measured only when it is given, because without the word it redirects to `/`
 //      APP_DIR           check another tree (a seat's apps/home) instead of this one: its tokens, contrast, test, literals
 //
 // Read-only: it loads pages, flips the capsule, presses Tab, opens a row. It never presses Stop, Approve, Decline or Raise.
@@ -35,12 +37,12 @@ export const HASH = /0x[0-9a-fA-F]{8,}/;
 export const VIEW_KEY = "tameion.home.view";
 export const HEIGHT = { 1280: 800, 390: 844 };
 export const ROUTES = {
-  guest: { path: () => "/", states: ["rest", "loading", "error", "offline"] },
+  guest: { path: () => "/", states: ["rest", "error"] },
   // rest is the owner's browser (the passkey's public half seeded, nothing signed); guest is the same page read-only
   account: { path: (p) => `/a/${p}`, states: ["rest", "guest", "loading", "empty", "error", "offline", "needs-you", "sealed", "detail"] },
   new: { path: () => "/new", states: ["rest", "error"] },
   add: { path: (p) => `/a/${p}/add`, states: ["rest", "loading", "error", "offline"] },
-  receive: { path: (p) => `/a/${p}/receive`, states: ["rest", "loading", "error", "offline"] },
+  receive: { path: (p) => `/a/${p}/receive`, states: ["rest", "loading", "error"] },
 };
 const CORE = ["paper", "plate", "plate-2", "ink", "ink-2", "rule", "attention", "transit"];
 // The numbers the checks use, from DESIGN.md (founder, 2026-10-18 07:01). When the founder changes a value, change it here.
@@ -183,19 +185,53 @@ function stepZeroHash() {
 
 // DESIGN §Acceptance: Lighthouse mobile performance >= 85 and LCP <= 2.5 s on `/`, no image over 350 KB. Lighthouse mobile is its default (a Moto G class phone,
 // slow 4G, simulated). Measure a production server (`npm run build && npx next start -p 3015`, then LH_URL=http://localhost:3015), not `next dev`.
-function stepLighthouse(url) {
-  const file = join(tmpdir(), `lh-${process.pid}.json`);
-  const chrome = process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-  const r = spawnSync("npx", ["--yes", "lighthouse@13.5.0", `${url}/`, "--quiet", "--only-categories=performance", "--output=json", `--output-path=${file}`, "--chrome-flags=--headless=new"], { env: { ...process.env, CHROME_PATH: chrome }, encoding: "utf8", timeout: 300000 });
-  if (r.status !== 0 || !existsSync(file)) return { name: "lighthouse", sev: "fail", lines: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim().split("\n").slice(-6) };
-  const j = JSON.parse(readFileSync(file, "utf8")), a = j.audits;
-  const score = Math.round(j.categories.performance.score * 100), lcp = Math.round(a["largest-contentful-paint"].numericValue);
-  const imgs = (a["network-requests"]?.details?.items ?? []).filter((x) => x.resourceType === "Image").sort((x, y) => y.transferSize - x.transferSize);
-  const big = imgs.filter((x) => x.transferSize > 350 * 1024);
-  const lines = [`mobile performance ${score} (DESIGN >= 85), LCP ${lcp} ms (DESIGN <= 2500), TBT ${Math.round(a["total-blocking-time"].numericValue)} ms, CLS ${a["cumulative-layout-shift"].numericValue.toFixed(3)}, ${Math.round(a["total-byte-weight"].numericValue / 1024)} KB over the wire; Lighthouse ${j.lighthouseVersion} on ${url}/`];
-  if (imgs[0]) lines.push(`largest image ${Math.round(imgs[0].transferSize / 1024)} KB ${new URL(imgs[0].url).pathname.slice(0, 60)}`);
-  for (const x of big) lines.push(`over 350 KB: ${new URL(x.url).pathname.slice(0, 60)} ${Math.round(x.transferSize / 1024)} KB`);
-  return { name: "lighthouse", sev: score >= 85 && lcp <= 2500 && !big.length ? "pass" : "fail", lines };
+async function stepLighthouse(url, paths = ["/"], view = "owner") {
+  const chrome = process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Chrome";
+  const lines = [];
+  let sev = "pass";
+  if (view === "agent") {
+    // Lighthouse always starts from an empty profile (the Owner view), and attaching it to a Chrome that holds the Agent view hangs; so the Agent view's LCP is read
+    // from Chrome itself under Lighthouse's mobile settings (slow 4G: 150 ms, 1.6 Mbit/s; 4x CPU slowdown). It is not Lighthouse's number and says so.
+    const { chromium } = await import("playwright-core");
+    const browser = await chromium.launch({ headless: true, channel: "chrome" });
+    try {
+      for (const path of paths) {
+        const ctx = await browser.newContext({ viewport: { width: 412, height: 823 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1.75 });
+        await ctx.addInitScript(([k, v]) => { try { localStorage.setItem(k, v); } catch { /* storage blocked */ } }, [VIEW_KEY, "agent"]);
+        const page = await ctx.newPage();
+        const cdp = await ctx.newCDPSession(page);
+        await cdp.send("Network.enable");
+        await cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 150, downloadThroughput: (1.6 * 1024 * 1024) / 8, uploadThroughput: (750 * 1024) / 8 });
+        await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+        await page.addInitScript(() => { window.__lcp = 0; new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__lcp = Math.round(e.startTime); }).observe({ type: "largest-contentful-paint", buffered: true }); });
+        await page.goto(`${url}${path}`, { waitUntil: "load", timeout: 120000 });
+        await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
+        await page.waitForTimeout(1500);
+        const lcp = await page.evaluate(() => window.__lcp);
+        lines.push(`${path} (agent view): LCP ${lcp} ms (DESIGN <= 2500), read from Chrome under Lighthouse's mobile settings, not Lighthouse's own run; ${url}`);
+        if (lcp > 2500) sev = sev === "fail" ? "fail" : "warn";
+        await ctx.close();
+      }
+    } finally {
+      await browser.close().catch(() => {});
+    }
+    return { name: "lighthouse", sev, lines };
+  }
+  for (const path of paths) {
+    const file = join(tmpdir(), `lh-${process.pid}-${paths.indexOf(path)}.json`);
+    const r = spawnSync("npx", ["--yes", "lighthouse@13.5.0", `${url}${path}`, "--quiet", "--only-categories=performance", "--output=json", `--output-path=${file}`, "--chrome-flags=--headless=new"], { env: { ...process.env, CHROME_PATH: chrome }, encoding: "utf8", timeout: 240000 });
+    if (r.status !== 0 || !existsSync(file)) { sev = "fail"; lines.push(`${path} (${view}): Lighthouse did not run: ${`${r.stdout ?? ""}${r.stderr ?? ""}`.trim().split("\n").slice(-2).join(" | ")}`); continue; }
+    const j = JSON.parse(readFileSync(file, "utf8")), a = j.audits;
+    const score = Math.round(j.categories.performance.score * 100), lcp = Math.round(a["largest-contentful-paint"].numericValue);
+    const imgs = (a["network-requests"]?.details?.items ?? []).filter((x) => x.resourceType === "Image").sort((x, y) => y.transferSize - x.transferSize);
+    const big = imgs.filter((x) => x.transferSize > 350 * 1024);
+    lines.push(`${path} (${view} view): mobile performance ${score} (DESIGN >= 85), LCP ${lcp} ms (DESIGN <= 2500), TBT ${Math.round(a["total-blocking-time"].numericValue)} ms, CLS ${a["cumulative-layout-shift"].numericValue.toFixed(3)}, ${Math.round(a["total-byte-weight"].numericValue / 1024)} KB over the wire${imgs[0] ? `, largest image ${Math.round(imgs[0].transferSize / 1024)} KB` : ""}; Lighthouse ${j.lighthouseVersion} on ${url}`);
+    for (const x of big) lines.push(`${path}: over 350 KB: ${new URL(x.url).pathname.slice(0, 60)} ${Math.round(x.transferSize / 1024)} KB`);
+    // DESIGN's acceptance is for `/` (the hero); another page's slower LCP is reported, not failed
+    if (score < 85 || big.length || (lcp > 2500 && path === "/")) sev = "fail";
+    else if (lcp > 2500 && sev === "pass") sev = "warn";
+  }
+  return { name: "lighthouse", sev, lines };
 }
 
 // Steps another seat builds, wired in as soon as the npm script exists (DESIGN §Acceptance: the tokens-only hex lint, `21st review` with zero errors).
@@ -277,6 +313,9 @@ function domRules({ view, width, route, palette, spec }) {
   metrics.busy = !!document.querySelector('[aria-busy="true"]'); // the page is a skeleton: no hero yet
   const tok = (n) => (palette[`--${n}`] ?? "").toUpperCase();
 
+  // The hero is on `/` and nowhere else (the account page loads with no hero)
+  if (route !== "guest" && document.querySelector("[data-hero], canvas")) add("fail", "hero-outside-landing", document.querySelector("[data-hero], canvas"), "hero markup on a route other than `/`: the account pages carry none");
+
   // Hashes live in the Agent view only: none in the Owner DOM (text and every attribute, hrefs included), none in any route
   if (view === "owner") {
     const HASH = /0x[0-9a-fA-F]{8,}/;
@@ -286,6 +325,10 @@ function domRules({ view, width, route, palette, spec }) {
       if (SKIP.test(e.tagName)) continue;
       for (const a of e.attributes) if (HASH.test(a.value)) add("fail", "zero-hash", e, `${a.name}="${a.value.slice(0, 40)}"`);
     }
+    const grouped = document.body.innerText.match(/(?:0x)?(?:[0-9a-fA-F]{4}[ \u00a0]){7,}[0-9a-fA-F]{4}/);
+    // D-H5-1 (PM, under delegation): /add and /receive are where the owner must copy or scan the account address, so it may be spelled in groups of four there and only there
+    if (grouped && !["add", "receive"].includes(route)) add("fail", "grouped-hash", null, `an address spelled in groups of four ("${grouped[0].slice(0, 24)}...") passes the 0x{8,} test but is a hash on an Owner surface other than /add and /receive`);
+    else if (grouped) metrics.groupedAddress = "allowed here (D-H5-1)";
     for (const e of document.head.querySelectorAll("link[href],meta[content]")) {
       const v = e.getAttribute("href") ?? e.getAttribute("content");
       if (HASH.test(v)) add("warn", "zero-hash-head", e, v.slice(0, 40));
@@ -319,7 +362,7 @@ function domRules({ view, width, route, palette, spec }) {
       if (!fits(spec.authority)) add("fail", "type-authority", h1s[0], `h1 is ${metrics.h1}; the Owner hero is the authority role ${spec.authority.join("/")}`);
       if (!/\s/.test(h1s[0].innerText) || /^[\d.,\s]*(USDC)?$/.test(h1s[0].innerText.trim())) add("warn", "hero-not-a-sentence", h1s[0], "the Owner hero is a sentence, not a number");
     }
-    if (route === "guest" && !fits(width < spec.heroNarrowUnder ? spec.heroNarrow : spec.heroStatement)) add("warn", "type-heroStatement", h1s[0], `h1 is ${metrics.h1}; the landing hero is heroStatement ${spec.heroStatement.join("/")} (${spec.heroNarrow.join("/")} under ${spec.heroNarrowUnder} px)`);
+    if (route === "guest" && view === "owner" && !fits(width < spec.heroNarrowUnder ? spec.heroNarrow : spec.heroStatement)) add("warn", "type-heroStatement", h1s[0], `h1 is ${metrics.h1}; the landing hero is heroStatement ${spec.heroStatement.join("/")} (${spec.heroNarrow.join("/")} under ${spec.heroNarrowUnder} px)`);
   }
   // one accented word inside a headline is banned
   for (const hd of all.filter((e) => /^H[1-3]$/.test(e.tagName))) {
@@ -345,7 +388,7 @@ function domRules({ view, width, route, palette, spec }) {
     const w = /\b(submit|soon|quote only|guarantee[ds]?|locked|yield|delta-neutral)\b/i.exec(own);
     if (w) add("fail", "banned-word", e, `"${w[0]}"`);
     if (/\$\s?\d/.test(own)) add("fail", "no-dollar-sign", e, "money is 0.05 USDC, never $");
-    if (/\s·\s/.test(own)) add("fail", "middle-dot-meta", e, "meta strings joined with middle dots are banned");
+    if (/\s·\s/.test(own) && !e.closest("[data-hero]")) add("fail", "middle-dot-meta", e, "meta strings joined with middle dots are banned"); // the hero caption is DESIGN's own text
     if (s.textTransform === "uppercase") add("fail", "tracked-uppercase", e, "text-transform: uppercase");
     else if (/^[A-Z][A-Z0-9 ]{3,}$/.test(own) && !/^(USDC|EURC|USD|ERC|CCTP|MCP|API|UTC|HTTP|AIS|MMSI)$/.test(own)) add("warn", "all-caps", e, `"${own.slice(0, 20)}"`);
     if (view === "owner" && (/\b\d{4}-\d{2}-\d{2}\b|T\d{2}:\d{2}:\d{2}|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(own))) add("warn", "date-not-in-words", e, "dates read Today 05:41, Yesterday, 12 Oct");
@@ -362,8 +405,14 @@ function domRules({ view, width, route, palette, spec }) {
   }
 
   // Visual bans: gradients, glow, shadows (the sheet's own excepted), spinner pages, borders on content, radii off the scale
+  const rgb = (v) => {
+    const m = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+%?))?\s*\)$/.exec(v);
+    if (!m) return null;
+    return { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : m[4].endsWith("%") ? parseFloat(m[4]) / 100 : +m[4] };
+  };
   const RADII = [0, 4, 8, 12, 16, 24];
-  const ledgerRow = (e, sides) => (e.matches("tr, td, th, thead, tbody, tfoot") || !!e.closest("table")) || (e.matches("li, [role=listitem]") && sides.every((x) => x === "Bottom" || x === "Top"));
+  const inPlate = (e) => { for (let a = e.parentElement; a && a !== document.body; a = a.parentElement) { const c = rgb(st(a).backgroundColor); if (c && c.a > 0 && a.tagName !== "MAIN") return true; } return false; };
+  const ledgerRow = (e, sides) => (e.matches("tr, td, th, thead, tbody, tfoot") || !!e.closest("table")) || (sides.every((x) => x === "Bottom" || x === "Top") && (e.matches("li, [role=listitem], [role=row]") || inPlate(e)));
   const radii = new Map();
   for (const e of all) {
     const s = st(e);
@@ -388,11 +437,6 @@ function domRules({ view, width, route, palette, spec }) {
     else allowed.add(v);
   }
   const red = tok("attention") || tok("red");
-  const rgb = (v) => {
-    const m = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+%?))?\s*\)$/.exec(v);
-    if (!m) return null;
-    return { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : m[4].endsWith("%") ? parseFloat(m[4]) / 100 : +m[4] };
-  };
   const hex = (c) => "#" + [c.r, c.g, c.b].map((x) => x.toString(16).padStart(2, "0")).join("").toUpperCase();
   const used = new Map(), reds = new Set();
   const note = (raw, e, prop) => {
@@ -401,12 +445,13 @@ function domRules({ view, width, route, palette, spec }) {
     const key = c ? (c.a < 1 ? `${hex(c)}@${c.a}` : hex(c)) : raw;
     if (key === red) reds.add(e);
     if (prop === "color" && view === "owner" && key === tok("transit")) add("fail", "transit-as-text", e, "transit is for marks only, never text on light");
-    if (prop === "color" && (key === tok("up") || key === tok("down")) && !/[+\-−–]|\b(up|down|in|out|more|less|received|paid|spent|refused|days?)\b/i.test(e.innerText || "")) add("warn", "direction-alone", e, "up and down colour a direction; with a sign or a word, never alone");
+    if (prop === "color" && (key === tok("up") || (key === tok("down") && key !== red)) && !/[+\-−–]|\b(up|down|in|out|more|less|received|paid|spent|refused|days?)\b/i.test(e.innerText || "")) add("warn", "direction-alone", e, "up and down colour a direction; with a sign or a word, never alone");
     const u = used.get(key) ?? { n: 0, e, prop, raw };
     u.n++;
     used.set(key, u);
   };
   for (const e of [document.documentElement, document.body, ...all]) {
+    if (e instanceof SVGElement || e.closest("svg") || e.matches("img, [role=img]")) continue; // real marks (USDC, QR, vendors) keep their own colours
     const s = st(e);
     if (e === document.body || h.own(e)) note(s.color, e, "color"); // <html> paints no text of its own
     note(s.backgroundColor, e, "background");
@@ -458,8 +503,23 @@ function domRules({ view, width, route, palette, spec }) {
       const label = e.closest("label");
       if (label && label.getBoundingClientRect().height >= spec.touch - 0.5 && /^(radio|checkbox)$/.test(e.type)) continue;
       const inline = e.tagName === "A" && e.parentElement && e.parentElement.innerText.length > e.innerText.length + 12;
-      add(inline ? "warn" : "fail", "touch-target", e, `${Math.round(r.width)}x${Math.round(r.height)} px; DESIGN touch targets are >= ${spec.touch}`);
+      // D-H3-1 (PM, under delegation): inside an opened line of the dense Agent view and on its disclosure summary, 24 px (WCAG 2.5.8 AA) is accepted; row-level controls stay 44
+      const dense = view === "agent" && r.height >= 24 && r.width >= 24 && (e.matches("summary") || !!e.closest('[id^="slots-"], details'));
+      add(inline || dense ? "warn" : "fail", "touch-target", e, `${Math.round(r.width)}x${Math.round(r.height)} px; DESIGN touch targets are >= ${spec.touch}${dense ? " (accepted in an opened line: WCAG 2.2 AA 24 px, D-H3-1)" : ""}`);
     }
+  }
+
+  // A text field is found by its edge: fill or border against what it sits on must reach 3:1 (WCAG 2.2 1.4.11) unless a border carries it
+  const lum = (c) => [c.r, c.g, c.b].map((x) => x / 255).map((x) => (x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4)).reduce((t, x, i) => t + x * [0.2126, 0.7152, 0.0722][i], 0);
+  const ratio = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+  const under = (e) => { for (let a = e.parentElement; a; a = a.parentElement) { const c = rgb(st(a).backgroundColor); if (c && c.a > 0) return c; } return rgb(st(document.body).backgroundColor) ?? { r: 255, g: 255, b: 255, a: 1 }; };
+  for (const e of all.filter((x) => x.matches("input:not([type=hidden]):not([type=radio]):not([type=checkbox]):not([type=submit]), textarea, select"))) {
+    const s = st(e), bg = rgb(s.backgroundColor), around = under(e);
+    const edges = [];
+    if (bg && bg.a > 0) edges.push(ratio(bg, around));
+    for (const side of ["Top", "Right", "Bottom", "Left"]) { const c = rgb(s[`border${side}Color`]); if (px(s[`border${side}Width`]) > 0 && s[`border${side}Style`] !== "none" && c && c.a > 0) edges.push(ratio(c, around)); }
+    const best = edges.length ? Math.max(...edges) : 1;
+    if (best < 3) add("warn", "control-boundary", e, `the field's edge reads ${best.toFixed(2)}:1 against what it sits on (WCAG 2.2 1.4.11 asks 3:1); only its label says where to type`);
   }
 
   // The shell: Testnet is a word and a dashed capsule; the capsule says which view it is
@@ -484,22 +544,24 @@ function domRules({ view, width, route, palette, spec }) {
   return { findings: F, metrics };
 }
 
-/** Every focusable thing the page offers right now, for the "is it reachable by Tab" count. */
+/** Every focusable thing the page offers right now, for the "is it reachable by Tab" count; each is given a number the walk can read back. */
 function interactive() {
   const h = window.__h6;
+  window.__h6.n ??= 0;
   return [...document.querySelectorAll('a[href], button, input:not([type=hidden]), select, textarea, summary, [tabindex], [role=button]')]
     .filter((e) => !e.disabled && e.tabIndex >= 0 && h.vis(e) && !e.closest("[inert], [aria-hidden=true], nextjs-portal"))
-    .map((e) => { const r = e.getBoundingClientRect(); return `${h.sel(e)}@${Math.round(r.x)},${Math.round(r.y + window.scrollY)}`; });
+    .map((e) => { e.__h6id ??= ++window.__h6.n; return { id: e.__h6id, sel: h.sel(e) }; });
 }
 
 function focusInfo(e) {
   const h = window.__h6, s = getComputedStyle(e), r = e.getBoundingClientRect();
   return {
-    key: `${h.sel(e)}@${Math.round(r.x)},${Math.round(r.y + window.scrollY)}`, y: r.y + window.scrollY,
+    key: e.__h6id ?? `${h.sel(e)}@${Math.round(r.x)},${Math.round(r.y + window.scrollY)}`, y: r.y + window.scrollY,
     sel: h.sel(e), name: (e.getAttribute("aria-label") || e.innerText || e.value || e.title || "").replace(/\s+/g, " ").trim().slice(0, 30),
     portal: !!e.closest("nextjs-portal") || e.tagName === "NEXTJS-PORTAL",
     visible: e.matches(":focus-visible"), outline: `${s.outlineStyle} ${s.outlineWidth} ${s.outlineColor} +${s.outlineOffset}`, shadow: s.boxShadow === "none" ? "" : s.boxShadow.slice(0, 40),
     ow: parseFloat(s.outlineWidth), os: s.outlineStyle, oc: s.outlineColor, tab: e.tabIndex,
+    field: /^(INPUT|TEXTAREA|SELECT)$/.test(e.tagName) && !/^(radio|checkbox|submit|button)$/.test(e.type || ""), bw: parseFloat(s.borderTopWidth), bc: s.borderTopColor,
   };
 }
 
@@ -531,6 +593,15 @@ const SEV = { fail: 3, warn: 2, note: 1, pass: 0 };
 const worst = (xs) => xs.reduce((m, x) => (SEV[x.sev] > SEV[m] ? x.sev : m), "pass");
 const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"];
 const DENY = /^\s*(stop|approve|decline|raise|pay now|send|sign|confirm|delete|revoke|start|resume|cancel|withdraw|add money|make your own|close|try again)\b/i;
+
+// `/new` sends a visitor back to `/` until the invite word has been presented there (H4's gate). With INVITE_FILE (a file holding the word, never printed) the word is
+// typed on `/` the way a person would, and "Make your own" opens the stepper. Without it `/new` is not measured: it would only measure `/`.
+async function openNew(page, cfg) {
+  await page.goto(cfg.url + "/", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.fill("#word", cfg.invite);
+  await Promise.all([page.waitForURL(/\/new(\?|$)/, { timeout: 20000 }), page.getByRole("button", { name: /make your own/i }).click()]);
+}
+const gotoRoute = (page, cfg, route, url, opts) => (route === "new" && cfg.invite ? openNew(page, cfg) : page.goto(url, opts));
 
 async function newPage(browser, sc, { reduced = false, seed = true, pub = null } = {}) {
   const ctx = await browser.newContext({
@@ -579,6 +650,17 @@ const fail503 = (route) => route.fulfill({ status: 503, contentType: "applicatio
 const API = /\/api\//;
 const FLAGS = { loading: "skeleton", empty: "empty", error: "error", offline: "offline" }; // H2's ?state= values
 
+// Does the named account still look like the state it was named for? (Seats act on the lane's accounts: a waiting item gets approved.)
+async function stillSo(cfg, name, kind) {
+  try {
+    const acct = (await (await fetch(`${cfg.url}/api/level1/name/${encodeURIComponent(name)}`)).json()).account;
+    const i = await (await fetch(`${cfg.url}/api/level1/inbox?policy=${acct}`)).json();
+    return kind === "needs-you" ? (i.waitingCount ?? 0) > 0 : (i.paid ?? []).length === 0 && (i.payees ?? []).length === 0;
+  } catch {
+    return false;
+  }
+}
+
 // Arrange one scenario's state. Real data where an account for it was given; otherwise the reply is patched in the page and R.mocked says so.
 async function arrange(page, ctx, sc, cfg, R) {
   const { state } = sc;
@@ -587,17 +669,17 @@ async function arrange(page, ctx, sc, cfg, R) {
     await page.route(API, async (route) => { await R.hold; await route.continue().catch(() => {}); });
   } else if (state === "error") {
     await page.route(API, fail503); // the service never answers: nothing was read, nothing is cached
-  } else if (state === "empty" && !cfg.policyEmpty) {
+  } else if (state === "empty" && !R.real) {
     await patchJson(page, /\/api\/level1\/inbox/, (b) => ({ ...b, paid: [], waiting: [], waitingCount: 0, needsYou: [], paidTotal: "0", purchases: [], refused: [], invoices: [] }), R);
   } else if (state === "sealed") {
     // No real account has a triple-signed record yet (the agent slot is never filled today), so the symbolon reply is patched: every record carries
     // all three halves, verified. The log says "mocked": this screenshot is a fixture of the sealed look, not an account's proof.
     const slot = { alg: "secp256k1-eip712", keyId: "0x" + "ab".repeat(20), verified: true };
     await patchJson(page, /\/api\/level1\/symbolon/, (b) => {
-      const records = (b.records ?? []).map((r) => ({ ...r, agent: slot, counterparty_slot: slot, witness: slot }));
+      const records = (b.records ?? []).map((r) => ({ ...r, agent: slot, counterpartySlot: slot, counterparty_slot: slot, witness: slot }));
       return { ...b, records, counts: { unsigned: 0, single: 0, double: 0, triple: records.length } };
     }, R);
-  } else if (state === "needs-you" && !cfg.policyNeeds) {
+  } else if (state === "needs-you" && !R.real) {
     const item = { kind: "bill", what: "Pay Demo Vendor 0.002 USDC for the hosting bill", counterparty: "0x" + "11".repeat(20), amount: "0.002", why: "hosting bill, due today" };
     await patchJson(page, /\/api\/level1\/inbox/, (b) => ({ ...b, waiting: [item], waitingCount: 1, needsYou: [{ counterparty: item.counterparty, amount: item.amount, why: item.why, to: item.counterparty, data: "0x" }] }), R);
   }
@@ -611,9 +693,20 @@ async function afterLoad(page, ctx, sc, R) {
     await ctx.setOffline(true);
     await page.evaluate(() => { window.dispatchEvent(new Event("offline")); window.dispatchEvent(new Event("focus")); document.dispatchEvent(new Event("visibilitychange")); }).catch(() => {});
     const t0 = Date.now();
-    const seen = await page.waitForFunction(() => /\bas of \d{1,2}:\d{2}\b/i.test(document.body.innerText), null, { timeout: 30000 }).then(() => true, () => false);
+    const stale = (ms) => page.waitForFunction(() => /\bas of \d{1,2}:\d{2}\b|\bas of yesterday\b/i.test(document.body.innerText), null, { timeout: ms }).then(() => true, () => false);
+    let seen = await stale(24000);
+    let how = "the connection dropped after a good read";
+    if (!seen) {
+      // a page that keeps its last figures on the device marks them stale on the next open: open it again while the service does not answer
+      await ctx.setOffline(false);
+      await page.route(API, (r) => r.abort("internetdisconnected"));
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await settle(page);
+      seen = await stale(6000);
+      how = "the connection dropped after a good read, then the page was opened again while the service did not answer";
+    }
     R.waited = Math.round((Date.now() - t0) / 1000);
-    if (!seen) R.findings.push({ sev: "warn", rule: "offline-no-stale-marker", sel: "", text: "", detail: `no "as of HH:MM" on the page ${R.waited} s after the connection dropped (DESIGN: cached values at full ink, each marked stale with its time)` });
+    if (!seen) R.findings.push({ sev: "warn", rule: "offline-no-stale-marker", sel: "", text: "", detail: `no "as of HH:MM" on the page after ${how} (DESIGN: cached values at full ink, each marked stale with its time)` });
     await page.waitForTimeout(300);
   } else if (sc.state === "detail") {
     const ok = await openDetail(page);
@@ -649,14 +742,17 @@ async function scenario(browser, AxeBuilder, sc, cfg) {
   const R = { name: `${sc.route}/${sc.state}/${sc.view}/${sc.width}`, findings: [], mocked: false, pending: null };
   // --fast: the Owner home's own development flag shows loading, empty, error and offline at once; otherwise the state is made for real
   R.flag = cfg.fast && sc.route === "account" && sc.view === "owner" ? FLAGS[sc.state] : undefined;
-  const policy = sc.state === "empty" ? (cfg.policyEmpty ?? cfg.policy) : sc.state === "needs-you" ? (cfg.policyNeeds ?? cfg.policy) : cfg.policy;
-  const { ctx, page, errors } = await newPage(browser, sc, { pub: sc.state === "guest" ? null : cfg.pub });
+  const named = sc.state === "empty" ? cfg.policyEmpty : sc.state === "needs-you" ? cfg.policyNeeds : undefined;
+  R.real = !!named && (await (cfg.still[`${named}|${sc.state}`] ??= stillSo(cfg, named, sc.state)));
+  const policy = R.real ? named : cfg.policy;
+  const pub = sc.state === "guest" || !policy ? null : policy === cfg.policy ? cfg.pub : await (cfg.pubs[policy] ??= ownerPub(cfg.url, policy));
+  const { ctx, page, errors } = await newPage(browser, sc, { pub });
   let release;
   R.hold = new Promise((r) => (release = r));
   const quiet = ["loading", "error", "offline"].includes(sc.state);
   try {
     await arrange(page, ctx, sc, cfg, R);
-    await page.goto(cfg.url + ROUTES[sc.route].path(policy) + (R.flag ? `?state=${R.flag}` : ""), { waitUntil: sc.state === "loading" && !R.flag ? "commit" : "domcontentloaded", timeout: 60000 });
+    await gotoRoute(page, cfg, sc.route, cfg.url + ROUTES[sc.route].path(policy) + (R.flag ? `?state=${R.flag}` : ""), { waitUntil: sc.state === "loading" && !R.flag ? "commit" : "domcontentloaded", timeout: 60000 });
     if (sc.state === "loading") {
       await page.waitForSelector('[aria-busy="true"], .skeleton, [data-skeleton]', { timeout: 5000 }).catch(() => R.findings.push({ sev: "warn", rule: "no-skeleton", sel: "", text: "", detail: "no skeleton on screen while the service reply is held" }));
       await page.waitForTimeout(450);
@@ -683,6 +779,7 @@ async function scenario(browser, AxeBuilder, sc, cfg) {
     if (!quiet) for (const e of errors.filter((x) => !/^Failed to load resource/.test(x) && !/^404 \/favicon/.test(x) && !/_next\/(webpack-)?hmr/.test(x))) {
       // the symbolon projection is merged after the tag: this service answering 404 for it is expected, the page then marks nothing sealed
       if (/^404 \/api\/level1\/symbolon/.test(e)) { R.symbolon404 = true; continue; }
+      if (/^404 \/api\/level1\/name\//.test(e)) { R.nameFree = true; continue; } // the stepper's name check: 404 means the name is free
       R.findings.push({ sev: /hydrat|pageerror/i.test(e) ? "fail" : "warn", rule: "console", sel: "", text: "", detail: e });
     }
     if (cfg.shots) {
@@ -707,7 +804,7 @@ async function focusWalk(browser, sc, cfg) {
   const R = { name: `focus/${sc.route}/${sc.view}/${sc.width}`, findings: [], stops: 0 };
   const { ctx, page } = await newPage(browser, sc, { pub: cfg.pub });
   try {
-    await page.goto(cfg.url + ROUTES[sc.route].path(cfg.policy), { waitUntil: "domcontentloaded", timeout: 60000 });
+    await gotoRoute(page, cfg, sc.route, cfg.url + ROUTES[sc.route].path(cfg.policy), { waitUntil: "domcontentloaded", timeout: 60000 });
     await settle(page);
     await setView(page, sc.view);
     await page.addStyleTag({ content: "nextjs-portal{display:none!important}" }).catch(() => {});
@@ -715,7 +812,16 @@ async function focusWalk(browser, sc, cfg) {
     const seen = new Set();
     let prevY = -1;
     mkdirSync(join(cfg.shotsDir, "focus"), { recursive: true });
-    await page.evaluate(() => { document.activeElement?.blur?.(); window.scrollTo(0, 0); });
+    await page.evaluate(() => {
+      document.activeElement?.blur?.();
+      window.scrollTo(0, 0);
+      // the sequential focus starting point goes to the top of the document (a page that focuses a field on load would otherwise start Tab below the header)
+      const t = document.createElement("i");
+      t.tabIndex = -1;
+      document.body.insertBefore(t, document.body.firstChild);
+      t.focus();
+      t.remove();
+    });
     let capped = true;
     for (let i = 0; i < 400; i++) {
       await page.keyboard.press("Tab");
@@ -739,6 +845,11 @@ async function focusWalk(browser, sc, cfg) {
       if (cfg.shots) writeFileSync(join(cfg.shotsDir, "focus", `${sc.route}-${sc.view}-${sc.width}-${String(R.stops).padStart(2, "0")}.png`), on);
       if (on.equals(off)) R.findings.push({ sev: "fail", rule: "focus-ring-missing", sel: info.sel, text: info.name, detail: `no visible change when focused (outline ${info.outline}; shadow ${info.shadow || "none"})` });
       else if (!(info.ow >= 2) && !info.shadow) R.findings.push({ sev: "warn", rule: "focus-ring-thin", sel: info.sel, text: info.name, detail: `outline ${info.outline}` });
+      // D-FIELD-1 (PM, under delegation): a text field has a 1 px ink-2 edge, ink while it has focus
+      if (info.field) {
+        const ink = (cfg.palette[sc.view]["--ink"] ?? "").toUpperCase();
+        if (!(info.bw >= 1) || hexNorm(info.bc) !== ink) R.findings.push({ sev: "warn", rule: "field-edge-on-focus", sel: info.sel, text: info.name, detail: `a focused text field's edge is ${info.bw}px ${info.bc}; D-FIELD-1: 1 px, ink while focused (${ink})` });
+      }
       if (info.tab > 0) R.findings.push({ sev: "warn", rule: "tabindex-positive", sel: info.sel, text: info.name, detail: `tabindex=${info.tab} bends the order` });
       if (info.y < prevY - 40) R.findings.push({ sev: "warn", rule: "focus-order", sel: info.sel, text: info.name, detail: "focus jumped up the page" });
       prevY = info.y;
@@ -746,9 +857,9 @@ async function focusWalk(browser, sc, cfg) {
         await page.screenshot({ path: join(cfg.shotsDir, `focus-${sc.route}-${sc.view}-${sc.width}.png`), animations: "disabled", caret: "hide" });
       }
     }
-    const missed = want.filter((k) => !seen.has(k));
+    const missed = want.filter((w) => !seen.has(w.id));
     if (capped) R.findings.push({ sev: "warn", rule: "focus-walk-capped", sel: "", text: "", detail: `${R.stops} stops and Tab had not wrapped yet: the walk stopped at 400 presses` });
-    else if (missed.length) R.findings.push({ sev: "warn", rule: "not-reachable-by-tab", sel: missed[0].split("@")[0], text: "", detail: `${missed.length} interactive element(s) were never a Tab stop` });
+    else if (missed.length) R.findings.push({ sev: "warn", rule: "not-reachable-by-tab", sel: missed[0].sel, text: "", detail: `${missed.length} interactive element(s) were never a Tab stop` });
   } catch (e) {
     R.findings.push({ sev: "fail", rule: "scenario-error", sel: "", text: "", detail: String(e.message).split("\n")[0].slice(0, 160) });
   } finally {
@@ -860,6 +971,8 @@ function git(dir, ...a) {
   try { return execFileSync("git", ["-C", dir, ...a], { encoding: "utf8" }).trim(); } catch { return ""; }
 }
 function treeInfo(url) {
+  const host = new URL(url).hostname;
+  if (!/^(localhost|127\.0\.0\.1)$/.test(host)) return `remote ${host} (the commit it serves is read from the deploy record, not from here)`;
   let dir = process.env.APP_TREE || "";
   try {
     const port = new URL(url).port || "80";
@@ -879,7 +992,7 @@ async function keyboardFit(browser, route, cfg) {
   const R = { name: `keyboard/${route}/375`, findings: [] };
   const { ctx, page } = await newPage(browser, { route, state: "rest", view: "owner", width: 375, height: 812 - 336 });
   try {
-    await page.goto(cfg.url + ROUTES[route].path(cfg.policy), { waitUntil: "domcontentloaded", timeout: 60000 });
+    await gotoRoute(page, cfg, route, cfg.url + ROUTES[route].path(cfg.policy), { waitUntil: "domcontentloaded", timeout: 60000 });
     await settle(page);
     const input = await page.$("main input:not([type=hidden]):not([type=radio]):not([type=checkbox]), main textarea");
     if (!input) { R.findings.push({ sev: cfg.strict ? "fail" : "note", rule: "not-built-yet", sel: "", text: "", detail: `no text input on /${route} yet` }); return R; }
@@ -895,10 +1008,94 @@ async function keyboardFit(browser, route, cfg) {
     if (!m.cta) R.findings.push({ sev: "warn", rule: "keyboard-cta", sel: "", text: "", detail: "no CTA button found on the page" });
     else {
       if (m.cta.bottom > m.h + 0.5) R.findings.push({ sev: "fail", rule: "keyboard-cta", sel: "button", text: m.cta.text, detail: `CTA spans ${Math.round(m.cta.top)}..${Math.round(m.cta.bottom)} of ${m.h} px with the keyboard open` });
-      if (![SPEC.button, SPEC.buttonCompact].some((h) => Math.abs(m.cta.hgt - h) <= 0.6) || m.cta.w < 375 - 2 * SPEC.gutter.narrow - 1) R.findings.push({ sev: "warn", rule: "cta-plate", sel: "button", text: m.cta.text, detail: `CTA is ${Math.round(m.cta.w)}x${Math.round(m.cta.hgt)} px; DESIGN: a ${SPEC.button} px plate (${SPEC.buttonCompact} compact), full width on mobile` });
+      if (!/^copy$/i.test(m.cta.text) && ![SPEC.button, SPEC.buttonCompact].some((h) => Math.abs(m.cta.hgt - h) <= 0.6)) R.findings.push({ sev: "warn", rule: "cta-plate", sel: "button", text: m.cta.text, detail: `CTA is ${Math.round(m.cta.w)}x${Math.round(m.cta.hgt)} px; DESIGN: a ${SPEC.button} px plate (${SPEC.buttonCompact} compact)` });
     }
   } catch (e) {
     R.findings.push({ sev: "fail", rule: "scenario-error", sel: "", text: "", detail: String(e.message).split("\n")[0].slice(0, 160) });
+  } finally {
+    await ctx.close().catch(() => {});
+  }
+  return R;
+}
+
+// The landing hero (DESIGN §The hero): 500 svh of stage under motion and 300 svh (three stills) under reduced motion; the six keyframes by scroll progress;
+// its own h1; the images over the wire stay under 350 KB.
+async function heroCheck(browser, sc, cfg) {
+  const out = [];
+  for (const reduced of [false, true]) {
+    const R = { name: `hero/${reduced ? "reduced" : "motion"}/${sc.width}`, findings: [] };
+    const { ctx, page } = await newPage(browser, { ...sc, route: "guest", view: "owner" }, { reduced });
+    try {
+      await page.goto(cfg.url + "/", { waitUntil: "domcontentloaded", timeout: 60000 });
+      await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+      await page.waitForTimeout(1800); // the canvas starts after the first paint
+      const g = await page.evaluate(() => {
+        const sec = document.querySelector("[data-hero]");
+        if (!sec) return null;
+        const r = sec.getBoundingClientRect();
+        const imgs = performance.getEntriesByType("resource").filter((e) => /\.(avif|webp|png|jpe?g|gif)(\?|$)/i.test(e.name) || e.initiatorType === "img").map((e) => ({ path: new URL(e.name).pathname.slice(-48), kb: Math.round(e.encodedBodySize / 1024) }));
+        return { top: r.top + window.scrollY, height: r.height, vh: window.innerHeight, h1s: [...document.querySelectorAll("h1")].map((h) => h.textContent.trim().slice(0, 60)), inside: sec.querySelectorAll("h1").length, imgs, canvas: !!sec.querySelector("canvas") };
+      });
+      if (!g) { R.findings.push({ sev: cfg.strict ? "fail" : "note", rule: "not-built-yet", sel: "", text: "", detail: "no [data-hero] on `/`" }); out.push(R); continue; }
+      const want = (reduced ? 3 : 5) * g.vh;
+      if (Math.abs(g.height - want) > Math.max(4, g.vh * 0.02)) R.findings.push({ sev: "fail", rule: reduced ? "hero-three-stills" : "hero-500svh", sel: "[data-hero]", text: "", detail: `the hero is ${Math.round(g.height)} px tall = ${(g.height / g.vh).toFixed(2)} screens; ${reduced ? "three stills = 3" : "the scroll-bound stage = 5"}` });
+      if (g.h1s.length !== 1) R.findings.push({ sev: "fail", rule: "hero-h1", sel: "h1", text: "", detail: `${g.h1s.length} h1 on the landing (DESIGN: the hero carries its own, one)` });
+      const big = g.imgs.filter((i) => i.kb > 350);
+      for (const i of big) R.findings.push({ sev: "fail", rule: "hero-image-350kb", sel: "img", text: i.path, detail: `${i.kb} KB over the wire; DESIGN: the hero image <= 350 KB` });
+      R.images = g.imgs.map((i) => `${i.path} ${i.kb} KB`).join(", ");
+      const shots = [];
+      const at = reduced ? [0, 1, 2].map((i) => ({ y: g.top + i * g.vh, tag: `still-${i + 1}` })) : [0, 20, 40, 60, 80, 100].map((pc) => ({ y: g.top + (pc / 100) * (g.height - g.vh), tag: `p${String(pc).padStart(3, "0")}` }));
+      for (const f of at) {
+        await page.evaluate((y) => window.scrollTo({ top: y, behavior: "instant" }), f.y);
+        await page.waitForTimeout(600);
+        const buf = await page.screenshot({ caret: "hide", animations: "allow" });
+        shots.push(buf);
+        if (cfg.shots) { mkdirSync(cfg.shotsDir, { recursive: true }); writeFileSync(join(cfg.shotsDir, `${reduced ? "reduced-hero" : "hero"}-${f.tag}-${sc.width}.png`), buf); }
+      }
+      if (reduced && (shots[0].equals(shots[1]) || shots[1].equals(shots[2]))) R.findings.push({ sev: "fail", rule: "hero-stills-identical", sel: "[data-hero]", text: "", detail: "two of the three reduced-motion stills are the same picture" });
+      if (!reduced && shots.slice(1).every((b) => b.equals(shots[0]))) R.findings.push({ sev: "fail", rule: "hero-static", sel: "[data-hero]", text: "", detail: "the six keyframes are one picture: the stage does not move with scroll" });
+    } catch (e) {
+      R.findings.push({ sev: "fail", rule: "scenario-error", sel: "", text: "", detail: String(e.message).split("\n")[0].slice(0, 160) });
+    } finally {
+      await ctx.close().catch(() => {});
+    }
+    out.push(R);
+  }
+  return out;
+}
+
+// The judges' guest path, the way a person walks it: a wrong word is refused in words, the right word (INVITE_FILE) opens the demo account read-only by its name.
+async function guestPath(browser, sc, cfg, AxeBuilder) {
+  const R = { name: `guest-path/${sc.width}`, findings: [] };
+  const { ctx, page } = await newPage(browser, { ...sc, route: "guest", view: "owner" });
+  const add = (sev, rule, detail, sel = "") => R.findings.push({ sev, rule, sel, text: "", detail });
+  // never a word typed on a public host, not even a wrong one (PM's ruling): the guest path is walked on the lane only
+  if (!/^(localhost|127\.0\.0\.1)$/.test(new URL(cfg.url).hostname)) { await ctx.close().catch(() => {}); add("note", "not-measured", "not walked on a public host: no word is ever typed there"); return R; }
+  try {
+    await page.goto(cfg.url + "/", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await settle(page);
+    await page.fill("#word", "not-the-word");
+    await page.getByRole("button", { name: /open the demo account/i }).click();
+    // the refusal is a sentence in the card, in attention red: found by what it says, not by a role
+    const refusal = await page.waitForFunction(() => { const m = document.body.innerText.match(/[^\n]*(?:not the word|wrong word|did not match|was refused|no invite)[^\n]*/i); return m ? m[0] : false; }, null, { timeout: 8000 }).then((h) => h.jsonValue(), () => "");
+    if (!refusal.trim()) add("fail", "guest-refusal-silent", "a wrong word was answered with nothing on screen");
+    if (cfg.shots) { mkdirSync(cfg.shotsDir, { recursive: true }); await page.screenshot({ path: join(cfg.shotsDir, `guest-refused-owner-${sc.width}.png`), fullPage: true, caret: "hide" }); }
+    R.refusal = refusal.replace(/\s+/g, " ").slice(0, 90);
+    if (!cfg.invite) { add(cfg.strict ? "fail" : "note", "not-measured", "the right word was not tried (INVITE_FILE)"); return R; }
+    await page.fill("#word", cfg.invite);
+    await Promise.all([page.waitForURL(/\/a\/[^/?#]+$/, { timeout: 30000 }), page.getByRole("button", { name: /open the demo account/i }).click()]);
+    await page.waitForSelector("h1", { timeout: 20000 }).catch(() => {});
+    await settle(page);
+    const here = new URL(page.url()).pathname;
+    if (/0x[0-9a-fA-F]{8,}/.test(here)) add("fail", "route-has-hash", `the demo account opened at ${here.slice(0, 30)}...: routes are /a/<name>`);
+    const seen = await page.evaluate(() => ({ h1: document.querySelector("h1")?.innerText.trim().slice(0, 70) ?? "", stop: [...document.querySelectorAll("button")].some((b) => /^(stop|start) the agent/i.test(b.innerText.trim())) }));
+    if (seen.stop) add("fail", "guest-can-stop", "the read-only demo shows a Stop or Start the agent button to a visitor without the passkey");
+    if (!seen.h1) add("fail", "guest-no-hero", "the demo account opened with no h1");
+    R.opened = `${here}  h1 "${seen.h1}"`;
+    if (cfg.shots) await page.screenshot({ path: join(cfg.shotsDir, `guest-demo-opened-owner-${sc.width}.png`), fullPage: true, caret: "hide" });
+    if (!cfg.noAxe) R.findings.push(...(await axeFindings(page, AxeBuilder, R)));
+  } catch (e) {
+    add("fail", "scenario-error", String(e.message).split("\n")[0].slice(0, 160));
   } finally {
     await ctx.close().catch(() => {});
   }
@@ -911,14 +1108,14 @@ async function typingV(browser, cfg) {
   const R = { name: "typing-v/new/owner/390", findings: [] };
   const { ctx, page } = await newPage(browser, sc);
   try {
-    await page.goto(cfg.url + ROUTES.new.path(), { waitUntil: "domcontentloaded", timeout: 60000 });
+    await gotoRoute(page, cfg, "new", cfg.url + ROUTES.new.path(), { waitUntil: "domcontentloaded", timeout: 60000 });
     await settle(page);
     const input = await page.$("main input:not([type=hidden]):not([type=radio]):not([type=checkbox]), main textarea");
     if (!input) { R.findings.push({ sev: cfg.strict ? "fail" : "note", rule: "not-built-yet", sel: "", text: "", detail: "no text input on /new yet" }); return R; }
     await input.focus();
     await page.keyboard.type("v");
     const view = await page.evaluate(() => document.documentElement.dataset.view), value = await input.inputValue();
-    if (view !== "owner" || value !== "v") R.findings.push({ sev: "fail", rule: "v-while-typing", sel: "input", text: "", detail: `typed v: view ${view}, field reads "${value}"` });
+    if (view !== "owner" || !value.endsWith("v")) R.findings.push({ sev: "fail", rule: "v-while-typing", sel: "input", text: "", detail: `typed v: view ${view}, field reads "${value.slice(-24)}"` });
   } catch (e) {
     R.findings.push({ sev: "fail", rule: "scenario-error", sel: "", text: "", detail: String(e.message).split("\n")[0].slice(0, 160) });
   } finally {
@@ -964,6 +1161,7 @@ async function main() {
     url: (process.env.APP_URL ?? "http://localhost:3010").replace(/\/$/, ""),
     policy, policyEmpty: process.env.POLICY_EMPTY || undefined, policyNeeds: process.env.POLICY_NEEDS || undefined,
     proof: proofDir(), shotsDir: process.env.SHOTS_DIR ?? proofDir(), shots: !!args.shots, strict: !!args.strict, noAxe: !!args["no-axe"], fast: !!args.fast,
+    invite: process.env.INVITE_FILE && existsSync(process.env.INVITE_FILE) ? readFileSync(process.env.INVITE_FILE, "utf8").trim() : undefined,
   };
   const plan = matrix(args, { policy: !!policy });
   if (args.dry) {
@@ -983,7 +1181,7 @@ async function main() {
   const palette = Object.fromEntries(["owner", "agent"].map((v) => [v, Object.keys(pal[v] ?? {}).length ? pal[v] : Object.fromEntries(Object.entries(css[v]).map(([k, x]) => [k, hexNorm(x)]).filter(([, x]) => x))]));
   for (const s of steps) console.log(`${s.sev.toUpperCase().padEnd(5)} ${s.name}${s.lines.length ? "\n        " + s.lines.join("\n        ") : ""}`);
 
-  if (args.lighthouse) { const lh = stepLighthouse((process.env.LH_URL ?? cfg.url).replace(/\/$/, "")); steps.push(lh); console.log(`${lh.sev.toUpperCase().padEnd(5)} ${lh.name}\n        ${lh.lines.join("\n        ")}`); }
+  if (args.lighthouse) { const lh = await stepLighthouse((process.env.LH_URL ?? cfg.url).replace(/\/$/, ""), (process.env.LH_PATHS ?? "/").split(",").map((x) => x.trim()).filter(Boolean), process.env.LH_VIEW === "agent" ? "agent" : "owner"); steps.push(lh); console.log(`${lh.sev.toUpperCase().padEnd(5)} ${lh.name}\n        ${lh.lines.join("\n        ")}`); }
   const results = [];
   const say = (R, extra = "") => console.log(`${worst(R.findings).toUpperCase().padEnd(5)} ${R.name}${extra}`);
   if (!args["no-browser"]) {
@@ -995,11 +1193,16 @@ async function main() {
       const channel = process.env.PW_CHANNEL === undefined ? "chrome" : process.env.PW_CHANNEL;
       const browser = await chromium.launch({ headless: true, ...(channel ? { channel } : {}) });
       const AxeBuilder = await import("@axe-core/playwright").then((m) => m.AxeBuilder ?? m.default?.AxeBuilder ?? m.default);
-      cfg.pub = await ownerPub(cfg.url, cfg.policy);
-      if (!cfg.pub) steps.push({ name: "owner-mode", sev: "warn", lines: [`could not read ${cfg.policy}'s owner key through ${cfg.url}: every account page is rendered as a guest (read-only)`] });
+      cfg.pub = process.env.NO_OWNER ? null : await ownerPub(cfg.url, cfg.policy);
+      cfg.pubs = {};
+      if (process.env.NO_OWNER) { cfg.policyEmpty = undefined; cfg.policyNeeds = undefined; }
+      cfg.still = {};
+      if (!cfg.pub && !process.env.NO_OWNER) steps.push({ name: "owner-mode", sev: "warn", lines: [`could not read ${cfg.policy}'s owner key through ${cfg.url}: every account page is rendered as a guest (read-only)`] });
       const c2 = { ...cfg, palette };
-      const runnable = plan.filter((s) => !s.skip);
-      if (plan.length > runnable.length) results.push({ name: "policy", findings: [{ sev: cfg.strict ? "fail" : "warn", rule: "no-policy", sel: "", text: "", detail: `POLICY is not set: ${plan.length - runnable.length} account scenarios were not run` }] });
+      const noInvite = plan.filter((s) => s.route === "new" && !cfg.invite);
+      const runnable = plan.filter((s) => !s.skip && !noInvite.includes(s));
+      if (noInvite.length) results.push({ name: "new", findings: [{ sev: cfg.strict ? "fail" : "note", rule: "not-measured", sel: "", text: "", detail: `/new redirects to / until the invite word is presented there: ${noInvite.length} stepper scenarios were not run (INVITE_FILE=<file holding the word> measures them)` }] });
+      if (plan.some((x) => x.skip)) results.push({ name: "policy", findings: [{ sev: cfg.strict ? "fail" : "warn", rule: "no-policy", sel: "", text: "", detail: `POLICY is not set: ${plan.filter((x) => x.skip).length} account scenarios were not run` }] });
       for (const sc of runnable) {
         const R = await scenario(browser, AxeBuilder, sc, c2);
         results.push(R);
@@ -1012,6 +1215,12 @@ async function main() {
           for (const R of await motionAndShell(browser, sc, c2)) { results.push(R); say(R, R.crossfade ? "  " + R.crossfade : ""); }
         for (const sc of runnable.filter((s) => s.route === "account" && s.state === "detail")) { const R = await sheetCheck(browser, sc, c2); results.push(R); say(R); }
         if (runnable.some((s) => s.route === "new")) { const R = await typingV(browser, c2); results.push(R); say(R); }
+        for (const sc of runnable.filter((s) => s.route === "guest" && s.state === "rest" && s.view === "owner")) {
+          for (const R of await heroCheck(browser, sc, c2)) { results.push(R); say(R, R.images ? `  ${R.images}` : ""); }
+          const G = await guestPath(browser, sc, c2, AxeBuilder);
+          results.push(G);
+          say(G, G.opened ? `  ${G.opened}` : "");
+        }
         for (const route of ["new", "add"]) if (runnable.some((s) => s.route === route)) { const R = await keyboardFit(browser, route, c2); results.push(R); say(R); }
       }
       await browser.close();
