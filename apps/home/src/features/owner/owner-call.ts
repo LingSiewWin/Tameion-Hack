@@ -95,17 +95,23 @@ export const calls = {
     "0x" + selector("setPayees(address[],bool)") + word(64n) + word(attested ? 1n : 0n) + word(BigInt(payees.length)) + payees.map(word).join(""),
   setLimits: (perAction: bigint, daily: bigint, floor: bigint) =>
     "0x" + selector("setLimits(uint256,uint256,uint256)") + word(perAction) + word(daily) + word(floor),
+  /** drops the change waiting out the delay (a raised limit or mode) */
+  cancelPending: () => "0x" + selector("cancelPending()"),
 };
 
+const text = (u: bigint) => `${u / 1_000_000n}.${(u % 1_000_000n).toString().padStart(6, "0")}`;
+/** The prepare-limits body and the call the page will compare it with: these two caps, the floor kept. */
+export function limitsCall(caps: { floor: string }, perAction: bigint, daily: bigint) {
+  const floor = units(caps.floor);
+  return { body: { perAction: text(perAction), daily: text(daily), floor: text(floor) }, data: calls.setLimits(perAction, daily, floor) };
+}
+
 /** "Raise the cap" for a payment over the per-payment cap: one payment may be that payment's amount, and the day's cap
- *  at least as much; the floor stays. The prepare-limits body and the call the page will compare it with. */
+ *  at least as much; the floor stays. */
 export function raiseCap(caps: { daily: string; floor: string }, amountText: string) {
   const want = units(amountText);
   const daily = units(caps.daily);
-  const floor = units(caps.floor);
-  const day = daily > want ? daily : want;
-  const text = (u: bigint) => `${u / 1_000_000n}.${(u % 1_000_000n).toString().padStart(6, "0")}`;
-  return { body: { perAction: text(want), daily: text(day), floor: text(floor) }, data: calls.setLimits(want, day, floor) };
+  return limitsCall(caps, want, daily > want ? daily : want);
 }
 
 const SETTLE = [selector("settleAsPrincipal(address,uint256,bytes32)"), selector("settleAsPrincipalIf(address,uint256,bytes32,bytes32,uint64)")];
