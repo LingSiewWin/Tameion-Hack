@@ -1069,6 +1069,8 @@ async function guestPath(browser, sc, cfg, AxeBuilder) {
   const R = { name: `guest-path/${sc.width}`, findings: [] };
   const { ctx, page } = await newPage(browser, { ...sc, route: "guest", view: "owner" });
   const add = (sev, rule, detail, sel = "") => R.findings.push({ sev, rule, sel, text: "", detail });
+  // never a word typed on a public host, not even a wrong one (PM's ruling): the guest path is walked on the lane only
+  if (!/^(localhost|127\.0\.0\.1)$/.test(new URL(cfg.url).hostname)) { await ctx.close().catch(() => {}); add("note", "not-measured", "not walked on a public host: no word is ever typed there"); return R; }
   try {
     await page.goto(cfg.url + "/", { waitUntil: "domcontentloaded", timeout: 60000 });
     await settle(page);
