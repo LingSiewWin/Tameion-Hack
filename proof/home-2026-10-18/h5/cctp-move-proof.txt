@@ -26,3 +26,15 @@ signer log (no key):
 2026-10-17T22:50:18.500Z listening for 0xD7cb3922f3A6Aab6F8977895E23970aEEEa2052a
 2026-10-17T22:52:39.826Z sent 0x9475f8fe71419779d5a1fa3c85a45d99b6151ee52b82bf875e24d98ab72f9a9a on Arbitrum Sepolia to 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d selector 0x095ea7b3
 2026-10-17T22:52:43.197Z sent 0x23c65d4eceb0a8a4d126f91e216595d220a810a819a716dd1e864f7159a13e90 on Arbitrum Sepolia to 0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA selector 0x8e0250ee
+
+MINT, read back 2026-10-18T01:00:35.339Z (the founder dripped 20 USDC on Arc to the mover at about 08:5x +08; the page sent the mint at 08:59:55 +08):
+receiveMessage on Arc testnet: 0xd13bedee05ec98e3ad67e41fbb138ee8fcb99ce0774fd13cedcd32016914a93c
+  https://explorer.testnet.arc.io/tx/0xd13bedee05ec98e3ad67e41fbb138ee8fcb99ce0774fd13cedcd32016914a93c
+  status success, block 67758345, 2026-10-18T00:59:55.000Z, from 0xd7cb3922f3a6aab6f8977895e23970aeeea2052a to 0xe737e5cebeeba77efe34d4aa090756590b1ce275, gas used 186323 at 25000000000 wei (0.004658075 USDC)
+  receiveMessage(message 376 bytes: 3 -> 26, recipient 0xB8064C0325b0679f219665f55e24F1De1FD369fA, amount 250000, nonce 0x65233b819b9d792bc1cd6c3ab2784631aabf5c9c397b2fefb369bc09a27d9a2d; attestation 130 bytes)
+  logs 5 (MessageReceived and MintAndWithdraw among them)
+Arc MessageTransmitterV2 usedNonces(nonce) = 1 (1: received)
+h5-arc-0641 (0xb8064c0325b0679f219665f55e24f1de1fd369fa) USDC on Arc (ERC-20 0x3600...): 0.25
+service inbox balance (h5-arc-0641): 0.250000 USDC
+signer log line:
+2026-10-18T00:59:55.663Z sent 0xd13bedee05ec98e3ad67e41fbb138ee8fcb99ce0774fd13cedcd32016914a93c on Arc Testnet to 0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275 selector 0x57ecfd28
