@@ -304,7 +304,9 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
               ref={(el) => {
                 groups.current[i] = el;
               }}
-              inert={active !== i}
+              // the page's one h1 is never inside an inert layer (axe page-has-heading-one at any scroll); only the
+              // statement's actions leave the tab order while another keyframe shows
+              inert={i !== 0 && active !== i}
               className={`rounded-(--radius-plate) bg-(--paper) p-(--space-5) sm:p-(--space-6) ${i === 0 ? "relative" : "absolute inset-x-0 bottom-0 sm:bottom-auto sm:top-0"}`}
               style={{ opacity: i === 0 ? 1 : 0 }}
             >
@@ -312,7 +314,7 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
                 <>
                   <h1 className="hero-statement m-0">{HERO.statement}</h1>
                   <p className="row m-0 mt-(--space-4) max-w-(--measure) text-(--ink-2)">{HERO.body}</p>
-                  <div className="mt-(--space-5) flex flex-col gap-(--space-3) sm:flex-row">
+                  <div inert={active !== 0} className="mt-(--space-5) flex flex-col gap-(--space-3) sm:flex-row">
                     <a href="#guest" className="row-title inline-flex h-(--button) items-center justify-center rounded-(--radius-button) bg-(--ink) px-(--space-5) text-(--paper) no-underline">{HERO.open}</a>
                     <a href="/new" className="row-title inline-flex h-(--button) items-center justify-center rounded-(--radius-button) bg-(--plate-2) px-(--space-5) text-(--ink) no-underline">{HERO.tryIt}</a>
                   </div>
