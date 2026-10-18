@@ -701,3 +701,74 @@ measured:
   receive/rest/agent/390: h1 none; main 0..390 (390 wide)
 since the last run: 36 fixed, 451 new
 
+== 2026-10-18 09:09:18 +08  remote tameion-home-production.up.railway.app (the commit it serves is read from the deploy record, not from here)  seat H6  https://tameion-home-production.up.railway.app
+PASS  tokens  owner --up: DESIGN #2F7A00, tokens.css #2E7800 (deliberate: DESIGN's value reads 4.39:1 on its surfaces, this one 4.51:1)
+PASS  contrast  contrast/tokens: every text pair >= 4.5:1 and every edge >= 3:1 in both views; tokens.css matches tokens.ts
+PASS  zero-hash  ℹ tests 11  ℹ pass 11  ℹ fail 0
+PASS  literals
+PASS  hex-lint  tokens-lint: no colour literal outside the tokens files; every token used is defined
+PASS  21st-review  src/tokens.css:43:12 info design-hardcoded-color Hardcoded color may drift from project design tokens.
+        49 file(s), 25 finding(s), 0 fixed.
+browser: 63 checks, 0 FAIL, 6 WARN (0 + 4 distinct), 6 note
+  WARN measure  div.mono-dense.flex > section.flex.flex-col > p.mono-read.m-0 "– the service gave no figure: inbox.balance, inbox"  about 81 characters per line (DESIGN: measure <= 68 ch)
+       in 1: account/error/agent/1280
+  WARN touch-target  div.flex.flex-col > details.meta > summary.cursor-pointer.py-(--space-1) "What the service said"  350x28 px; DESIGN touch targets are >= 44 (accepted in an opened line: WCAG 2.2 AA 24 px, D-H3-1)
+       in 1: account/error/agent/390
+  WARN money-not-shortest  div.flex.flex-col > div.grid.grid-cols-[14ch_1fr] > span.mono-read.break-normal "Paid 0.002000 USDC to 0xe5e2d8dcc2038fd0a010a6e784"  "0.002000 USDC": six decimals trimmed to the shortest that is exact
+       in 2: account/detail/agent/1280, account/detail/agent/390
+  WARN touch-target  div.flex.flex-col > div.grid.grid-cols-[14ch_1fr] > a.text-(--ink).underline "0x74e0bbdec12180ca9a4db3519b15aa208924d1cd4a4e06a9"  776x28 px; DESIGN touch targets are >= 44 (accepted in an opened line: WCAG 2.2 AA 24 px, D-H3-1)
+       in 2: account/detail/agent/390, account/detail/agent/390
+  NOTE not-built-yet    the route still shows its skeleton after settling: no content yet
+       in 4: guest/rest/owner/1280, guest/rest/owner/390, guest/rest/agent/1280, guest/rest/agent/390
+  NOTE not-measured    not walked on a public host: no word is ever typed there
+       in 2: guest-path/1280, guest-path/390
+  mocked replies (a fixture, not a real account): account/sealed/owner/1280, account/sealed/owner/390, account/sealed/agent/1280, account/sealed/agent/390
+measured:
+  guest/rest/owner/1280: h1 49px/56px/500; main 80..1200 (1120 wide)
+  guest/rest/owner/390: h1 31px/38px/500; main 0..390 (390 wide)
+  guest/rest/agent/1280: h1 15px/22px/500; main 80..1200 (1120 wide)
+  guest/rest/agent/390: h1 15px/22px/500; main 0..390 (390 wide)
+  account/rest/owner/1280: h1 31px/38px/500; main 80..1200 (1120 wide)
+  account/rest/owner/390: h1 31px/38px/500; main 0..390 (390 wide)
+  account/rest/agent/1280: h1 15px/22px/500; main 80..1200 (1120 wide)
+  account/rest/agent/390: h1 15px/22px/500; main 0..390 (390 wide)
+  add/rest/owner/1280: h1 16px/24px/600; main 80..1200 (1120 wide)
+  add/rest/owner/390: h1 16px/24px/600; main 0..390 (390 wide)
+  add/rest/agent/1280: h1 15px/22px/500; main 80..1200 (1120 wide)
+  add/rest/agent/390: h1 15px/22px/500; main 0..390 (390 wide)
+
+== 2026-10-18 09:10:05 +08  lane/home 2640e5d (+2 uncommitted) at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home  seat H6  http://localhost:3010
+PASS  tokens  owner --up: DESIGN #2F7A00, tokens.css #2E7800 (deliberate: DESIGN's value reads 4.39:1 on its surfaces, this one 4.51:1)
+PASS  contrast  contrast/tokens: every text pair >= 4.5:1 and every edge >= 3:1 in both views; tokens.css matches tokens.ts
+PASS  zero-hash  ℹ tests 11  ℹ pass 11  ℹ fail 0
+PASS  literals
+PASS  hex-lint  tokens-lint: no colour literal outside the tokens files; every token used is defined
+PASS  21st-review  src/tokens.css:43:12 info design-hardcoded-color Hardcoded color may drift from project design tokens.
+        49 file(s), 25 finding(s), 0 fixed.
+PASS  lighthouse  / (owner view): mobile performance 100 (DESIGN >= 85), LCP 1295 ms (DESIGN <= 2500), TBT 55 ms, CLS 0.000, 242 KB over the wire; Lighthouse 13.5.0 on https://tameion-home-production.up.railway.app
+        /a/guest-demo (owner view): mobile performance 98 (DESIGN >= 85), LCP 2141 ms (DESIGN <= 2500), TBT 41 ms, CLS 0.000, 264 KB over the wire; Lighthouse 13.5.0 on https://tameion-home-production.up.railway.app
+since the last run: 2 fixed, 0 new
+
+== 2026-10-18 09:10:20 +08  lane/home e499002 (+2 uncommitted) at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home  seat H6  http://localhost:3010
+PASS  tokens  owner --up: DESIGN #2F7A00, tokens.css #2E7800 (deliberate: DESIGN's value reads 4.39:1 on its surfaces, this one 4.51:1)
+PASS  contrast  contrast/tokens: every text pair >= 4.5:1 and every edge >= 3:1 in both views; tokens.css matches tokens.ts
+PASS  zero-hash  ℹ tests 11  ℹ pass 11  ℹ fail 0
+PASS  literals
+PASS  hex-lint  tokens-lint: no colour literal outside the tokens files; every token used is defined
+PASS  21st-review  src/tokens.css:43:12 info design-hardcoded-color Hardcoded color may drift from project design tokens.
+        49 file(s), 25 finding(s), 0 fixed.
+WARN  lighthouse  /a/guest-demo (agent view): LCP 3640 ms (DESIGN <= 2500), read from Chrome under Lighthouse's mobile settings, not Lighthouse's own run; https://tameion-home-production.up.railway.app
+since the last run: 0 fixed, 0 new
+
+== 2026-10-18 09:11:54 +08  lane/home e499002 (+2 uncommitted) at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home  seat H6  http://localhost:3010
+PASS  tokens  owner --up: DESIGN #2F7A00, tokens.css #2E7800 (deliberate: DESIGN's value reads 4.39:1 on its surfaces, this one 4.51:1)
+PASS  contrast  contrast/tokens: every text pair >= 4.5:1 and every edge >= 3:1 in both views; tokens.css matches tokens.ts
+PASS  zero-hash  ℹ tests 11  ℹ pass 11  ℹ fail 0
+PASS  literals
+PASS  hex-lint  tokens-lint: no colour literal outside the tokens files; every token used is defined
+PASS  21st-review  src/tokens.css:43:12 info design-hardcoded-color Hardcoded color may drift from project design tokens.
+        49 file(s), 25 finding(s), 0 fixed.
+FAIL  lighthouse  / (owner view): mobile performance 75 (DESIGN >= 85), LCP 3152 ms (DESIGN <= 2500), TBT 786 ms, CLS 0.000, 277 KB over the wire, largest image 26 KB; Lighthouse 13.5.0 on http://localhost:3015
+        /a/northwind-agents (owner view): mobile performance 93 (DESIGN >= 85), LCP 3257 ms (DESIGN <= 2500), TBT 23 ms, CLS 0.000, 289 KB over the wire; Lighthouse 13.5.0 on http://localhost:3015
+since the last run: 0 fixed, 0 new
+
