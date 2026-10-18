@@ -1,0 +1,79 @@
+{
+ "at": "2026-10-18 13:42:12 +08",
+ "keys": [
+  "account/rest/owner/1280|middle-dot-meta|button.grid.w-full > span.row-title.order-1 > span.min-w-0|meta strings joined with middle dots are banned",
+  "account/rest/owner/390|middle-dot-meta|button.grid.w-full > span.row-title.order-1 > span.min-w-0|meta strings joined with middle dots are banned",
+  "account/guest/owner/1280|middle-dot-meta|button.grid.w-full > span.row-title.order-1 > span.min-w-0|meta strings joined with middle dots are banned",
+  "account/guest/owner/390|middle-dot-meta|button.grid.w-full > span.row-title.order-1 > span.min-w-0|meta strings joined with middle dots are banned",
+  "account/detail/owner/1280|middle-dot-meta|button.grid.w-full > span.row-title.order-1 > span.min-w-0|meta strings joined with middle dots are banned",
+  "account/detail/owner/390|middle-dot-meta|button.grid.w-full > span.row-title.order-1 > span.min-w-0|meta strings joined with middle dots are banned",
+  "account/detail/agent/390|touch-target|div.flex.flex-col > div.grid.grid-cols-[14ch_1fr] > a.text-(--ink).underline|640x28 px; DESIGN touch targets are >= 44 (accepted in an opened line: WCAG 2.2 AA 24 px, D-H3-1)",
+  "account/detail/agent/390|touch-target|div.flex.flex-col > div.grid.grid-cols-[14ch_1fr] > a.text-(--ink).underline|640x28 px; DESIGN touch targets are >= 44 (accepted in an opened line: WCAG 2.2 AA 24 px, D-H3-1)"
+ ],
+ "findings": [
+  {
+   "sev": "fail",
+   "rule": "middle-dot-meta",
+   "sel": "button.grid.w-full > span.row-title.order-1 > span.min-w-0",
+   "text": "Demo Vendor · paid 4 times today · 0.008 USDC",
+   "detail": "meta strings joined with middle dots are banned",
+   "name": "account/rest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "middle-dot-meta",
+   "sel": "button.grid.w-full > span.row-title.order-1 > span.min-w-0",
+   "text": "Demo Vendor · paid 4 times today · 0.008 USDC",
+   "detail": "meta strings joined with middle dots are banned",
+   "name": "account/rest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "middle-dot-meta",
+   "sel": "button.grid.w-full > span.row-title.order-1 > span.min-w-0",
+   "text": "Demo Vendor · paid 4 times today · 0.008 USDC",
+   "detail": "meta strings joined with middle dots are banned",
+   "name": "account/guest/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "middle-dot-meta",
+   "sel": "button.grid.w-full > span.row-title.order-1 > span.min-w-0",
+   "text": "Demo Vendor · paid 4 times today · 0.008 USDC",
+   "detail": "meta strings joined with middle dots are banned",
+   "name": "account/guest/owner/390"
+  },
+  {
+   "sev": "fail",
+   "rule": "middle-dot-meta",
+   "sel": "button.grid.w-full > span.row-title.order-1 > span.min-w-0",
+   "text": "Demo Vendor · paid 4 times today · 0.008 USDC",
+   "detail": "meta strings joined with middle dots are banned",
+   "name": "account/detail/owner/1280"
+  },
+  {
+   "sev": "fail",
+   "rule": "middle-dot-meta",
+   "sel": "button.grid.w-full > span.row-title.order-1 > span.min-w-0",
+   "text": "Demo Vendor · paid 4 times today · 0.008 USDC",
+   "detail": "meta strings joined with middle dots are banned",
+   "name": "account/detail/owner/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "touch-target",
+   "sel": "div.flex.flex-col > div.grid.grid-cols-[14ch_1fr] > a.text-(--ink).underline",
+   "text": "0x71422c4e0962bf4b45e806eeae6b830528f5478292b639fe",
+   "detail": "640x28 px; DESIGN touch targets are >= 44 (accepted in an opened line: WCAG 2.2 AA 24 px, D-H3-1)",
+   "name": "account/detail/agent/390"
+  },
+  {
+   "sev": "warn",
+   "rule": "touch-target",
+   "sel": "div.flex.flex-col > div.grid.grid-cols-[14ch_1fr] > a.text-(--ink).underline",
+   "text": "0x51e5947bfa5a15249e64b258b9984460aef5f6cf75fad8f8",
+   "detail": "640x28 px; DESIGN touch targets are >= 44 (accepted in an opened line: WCAG 2.2 AA 24 px, D-H3-1)",
+   "name": "account/detail/agent/390"
+  }
+ ]
+}
