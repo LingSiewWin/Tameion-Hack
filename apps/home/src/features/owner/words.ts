@@ -149,6 +149,8 @@ export function facts(inbox: Pick<Inbox, "caps" | "waitingCount" | "paid" | "bal
 export type Line = {
   key: string;
   payee: string;
+  /** the payee's address, for its mark only (lib/mark.ts draws cells from it); never rendered as text */
+  payeeId: string;
   amount: string;
   why: string;
   when: string;
@@ -182,6 +184,7 @@ export function lines(inbox: Pick<Inbox, "paid" | "refused" | "parties" | "payee
   const refused: Line[] = (inbox.refused ?? []).map((r, i) => ({
     key: `refused-${i}`,
     payee: payeeName(inbox, r.counterparty),
+    payeeId: r.counterparty.toLowerCase(),
     amount: money(r.amount),
     why: plainWhy(inbox, r.why),
     when: "In the last check",
@@ -195,6 +198,7 @@ export function lines(inbox: Pick<Inbox, "paid" | "refused" | "parties" | "payee
     return {
       key: p.tx ?? `paid-${i}`,
       payee: payeeName(inbox, p.counterparty),
+      payeeId: p.counterparty.toLowerCase(),
       amount: money(p.amount),
       why: plain(inbox, p.reason) || (p.by === "you" ? "Paid by you with your passkey." : "Paid by the agent inside your limits."),
       when: p.at ? dateWords(p.at, nowSecs) : "",

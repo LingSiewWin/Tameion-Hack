@@ -33,7 +33,7 @@ const sealedHalves = () => {
 const cases: [string, string][] = [
   ["at rest", render()],
   ["the Stop question", render({ asking: true })],
-  ["a row's sheet open", render({ openKey: lines(inbox, NOW)[0].key })],
+  ["a row's sheet open, the agent's mark beside it", render({ openKey: lines(inbox, NOW)[0].key, agentId: "0x270d9f049e75b5eead616975196edf80b756b3cb" })],
   ["sealed, its sheet open", render({ halves: sealedHalves(), openKey: lines(inbox, NOW)[0].key })],
   ["stale", render({ staleAt: NOW * 1000 - 360_000, onRetry: () => {} })],
   ["empty (a fresh account)", render({ inbox: fresh, byRateDays: null })],
@@ -54,6 +54,9 @@ test("the seeded page shows what it is for (so the empty check above is not vacu
   assert.match(html, />Stop the agent</);
   assert.match(html, /What the agent paid, and why/);
   assert.equal((html.match(/>Demo Vendor</g) ?? []).length, 8, "eight paid rows, each by name");
+  assert.equal((html.match(/<svg width="24" height="24" viewBox="0 0 16 16"/g) ?? []).length, 8, "each paid row wears its payee's mark");
+  assert.match(cases[2][1], /<svg width="40" height="40" viewBox="0 0 16 16"/, "the sheet: the payee's seal at 40 px");
+  assert.equal((cases[2][1].match(/<svg width="24" height="24" viewBox="0 0 16 16"/g) ?? []).length, 9, "and the agent's mark beside its line");
   assert.match(cases[3][1], /Paid and sealed/);
   assert.doesNotMatch(cases[6][1], /Stop the agent/, "a guest has no Stop");
   assert.match(cases[5][1], /Nothing paid yet: the first payment goes to a payee you approve/);
