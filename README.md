@@ -47,11 +47,11 @@ Every row ran against a real chain. The file holds the requests, answers and ref
 | Signature algorithm switched live on chain, register, switch, old algorithm refused, new one accepted. | proof/passkey-agility-2026-10-18.txt |
 | Money moved in from another chain by CCTP, burn on Arbitrum Sepolia, attestation, mint on Arc. | proof/home-2026-10-18/h5/cctp-move-proof.txt |
 | Credit drawn against the book on Arc testnet, lock, draw, repay, slash, all four confirmed. No external lender, not a lending protocol. | proof/credit-line-2026-10-18.txt |
-| Signature counts on the service, 228 records with one signature, 1 with two, none with three yet. | proof/symbolon-count-2026-10-18-4ce997c.txt |
+| Signature counts on the service, 237 records: 236 with one signature, 1 with two, none with three yet. | proof/symbolon-count-2026-10-18-4ce997c.txt |
 
 ## The honest state
 
-No customers and no outside operator yet. Every account is the team's and the money moved is cents. The model decides little today, the rules decided 90 of 91 finished passes. The agent has only ever bought from our own x402 seller, because none of the 1,401 payment options in the Bazaar accept an ERC-7710 payment. Contracts are unaudited, there is no mainnet, and the passkey can withdraw everything at once by design. The landing page's satellite scene is NOAA-20 imagery and its vessel tracks are illustrative, and a test fails if the page ever calls them real. Full detail in [DETAILS.md](DETAILS.md).
+No customers and no outside operator yet. Every account is the team's and the money moved is cents. The model decides little today, the rules decided all 91 finished passes. The agent has only ever bought from our own x402 seller, because none of the 1,401 payment options in the Bazaar accept an ERC-7710 payment. Contracts are unaudited, there is no mainnet, and the passkey can withdraw everything at once by design. The landing page's satellite scene is NOAA-20 imagery and its vessel tracks are illustrative, and a test fails if the page ever calls them real. Full detail in [DETAILS.md](DETAILS.md).
 
 ## Where to look
 
