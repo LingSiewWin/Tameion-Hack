@@ -62,3 +62,4 @@ crates/*/Cargo.lock
 
 # The SDK README is part of the package agents install, not a research note (docs/115, S18).
 !/apps/sdk/README.md
+!/DETAILS.md
