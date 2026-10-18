@@ -78,12 +78,6 @@ scripts/dev.sh                 # the service on :7880
 
 Needs Rust, Foundry, Node 20 and Python 3. The full setup, the audit command that recomputes a root against two public nodes, and the home surface's own gate are in [DETAILS.md](DETAILS.md).
 
-## Since submission
-
-The tag `submission-2026-10-18` is what existed when the form went in. Everything after it lands here as one dated line, newest first, each naming its proof file.
-
-Nothing yet.
-
 ## Naming and prior work
 
 The repository, crates and binaries still say `tameion` in places until the rename lands. `MemoryAnchor.sol` comes from [arc-agent-kit](https://github.com/LingSiewWin/arc-agent-kit), extracted from Arcane, my entry to the Agora round. Nothing else is imported.
