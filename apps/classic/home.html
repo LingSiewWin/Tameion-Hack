@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1f6f5c">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Tameion</title>
+<title>Tami</title>
 <meta name="description" content="A treasury account that pays your company's recurring bills by itself, inside a limit you set, and can prove every payment.">
 <style>
   :root { --bg:#f6f5f1; --ink:#171717; --mute:#6b6b66; --line:#dedcd4; --accent:#1f6f5c; --amber:#a3630a; --crimson:#9b2c2c; --card:#ffffff; --mono:"SF Mono",ui-monospace,Menlo,monospace; }
@@ -60,9 +60,9 @@
   <!-- State A: nothing yet. Two facts, one button. -->
   <section id="start">
     <h1>Your bills, paid on time, inside a limit you set.</h1>
-    <p class="sub">Tameion reads what your company already pays, pays it when due, and can prove every payment. Your phone is the only key that can take money out.</p>
+    <p class="sub">Tami reads what your company already pays, pays it when due, and can prove every payment. Your phone is the only key that can take money out.</p>
     <p class="sub small hide" id="partnerLine"></p>
-    <p class="sub small" id="trustLine">The agent's key can pay payees you approved, under a cap, and nothing else. It cannot add a payee, raise its own limit, or withdraw. You sign; Tameion holds no key that can take your money.</p>
+    <p class="sub small" id="trustLine">The agent's key can pay payees you approved, under a cap, and nothing else. It cannot add a payee, raise its own limit, or withdraw. You sign; Tami holds no key that can take your money.</p>
     <div class="fig">{{HERO_SVG}}</div>
     <div class="card">
       <div class="row">
@@ -141,7 +141,7 @@
         <div><label>Amount (USDC)</label><input id="parkAmt" placeholder="e.g. 0.5" inputmode="decimal"></div>
       </div>
       <div style="margin-top:10px"><button id="parkGo" class="ghost">Send it to Circle Gateway</button> <span class="small muted" id="parkOut"></span></div>
-      <div class="why" id="parkWhy">Your wallet switches to that chain and asks you to confirm once, or twice if it cannot do both steps together. Tameion never touches the money: it goes from your wallet into Circle's Gateway under your own address.</div>
+      <div class="why" id="parkWhy">Your wallet switches to that chain and asks you to confirm once, or twice if it cannot do both steps together. Tami never touches the money: it goes from your wallet into Circle's Gateway under your own address.</div>
     </div>
     <div class="card hide" id="recommend">
       <b>The agent recommends autopilot.</b> <span class="small muted" id="recWhy"></span>
@@ -162,7 +162,7 @@
       <div style="margin-top:10px"><button id="renewBtn" class="ghost">Renew for 90 days</button> <span class="small mono" id="renewOut"></span></div>
     </div>
     <div class="card hide" id="standing">
-      <b>Standing orders</b> <span class="small muted">— paid on their day by whoever is awake: the agent, you, anyone. Tameion being down changes nothing.</span>
+      <b>Standing orders</b> <span class="small muted">— paid on their day by whoever is awake: the agent, you, anyone. Tami being down changes nothing.</span>
       <div id="standingList"></div>
       <div id="standingSuggest"></div>
       <div class="small mono" id="standingOut"></div>
@@ -429,7 +429,7 @@ async function signNow(target, data) {
 async function createKey() {
   const saved = store.get("tameion.pub"); if (saved) { pub = JSON.parse(saved); return pub; }
   const cred = await navigator.credentials.create({ publicKey: {
-    rp: { name: "Tameion", id: location.hostname },
+    rp: { name: "Tami", id: location.hostname },
     user: { id: crypto.getRandomValues(new Uint8Array(16)), name: "treasurer", displayName: "Treasurer" },
     challenge: crypto.getRandomValues(new Uint8Array(32)),
     pubKeyCredParams: [{ type: "public-key", alg: -7 }],
@@ -678,8 +678,8 @@ function render(i) {
   $("#allow").classList.toggle("hide", !pl);
   if (pl) {
     const low = num(pl.allowance) < num(i.caps.daily);
-    $("#allowText").textContent = pl.error ? pl.error : `The agent may pull up to ${usd(pl.allowance)} USDC from your wallet ${short(pl.wallet)}, which holds ${usd(pl.walletBalance)} USDC. Tameion holds nothing.${low ? " That is less than one day's limit: allow more for the agent to pay." : ""}`;
-    $("#allowHow").textContent = `Allowing sets ${usd(pl.suggestedAllowance)} USDC: ${pretty(pl.suggestedBasis || "thirty days at your daily limit")}. From any wallet: approve(${tenant.policy}, ${usd(pl.suggestedAllowance)} USDC) on USDC ${short(pl.usdc)}; approve(…, 0) cuts the agent off without Tameion.`;
+    $("#allowText").textContent = pl.error ? pl.error : `The agent may pull up to ${usd(pl.allowance)} USDC from your wallet ${short(pl.wallet)}, which holds ${usd(pl.walletBalance)} USDC. Tami holds nothing.${low ? " That is less than one day's limit: allow more for the agent to pay." : ""}`;
+    $("#allowHow").textContent = `Allowing sets ${usd(pl.suggestedAllowance)} USDC: ${pretty(pl.suggestedBasis || "thirty days at your daily limit")}. From any wallet: approve(${tenant.policy}, ${usd(pl.suggestedAllowance)} USDC) on USDC ${short(pl.usdc)}; approve(…, 0) cuts the agent off without Tami.`;
     $("#allow").classList.toggle("amber", low);
   }
   $("#mode").textContent = `${i.mode}${i.pending ? " · a change is waiting for the delay" : ""} · holds ${usd(i.balance)} USDC`;
@@ -724,7 +724,7 @@ function render(i) {
   $("#delegateCard").classList.toggle("hide", !(dg && !dg.active));
   if (dg && !dg.active) {
     $("#delegateCmd").textContent = `cast send ${dg.wallet} ${dg.initializeData} --auth ${dg.implementation} --private-key <your wallet's key> --rpc-url <chain>`;
-    $("#delegateWhy").textContent = `The authorization points your wallet's code at ${dg.implementation} (the same policy code every Tameion account runs, readable on the explorer). The call initialises it with your passkey's account as the owner. The agent's first check sees it and starts.`;
+    $("#delegateWhy").textContent = `The authorization points your wallet's code at ${dg.implementation} (the same policy code every Tami account runs, readable on the explorer). The call initialises it with your passkey's account as the owner. The agent's first check sees it and starts.`;
   }
   // PLAN 5.7: owners, devices asking to join, calls waiting for more approvals.
   {

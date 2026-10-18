@@ -95,7 +95,7 @@ export const keysReady = (k: Keys) => k.guardians.length >= 2 && k.threshold >= 
 /** What a guardian signs when it agrees to be one: no gas, and proof that the wallet can sign at all
  *  (a watch-only account would otherwise be a dead slot found only on the day of recovery). */
 export const guardianConsent = (owner: string, chainId: number) =>
-  `Tameion: I agree to be a guardian of account ${getAddress(owner)} on chain ${chainId}. ` +
+  `Tami: I agree to be a guardian of account ${getAddress(owner)} on chain ${chainId}. ` +
   "Together with the other guardian I can replace its owner's passkey after a delay the owner can cancel. A guardian cannot spend.";
 
 /** A guardian from a wallet in this browser (a hardware wallet through MetaMask, Rabby or Frame; an email wallet):

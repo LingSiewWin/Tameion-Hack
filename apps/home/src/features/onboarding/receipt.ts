@@ -101,7 +101,7 @@ export function receiptOf(i: MandateInbox, now: number): Receipt {
   // Worst case: a stolen agent key, a stolen Tameion key, a lost device.
   if (auto) worst.push({ text: `A stolen agent key moves at most ${daily} in any 24 hours, and only to ${payees}.`, rule: "BudgetPolicy._payChecked: dailyCap, PayeeNotAttested" });
   else worst.push({ text: `A stolen agent key moves nothing while each payment waits for your tap.`, rule: "BudgetPolicy.pay: NotAutopilot" });
-  if (wait) worst.push({ text: `A stolen Tameion key is held to the same limits and payees. Anything more waits ${wait}, and your passkey cancels it.`, rule: "BudgetPolicy.setAgent/setLimits: operator, delay, cancelPending" });
+  if (wait) worst.push({ text: `A stolen Tami key is held to the same limits and payees. Anything more waits ${wait}, and your passkey cancels it.`, rule: "BudgetPolicy.setAgent/setLimits: operator, delay, cancelPending" });
   const g = i.guardians;
   if (g && g.threshold > 0 && g.list.length >= g.threshold)
     worst.push({ text: `If you lose this device, ${g.threshold} of your ${g.list.length} guardians can name a new passkey.`, rule: "PasskeyPrincipal.approveRecovery: guardians" });

@@ -84,7 +84,7 @@ export const wait = {
 export const receipt = {
   title: (n: string) => `${n} is open.`,
   holds: (amount: string, chain: string) => `It holds ${amount} on ${chain}.`,
-  sections: { can: "Tameion can", never: "Tameion can never", worst: "Worst case" },
+  sections: { can: "Tami can", never: "Tami can never", worst: "Worst case" },
   open: "Open the account",
 };
 

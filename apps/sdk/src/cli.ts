@@ -37,7 +37,7 @@ const EVENT_ID = /^evt:(0|[1-9]\d*)$/;
 const BOOL_FLAGS = new Set(["--json", "--help"]);
 const USDC = /^\d+(\.\d{1,6})?$/;
 
-const USAGE = `tameion — a Tameion account from the terminal
+const USAGE = `tameion — a Tami account from the terminal
 
   tameion status                         the service: contract version, recent updates, kill switches
   tameion top                            the burn rate, how far the floor is at that rate, the first bill

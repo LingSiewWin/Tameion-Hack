@@ -1,4 +1,4 @@
-# @tameion/sdk — a Tameion account from code or a terminal
+# @tameion/sdk — a Tami account from code or a terminal
 
 Your agent reads the account, asks for a check, pays approved payees, and buys paid APIs over x402. It can only pay payees and sellers the owner approved, and only up
 to the mandate the owner signed. The owner's passkey holds the keys. The agent holds a bounded key that cannot add a payee, raise a

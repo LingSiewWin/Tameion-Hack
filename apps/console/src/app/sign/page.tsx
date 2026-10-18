@@ -213,8 +213,8 @@ async function sealedKey(): Promise<{ sealed: Sealed } | null> {
   if (typeof PublicKeyCredential === "undefined") return null;
   const created = (await navigator.credentials.create({
     publicKey: {
-      rp: { name: "Tameion Desk" },
-      user: { id: rnd(16), name: "signing key", displayName: "Tameion signing key" },
+      rp: { name: "Tami Desk" },
+      user: { id: rnd(16), name: "signing key", displayName: "Tami signing key" },
       challenge: rnd(32),
       pubKeyCredParams: [
         { type: "public-key", alg: -7 },

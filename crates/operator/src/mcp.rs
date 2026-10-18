@@ -135,13 +135,13 @@ pub fn tools() -> Vec<Value> {
         json!({
             "name": "prepare_fund",
             "annotations": { "title": "Prepare Gateway funding (wallet signs)", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true },
-            "description": "EIP-712 data for the BILL WALLET to sign to move its USDC held in Circle Gateway on another chain (sourceDomain: 3 Arbitrum Sepolia, 6 Base Sepolia, 0 Ethereum Sepolia, 26 Arc Testnet) into the policy. Fee and expiry come from Circle's estimate; the data names the policy as the only recipient. This tool cannot sign; the owner signs on the Tameion page (or with a key file via scripts/gateway_fund.sh) and the service relays the mint.",
+            "description": "EIP-712 data for the BILL WALLET to sign to move its USDC held in Circle Gateway on another chain (sourceDomain: 3 Arbitrum Sepolia, 6 Base Sepolia, 0 Ethereum Sepolia, 26 Arc Testnet) into the policy. Fee and expiry come from Circle's estimate; the data names the policy as the only recipient. This tool cannot sign; the owner signs on the Tami page (or with a key file via scripts/gateway_fund.sh) and the service relays the mint.",
             "inputSchema": { "type": "object", "required": ["policy", "amount", "sourceDomain"], "properties": { "policy": addr, "amount": { "type": "string" }, "sourceDomain": { "type": "integer" }, "from": addr } }
         }),
         json!({
             "name": "prepare_schedule",
             "annotations": { "title": "Prepare standing order (owner signs)", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false },
-            "description": "Calldata for the OWNER'S PASSKEY to set a standing order on the policy: payee (must already be approved), USDC amount, everyDays, optional firstDue (unix). Once set, anyone may call payDue(id) on its due date inside the caps — the agent does it on its passes, and the bill pays even if Tameion is down. Cannot sign.",
+            "description": "Calldata for the OWNER'S PASSKEY to set a standing order on the policy: payee (must already be approved), USDC amount, everyDays, optional firstDue (unix). Once set, anyone may call payDue(id) on its due date inside the caps — the agent does it on its passes, and the bill pays even if Tami is down. Cannot sign.",
             "inputSchema": { "type": "object", "required": ["policy", "payee", "amount", "everyDays"], "properties": { "policy": addr, "payee": addr, "amount": { "type": "string" }, "everyDays": { "type": "number" }, "firstDue": { "type": "integer" } } }
         }),
         json!({
@@ -183,7 +183,7 @@ pub fn tools() -> Vec<Value> {
         json!({
             "name": "send_invoice",
             "annotations": { "title": "Send a signed invoice", "readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true },
-            "description": "Bill a Tameion account as a vendor: post an invoice the PAYEE has already signed (EIP-712 Invoice(address payee,address policy,uint256 amount,uint64 dueAt,uint32 everyDays,uint16 discountBps,uint16 earlyDays,bytes32 ref,uint64 issuedAt), domain name \"Tameion Invoice\", version \"1\", chainId of the account's chain, verifyingContract = the account). This tool holds no key and signs nothing: pass the body you signed elsewhere. Nothing is paid on receipt — the account's agent checks it and the owner accepts or declines. A ref already sent is refused; twenty invoices an hour per account. amount is USDC minor units as a string (\"150000\" = 0.15 USDC).",
+            "description": "Bill a Tami account as a vendor: post an invoice the PAYEE has already signed (EIP-712 Invoice(address payee,address policy,uint256 amount,uint64 dueAt,uint32 everyDays,uint16 discountBps,uint16 earlyDays,bytes32 ref,uint64 issuedAt), domain name \"Tameion Invoice\", version \"1\", chainId of the account's chain, verifyingContract = the account). This tool holds no key and signs nothing: pass the body you signed elsewhere. Nothing is paid on receipt — the account's agent checks it and the owner accepts or declines. A ref already sent is refused; twenty invoices an hour per account. amount is USDC minor units as a string (\"150000\" = 0.15 USDC).",
             "inputSchema": { "type": "object", "required": ["invoice"], "properties": { "invoice": { "type": "object", "required": ["policy", "payee", "amount", "dueAt", "everyDays", "discountBps", "earlyDays", "ref", "issuedAt", "signature"], "properties": { "policy": addr, "payee": addr, "amount": { "type": "string" }, "dueAt": { "type": "integer" }, "everyDays": { "type": "integer" }, "discountBps": { "type": "integer" }, "earlyDays": { "type": "integer" }, "ref": { "type": "string", "description": "0x… 32 bytes" }, "issuedAt": { "type": "integer" }, "signature": { "type": "string", "description": "0x… 65 bytes, by the payee" } } } } }
         }),
         json!({
@@ -500,7 +500,7 @@ fn transport_words(url: &str, e: &reqwest::Error) -> String {
         )
     } else if e.is_connect() {
         format!(
-            "the Tameion service at {url} is not reachable ({e}); check TAMEION_URL and that the service runs"
+            "the Tami service at {url} is not reachable ({e}); check TAMEION_URL and that the service runs"
         )
     } else {
         format!("{url}: {e}")
@@ -516,7 +516,7 @@ fn error(id: &Value, code: i64, message: String) -> Value {
 }
 
 /// What the server tells the calling model at `initialize`.
-const INSTRUCTIONS: &str = "Tameion is the account an agent operator gives its agents: they pay in USDC (paid APIs over x402, bills and invoices) only to payees the owner approved and only up to the mandate one contract enforces; a raise waits a delay anyone can see, a cut is instant, and every payment lands in a book anchored on chain. These tools read the account, run a pass, and prepare changes the owner signs with a passkey; none of them can add a payee, raise a cap or withdraw. Two spend, both with an agent key that has the buy scope: buy_service has the service pay a seller the owner already approved, inside the caps, and pay pays an approved payee directly, inside the caps, with the reason written to the book. Start with treasury_inbox; what waits for the owner is its `waiting` list. Before you rely on something you remember about the account, check it with recall: the record and the chain answer, not your memory.";
+const INSTRUCTIONS: &str = "Tami is the account an agent operator gives its agents: they pay in USDC (paid APIs over x402, bills and invoices) only to payees the owner approved and only up to the mandate one contract enforces; a raise waits a delay anyone can see, a cut is instant, and every payment lands in a book anchored on chain. These tools read the account, run a pass, and prepare changes the owner signs with a passkey; none of them can add a payee, raise a cap or withdraw. Two spend, both with an agent key that has the buy scope: buy_service has the service pay a seller the owner already approved, inside the caps, and pay pays an approved payee directly, inside the caps, with the reason written to the book. Start with treasury_inbox; what waits for the owner is its `waiting` list. Before you rely on something you remember about the account, check it with recall: the record and the chain answer, not your memory.";
 
 /// One JSON-RPC message, either transport. `None` for a notification or a
 /// response (no `id`, or no `method`): those get no reply.

@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tameion Passkey</title>
+<title>Tami Passkey</title>
 <style>
 /* One narrow column: a phone-sized control for one key. */
 :root {
@@ -101,7 +101,7 @@ document.getElementById("create").addEventListener("click", async () => {
   const out = document.getElementById("pub");
   try {
     const cred = await navigator.credentials.create({ publicKey: {
-      rp: { name: "Tameion", id: location.hostname },
+      rp: { name: "Tami", id: location.hostname },
       user: { id: crypto.getRandomValues(new Uint8Array(16)), name: "owner", displayName: "Owner" },
       challenge: crypto.getRandomValues(new Uint8Array(32)),
       pubKeyCredParams: [{ type: "public-key", alg: -7 }], // ES256: P-256

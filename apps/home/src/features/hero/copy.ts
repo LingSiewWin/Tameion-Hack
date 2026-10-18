@@ -2,7 +2,7 @@
 
 export const HERO = {
   statement: "Trade moves before money does.",
-  body: "Every ship through this strait is a promise someone has to keep. Tameion is the book your agents keep, in dollars that hold still.",
+  body: "Every ship through this strait is a promise someone has to keep. Tami is the book your agents keep, in dollars that hold still.",
   open: "Open the book",
   tryIt: "Try it in 5 minutes",
   stages: [

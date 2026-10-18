@@ -402,7 +402,7 @@ export async function createKey(k = "tameion.pub", signal?: AbortSignal): Promis
   const minute = AbortSignal.timeout(60_000);
   const cred = (await navigator.credentials.create({
     publicKey: {
-      rp: { name: "Tameion", id: location.hostname },
+      rp: { name: "Tami", id: location.hostname },
       user: { id: crypto.getRandomValues(new Uint8Array(16)), name: "treasurer", displayName: "Treasurer" },
       challenge: crypto.getRandomValues(new Uint8Array(32)),
       pubKeyCredParams: [{ type: "public-key", alg: -7 }],

@@ -193,7 +193,7 @@ function Allow() {
         ) : (
           <>
             The agent may pull up to <span className="figures font-medium">{usd(pl.allowance)} USDC</span> from your wallet <Payee addr={pl.wallet} nameable={false} />, which
-            holds <span className="figures">{usd(pl.walletBalance)} USDC</span>. Tameion holds nothing.
+            holds <span className="figures">{usd(pl.walletBalance)} USDC</span>. Tami holds nothing.
             {low ? " That is less than one day's limit: allow more for the agent to pay." : ""}
           </>
         )}
@@ -212,7 +212,7 @@ function Allow() {
         {pl.suggestedBasis ? `${sentence(pl.suggestedBasis)}. ` : ""}
         <Why label="Do it from any wallet">
           <span className="break-all font-mono text-xs">approve({tenant.policy}, {usd(pl.suggestedAllowance)} USDC)</span> on USDC{" "}
-          <span className="break-all font-mono text-xs">{pl.usdc}</span>; approving 0 cuts the agent off without Tameion.
+          <span className="break-all font-mono text-xs">{pl.usdc}</span>; approving 0 cuts the agent off without Tami.
         </Why>
       </p>
     </Panel>
@@ -430,7 +430,7 @@ function FromAnotherChain() {
           </div>
           <Out state={park.state} />
           <p className="mt-2 text-xs text-muted-foreground">
-            Your wallet switches chain and asks you to confirm twice. Tameion never touches the money: it goes from your wallet into Circle&apos;s Gateway under your own
+            Your wallet switches chain and asks you to confirm twice. Tami never touches the money: it goes from your wallet into Circle&apos;s Gateway under your own
             address.
           </p>
         </>
@@ -479,7 +479,7 @@ function Delegation() {
   return (
     <Panel title="One signature from your wallet" icon={KeyRound} tone="attention">
       <p>
-        Your wallet becomes the account when it signs one authorization pointing its code at the same contract every Tameion account runs. The agent&apos;s next check sees it
+        Your wallet becomes the account when it signs one authorization pointing its code at the same contract every Tami account runs. The agent&apos;s next check sees it
         and starts.
       </p>
       <details>

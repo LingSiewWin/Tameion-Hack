@@ -1,5 +1,5 @@
 "use client";
-// The header (DESIGN §Page grammar): the account's name on the left ("Tameion" when none), then the network word in
+// The header (DESIGN §Page grammar): the account's name on the left ("Tami" when none), then the network word in
 // words and shape, then the capsule Owner | Agent — one tap, or `v`; remembered per device. The route carries the
 // name (`/a/<name>`); it shows only once the service resolves it to an account.
 import { useParams } from "next/navigation";
@@ -39,7 +39,7 @@ export function Header() {
   }, [view]);
 
   const reading = wanted !== undefined && resolved?.wanted !== wanted;
-  const title = wanted && resolved?.wanted === wanted && resolved.name ? resolved.name : "Tameion";
+  const title = wanted && resolved?.wanted === wanted && resolved.name ? resolved.name : "Tami";
 
   return (
     <header>

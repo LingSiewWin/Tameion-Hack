@@ -136,7 +136,7 @@ export function Start({ cfg, onStarted, partner }: { cfg: Cfg; onStarted: (t: Te
           <p className="mt-4 flex max-w-[60ch] gap-2 text-sm leading-relaxed">
             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-protect" aria-hidden />
             <span>
-              Your key stays on this device, behind Touch ID or your passkey; Tameion holds no key that can move your money. An agent&apos;s key pays only the payees you
+              Your key stays on this device, behind Touch ID or your passkey; Tami holds no key that can move your money. An agent&apos;s key pays only the payees you
               approved, under its cap, and nothing else.
             </span>
           </p>
@@ -258,7 +258,7 @@ export function Start({ cfg, onStarted, partner }: { cfg: Cfg; onStarted: (t: Te
           </div>
 
           <p className="mt-6 max-w-[62ch] text-caption text-muted-foreground">
-            What it costs: nothing while Tameion runs on testnet; nothing here moves real money.
+            What it costs: nothing while Tami runs on testnet; nothing here moves real money.
           </p>
         </section>
 

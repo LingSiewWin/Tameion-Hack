@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tameion Level 1</title>
+<title>Tami Level 1</title>
 <meta name="description" content="Your own policy: your passkey is the only key that can add a payee or withdraw; the agent prepares each payment, your phone signs. Propose mode.">
 <style>
   :root { --bg:#f6f5f1; --ink:#171717; --mute:#6b6b66; --line:#dedcd4; --accent:#1f6f5c; --amber:#a3630a; --crimson:#9b2c2c; --card:#ffffff; --mono:"SF Mono",ui-monospace,Menlo,monospace; }
@@ -192,7 +192,7 @@ async function init() {
 $("#create").onclick = async () => {
   try {
     const cred = await navigator.credentials.create({ publicKey: {
-      rp: { name: "Tameion", id: location.hostname },
+      rp: { name: "Tami", id: location.hostname },
       user: { id: crypto.getRandomValues(new Uint8Array(16)), name: "treasurer", displayName: "Treasurer" },
       challenge: crypto.getRandomValues(new Uint8Array(32)),
       pubKeyCredParams: [{ type: "public-key", alg: -7 }],

@@ -8,7 +8,7 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Tameion",
+  title: "Tami",
   description:
     "The account your agents pay from: they pay their bills around the clock in USDC, only inside the mandate you signed, which one contract enforces; every payment lands in a book of what was owed and why.",
   icons: { icon: "/icon.svg" },
