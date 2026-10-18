@@ -1,0 +1,29 @@
+# LastGood on a lane copy of the service, H3's build (this commit): e1-seller-signed (Arbitrum Sepolia) read through a local relay
+#   that forwards to sepolia-rollup.arbitrum.io, or answers 503 to every RPC call while 'down' (a rate-limited node).
+# written 2026-10-18 10:13:09 +0800, service PID 25238
+
+10:13:09 inbox, relay up: HTTP 200 in 6.271505s
+   {'balance': '0.047000 USDC', 'mode': 'Autopilot', 'paidTotal': '0.003000 USDC'} | stale None | asOf None | error None
+10:13:16 status, relay up: HTTP 200 in 0.983025s
+   {'mode': 'Autopilot', 'paused': False, 'rate': '0.000428 USDC'} | stale None | asOf None | error None
+10:13:17 symbolon, relay up: HTTP 200 in 1.888117s
+   {'counts': {'double': 1, 'single': 3, 'triple': 0, 'unsigned': 0}, 'chainReadFailed': []} | stale None | asOf None | error None
+
+10:13:19 relay down
+10:13:19 inbox, relay down: HTTP 200 in 0.828481s
+   {'balance': '0.047000 USDC', 'mode': 'Autopilot', 'paidTotal': '0.003000 USDC'} | stale True | asOf 1792289596 | error None
+10:13:19 status, relay down: HTTP 200 in 0.819335s
+   {'mode': 'Autopilot', 'paused': False, 'rate': '0.000428 USDC'} | stale True | asOf 1792289597 | error None
+10:13:20 symbolon, relay down: HTTP 200 in 0.008683s
+   {'counts': {'double': 1, 'single': 3, 'triple': 0, 'unsigned': 0}, 'chainReadFailed': []} | stale None | asOf None | error None
+
+10:13:20 waiting 31 s, relay still down
+10:13:51 inbox, relay down, last good > 30 s old: HTTP 502 in 0.902652s
+   {'balance': None, 'mode': None, 'paidTotal': None} | stale None | asOf None | error upstream_unavailable
+10:13:52 status, relay down, last good > 30 s old: HTTP 200 in 0.875320s
+   {'mode': None, 'paused': None, 'rate': None} | stale None | asOf None | error None
+
+10:13:53 relay up again
+10:13:53 inbox, relay up: HTTP 200 in 2.926333s
+   {'balance': '0.047000 USDC', 'mode': 'Autopilot', 'paidTotal': '0.003000 USDC'} | stale None | asOf None | error None
+# end 10:13:56 +0800
