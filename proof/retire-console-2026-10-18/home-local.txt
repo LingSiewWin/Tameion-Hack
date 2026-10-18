@@ -1,0 +1,62 @@
+five-minutes against M1's home (lane/home-actions 6447365) on http://localhost:3031 -> service https://tameion-lane-production.up.railway.app (HOME_DEMO_NAME=guest-demo-arc); passkey RP id localhost.
+Note: run 1's screenshot folder was written as localhost:3031-20261018-134920 and renamed to localhost-3031-20261018-134920 after the run (the script now writes the host without the colon); the path in run 1's second line is edited to match. Nothing else in either run is edited.
+
+======== run 1 ========
+five-minutes http://localhost:3031 (home map) started Sun Oct 18 2026 13:49:20 GMT+0800 (Malaysia Time)
+screenshots /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/accept/proof/five-minutes/localhost-3031-20261018-134920/
+demo: enabled true, vendor 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854, bill 0.002 every 120 s, delay 30 s | from GET /api/level1/demo
+  13:49:22 step 1 open
+  13:49:23 typed the invite word (from the file)
+  13:49:23 tap "^Make your own account"
+  13:49:23 http 404 GET /api/level1/name/acme-agents-4586
+  13:49:23 typed the name accept-1349
+  13:49:23 tap "^Continue$"
+  13:49:24 tap "^Make my passkey$"
+STEP 1 PASS funded page (open; the figure is read from the inbox) · inbox balance 0.050000 USDC · account accept-1349 0x649a3b1089d38718c8986505f616dfe502b86f89 on arbitrum-sepolia | from page text + GET /api/level1/name/accept-1349 + GET /api/level1/inbox
+  13:49:39 step 2 bill
+  13:49:39 tap "^Let the agent pay Demo Vendor "
+  13:49:49 page: "It holds 0.05 USDC"
+  13:49:49 tap "^Open the account$"
+STEP 2 PASS page "Demo Vendor approved; the bill saved" · inbox payee 0xe5e2…3854 approved, payable from 13:50:14; bill 0.002 USDC every 120 s, first due 13:51:45 | from page text + GET /api/level1/inbox (payees, typedBills)
+  13:49:54 step 3 autopilot
+  13:49:54 tap "^Turn Autopilot on$"
+STEP 3 PASS page "It applies in 0:27 unless you cancel" with Cancel shown · inbox pending mode Autopilot eta 13:50:27; mode Autopilot by 13:50:53 (59 s after the tap) | from page text + GET /api/level1/inbox (pending, mode)
+  13:50:53 step 4 watch
+  13:52:03 row: Today 13:51 Demo Vendor 0.002 USDC Paid by the agent: a bill the owner typed: 0.002 USDC Paid
+STEP 4 PASS page 0.002 USDC to Demo Vendor, why "Paid by the agent: a bill the owner typed: 0.002 USDC", tx not on the page · inbox 0.002000 USDC to 0xe5e2…3854 at 13:51:50 (due 13:51:45), by the agent, reason "paid by the agent: a bill the owner typed: 0.002000 USDC", tx 0x4454c999360d0824161dc03c46d926a632689e2dce9c86376f5a9c91050534df · chain arbitrum-sepolia receipt status 1 block 320310122 | from page row + GET /api/level1/inbox (paid) + eth_getTransactionReceipt on https://sepolia-rollup.arbitrum.io/rpc
+  13:52:05 step 5 raiseCut
+  13:52:07 tap "^Raise one payment to ([\d.,]+) USDC$"
+  13:52:16 tap "^Cut (?:one payment|the day) to ([\d.,]+) USDC$"
+STEP 5 PASS cap 50.000000 USDC → raise to 100 USDC: page "the limits rise to 100 USDC a day, 100 at a time. It applies in 0:27 unless you cancel." with Cancel shown, inbox pending perActionCap 100.000000 USDC eta 13:52:41 · cut perAction to 0.002 USDC: page "Cut, at once: 0.002 USDC at a time, 100 USDC a day.", inbox perAction 0.002000 USDC, 2 s after the page's confirmation (delay 30 s) | from page text + GET /api/level1/inbox (caps, pending)
+  account accept-1349 0x649a3b1089d38718c8986505f616dfe502b86f89 on arbitrum-sepolia; its passkey lived only in this run's virtual authenticator
+RESULT PASS 5/5 (ended Sun Oct 18 2026 13:52:28 GMT+0800 (Malaysia Time))
+
+======== run 2 (repeatability), same command ========
+five-minutes http://localhost:3031 (home map) started Sun Oct 18 2026 13:53:07 GMT+0800 (Malaysia Time)
+screenshots /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/accept/proof/five-minutes/localhost-3031-20261018-135307/
+demo: enabled true, vendor 0xe5e2d8dcc2038fd0a010a6e7845378b646e33854, bill 0.002 every 120 s, delay 30 s | from GET /api/level1/demo
+  13:53:08 step 1 open
+  13:53:08 typed the invite word (from the file)
+  13:53:08 tap "^Make your own account"
+  13:53:09 http 404 GET /api/level1/name/acme-agents-9926
+  13:53:09 typed the name accept-1353
+  13:53:09 tap "^Continue$"
+  13:53:09 tap "^Make my passkey$"
+STEP 1 PASS funded page (open; the figure is read from the inbox) · inbox balance 0.050000 USDC · account accept-1353 0x05d0ba8f43636cc136bde30c1a08e2e0d6b3b0f7 on arbitrum-sepolia | from page text + GET /api/level1/name/accept-1353 + GET /api/level1/inbox
+  13:53:25 step 2 bill
+  13:53:25 tap "^Let the agent pay Demo Vendor "
+  13:53:35 page: "It holds 0.05 USDC"
+  13:53:35 tap "^Open the account$"
+STEP 2 PASS page "Demo Vendor approved; the bill saved" · inbox payee 0xe5e2…3854 approved, payable from 13:54:00; bill 0.002 USDC every 120 s, first due 13:55:32 | from page text + GET /api/level1/inbox (payees, typedBills)
+  13:53:40 step 3 autopilot
+  13:53:40 tap "^Turn Autopilot on$"
+STEP 3 PASS page "It applies in 0:27 unless you cancel" with Cancel shown · inbox pending mode Autopilot eta 13:54:13; mode Autopilot by 13:55:07 (87 s after the tap) | from page text + GET /api/level1/inbox (pending, mode)
+  13:55:07 step 4 watch
+  13:55:50 row: Today 13:55 Demo Vendor 0.002 USDC Paid by the agent: a bill the owner typed: 0.002 USDC Paid
+STEP 4 PASS page 0.002 USDC to Demo Vendor, why "Paid by the agent: a bill the owner typed: 0.002 USDC", tx not on the page · inbox 0.002000 USDC to 0xe5e2…3854 at 13:55:37 (due 13:55:32), by the agent, reason "paid by the agent: a bill the owner typed: 0.002000 USDC", tx 0xb0dff8d1e4bd520afc60b1df21784772afb72d0930b955d58546af1f889efb7b · chain arbitrum-sepolia receipt status 1 block 320310991 | from page row + GET /api/level1/inbox (paid) + eth_getTransactionReceipt on https://sepolia-rollup.arbitrum.io/rpc
+  13:55:53 step 5 raiseCut
+  13:55:55 tap "^Raise one payment to ([\d.,]+) USDC$"
+  13:56:04 tap "^Cut (?:one payment|the day) to ([\d.,]+) USDC$"
+STEP 5 PASS cap 50.000000 USDC → raise to 100 USDC: page "the limits rise to 100 USDC a day, 100 at a time. It applies in 0:27 unless you cancel." with Cancel shown, inbox pending perActionCap 100.000000 USDC eta 13:56:28 · cut perAction to 0.002 USDC: page "Cut, at once: 0.002 USDC at a time, 100 USDC a day.", inbox perAction 0.002000 USDC, 2 s after the page's confirmation (delay 30 s) | from page text + GET /api/level1/inbox (caps, pending)
+  account accept-1353 0x05d0ba8f43636cc136bde30c1a08e2e0d6b3b0f7 on arbitrum-sepolia; its passkey lived only in this run's virtual authenticator
+RESULT PASS 5/5 (ended Sun Oct 18 2026 13:56:16 GMT+0800 (Malaysia Time))
