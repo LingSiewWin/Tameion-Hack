@@ -2,7 +2,7 @@
 
 The account an agent operator gives its agents: they pay inside the mandate you signed, and every payment, refusal and reason lands in a book both sides sign.
 
-![The owner's statement of a demo account on Arc testnet, on a phone: what the agents may spend today, what they paid and to whom, the why beside each row](proof/home-2026-10-18/guest-demo-opened-owner-390.png)
+![The owner's statement of a demo account on Arc testnet, on a phone: what the agents may spend today, what they paid and to whom, the why beside each row](proof/home-2026-10-18/owner-home-guest-demo-arc-390.png)
 
 ## Try it in 5 minutes
 
