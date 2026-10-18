@@ -1,0 +1,15 @@
+# clean clone of the tag submission-2026-10-18 = 997d342 (2026-10-18 10:11 +08)
+
+git clone --branch submission-2026-10-18 --depth 1 https://github.com/LingSiewWin/Tameion-Hack.git; npm ci in apps/console, apps/sdk, apps/home; then the README's gate and the home app's checks, in a fresh cargo target:
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+npm ci done 10:00:28
+gate exit=0 10:10:13
+18
+Ran 23 test suites in 85.69s (428.97s CPU time): 228 tests passed, 0 failed, 0 skipped (228 total tests)
+  594 passed, 0 failed
+all suites passed
+home ci FAIL count: 0
+ℹ pass 84
+ℹ fail 0
+clean clone end 10:10:17
+[exited with code 0]
