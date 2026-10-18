@@ -4,10 +4,6 @@
 
 Built for the Tameion Agents Hackathon (Canteen × Circle × Arc). Testnet only. The name comes from *tamias*, the Greek steward of the treasury. The record both sides keep is a *symbolon*.
 
-![The owner's statement for a demo account](proof/home-2026-10-18/guest-demo-opened-owner-390.png)
-
-*What the owner sees. Allowance left today, runway at this burn, what needs them, and what the agent paid and why. Not one hash on the page.*
-
 ## Try it in five minutes
 
 | | |
