@@ -112,3 +112,28 @@ Autopilot at 07:29:55; 07:31:01 THE AGENT PAID BY ITSELF 0.002 USDC, tx 0xc1840d
 ("paid by the agent: a bill the owner typed"). The same driver against https://tameion-lane-production.up.railway.app was refused
 at 07:31 and 07:32: "/api/level1/deploy 403: an invite word is needed to deploy; ask us" (neither the :7890 word nor the S17a word
 file is that service's). guest-demo does not exist yet.
+
+======================================================================================================================================
+guest-demo-arc on the lane service (Arc testnet), written 2026-10-18 09:47 +0800
+Driver: scratchpad/guest/guest-demo.cjs (software P-256 owner key ~/.tameion/test-keys/h4-guest-demo-arc-owner.pk8, mode 600; the invite
+from ~/.tameion/invite.word, never printed), NAME_=guest-demo-arc CHAIN=arc-testnet, against https://tameion-lane-production.up.railway.app
+(rebuild bcc2469f with demo_usdc; relayer 0x5f3f40daa525230289af8d40746dd12d10a151d6 held 20.0 USDC on Arc at 09:43:18).
+09:44:21  opened: policy 0x8e388dc7a4098b0e7837b6607a70114238655623, owner 0x637c4cefbc4c1a8fe6e5df447a656be1a3e42221, chain arc-testnet (5042002)
+09:44:23  balance read back 0.050000 USDC (mode Propose)
+09:44:25  Demo Vendor approved; 09:44:25 bill saved 0.002 USDC every 120 s, first due 09:46:25; 09:44:31 Autopilot asked
+09:45:01  the first run stopped on a read: GET /api/level1/inbox 502 "contract call: Max retries exceeded server returned an error response:
+          error code -32005: rate limit exceeded" (Arc's public RPC, P-12/P-14); nothing was half-made. The driver now reads again on a
+          failed read and keeps a saved bill; run again at 09:45:49 on the same account: same policy, the same funding, approval and bill
+          kept, mode Autopilot (on chain: mode() = 2).
+09:46:30  THE AGENT PAID BY ITSELF 0.002 USDC, tx 0x8739b4b02fd92d606d1d416ed806c15ce311168d421552dab24ed52a21cabd11 (status 1, block
+          67763883, from the agent key 0xcce873465fc99494de0e139584e6abb3a2dee18e to the policy, 2 logs), "paid by the agent: a bill the owner typed"
+Transactions on Arc testnet, receipts read back from https://rpc.testnet.arc.io:
+  policy deploy   0x1f4edb57ef838f241cfd944c7af1fa148bb2fba6cdbeaec5ecc0f7cbdc6df47b  status 1  block 67763601 (CREATE2 factory, 4 logs)
+  owner deploy    0x4f31bda2073ab1185b58110eec6b932e58f603e9546793143328d6e21ead0164
+  funding 0.05    0x73904b194be8e4e4f406a5f9fed0557b2ea8d2b5320438b4cbf10b90c2d7af34  status 1  block 67763606 (to 0x3600…0000, 2 logs)
+  payee approval  0x9341f3dbe2caf958c370e78d7c670f9d1f044d0e501ac2caf10c433aefb392e5  status 1  block 67763614 (PasskeyPrincipal.execute)
+  Autopilot ask   0x026f6c723683073fd8c6507a8b614a76fc9bcdd8fa18e565ac6188ce94d824e9  status 1  block 67763626 (PasskeyPrincipal.execute)
+  first payment   0x8739b4b02fd92d606d1d416ed806c15ce311168d421552dab24ed52a21cabd11  status 1  block 67763883
+Checks after: GET /api/level1/name/guest-demo-arc -> arc-testnet 5042002 deployed; through the preview proxy by name, status ok
+(contract 2026-10-18.1, rate 0.000285 USDC, runway 168 days) and inbox mode Autopilot, balance 0.048000 USDC, 1 payee, 1 paid row
+(the first proxy inbox read at 09:47:04 answered upstream_unavailable, the same Arc rate limit; the read at 09:47:25 answered).

@@ -1,0 +1,39 @@
+== 2026-10-18 09:55:49 +08  remote tameion-home-production.up.railway.app (the commit it serves is read from the deploy record, not from here)  seat H6  https://tameion-home-production.up.railway.app
+PASS  tokens  owner --up: DESIGN #2F7A00, tokens.css #2E7800 (deliberate: DESIGN's value reads 4.39:1 on its surfaces, this one 4.51:1)
+WARN  strings  8 inline strings in .tsx (DESIGN: none in components):
+        src/app/a/[name]/add/page.tsx:14  "The service did not answer"
+        src/app/a/[name]/add/page.tsx:16  "No account has that name"
+        src/features/add-money/add-money.tsx:134  "Add money"
+        src/features/add-money/add-money.tsx:229  "The demo pays an account once, when it opens"
+        src/features/add-money/move-plate.tsx:290  "The move"
+        src/features/add-money/move-plate.tsx:385  "What the wallet said"
+        src/features/add-money/move-plate.tsx:508  "Amount in USDC"
+PASS  contrast  contrast/tokens: every text pair >= 4.5:1 and every edge >= 3:1 in both views; tokens.css matches tokens.ts
+PASS  zero-hash  ℹ tests 11  ℹ pass 11  ℹ fail 0
+PASS  literals
+PASS  hex-lint  tokens-lint: no colour literal outside the tokens files; every token used is defined
+PASS  21st-review  src/tokens.css:43:12 info design-hardcoded-color Hardcoded color may drift from project design tokens.
+        54 file(s), 25 finding(s), 0 fixed.
+browser: 31 checks, 0 FAIL, 2 WARN (0 + 1 distinct), 8 note
+  WARN console    502 /api/level1/inbox
+       in 2: guest/rest/agent/1280, add/rest/agent/1280
+  NOTE not-built-yet    the route still shows its skeleton after settling: no content yet
+       in 5: account/rest/owner/390, account/rest/agent/1280, account/rest/agent/390, add/rest/owner/1280, ...
+  NOTE not-measured    not walked on a public host: no word is ever typed there
+       in 2: guest-path/1280, guest-path/390
+  NOTE not-built-yet    no text input on /add yet
+       in 1: keyboard/add/375
+measured:
+  guest/rest/owner/1280: h1 49px/56px/500; main 80..1200 (1120 wide)
+  guest/rest/owner/390: h1 31px/38px/500; main 0..390 (390 wide)
+  guest/rest/agent/1280: h1 15px/22px/500; main 80..1200 (1120 wide)
+  guest/rest/agent/390: h1 15px/22px/500; main 0..390 (390 wide)
+  account/rest/owner/1280: h1 31px/38px/500; main 80..1200 (1120 wide)
+  account/rest/owner/390: h1 none; main 0..390 (390 wide)
+  account/rest/agent/1280: h1 none; main 80..1200 (1120 wide)
+  account/rest/agent/390: h1 none; main 0..390 (390 wide)
+  add/rest/owner/1280: h1 none; main 80..1200 (1120 wide)
+  add/rest/owner/390: h1 none; main 0..390 (390 wide)
+  add/rest/agent/1280: h1 15px/22px/500; main 80..1200 (1120 wide)
+  add/rest/agent/390: h1 15px/22px/500; main 0..390 (390 wide)
+since the last run: 5 fixed, 2 new

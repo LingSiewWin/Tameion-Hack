@@ -1,0 +1,23 @@
+== 2026-10-18 09:34:22 +08  lane/home 652021a (+2 uncommitted) at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home  seat H6  http://localhost:3010
+PASS  tokens  owner --up: DESIGN #2F7A00, tokens.css #2E7800 (deliberate: DESIGN's value reads 4.39:1 on its surfaces, this one 4.51:1)
+WARN  strings  8 inline strings in .tsx (DESIGN: none in components):
+        src/app/a/[name]/add/page.tsx:14  "The service did not answer"
+        src/app/a/[name]/add/page.tsx:16  "No account has that name"
+        src/features/add-money/add-money.tsx:134  "Add money"
+        src/features/add-money/add-money.tsx:229  "The demo pays an account once, when it opens"
+        src/features/add-money/move-plate.tsx:290  "The move"
+        src/features/add-money/move-plate.tsx:385  "What the wallet said"
+        src/features/add-money/move-plate.tsx:508  "Amount in USDC"
+PASS  contrast  contrast/tokens: every text pair >= 4.5:1 and every edge >= 3:1 in both views; tokens.css matches tokens.ts
+PASS  zero-hash  ℹ tests 11  ℹ pass 11  ℹ fail 0
+PASS  literals
+PASS  hex-lint  tokens-lint: no colour literal outside the tokens files; every token used is defined
+PASS  21st-review  src/tokens.css:43:12 info design-hardcoded-color Hardcoded color may drift from project design tokens.
+        54 file(s), 25 finding(s), 0 fixed.
+browser: 17 checks, 0 FAIL, 0 WARN (0 + 0 distinct), 0 note
+measured:
+  add/rest/owner/1280: h1 16px/24px/600; main 80..1200 (1120 wide)
+  add/rest/owner/390: h1 16px/24px/600; main 0..390 (390 wide)
+  add/rest/agent/1280: h1 15px/22px/500; main 80..1200 (1120 wide)
+  add/rest/agent/390: h1 15px/22px/500; main 0..390 (390 wide)
+since the last run: 0 fixed, 0 new
