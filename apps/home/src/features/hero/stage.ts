@@ -1,6 +1,6 @@
 // The scroll-bound canvas (DESIGN §The hero): photograph -> grid -> drain -> tracking -> hand-over. Treatment A starts
 // from the scene (or its two-tone placeholder), treatment B from an ink line chart of the coast. Colours come from the
-// tokens (tokens.ts) of the view the page is in; nothing is drawn that the scene or the recording does not hold.
+// tokens (tokens.ts) of the view the page is in; the vessels are the prebuilt illustrative tracks (public/hero/ais.json).
 import { palette, type View } from "../../tokens.ts";
 import { cellAt, COLUMN, FOCUS, fixAt, handBeats, labelOf, lerp, luma, MODULE, otsu, phases, seg, toPixel, type Replay, type Scene, type Vessel } from "./model.ts";
 
@@ -10,10 +10,12 @@ type Coast = { features: { geometry: { coordinates: number[][][] } }[] };
 type Label = { v: Vessel; text: string; x: number; y: number; w: number };
 
 const channels = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+/** A vessel's ink cluster, in 8 px columns: tanker 3, cargo 2, any other 1. */
+const clusterCols = (v: Vessel) => (v.type !== null && v.type >= 80 && v.type < 90 ? 3 : v.type !== null && v.type >= 70 && v.type < 80 ? 2 : 1);
 const meets = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
 /** The two-tone placeholder (A until the Sentinel-2 export lands): coast lines drawn, the sea flood-filled from two
- *  seeds (the Gulf of Oman and the Gulf), everything else land. Real geography, labelled placeholder in the caption. */
+ *  seeds (the Gulf of Oman and the Gulf), everything else land. Natural Earth geography, labelled placeholder in the caption. */
 export function drawPlaceholder(scene: Scene, coast: Coast): HTMLCanvasElement {
   const c = document.createElement("canvas");
   [c.width, c.height] = [scene.width, scene.height];
@@ -130,18 +132,28 @@ export function createStage(canvas: HTMLCanvasElement) {
     const out: Label[] = [];
     const max = L.W >= 640 ? 6 : 4;
     const vs = [...(inp.replay?.vessels ?? [])].sort((a, b) => (fixAt(b, t)?.[3] ?? 0) - (fixAt(a, t)?.[3] ?? 0));
+    // every vessel's ink cluster at that moment: a label's words never sit on another vessel (no boxes to separate them)
+    const clusters = vs.flatMap((v) => {
+      const f = fixAt(v, t);
+      if (!f) return [];
+      const [x, y] = place(f[1], f[2]);
+      return [{ v, r: { x: Math.floor(x / COLUMN) * COLUMN, y: Math.floor(y / COLUMN) * COLUMN, w: clusterCols(v) * COLUMN, h: COLUMN } }];
+    });
     for (const v of vs) {
       if (out.length >= max) break;
       const f = fixAt(v, t);
       if (!f) continue;
       const [x, y] = place(f[1], f[2]);
       const text = labelOf(v, f);
-      const lx = Math.floor(x / MODULE) * MODULE; // the label starts on a grid column
-      const gy = Math.floor(y / COLUMN) * COLUMN; // the cluster's top
       const w = Math.ceil(ctx.measureText(text).width / COLUMN) * COLUMN;
+      // the label starts on the cluster's 40 px column, or further left on the 8 px columns when it would run off the page
+      const lx = Math.max(0, Math.min(Math.floor(x / MODULE) * MODULE, Math.floor((L.W - w - COLUMN) / COLUMN) * COLUMN));
+      const gy = Math.floor(y / COLUMN) * COLUMN; // the cluster's top
       const r = { x: lx, y: gy, w, h: MODULE };
       if (r.x < 0 || r.x + r.w > L.W || r.y < 0 || r.y + r.h > L.H || meets(r, L.plate)) continue;
       if (out.some((o) => meets(r, { x: o.x, y: o.y, w: o.w, h: MODULE }))) continue;
+      const words = { x: lx, y: gy + COLUMN, w, h: 3 * COLUMN }; // the underline and the label under the cluster
+      if (clusters.some((c) => c.v !== v && meets(words, c.r))) continue;
       out.push({ v, text, x: lx, y: gy, w });
     }
     return out;
@@ -219,7 +231,7 @@ export function createStage(canvas: HTMLCanvasElement) {
       ctx.globalAlpha = 1;
     }
 
-    // 3. vessels from the recording: marks (B, from the start) that drain to ink clusters on the 8 px columns
+    // 3. vessels from the tracks: marks (B, from the start) that drain to ink clusters on the 8 px columns
     const rep = inp.replay;
     if (!rep) return;
     const t = lerp(rep.from, rep.to, seg(p, 0.26, 0.82));
@@ -235,15 +247,14 @@ export function createStage(canvas: HTMLCanvasElement) {
           ctx.fillRect(Math.round(x) - 2, Math.round(y) - 2, 4, 4);
         } else {
           const gx = Math.floor(x / COLUMN) * COLUMN, gy = Math.floor(y / COLUMN) * COLUMN;
-          const n = v.type !== null && v.type >= 80 && v.type < 90 ? 3 : v.type !== null && v.type >= 70 && v.type < 80 ? 2 : 1;
           ctx.fillStyle = tk.ink;
-          ctx.fillRect(gx, gy, n * COLUMN, COLUMN);
+          ctx.fillRect(gx, gy, clusterCols(v) * COLUMN, COLUMN);
         }
       }
       ctx.globalAlpha = 1;
     }
 
-    // 4. tracking: a thin underline and the recording's own fields, on the grid's columns; 5. they slide into rows and fade
+    // 4. the labels: a thin underline and the track's own fields, on the grid's columns; 5. they slide into rows and fade
     if (ph.track > 0) {
       const key = [L.W, L.H, rep, inp.monoFont];
       if (labelsFor === null || (labelsFor as unknown[]).some((k, i) => k !== key[i])) {

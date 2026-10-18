@@ -12,12 +12,8 @@ const readJson = <T,>(f: string): T | null => (existsSync(pub(f)) ? (JSON.parse(
 export default async function GuestPage({ searchParams }: { searchParams: Promise<{ treatment?: string }> }) {
   const t = (await searchParams).treatment;
   const treatment: Treatment = t === "B" || t === "C" ? t : "A";
-  // the recording once it exists; the synthetic replay only in development, never in a production build
-  const replayUrl = existsSync(pub("hero/ais.json"))
-    ? "/hero/ais.json"
-    : process.env.NODE_ENV !== "production" && existsSync(pub("hero/ais.synthetic.json"))
-      ? "/hero/ais.synthetic.json"
-      : null;
+  // the prebuilt illustrative tracks (scripts/hero-data.mjs tracks)
+  const replayUrl = existsSync(pub("hero/ais.json")) ? "/hero/ais.json" : null;
   return (
     <>
       <Hero

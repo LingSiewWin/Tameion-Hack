@@ -1,13 +1,12 @@
 // The hero's data files (DESIGN §Data and honesty). Node >= 22.18 (imports the TypeScript model directly).
 //   node scripts/hero-data.mjs ais <recording.jsonl> [out.json]   pack a real aisstream.io recording -> public/hero/ais.json
-//   node scripts/hero-data.mjs synthetic                          write the 200-line synthetic replay (test/fixtures/ais.synthetic.jsonl)
-//                                                                 and its packed copy public/hero/ais.synthetic.json (gitignored, dev only)
+//   node scripts/hero-data.mjs tracks                             the illustrative tracks on the strait's traffic lanes -> public/hero/ais.json
 //   node scripts/hero-data.mjs portwatch <query.json> <url>       IMF PortWatch daily chokepoint rows -> public/hero/portwatch.json
-//   node scripts/hero-data.mjs scene <image> <world file> <scene id> <YYYY-MM-DD>
+//   node scripts/hero-data.mjs scene <image> <world file> <scene id> <YYYY-MM-DD> <credit> [source URL]
 //                                     the founder's Sentinel-2 export -> public/hero/scene.avif (<= 350 KB), scene-828.avif (phones)
 //                                     and scene.json (size, world file, crs read from it: metres = EPSG:3857, degrees = EPSG:4326)
 import { readFileSync, writeFileSync } from "node:fs";
-import { BBOX, pack, parseWorldFile } from "../src/features/hero/model.ts";
+import { crossesCoast, pack, parseWorldFile } from "../src/features/hero/model.ts";
 
 const app = new URL("..", import.meta.url).pathname;
 const [cmd, a1, a2] = process.argv.slice(2);
@@ -23,45 +22,65 @@ if (cmd === "ais") {
   const replay = pack(lines(a1), { synthetic: false, source: "aisstream.io" }, 5 * 60_000);
   write(a2 ?? `${app}public/hero/ais.json`, replay);
   console.log(`${replay.vessels.length} vessels, ${new Date(replay.from).toISOString()} to ${new Date(replay.to).toISOString()}`);
-} else if (cmd === "synthetic") {
-  // Clearly not real: MMSIs 999000001.. (999 is no country's MID), a fixed made-up window, lanes drawn by hand.
-  let seed = 7;
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
-  const lanes = [
-    [[57.45, 25.25], [56.8, 26.1], [56.45, 26.45], [56.05, 26.55], [55.35, 26.3], [54.6, 26.05]], // inbound
-    [[54.6, 26.15], [55.35, 26.42], [56.05, 26.66], [56.5, 26.56], [56.9, 26.15], [57.5, 25.35]], // outbound
-  ];
-  const from = Date.parse("2026-10-18T00:00:00Z");
-  const out = [];
-  for (let k = 0; k < 20; k++) {
-    const mmsi = 999000001 + k;
-    const anchored = k >= 15; // five at anchor off Fujairah
-    const type = [80, 80, 81, 70, 71, 84, 89, 70, 60, 80, 79, 82, 70, 52, 80][k % 15];
-    const lane = lanes[k % 2];
-    const segs = lane.slice(1).map((p, i) => [lane[i], p, Math.hypot((p[0] - lane[i][0]) * Math.cos((26 * Math.PI) / 180), p[1] - lane[i][1])]);
-    const length = segs.reduce((s, x) => s + x[2], 0);
-    const speed = 9 + rnd() * 5; // kn
-    let s = rnd() * length * 0.7;
-    const anchor = [56.38 + rnd() * 0.1, 25.08 + rnd() * 0.12];
-    for (let i = 0; i < 10; i++) {
-      const ts = new Date(from + i * 10 * 60_000).toISOString();
-      if (anchored) {
-        out.push({ mmsi, lat: +(anchor[1] + rnd() * 0.002).toFixed(5), lon: +(anchor[0] + rnd() * 0.002).toFixed(5), sog: +(rnd() * 0.3).toFixed(1), cog: Math.round(rnd() * 359), type: [80, 70, 80, 89, 70][k - 15], ts });
-        continue;
+} else if (cmd === "tracks") {
+  // Illustrative tracks (founder, 2026-10-18 08:44: the hero is design, its data prebuilt; there is no live recording).
+  // Inbound (westbound) lane: OpenStreetMap way 220138792, seamark separation_lane, north of the Musandam peninsula; the
+  // scheme's northern boundary is way 220138843. Outbound lane: 4 nm to its south (IMO: 2 nm lanes either side of a 2 nm
+  // separation zone). The ends run out into the Gulf of Oman and the Gulf on waypoints checked against the coast below.
+  // Deterministic: no randomness, no network.
+  const NM = 1 / 60; // one nautical mile in degrees of latitude
+  const k = Math.cos((26.5 * Math.PI) / 180); // a degree of longitude here, in degrees of latitude
+  const osmLane = [[56.3452, 26.5951], [56.465, 26.6241], [56.5916, 26.6238], [56.6734, 26.5035]]; // west to east
+  const inboundWE = [[55.35, 26.42], [55.85, 26.5], ...osmLane, [56.95, 26.2], [57.2, 25.55]];
+  // a polyline moved d nm to the right of its direction (west to east: to the south)
+  const offset = (line, d) =>
+    line.map((p, i) => {
+      const a = line[Math.max(0, i - 1)], b = line[Math.min(line.length - 1, i + 1)];
+      const dx = (b[0] - a[0]) * k, dy = b[1] - a[1], len = Math.hypot(dx, dy);
+      return [p[0] + ((dy / len) * d * NM) / k, p[1] - (dx / len) * d * NM];
+    });
+  const lanes = { in: [...inboundWE].reverse(), out: offset(inboundWE, 4) };
+  // every lane, and both edges of it (1 nm either side), stays at sea
+  const coast = JSON.parse(readFileSync(`${app}public/hero/coastline-hormuz.geojson`, "utf8")).features.flatMap((f) => f.geometry.coordinates);
+  for (const [name, line] of Object.entries(lanes))
+    for (const edge of [line, offset(line, 1), offset(line, -1)])
+      for (let i = 1; i < edge.length; i++)
+        if (crossesCoast(edge[i - 1], edge[i], coast)) throw new Error(`tracks: the ${name} lane crosses the coast between ${edge[i - 1]} and ${edge[i]}`);
+  const segLen = (a, b) => Math.hypot((b[0] - a[0]) * k, b[1] - a[1]) / NM; // nm
+  const along = (line, s) => {
+    for (let i = 1; i < line.length; i++) {
+      const a = line[i - 1], b = line[i], len = segLen(a, b);
+      if (s <= len || i === line.length - 1) {
+        const f = Math.min(1, s / len);
+        const cog = ((Math.atan2((b[0] - a[0]) * k, b[1] - a[1]) * 180) / Math.PI + 360) % 360;
+        return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, Math.round(cog)];
       }
-      let at = s, j = 0;
-      while (j < segs.length - 1 && at > segs[j][2]) at -= segs[j++][2];
-      const [p, q, len] = segs[j];
-      const f = Math.min(1, at / len);
-      const lon = p[0] + (q[0] - p[0]) * f, lat = p[1] + (q[1] - p[1]) * f;
-      const cog = Math.round(((Math.atan2((q[0] - p[0]) * Math.cos((26 * Math.PI) / 180), q[1] - p[1]) * 180) / Math.PI + 360) % 360);
-      out.push({ mmsi, lat: +lat.toFixed(5), lon: +lon.toFixed(5), sog: +speed.toFixed(1), cog, type, ts });
-      s += (speed * 10) / 60 / 60; // nautical miles in 10 minutes, in degrees of latitude
+      s -= len;
     }
-  }
-  write(`${app}test/fixtures/ais.synthetic.jsonl`, out.map((r) => JSON.stringify(r)).join("\n") + "\n");
-  write(`${app}public/hero/ais.synthetic.json`, pack(out, { synthetic: true, source: "synthetic" }));
-  console.log(`${out.length} lines, bbox ${BBOX.join(",")}`);
+  };
+  const total = (line) => line.slice(1).reduce((sum, p, i) => sum + segLen(line[i], p), 0);
+  const from = Date.parse("2026-10-18T06:00:00Z");
+  // [lane, nm along it at the window's start, speed kn, AIS ship type]
+  const fleet = [
+    ["in", 42, 12.4, 80], ["in", 51, 14.1, 70], ["in", 60, 11.2, 84], ["in", 69, 16.0, 71],
+    ["out", 40, 12.8, 80], ["out", 49, 13.3, 81], ["out", 57, 13.0, 79], ["out", 65, 10.6, 80],
+  ];
+  const reports = [];
+  fleet.forEach(([lane, s0, kn, type], i) => {
+    for (let m = 0; m <= 90; m += 2) {
+      const s = s0 + (kn * m) / 60;
+      if (s > total(lanes[lane])) break;
+      const [lon, lat, cog] = along(lanes[lane], s);
+      reports.push({ mmsi: 999000001 + i, lat, lon, sog: kn, cog, type, ts: from + m * 60_000 });
+    }
+  });
+  const about =
+    "Illustrative tracks for the hero's design, not ship positions: eight vessels with made-up identifiers (MMSI prefix 999 belongs to no country) " +
+    "moving at steady speeds along the Strait of Hormuz traffic separation scheme. Inbound lane: OpenStreetMap way 220138792 (seamark separation_lane), " +
+    "(c) OpenStreetMap contributors, ODbL; outbound lane 4 nm south of it (IMO: 2 nm lanes either side of a 2 nm separation zone); lane ends checked " +
+    "against the Natural Earth 10 m coast (public domain). Made by scripts/hero-data.mjs tracks.";
+  write(`${app}public/hero/ais.json`, { about, ...pack(reports, { synthetic: true, source: "illustrative" }) });
+  console.log(`${reports.length} fixes, ${fleet.length} vessels`);
 } else if (cmd === "portwatch") {
   if (!a1 || !a2) throw new Error("portwatch: give the saved query reply and its URL");
   const body = JSON.parse(readFileSync(a1, "utf8"));
@@ -71,8 +90,8 @@ if (cmd === "ais") {
   }));
   write(`${app}public/hero/portwatch.json`, { source: a2, fetchedAt: new Date().toISOString(), days });
 } else if (cmd === "scene") {
-  const [, , , , worldFile, id, date] = process.argv;
-  if (!a1 || !worldFile || !id || !/^\d{4}-\d{2}-\d{2}$/.test(date ?? "")) throw new Error("scene: <image> <world file> <scene id> <YYYY-MM-DD>");
+  const [, , , , worldFile, id, date, credit, source] = process.argv;
+  if (!a1 || !worldFile || !id || !/^\d{4}-\d{2}-\d{2}$/.test(date ?? "") || !credit) throw new Error("scene: <image> <world file> <scene id> <YYYY-MM-DD> <credit> [source URL]");
   const sharp = (await import("sharp")).default;
   const { width, height } = await sharp(a1).metadata();
   const wld = parseWorldFile(readFileSync(worldFile, "utf8"));
@@ -91,9 +110,9 @@ if (cmd === "ais") {
   write(`${app}public/hero/scene.avif`, full);
   write(`${app}public/hero/scene-828.avif`, phone);
   const src = "/hero/scene.avif";
-  write(`${app}public/hero/scene.json`, { id, date, width, height, crs, wld, src, srcSet: `/hero/scene-828.avif 828w, ${src} ${Math.min(2560, width)}w` });
+  write(`${app}public/hero/scene.json`, { id, date, credit, source, width, height, crs, wld, src, srcSet: `/hero/scene-828.avif 828w, ${src} ${Math.min(2560, width)}w` });
   console.log(`${width}x${height} ${crs}; ${full.length} B and ${phone.length} B`);
 } else {
-  console.error("usage: hero-data.mjs ais <recording.jsonl> [out] | synthetic | portwatch <query.json> <url>");
+  console.error("usage: hero-data.mjs ais <recording.jsonl> [out] | tracks | portwatch <query.json> <url> | scene <image> <world file> <id> <date> <credit> [source]");
   process.exit(2);
 }

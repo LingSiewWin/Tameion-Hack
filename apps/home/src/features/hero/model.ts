@@ -60,14 +60,16 @@ export const luma = (r: number, g: number, b: number) => 0.2126 * r + 0.7152 * g
 
 // ---- the AIS replay -----------------------------------------------------------------------------------------------
 
-/** The recording's bbox (DESIGN §Data and honesty): 54.5–58.0 E × 24.5–27.5 N, as [west, south, east, north]. */
+/** The hero's bbox (DESIGN §Data and honesty): 54.5–58.0 E × 24.5–27.5 N, as [west, south, east, north]. */
 export const BBOX = [54.5, 24.5, 58.0, 27.5] as const;
-/** One position report as scripts/ais-record.mjs writes it (one per line of ais.jsonl). */
+/** One position report: what scripts/hero-data.mjs tracks makes, and what scripts/ais-record.mjs would write for a later
+ *  aisstream.io recording (nothing calls it now). */
 export type Report = { mmsi: number | string; lat: number; lon: number; sog?: number | null; cog?: number | null; type?: number | null; ts: string | number };
 /** [time ms, lon, lat, speed over ground kn, course over ground deg]: only what the report held. */
 export type Fix = [number, number, number, number | null, number | null];
 export type Vessel = { mmsi: string; type: number | null; fixes: Fix[] };
-export type Replay = { synthetic: boolean; source: string; from: number; to: number; vessels: Vessel[] };
+/** `synthetic` true = not a recording (the illustrative tracks); `about` says what the data is and where it comes from. */
+export type Replay = { about?: string; synthetic: boolean; source: string; from: number; to: number; vessels: Vessel[] };
 
 const inBox = (lon: number, lat: number) => lon >= BBOX[0] && lon <= BBOX[2] && lat >= BBOX[1] && lat <= BBOX[3];
 const r5 = (x: number) => Math.round(x * 1e5) / 1e5;
@@ -95,7 +97,7 @@ export function pack(reports: Report[], meta: { synthetic: boolean; source: stri
   return { ...meta, from: Number.isFinite(from) ? from : 0, to: Number.isFinite(to) ? to : 0, vessels };
 }
 
-/** The vessel's last recorded fix at or before t (never an interpolated position), or null before its first. */
+/** The vessel's last fix at or before t (never an interpolated position), or null before its first. */
 export function fixAt(v: Vessel, t: number): Fix | null {
   let hit: Fix | null = null;
   for (const f of v.fixes) {
@@ -126,7 +128,7 @@ export function typeWord(code: number | null): string | null {
 }
 
 const hhmm = (ms: number) => new Date(ms).toISOString().slice(11, 16);
-/** The tracking label: only recorded fields, joined by two spaces (DESIGN: `MMSI 4…  tanker  11.8 kn  06:41`). */
+/** The label: only the fix's own fields, joined by two spaces (DESIGN: `MMSI 4…  tanker  11.8 kn  06:41`). */
 export function labelOf(v: Vessel, f: Fix): string {
   const type = typeWord(v.type);
   return [`MMSI ${v.mmsi}`, type, f[3] === null ? null : `${f[3].toFixed(1)} kn`, hhmm(f[0])].filter(Boolean).join("  ");
@@ -137,7 +139,20 @@ export const windowWords = (r: Replay) => ({ from: new Date(r.from).toISOString(
 
 /** A georeferenced image: its size in px and its world file [A, D, B, E, C, F] in `crs` (EPSG:3857 metres or EPSG:4326
  *  degrees); `src` null = the placeholder drawn from the coast. */
-export type Scene = { id: string; date: string | null; width: number; height: number; crs: "EPSG:3857" | "EPSG:4326"; wld: number[]; src: string | null; srcSet?: string };
+export type Scene = {
+  id: string;
+  date: string | null;
+  /** what the caption names as the picture's source, e.g. "NOAA-20 VIIRS true colour (NASA GIBS)" */
+  credit?: string;
+  /** where the picture was fetched from */
+  source?: string;
+  width: number;
+  height: number;
+  crs: "EPSG:3857" | "EPSG:4326";
+  wld: number[];
+  src: string | null;
+  srcSet?: string;
+};
 
 const EARTH = 6378137;
 const merc = (lon: number, lat: number): [number, number] => [
@@ -152,7 +167,7 @@ export function toPixel(scene: Scene, lon: number, lat: number): [number, number
   return [(x - C) / A + 0.5, (y - F) / E + 0.5];
 }
 
-/** The placeholder's frame: the recording's bbox in Web Mercator at `width` px, so it has the export's aspect ratio. */
+/** The placeholder's frame: the hero's bbox in Web Mercator at `width` px, so it has the scene's aspect ratio. */
 export function placeholderScene(width = 1024): Scene {
   const [x0, y1] = merc(BBOX[0], BBOX[3]);
   const [x1, y0] = merc(BBOX[2], BBOX[1]);
@@ -165,6 +180,17 @@ export const parseWorldFile = (text: string) => text.trim().split(/\s+/).slice(0
 
 /** The strait's bend (between Musandam and Larak): the canvas's focal third, where text never sits. */
 export const FOCUS = { lon: 56.3, lat: 26.55 } as const;
+
+/** True when the segment a-b crosses any of the coast's lines ([lon, lat]; planar, fine at a strait's scale). */
+export function crossesCoast(a: number[], b: number[], lines: number[][][]): boolean {
+  const side = (p: number[], q: number[], r: number[]) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]));
+  for (const line of lines)
+    for (let i = 1; i < line.length; i++) {
+      const c = line[i - 1], d = line[i];
+      if (side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0) return true;
+    }
+  return false;
+}
 
 // ---- IMF PortWatch (treatment C) ----------------------------------------------------------------------------------
 

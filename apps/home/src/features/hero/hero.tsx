@@ -3,6 +3,7 @@
 // strait becoming the book; the demo account's real records take the rows; the Owner home closes it. Never on /a/<name>.
 // The canvas starts after first paint (the plate's words are the LCP); reduced motion shows three stills instead.
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { OwnerSkeleton } from "../../components/skeletons.tsx";
 import { fetchDemo, fetchInbox } from "../../lib/api.ts";
@@ -77,7 +78,7 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
     return () => m.removeEventListener("change", on);
   }, []);
 
-  // after first paint: the recording and the demo account's records (the LCP never waits for either)
+  // after first paint: the vessels' tracks and the demo account's records (the LCP never waits for either)
   useEffect(() => {
     let live = true;
     const start = () => {
@@ -109,6 +110,7 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
     let monoFamily = "monospace";
     let raf = 0;
     let L: Layout | null = null;
+    let cancelled = false; // set by the cleanup: nothing measures, draws or schedules a frame after the section unmounts
 
     // At the top of the page the header sits above the stage, so what hangs from the stage's foot (the caption on a wide
     // screen, the plate on a phone) is lifted by the stage's offset until the stage reaches the top and sticks.
@@ -121,7 +123,9 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
     const measure = () => {
       pl.style.transform = ""; // the plate's box as laid out; lift() puts the offset back below
       // full bleed: the class places it for a page without a classic scrollbar; this corrects for one (100vw counts it)
-      const parent = sec.parentElement!;
+      // the reader may already have left `/`: a detached section has no parent and nothing to measure
+      const parent = sec.parentElement;
+      if (!parent || !sec.isConnected) return;
       const left = parent.getBoundingClientRect().left + parseFloat(getComputedStyle(parent).paddingLeft || "0");
       sec.style.width = `${document.documentElement.clientWidth}px`;
       sec.style.marginLeft = `${-left}px`;
@@ -161,11 +165,10 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
       cv.style.opacity = String(1 - ph.book);
     };
     const kick = () => {
-      if (!raf) raf = requestAnimationFrame(frame);
+      if (!raf && !cancelled) raf = requestAnimationFrame(frame);
     };
     measure();
     kick();
-    let cancelled = false;
     const start = async () => {
       monoFamily = getComputedStyle(document.documentElement).getPropertyValue("--font-mono").trim() || "monospace";
       // the labels' face loads beside the picture, never before it; once it is in, labels are measured again
@@ -217,10 +220,12 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
   const win = replay ? windowWords(replay) : null;
   const latest = portwatch?.days[0] ?? null;
   const caption = [
-    treatment === "A" ? (realScene?.date ? CAPTION.sceneA(realScene.date) : CAPTION.placeholderA) : treatment === "B" ? CAPTION.sceneB : latest ? CAPTION.sceneC(latest.date) : "",
-    !replay ? CAPTION.aisNone : replay.synthetic ? CAPTION.aisSynthetic : CAPTION.ais(win!.from, win!.to),
+    treatment === "A" ? (realScene?.date && realScene.credit ? CAPTION.scene(realScene.credit, realScene.date) : CAPTION.placeholderA) : treatment === "B" ? CAPTION.sceneB : latest ? CAPTION.sceneC(latest.date) : "",
+    !replay ? "" : replay.synthetic ? CAPTION.aisIllustrative : CAPTION.ais(win!.from, win!.to),
     CAPTION.rows,
-  ].join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
   const cell = (r: Row) => [r.date, r.who, r.amount, r.why, r.state].filter((_, i) => cols[i] > 0);
   const portRows = latest
     ? (Object.keys(FIGURES.types) as (keyof typeof FIGURES.types)[]).map((k) => ({ type: FIGURES.types[k], n: latest[k] }))
@@ -240,10 +245,10 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
           <div ref={figs} className="absolute px-(--space-2)" style={{ left: layout.rows.x, top: wide ? layout.rows.y - 2 * MODULE : 2 * MODULE }}>
             <p className="hero-figure m-0">{latest.total}</p>
             <p className="meta m-0 mb-(--space-5)">{FIGURES.transits(latest.date)}</p>
-            {replay ? (
+            {replay && !replay.synthetic ? (
               <>
                 <p className="hero-figure m-0">{replay.vessels.length}</p>
-                <p className="meta m-0">{FIGURES.window(replay.synthetic)}</p>
+                <p className="meta m-0">{FIGURES.window}</p>
               </>
             ) : null}
           </div>
@@ -316,7 +321,7 @@ export function Hero({ treatment, scene: realScene, replayUrl, portwatch, demo }
                   <p className="row m-0 mt-(--space-4) max-w-(--measure) text-(--ink-2)">{HERO.body}</p>
                   <div inert={active !== 0} className="mt-(--space-5) flex flex-col gap-(--space-3) sm:flex-row">
                     <a href="#guest" className="row-title inline-flex h-(--button) items-center justify-center rounded-(--radius-button) bg-(--ink) px-(--space-5) text-(--paper) no-underline">{HERO.open}</a>
-                    <a href="/new" className="row-title inline-flex h-(--button) items-center justify-center rounded-(--radius-button) bg-(--plate-2) px-(--space-5) text-(--ink) no-underline">{HERO.tryIt}</a>
+                    <Link href="/new" className="row-title inline-flex h-(--button) items-center justify-center rounded-(--radius-button) bg-(--plate-2) px-(--space-5) text-(--ink) no-underline">{HERO.tryIt}</Link>
                   </div>
                 </>
               ) : (
