@@ -1034,6 +1034,42 @@ async function heroCheck(browser, sc, cfg) {
   return out;
 }
 
+// The judges' guest path, the way a person walks it: a wrong word is refused in words, the right word (INVITE_FILE) opens the demo account read-only by its name.
+async function guestPath(browser, sc, cfg, AxeBuilder) {
+  const R = { name: `guest-path/${sc.width}`, findings: [] };
+  const { ctx, page } = await newPage(browser, { ...sc, route: "guest", view: "owner" });
+  const add = (sev, rule, detail, sel = "") => R.findings.push({ sev, rule, sel, text: "", detail });
+  try {
+    await page.goto(cfg.url + "/", { waitUntil: "domcontentloaded", timeout: 60000 });
+    await settle(page);
+    await page.fill("#word", "not-the-word");
+    await page.getByRole("button", { name: /open the demo account/i }).click();
+    // the refusal is a sentence in the card, in attention red: found by what it says, not by a role
+    const refusal = await page.waitForFunction(() => { const m = document.body.innerText.match(/[^\n]*(?:not the word|wrong word|did not match|was refused|no invite)[^\n]*/i); return m ? m[0] : false; }, null, { timeout: 8000 }).then((h) => h.jsonValue(), () => "");
+    if (!refusal.trim()) add("fail", "guest-refusal-silent", "a wrong word was answered with nothing on screen");
+    if (cfg.shots) { mkdirSync(cfg.shotsDir, { recursive: true }); await page.screenshot({ path: join(cfg.shotsDir, `guest-refused-owner-${sc.width}.png`), fullPage: true, caret: "hide" }); }
+    R.refusal = refusal.replace(/\s+/g, " ").slice(0, 90);
+    if (!cfg.invite) { add(cfg.strict ? "fail" : "note", "not-measured", "the right word was not tried (INVITE_FILE)"); return R; }
+    await page.fill("#word", cfg.invite);
+    await Promise.all([page.waitForURL(/\/a\/[^/?#]+$/, { timeout: 30000 }), page.getByRole("button", { name: /open the demo account/i }).click()]);
+    await page.waitForSelector("h1", { timeout: 20000 }).catch(() => {});
+    await settle(page);
+    const here = new URL(page.url()).pathname;
+    if (/0x[0-9a-fA-F]{8,}/.test(here)) add("fail", "route-has-hash", `the demo account opened at ${here.slice(0, 30)}...: routes are /a/<name>`);
+    const seen = await page.evaluate(() => ({ h1: document.querySelector("h1")?.innerText.trim().slice(0, 70) ?? "", stop: [...document.querySelectorAll("button")].some((b) => /^(stop|start) the agent/i.test(b.innerText.trim())) }));
+    if (seen.stop) add("fail", "guest-can-stop", "the read-only demo shows a Stop or Start the agent button to a visitor without the passkey");
+    if (!seen.h1) add("fail", "guest-no-hero", "the demo account opened with no h1");
+    R.opened = `${here}  h1 "${seen.h1}"`;
+    if (cfg.shots) await page.screenshot({ path: join(cfg.shotsDir, `guest-demo-opened-owner-${sc.width}.png`), fullPage: true, caret: "hide" });
+    if (!cfg.noAxe) R.findings.push(...(await axeFindings(page, AxeBuilder, R)));
+  } catch (e) {
+    add("fail", "scenario-error", String(e.message).split("\n")[0].slice(0, 160));
+  } finally {
+    await ctx.close().catch(() => {});
+  }
+  return R;
+}
+
 // `v` flips the view, but not while someone is typing.
 async function typingV(browser, cfg) {
   const sc = { route: "new", state: "rest", view: "owner", width: 390 };
@@ -1146,8 +1182,12 @@ async function main() {
           for (const R of await motionAndShell(browser, sc, c2)) { results.push(R); say(R, R.crossfade ? "  " + R.crossfade : ""); }
         for (const sc of runnable.filter((s) => s.route === "account" && s.state === "detail")) { const R = await sheetCheck(browser, sc, c2); results.push(R); say(R); }
         if (runnable.some((s) => s.route === "new")) { const R = await typingV(browser, c2); results.push(R); say(R); }
-        for (const sc of runnable.filter((s) => s.route === "guest" && s.state === "rest" && s.view === "owner"))
+        for (const sc of runnable.filter((s) => s.route === "guest" && s.state === "rest" && s.view === "owner")) {
           for (const R of await heroCheck(browser, sc, c2)) { results.push(R); say(R, R.images ? `  ${R.images}` : ""); }
+          const G = await guestPath(browser, sc, c2, AxeBuilder);
+          results.push(G);
+          say(G, G.opened ? `  ${G.opened}` : "");
+        }
         for (const route of ["new", "add"]) if (runnable.some((s) => s.route === route)) { const R = await keyboardFit(browser, route, c2); results.push(R); say(R); }
       }
       await browser.close();
