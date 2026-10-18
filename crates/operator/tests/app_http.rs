@@ -223,7 +223,7 @@ fn the_service_answers_what_needs_no_chain_and_refuses_what_it_should() {
     // front door itself — where the key is NOT, before what the agent does.
     assert!(
         visible.contains("cannot add a payee, raise its own limit, or withdraw")
-            && visible.contains("Tameion holds no key that can take your money"),
+            && visible.contains("Tami holds no key that can take your money"),
         "the trust line is on the front door"
     );
     // PLAN 5.41: the price model where the buyer decides; no placeholder left.
@@ -240,7 +240,7 @@ fn the_service_answers_what_needs_no_chain_and_refuses_what_it_should() {
     );
     let (st, b) = http(p, "GET", "/watch", "");
     assert_eq!(st, 200);
-    assert!(b.contains("Tameion Watch"));
+    assert!(b.contains("Tami Watch"));
     assert!(
         b.contains("try the demo treasury"),
         "a visitor with no address has somewhere to click"

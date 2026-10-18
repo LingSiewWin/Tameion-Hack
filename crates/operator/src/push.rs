@@ -345,7 +345,7 @@ pub async fn tell(app_dir: &Path, policy: &str, text: &str) {
         println!("push {policy}: no VAPID key");
         return;
     };
-    let payload = json!({ "title": "Tameion", "body": text, "policy": policy }).to_string();
+    let payload = json!({ "title": "Tami", "body": text, "policy": policy }).to_string();
     let mut kept = Vec::new();
     for s in subs {
         match send(&s, payload.as_bytes(), &vapid).await {
@@ -474,7 +474,7 @@ mod tests {
         let f = std::env::var("TAMEION_PUSH_FILE").expect("TAMEION_PUSH_FILE");
         let v: Value = serde_json::from_str(&std::fs::read_to_string(f).unwrap()).unwrap();
         let msg =
-            json!({ "title": "Tameion", "body": "Paid 0.35 USDC to 2 payees · 1 bill needs you" });
+            json!({ "title": "Tami", "body": "Paid 0.35 USDC to 2 payees · 1 bill needs you" });
         let code = send(
             &v["subs"][0],
             msg.to_string().as_bytes(),

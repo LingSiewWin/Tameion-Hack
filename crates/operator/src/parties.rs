@@ -347,7 +347,7 @@ fn own(t: &Tenant) -> Vec<(Address, String, &'static str)> {
     }
     push(
         parse(&t.operator),
-        "Tameion's relayer".into(),
+        "Tami's relayer".into(),
         "pays the gas; cannot move your money",
     );
     out
@@ -777,7 +777,7 @@ pub async fn resolve_typed(
         let t = crate::level1::by_name(app_dir, &q)
             .into_iter()
             .next()
-            .ok_or(format!("no Tameion account is called {q}"))?;
+            .ok_or(format!("no Tami account is called {q}"))?;
         let a = Address::from_str(&t.policy).map_err(|e| e.to_string())?;
         return Ok((a, q, "tameion"));
     }

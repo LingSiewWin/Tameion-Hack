@@ -1819,7 +1819,7 @@ pub fn guardian_call_refusal(
         return None;
     };
     if named.iter().any(|a| ours.contains(a)) {
-        return Some("that is Tameion's own key; a guardian or recovery address is a wallet you, or someone you trust, holds".into());
+        return Some("that is Tami's own key; a guardian or recovery address is a wallet you, or someone you trust, holds".into());
     }
     (guardians && named.iter().any(|a| itself.contains(a)))
         .then(|| "that is this account itself; a guardian is a wallet that can sign".to_string())
@@ -3615,12 +3615,12 @@ mod tests {
         assert!(
             refuse(owner, &guardians(vec![relayer, g1]))
                 .unwrap()
-                .contains("Tameion's own key")
+                .contains("Tami's own key")
         );
         assert!(
             refuse(owner, &recovery(relayer))
                 .unwrap()
-                .contains("Tameion's own key")
+                .contains("Tami's own key")
         );
         // The account itself as a guardian (S1-5): a slot that can never vote.
         assert!(

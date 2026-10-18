@@ -161,9 +161,9 @@ fn price_line() -> String {
         .filter(|v| !v.is_empty() && v.chars().all(|c| c.is_ascii_digit() || c == '.'))
     {
         Some(n) => format!(
-            "${n} a month per protected account. The read-only report is free. Tameion takes nothing per payment."
+            "${n} a month per protected account. The read-only report is free. Tami takes nothing per payment."
         ),
-        None => "Nothing while Tameion runs on testnet. After that, a flat monthly fee per protected account; the read-only report stays free, and Tameion takes nothing per payment.".to_string(),
+        None => "Nothing while Tami runs on testnet. After that, a flat monthly fee per protected account; the read-only report stays free, and Tami takes nothing per payment.".to_string(),
     }
 }
 
@@ -1360,8 +1360,8 @@ async fn agent_card(
         .map(|a| format!("{a:#x}"));
     let mut card = json!({
         "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
-        "name": format!("Tameion agent for account {}…{}", &t.policy[..6], &t.policy[t.policy.len() - 4..]),
-        "description": "Pays one Tameion account's bills: only payees its owner approved, under caps a smart contract enforces. It cannot add a payee, raise its own limit or withdraw; the owner's passkey does those.",
+        "name": format!("Tami agent for account {}…{}", &t.policy[..6], &t.policy[t.policy.len() - 4..]),
+        "description": "Pays one Tami account's bills: only payees its owner approved, under caps a smart contract enforces. It cannot add a payee, raise its own limit or withdraw; the owner's passkey does those.",
         "services": [
             { "name": "wallet", "endpoint": format!("eip155:{id}:{}", t.agent) },
             { "name": "account", "endpoint": format!("eip155:{id}:{}", t.policy) },
@@ -1792,7 +1792,7 @@ async fn notify_telegram(tenant: &level1::Tenant, job: &Job) {
         })
         .collect();
     let mut lines = vec![format!(
-        "Tameion · policy {} · {}",
+        "Tami · policy {} · {}",
         short(&tenant.policy),
         if job.status == "done" {
             "checked"
@@ -2214,7 +2214,7 @@ impl App {
             if v["recovery"].is_string() {
                 return json_reply(
                     "400 Bad Request",
-                    json!({ "error": "the recovery address is Tameion's own key; name a wallet you hold, or none" }),
+                    json!({ "error": "the recovery address is Tami's own key; name a wallet you hold, or none" }),
                 );
             }
             recovery = Address::ZERO;
@@ -8811,7 +8811,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("watcher: a pass on new transfers, checked every {watch_every} s");
     }
     println!(
-        "Tameion Watch → http://{host}:{port}  (runs in {})",
+        "Tami Watch → http://{host}:{port}  (runs in {})",
         dir.display()
     );
     for c in CHAINS {
