@@ -16,7 +16,8 @@ import { parseArgs } from "node:util";
 import { chromium } from "playwright-core";
 
 // ---- What the script looks for, per origin: controls by accessible name, reads by the page's own words. ------------
-// Ops: { fill: <label>, with: "invite" | "name", optional } · { click: <button name> } · { text: <page text> }.
+// Ops: { fill: <label>, with: "invite" | "name", optional } · { click: <button name> } · { see: <button name> } ·
+// { text: <page text> } (the text read is logged).
 // Reads are regexes over the page's text; a capture group is the figure read.
 const MAP = {
   // apps/console as served by the Rust service (components/start.tsx, components/account/judge.tsx).
@@ -44,9 +45,8 @@ const MAP = {
     cut: /^Cut one payment to ([\d.,]+) USDC$/,
     cutDone: /Cut at once|the cut applied at once/, // the finish card replaces the step the moment the cut is signed
   },
-  // apps/home. Steps 1 and 2 are read from main at a674b6e (features/onboarding/copy.ts, guest card + /new stepper) and
-  // have NOT been run. Everything set to null is M1's to fill (lane/home-actions, docs/122 §4); a null fails its step
-  // with "home map: <key> not filled yet (M1)".
+  // apps/home at lane/home-actions 6447365 (names from M1's report, docs/research-data/102-team/reports/M1-report.md):
+  // the guest card, the /new stepper (its own bill tap), then the strip on /a/<name>, owner device only.
   home: {
     open: [
       { fill: /^Invite word/, with: "invite" },
@@ -54,23 +54,25 @@ const MAP = {
       { fill: /^Name the account$/, with: "name" },
       { click: /^Continue$/ },
       { click: /^Make my passkey$/ },
+      { see: /^Let the agent pay Demo Vendor / }, // the Allowance step: the account is open and funded
     ],
-    funded: /The account holds ([\d.,]+)/,
-    bill: [{ click: /^Let the agent pay Demo Vendor / }, { text: /Demo Vendor is approved/ }, { click: /^Open the account$/ }],
-    billDone: null, // M1: the words /a/[name] shows once Demo Vendor is approved and the bill saved
-    autopilot: null, // M1: e.g. [{ click: /^Turn Autopilot on$/ }]
-    countdown: null, // M1: e.g. /Autopilot applies in (\d+:\d\d) unless you cancel/
-    cancelAutopilot: null, // M1: the Cancel beside the countdown
-    paidRow: null, // M1: words only the paid row holds (the why line)
-    paidPayee: null, // M1: capture the payee's name in the row
-    paidWhy: null, // M1: capture the why line
-    paidLink: null, // M1: the tx link's accessible name
-    raise: null, // M1: the raise button, capture the new per-payment cap
-    raiseWait: null, // M1: the wait's words, capture the countdown
-    cancelRaise: null, // M1: the Cancel beside the raise
-    beforeCut: [], // M1: what must happen before the cut is offered ([] when the cut sits beside the waiting raise)
-    cut: null, // M1: the cut button, capture the new per-payment cap
-    cutDone: null, // M1: the words once the cut applied
+    funded: null, // "The account holds …" shows for under a second (P-406): the figure is read from the inbox, and the
+    // page's own figure from the receipt in step 2 ("It holds 0.05 USDC on …")
+    bill: [{ click: /^Let the agent pay Demo Vendor / }, { text: /It holds ([\d.,]+) USDC/ }, { click: /^Open the account$/ }],
+    billDone: /Demo Vendor approved; the bill saved/,
+    autopilot: [{ click: /^Turn Autopilot on$/ }],
+    countdown: /It applies in (\d+:\d\d) unless you cancel/,
+    cancelAutopilot: /^Cancel$/,
+    paidRow: /Paid by the agent/, // a listitem: "<when> <payee> <amount> USDC <why> <state>"
+    paidPayee: /^(?:Today \d\d:\d\d|Yesterday|\d+ \w+)\s+(.+?)\s+[\d.,]+ USDC/,
+    paidWhy: /[\d.,]+ USDC\s+(.+?)\s+(?:Paid and sealed|Paid)$/,
+    paidLink: null, // the Owner view shows no tx (zero-hash rule): the tx is the inbox's payment of that amount
+    raise: /^Raise one payment to ([\d.,]+) USDC$/,
+    raiseWait: /the limits rise to .+? a day, .+? at a time\. It applies in (\d+:\d\d) unless you cancel\./,
+    cancelRaise: /^Cancel$/,
+    beforeCut: [], // the cut sits beside the waiting raise
+    cut: /^Cut (?:one payment|the day) to ([\d.,]+) USDC$/,
+    cutDone: /Cut, at once: .+? at a time, .+? a day\./,
   },
 };
 
@@ -98,7 +100,7 @@ const unixHms = (s) => (s ? hms(new Date(s * 1000)) : "?");
 const start = new Date();
 const stamp = `${start.getFullYear()}${pad(start.getMonth() + 1)}${pad(start.getDate())}-${pad(start.getHours())}${pad(start.getMinutes())}${pad(start.getSeconds())}`;
 const name = `accept-${pad(start.getHours())}${pad(start.getMinutes())}`;
-const shots = new URL(`../../../proof/five-minutes/${new URL(origin).host}-${stamp}/`, import.meta.url).pathname;
+const shots = new URL(`../../../proof/five-minutes/${new URL(origin).host.replace(":", "-")}-${stamp}/`, import.meta.url).pathname;
 mkdirSync(shots, { recursive: true });
 
 const say = (line) => console.log(String(line).split(invite).join("[invite word]"));
@@ -156,7 +158,12 @@ async function run(ops) {
       await field.fill(op.with === "invite" ? invite : name);
       say(`  ${hms()} typed the ${op.with === "invite" ? "invite word (from the file)" : `name ${name}`}`);
     } else if (op.click) await tap(op.click);
-    else if (op.text && !(await waitText(op.text, 120_000))) throw new Error(`no "${op.text.source}" on the page within 120 s`);
+    else if (op.see) await shown(op.see).first().waitFor({ timeout: 240_000 });
+    else if (op.text) {
+      const m = await waitText(op.text, 120_000);
+      if (!m) throw new Error(`no "${op.text.source}" on the page within 120 s`);
+      say(`  ${hms()} page: "${m[0]}"`);
+    }
   }
 }
 
@@ -208,8 +215,8 @@ const vendorIs = (a) => a?.toLowerCase() === demo.vendor.toLowerCase();
 async function open() {
   await page.goto(`${origin}/`, { waitUntil: "domcontentloaded" });
   await run(M.open);
-  const m = await waitText(need("funded"), 240_000);
-  if (!m) return { ok: false, read: `no "${M.funded.source}" on the page within 240 s`, from: "page text" };
+  const m = M.funded ? await waitText(M.funded, 240_000) : null;
+  if (M.funded && !m) return { ok: false, read: `no "${M.funded.source}" on the page within 240 s`, from: "page text" };
   const rec = await api(`/api/level1/name/${name}`);
   policy = rec.account;
   chain = rec.chains?.[0]?.key;
@@ -217,10 +224,10 @@ async function open() {
     const x = await inbox();
     return num(x.balance) > 0 && x;
   }, 180_000, 5000);
-  const ok = num(m[1]) === FUND && !!b && num(b.balance) === FUND;
+  const ok = (!m || num(m[1]) === FUND) && !!b && num(b.balance) === FUND;
   return {
     ok,
-    read: `funded page "${m[0]}" · inbox balance ${b?.balance ?? "none within 180 s"} · account ${name} ${policy} on ${chain}`,
+    read: `funded page ${m ? `"${m[0]}"` : "(open; the figure is read from the inbox)"} · inbox balance ${b?.balance ?? "none within 180 s"} · account ${name} ${policy} on ${chain}`,
     from: `page text + GET /api/level1/name/${name} + GET /api/level1/inbox`,
   };
 }
@@ -278,19 +285,23 @@ async function watch() {
   const amount = text.match(/([\d.,]+)\s*USDC/)?.[1];
   const payee = text.match(need("paidPayee"))?.[1];
   const why = text.match(need("paidWhy"))?.[1]?.replace(/\s*In the book:.*$/, "");
-  const href = await row.getByRole("link", { name: need("paidLink") }).first().getAttribute("href").catch(() => null);
-  const tx = href?.match(/0x[0-9a-fA-F]{64}/)?.[0];
+  // The tx: the row's link where the page shows one; otherwise (home's Owner view) the inbox's latest agent payment of
+  // that amount to the demo vendor.
+  const href = M.paidLink ? await row.getByRole("link", { name: M.paidLink }).first().getAttribute("href").catch(() => null) : null;
   say(`  ${hms()} row: ${text.slice(0, 400)}`);
-  const p = tx
-    ? await until(async () => (await inbox()).paid?.find((y) => y.tx?.toLowerCase() === tx.toLowerCase()), 90_000, 5000)
-    : null;
+  const p = await until(async () => {
+    const paid = (await inbox()).paid ?? [];
+    if (M.paidLink) return href && paid.find((y) => y.tx && href.toLowerCase().includes(y.tx.toLowerCase()));
+    return paid.filter((y) => vendorIs(y.counterparty) && y.by !== "you" && num(y.amount) === num(amount)).sort((x, y) => (y.at ?? 0) - (x.at ?? 0))[0];
+  }, 90_000, 5000);
+  const tx = p?.tx;
   const rc = tx ? await receipt(chain, tx) : { error: "no tx link in the row" };
   const ok = !!amount && !!payee && !!why && !!p && num(p.amount) === num(amount) && vendorIs(p.counterparty) && p.by !== "you" && rc.status === "0x1";
   return {
     ok,
     read:
-      `page ${amount ?? "?"} USDC to ${payee ?? "?"}, why "${why ?? "?"}", tx ${href ?? "none"} · inbox ` +
-      (p ? `${p.amount} to ${short(p.counterparty)} at ${unixHms(p.at)} (due ${unixHms(p.dueAt)}), by ${p.by ?? "the agent"}, reason "${p.reason ?? ""}"` : "no paid entry with that tx") +
+      `page ${amount ?? "?"} USDC to ${payee ?? "?"}, why "${why ?? "?"}", tx ${href ?? "not on the page"} · inbox ` +
+      (p ? `${p.amount} to ${short(p.counterparty)} at ${unixHms(p.at)} (due ${unixHms(p.dueAt)}), by ${p.by ?? "the agent"}, reason "${p.reason ?? ""}", tx ${tx}` : "no matching paid entry") +
       ` · chain ${chain} receipt ${rc.status ? `status ${parseInt(rc.status, 16)} block ${parseInt(rc.blockNumber, 16)}` : rc.error}`,
     from: `page row + GET /api/level1/inbox (paid) + eth_getTransactionReceipt on ${RPC[chain] ?? "?"}`,
   };
@@ -307,13 +318,15 @@ async function raiseCut() {
     return x.pending && (x.pending.kinds & 1) && x.pending;
   }, 90_000);
   await run(M.beforeCut);
-  const cutTo = (await shown(need("cut")).first().innerText({ timeout: 120_000 })).trim().match(M.cut)?.[1];
+  const cutLabel = (await shown(need("cut")).first().innerText({ timeout: 120_000 })).trim();
+  const cutTo = cutLabel.match(M.cut)?.[1];
+  const cap = /the day/.test(cutLabel) ? "daily" : "perAction"; // "Cut the day to …" once one payment equals the bill
   await tap(M.cut);
   const done = await waitText(need("cutDone"), 180_000);
   const tDone = Date.now();
   const after = await until(async () => {
     const x = await inbox();
-    return num(x.caps.perAction) === num(cutTo) && x;
+    return num(x.caps[cap]) === num(cutTo) && x;
   }, 90_000, 2000);
   const lag = after ? Math.round((Date.now() - tDone) / 1000) : null;
   const ok = !!w && cancel && !!pend && num(pend.perActionCap) === num(to) && !!done && !!after && lag <= demo.delaySecs;
@@ -322,8 +335,8 @@ async function raiseCut() {
     read:
       `cap ${before.perAction} → raise to ${to} USDC: page "${w?.[0] ?? `no "${M.raiseWait.source}"`}" with Cancel ${cancel ? "shown" : "MISSING"}, inbox ` +
       (pend ? `pending perActionCap ${pend.perActionCap} eta ${unixHms(pend.eta)}` : "no pending raise within 90 s") +
-      ` · cut to ${cutTo} USDC: page "${done?.[0] ?? `no "${M.cutDone.source}"`}", inbox ` +
-      (after ? `perAction ${after.caps.perAction}, ${lag} s after the page's confirmation (delay ${demo.delaySecs} s)` : "cap not lowered within 90 s"),
+      ` · cut ${cap} to ${cutTo} USDC: page "${done?.[0] ?? `no "${M.cutDone.source}"`}", inbox ` +
+      (after ? `${cap} ${after.caps[cap]}, ${lag} s after the page's confirmation (delay ${demo.delaySecs} s)` : "cap not lowered within 90 s"),
     from: "page text + GET /api/level1/inbox (caps, pending)",
   };
 }
