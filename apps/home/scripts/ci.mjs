@@ -405,7 +405,8 @@ function domRules({ view, width, route, palette, spec }) {
     if (/\s·\s/.test(own) && !e.closest("[data-hero]")) add("fail", "middle-dot-meta", e, "meta strings joined with middle dots are banned"); // the hero caption is DESIGN's own text
     if (s.textTransform === "uppercase") add("fail", "tracked-uppercase", e, "text-transform: uppercase");
     else if (/^[A-Z][A-Z0-9 ]{3,}$/.test(own) && !/^(USDC|EURC|USD|ERC|CCTP|MCP|API|UTC|HTTP|AIS|MMSI)$/.test(own)) add("warn", "all-caps", e, `"${own.slice(0, 20)}"`);
-    if (view === "owner" && (/\b\d{4}-\d{2}-\d{2}\b|T\d{2}:\d{2}:\d{2}|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(own))) add("warn", "date-not-in-words", e, "dates read Today 05:41, Yesterday, 12 Oct");
+    // the founder's DESIGN names the hero caption's scene date and says nothing of words for dates; a raw timestamp in the Owner view is still worth a look
+    if (view === "owner" && !e.closest("[data-hero]") && (/T\d{2}:\d{2}:\d{2}|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(own))) add("note", "timestamp-shape", e, "a raw timestamp or day/month/year in the Owner view");
     for (const m of own.matchAll(money)) {
       const frac = (m[1].split(".")[1] ?? "");
       if (view === "owner" && (frac.length > 6 || /0$/.test(frac))) add("warn", "money-not-shortest", e, `"${m[0]}": six decimals trimmed to the shortest that is exact`);
