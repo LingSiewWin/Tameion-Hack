@@ -19,6 +19,7 @@
 //      SHOTS_DIR         where the PNGs go (default PROOF_DIR): a seat's tree before it is merged has its own folder
 //      PROOF_DIR         default <main checkout>/proof/home-2026-10-18      PW_CHANNEL  default chrome (PW_CHANNEL= for bundled chromium)
 //      APP_TREE          where the server runs, when lsof cannot say (only for the commit line in the log)
+//      NO_OWNER          1 for a public target (the preview): no owner key is seeded, every page is seen as a visitor sees it; no word is ever typed there
 //      INVITE_FILE       a file holding the invite word (never printed): `/new` is measured only when it is given, because without the word it redirects to `/`
 //      APP_DIR           check another tree (a seat's apps/home) instead of this one: its tokens, contrast, test, literals
 //
@@ -184,20 +185,47 @@ function stepZeroHash() {
 
 // DESIGN §Acceptance: Lighthouse mobile performance >= 85 and LCP <= 2.5 s on `/`, no image over 350 KB. Lighthouse mobile is its default (a Moto G class phone,
 // slow 4G, simulated). Measure a production server (`npm run build && npx next start -p 3015`, then LH_URL=http://localhost:3015), not `next dev`.
-function stepLighthouse(url, paths = ["/"]) {
-  const chrome = process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+async function stepLighthouse(url, paths = ["/"], view = "owner") {
+  const chrome = process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Chrome";
   const lines = [];
   let sev = "pass";
+  if (view === "agent") {
+    // Lighthouse always starts from an empty profile (the Owner view), and attaching it to a Chrome that holds the Agent view hangs; so the Agent view's LCP is read
+    // from Chrome itself under Lighthouse's mobile settings (slow 4G: 150 ms, 1.6 Mbit/s; 4x CPU slowdown). It is not Lighthouse's number and says so.
+    const { chromium } = await import("playwright-core");
+    const browser = await chromium.launch({ headless: true, channel: "chrome" });
+    try {
+      for (const path of paths) {
+        const ctx = await browser.newContext({ viewport: { width: 412, height: 823 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1.75 });
+        await ctx.addInitScript(([k, v]) => { try { localStorage.setItem(k, v); } catch { /* storage blocked */ } }, [VIEW_KEY, "agent"]);
+        const page = await ctx.newPage();
+        const cdp = await ctx.newCDPSession(page);
+        await cdp.send("Network.enable");
+        await cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 150, downloadThroughput: (1.6 * 1024 * 1024) / 8, uploadThroughput: (750 * 1024) / 8 });
+        await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+        await page.addInitScript(() => { window.__lcp = 0; new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__lcp = Math.round(e.startTime); }).observe({ type: "largest-contentful-paint", buffered: true }); });
+        await page.goto(`${url}${path}`, { waitUntil: "load", timeout: 120000 });
+        await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
+        await page.waitForTimeout(1500);
+        const lcp = await page.evaluate(() => window.__lcp);
+        lines.push(`${path} (agent view): LCP ${lcp} ms (DESIGN <= 2500), read from Chrome under Lighthouse's mobile settings, not Lighthouse's own run; ${url}`);
+        if (lcp > 2500) sev = sev === "fail" ? "fail" : "warn";
+        await ctx.close();
+      }
+    } finally {
+      await browser.close().catch(() => {});
+    }
+    return { name: "lighthouse", sev, lines };
+  }
   for (const path of paths) {
     const file = join(tmpdir(), `lh-${process.pid}-${paths.indexOf(path)}.json`);
-    const r = spawnSync("npx", ["--yes", "lighthouse@13.5.0", `${url}${path}`, "--quiet", "--only-categories=performance", "--output=json", `--output-path=${file}`, "--chrome-flags=--headless=new"], { env: { ...process.env, CHROME_PATH: chrome }, encoding: "utf8", timeout: 300000 });
-    if (r.status !== 0 || !existsSync(file)) { sev = "fail"; lines.push(`${path}: Lighthouse did not run: ${`${r.stdout ?? ""}${r.stderr ?? ""}`.trim().split("\n").slice(-2).join(" | ")}`); continue; }
+    const r = spawnSync("npx", ["--yes", "lighthouse@13.5.0", `${url}${path}`, "--quiet", "--only-categories=performance", "--output=json", `--output-path=${file}`, "--chrome-flags=--headless=new"], { env: { ...process.env, CHROME_PATH: chrome }, encoding: "utf8", timeout: 240000 });
+    if (r.status !== 0 || !existsSync(file)) { sev = "fail"; lines.push(`${path} (${view}): Lighthouse did not run: ${`${r.stdout ?? ""}${r.stderr ?? ""}`.trim().split("\n").slice(-2).join(" | ")}`); continue; }
     const j = JSON.parse(readFileSync(file, "utf8")), a = j.audits;
     const score = Math.round(j.categories.performance.score * 100), lcp = Math.round(a["largest-contentful-paint"].numericValue);
     const imgs = (a["network-requests"]?.details?.items ?? []).filter((x) => x.resourceType === "Image").sort((x, y) => y.transferSize - x.transferSize);
     const big = imgs.filter((x) => x.transferSize > 350 * 1024);
-    const lcpEl = a["largest-contentful-paint-element"]?.details?.items?.[0]?.items?.[0]?.node?.snippet?.slice(0, 50) ?? "";
-    lines.push(`${path}: mobile performance ${score} (DESIGN >= 85), LCP ${lcp} ms (DESIGN <= 2500)${lcpEl ? ` on ${lcpEl}` : ""}, TBT ${Math.round(a["total-blocking-time"].numericValue)} ms, CLS ${a["cumulative-layout-shift"].numericValue.toFixed(3)}, ${Math.round(a["total-byte-weight"].numericValue / 1024)} KB over the wire${imgs[0] ? `, largest image ${Math.round(imgs[0].transferSize / 1024)} KB` : ""}; Lighthouse ${j.lighthouseVersion} on ${url}`);
+    lines.push(`${path} (${view} view): mobile performance ${score} (DESIGN >= 85), LCP ${lcp} ms (DESIGN <= 2500), TBT ${Math.round(a["total-blocking-time"].numericValue)} ms, CLS ${a["cumulative-layout-shift"].numericValue.toFixed(3)}, ${Math.round(a["total-byte-weight"].numericValue / 1024)} KB over the wire${imgs[0] ? `, largest image ${Math.round(imgs[0].transferSize / 1024)} KB` : ""}; Lighthouse ${j.lighthouseVersion} on ${url}`);
     for (const x of big) lines.push(`${path}: over 350 KB: ${new URL(x.url).pathname.slice(0, 60)} ${Math.round(x.transferSize / 1024)} KB`);
     // DESIGN's acceptance is for `/` (the hero); another page's slower LCP is reported, not failed
     if (score < 85 || big.length || (lcp > 2500 && path === "/")) sev = "fail";
@@ -943,6 +971,8 @@ function git(dir, ...a) {
   try { return execFileSync("git", ["-C", dir, ...a], { encoding: "utf8" }).trim(); } catch { return ""; }
 }
 function treeInfo(url) {
+  const host = new URL(url).hostname;
+  if (!/^(localhost|127\.0\.0\.1)$/.test(host)) return `remote ${host} (the commit it serves is read from the deploy record, not from here)`;
   let dir = process.env.APP_TREE || "";
   try {
     const port = new URL(url).port || "80";
@@ -1149,7 +1179,7 @@ async function main() {
   const palette = Object.fromEntries(["owner", "agent"].map((v) => [v, Object.keys(pal[v] ?? {}).length ? pal[v] : Object.fromEntries(Object.entries(css[v]).map(([k, x]) => [k, hexNorm(x)]).filter(([, x]) => x))]));
   for (const s of steps) console.log(`${s.sev.toUpperCase().padEnd(5)} ${s.name}${s.lines.length ? "\n        " + s.lines.join("\n        ") : ""}`);
 
-  if (args.lighthouse) { const lh = stepLighthouse((process.env.LH_URL ?? cfg.url).replace(/\/$/, ""), (process.env.LH_PATHS ?? "/").split(",").map((x) => x.trim()).filter(Boolean)); steps.push(lh); console.log(`${lh.sev.toUpperCase().padEnd(5)} ${lh.name}\n        ${lh.lines.join("\n        ")}`); }
+  if (args.lighthouse) { const lh = await stepLighthouse((process.env.LH_URL ?? cfg.url).replace(/\/$/, ""), (process.env.LH_PATHS ?? "/").split(",").map((x) => x.trim()).filter(Boolean), process.env.LH_VIEW === "agent" ? "agent" : "owner"); steps.push(lh); console.log(`${lh.sev.toUpperCase().padEnd(5)} ${lh.name}\n        ${lh.lines.join("\n        ")}`); }
   const results = [];
   const say = (R, extra = "") => console.log(`${worst(R.findings).toUpperCase().padEnd(5)} ${R.name}${extra}`);
   if (!args["no-browser"]) {
@@ -1161,10 +1191,11 @@ async function main() {
       const channel = process.env.PW_CHANNEL === undefined ? "chrome" : process.env.PW_CHANNEL;
       const browser = await chromium.launch({ headless: true, ...(channel ? { channel } : {}) });
       const AxeBuilder = await import("@axe-core/playwright").then((m) => m.AxeBuilder ?? m.default?.AxeBuilder ?? m.default);
-      cfg.pub = await ownerPub(cfg.url, cfg.policy);
+      cfg.pub = process.env.NO_OWNER ? null : await ownerPub(cfg.url, cfg.policy);
       cfg.pubs = {};
+      if (process.env.NO_OWNER) { cfg.policyEmpty = undefined; cfg.policyNeeds = undefined; }
       cfg.still = {};
-      if (!cfg.pub) steps.push({ name: "owner-mode", sev: "warn", lines: [`could not read ${cfg.policy}'s owner key through ${cfg.url}: every account page is rendered as a guest (read-only)`] });
+      if (!cfg.pub && !process.env.NO_OWNER) steps.push({ name: "owner-mode", sev: "warn", lines: [`could not read ${cfg.policy}'s owner key through ${cfg.url}: every account page is rendered as a guest (read-only)`] });
       const c2 = { ...cfg, palette };
       const noInvite = plan.filter((s) => s.route === "new" && !cfg.invite);
       const runnable = plan.filter((s) => !s.skip && !noInvite.includes(s));
