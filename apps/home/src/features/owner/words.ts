@@ -2,7 +2,7 @@
 // to the shortest exact form; figures are combined here only where a ruling names the combination (allowance left today
 // = min(caps.daily − caps.spent24h, balance − caps.floor); paid this week = paid[] of the last 7 days). No hash ever
 // leaves this file.
-import type { Inbox, Paid, SymbolonRecord } from "../../lib/types.ts";
+import type { Demo, Inbox, Paid, SymbolonRecord } from "../../lib/types.ts";
 
 const UNIT = 1_000_000n;
 
@@ -102,6 +102,8 @@ export function pendingWords(inbox: Pick<Inbox, "pending">): string | null {
 
 const DAY = 86_400;
 const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+/** "06:41": a unix time of day, in the viewer's time. */
+export const timeWords = (unix: number) => hhmm(new Date(unix * 1000));
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** "Today 05:41", "Yesterday", "12 Oct" (DESIGN §Copy), in the viewer's time. */
@@ -367,6 +369,83 @@ export function needs(inbox: Pick<Inbox, "sellersToApprove" | "invoices" | "need
 }
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+// ---- the owner's actions (docs/122: every owner action the console had) -------------------------------------------
+
+/** "0:27", "1:42"; never negative (a countdown). */
+export const clockText = (secs: number) => {
+  const s = Math.max(0, Math.ceil(secs));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+};
+
+/** "every 2 minutes", "every day", "every 30 days": a bill's cadence in words. */
+export function everyWords(secs: number): string {
+  const every = (n: number, unit: string) => (n === 1 ? `every ${unit}` : `every ${n} ${unit}s`);
+  if (secs >= DAY) return every(Math.round(secs / DAY), "day");
+  if (secs >= 3600) return every(Math.round(secs / 3600), "hour");
+  if (secs >= 60) return every(Math.round(secs / 60), "minute");
+  return every(secs, "second");
+}
+
+/** The next due time of a bill first due at `first`, every `every` s: `first` until it passes, then the next cycle. */
+export const nextDue = (first: number, every: number, now: number) => (every <= 0 || now <= first ? first : first + every * Math.ceil((now - first) / every));
+
+/** The judge's five minutes on a demo account (docs/115 §3), as far as the account says: funded, the bill saved (Demo
+ *  Vendor approved and its bill typed), Autopilot on, the first payment to Demo Vendor. `step` is the first not done; 4 when
+ *  all are. A payment by the owner's tap counts too (the agent asked first); the row says who paid. */
+export function stripOf(inbox: Pick<Inbox, "balance" | "paid" | "payees" | "typedBills" | "mode">, demo: Pick<Demo, "vendor">) {
+  const v = demo.vendor.toLowerCase();
+  const approved = (inbox.payees ?? []).some((p) => p.address.toLowerCase() === v);
+  const bill = (inbox.typedBills ?? []).find((b) => b.payee.toLowerCase() === v);
+  const paid = (inbox.paid ?? []).filter((p) => p.counterparty.toLowerCase() === v);
+  const done = [(minor(inbox.balance) ?? 0n) > 0n || paid.length > 0, approved && !!bill, inbox.mode === "Autopilot", paid.length > 0];
+  const at = done.indexOf(false);
+  return { step: at < 0 ? 4 : at, approved, bill, paid };
+}
+
+/** The five minutes' raise: twice the cap on one payment, the day's cap with it only when it would be passed. It waits. */
+export function raiseOf(caps: Pick<Inbox["caps"], "perAction" | "daily">) {
+  const per = (minor(caps.perAction) ?? 0n) * 2n;
+  const day = minor(caps.daily) ?? 0n;
+  return { perAction: per, daily: per > day ? per : day };
+}
+
+/** The five minutes' cut, at once: the cap on one payment down to the bill, so the agent still pays the bill and nothing
+ *  bigger; already there, the day's cap halves (never below one payment). null when nothing is left to cut. */
+export function cutOf(caps: Pick<Inbox["caps"], "perAction" | "daily">, bill: string) {
+  const per = minor(caps.perAction) ?? 0n;
+  const day = minor(caps.daily) ?? 0n;
+  const b = minor(bill) ?? 0n;
+  if (per > b) return { perAction: b, daily: day, one: true };
+  const half = day / 2n > per ? day / 2n : per;
+  return half < day ? { perAction: per, daily: half, one: false } : null;
+}
+
+/** The autonomy levels in contract order (BudgetPolicy.Mode): 0 Watch, 1 Propose, 2 Autopilot. */
+export const MODES = ["Watch", "Propose", "Autopilot"] as const;
+export const modeIndex = (mode: string) => Math.max(0, MODES.indexOf(mode as (typeof MODES)[number]));
+
+/** The two caps as the owner typed them, against the account's: a raise (either up) waits the delay, a cut (both down
+ *  or equal) applies at once (BudgetPolicy.setLimits); `same` when nothing changes; an error in words when it cannot be. */
+export function changeOf(caps: Pick<Inbox["caps"], "perAction" | "daily">, perText: string, dailyText: string):
+  | { kind: "raise" | "cut" | "change" | "same"; perAction: bigint; daily: bigint }
+  | { error: string } {
+  const per = /^\s*\d+(\.\d{1,6})?\s*$/.test(perText) ? minor(perText) : null;
+  const day = /^\s*\d+(\.\d{1,6})?\s*$/.test(dailyText) ? minor(dailyText) : null;
+  if (per === null || day === null) return { error: COPY.limits.badAmount };
+  if (per <= 0n || day <= 0n) return { error: COPY.limits.zero };
+  if (per > day) return { error: COPY.limits.perOverDay };
+  const was = { per: minor(caps.perAction) ?? 0n, day: minor(caps.daily) ?? 0n };
+  const up = per > was.per || day > was.day;
+  const down = per < was.per || day < was.day;
+  return { kind: up && down ? "change" : up ? "raise" : down ? "cut" : "same", perAction: per, daily: day };
+}
+
+/** A payee by its name in a control's label: never an address, and two unnamed payees never read the same. */
+export const payeeLabel = (inbox: Pick<Inbox, "parties" | "payees">, address: string) => {
+  const n = payeeName(inbox, address);
+  return n.startsWith("a payee") ? `the payee ending ${address.slice(-4).toUpperCase()}` : n;
+};
+
 /** Every sentence the Owner home's components show that is not generated above (DESIGN: no hard-coded strings in
  *  components). One word per thing through the whole flow: the account, the agent, a payee by its name. */
 export const COPY = {
@@ -413,6 +492,69 @@ export const COPY = {
   demoVendor: "Demo Vendor",
   demoVendorNote: "the demo's vendor",
   phase: { signing: "Signing", sent: "Sent", confirmed: "Confirmed" },
+  // A change waiting out the delay: when it applies, and the one control that drops it (anyone can see it coming).
+  pendingIn: (clock: string) => `It applies in ${clock} unless you cancel.`,
+  applying: "The wait is over; it applies now.",
+  cancel: "Cancel",
+  cancelled: "Cancelled. Nothing changes.",
+  /** something went through before the step that failed: the summary says what holds */
+  partly: (done: string) => `${done} The rest did not go through.`,
+  strip: {
+    title: "Try it in 5 minutes",
+    steps: ["Funded", "Bill", "Autopilot", "First payment", "Raise and cut"],
+    label: "The five minutes",
+    funding: "The demo is funding the account. It takes a minute; nothing to do.",
+    bill: (amt: string, every: string) => `Let the agent pay Demo Vendor ${amt} ${every}`,
+    billSaved: (amt: string, every: string) => `Demo Vendor approved; the bill saved: ${amt} ${every}.`,
+    billApproved: "Demo Vendor is approved.",
+    agentKeys: "This account has agent keys, and a bill on such an account needs its own signature, which this page does not make.",
+    autopilot: "Turn Autopilot on",
+    due: (clock: string) => `The bill is due in ${clock}. Then the agent pays Demo Vendor by itself and says why.`,
+    dueNow: "The bill is due: the agent is paying Demo Vendor now.",
+    asked: "The agent asked you instead of paying by itself: it is under Needs you.",
+    cooling: (at: string) => `A new payee waits first: the agent may pay Demo Vendor from ${at}.`,
+    done: "Done. The agent paid Demo Vendor by itself, inside your limits, and said why:",
+    doneByYou: "Done. You paid Demo Vendor with your tap after the agent asked:",
+    raiseCut: (delay: string) => `Now raise, then cut: a raise waits ${delay} where anyone can see it; a cut applies at once, even while a raise waits.`,
+    raise: (amt: string) => `Raise one payment to ${amt} USDC`,
+    cutOne: (amt: string) => `Cut one payment to ${amt} USDC`,
+    cutDay: (amt: string) => `Cut the day to ${amt} USDC`,
+    lowest: "The limits are as low as the bill allows.",
+  },
+  mandate: {
+    title: "Change what the agent may do",
+    open: { payees: "Payees", limits: "Limits", mode: "Mode" },
+    sheet: { payees: "Who the agent may pay", limits: "How much the agent may spend", mode: "How the agent pays" },
+  },
+  payees: {
+    none: "No payee yet. Approve one below.",
+    from: (at: string) => `May be paid from ${at}.`,
+    stop: (who: string) => `Stop paying ${who}`,
+    stopped: (who: string) => `Stopped. The agent can no longer pay ${who}.`,
+    address: "Payee address",
+    name: "Name",
+    approve: "Approve payee",
+    badAddress: "That is not a wallet address: 0x and 40 letters or digits.",
+    needName: "Give the payee a name you will recognise.",
+    already: (who: string) => `${who} is already approved.`,
+  },
+  limits: {
+    perAction: "One payment, at most (USDC)",
+    daily: "A day, at most (USDC)",
+    raise: "Raise the limits",
+    cut: "Cut the limits",
+    change: "Change the limits",
+    badAmount: "Write each limit as a number of USDC, like 0.05.",
+    zero: "A limit must be more than 0.",
+    perOverDay: "One payment cannot be more than a day.",
+    cutDone: (per: string, day: string) => `Cut, at once: ${per} at a time, ${day} a day.`,
+    asked: (at: string) => `Asked. The new limits apply at ${at} unless you cancel.`,
+  },
+  modes: {
+    what: ["Pays nothing; it reads and reports.", "Prepares each payment and waits for your tap.", "Pays approved payees by itself, inside your limits."],
+    now: (name: string) => `${name}, at once.`,
+    asked: (name: string, at: string) => `Asked. ${name} starts at ${at} unless you cancel.`,
+  },
 } as const;
 
 /** A control in flight names its phase; after 3 s it counts the seconds, and a lost answer reads "still checking"
