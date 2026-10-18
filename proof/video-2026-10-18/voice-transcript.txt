@@ -1,0 +1,16 @@
+# whisper-cli 1.9.5 (Homebrew), model ggml-base.en, on the render's audio track; written 2026-10-18 12:44:22 +0800
+# purpose: the voice says what the captions say (apps/video/src/cues.json); names and digits are whisper's spelling
+[00:00:00.000 --> 00:00:14.040]   Built for the Tamian Agents Hakathon
+[00:00:14.040 --> 00:00:20.840]   Here are those three, as tests.
+[00:00:20.840 --> 00:00:26.000]   Wrong vendor, refused by the contract, nothing sent.
+[00:00:26.000 --> 00:00:31.160]   Phantom Invoice 422, not in the record.
+[00:00:31.160 --> 00:00:38.760]   Double pay on retry, one key sent four times, one payment.
+[00:00:38.760 --> 00:00:49.760]   The live demo account, recorded today.
+[00:00:49.760 --> 00:01:00.880]   The owner sees dollars, days and what needs them, not one hash.
+[00:01:00.880 --> 00:01:04.720]   Every record has three signature slots.
+[00:01:04.720 --> 00:01:08.200]   The chain's half is read back.
+[00:01:08.200 --> 00:01:12.520]   The seller's half arrives with a signed invoice.
+[00:01:12.520 --> 00:01:18.840]   The agent's half is next.
+[00:01:18.840 --> 00:01:28.880]   Credit on arc testnet, lock, draw, repay, slash, no external lender, not a lending protocol.
+[00:01:28.880 --> 00:01:43.840]   The gateway balance, is the second witness.
+[00:01:43.840 --> 00:01:57.640]   Every line on screen has a file in proof slash.

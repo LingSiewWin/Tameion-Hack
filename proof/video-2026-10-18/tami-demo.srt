@@ -1,0 +1,55 @@
+1
+00:00:02,400 --> 00:00:05,200
+Built for the Tameion Agents Hackathon.
+
+2
+00:00:14,000 --> 00:00:16,800
+Here are those three, as tests.
+
+3
+00:00:20,800 --> 00:00:24,767
+Wrong vendor: refused by the contract, nothing sent.
+
+4
+00:00:26,000 --> 00:00:30,000
+Phantom invoice: 422, not in the record.
+
+5
+00:00:31,200 --> 00:00:35,833
+Double pay on retry: one key sent four times, one payment.
+
+6
+00:00:38,800 --> 00:00:41,833
+The live demo account, recorded today.
+
+7
+00:00:49,800 --> 00:00:54,433
+The owner sees dollars, days and what needs them. Not one hash.
+
+8
+00:01:01,000 --> 00:01:03,900
+Every record has three signature slots.
+
+9
+00:01:04,800 --> 00:01:07,600
+The chain's half is read back.
+
+10
+00:01:08,300 --> 00:01:11,700
+The seller's half arrives with a signed invoice.
+
+11
+00:01:12,600 --> 00:01:15,100
+The agent's half is next.
+
+12
+00:01:19,000 --> 00:01:26,533
+Credit on Arc testnet: lock, draw, repay, slash. No external lender. Not a lending protocol.
+
+13
+00:01:29,000 --> 00:01:32,167
+The Gateway balance is the second witness.
+
+14
+00:01:44,000 --> 00:01:47,700
+Every line on screen has a file in proof/.

@@ -1,0 +1,59 @@
+{
+  "recordedAt": "2026-10-18 12:06:19 +0800",
+  "url": "https://tami-home.up.railway.app/a/guest-demo-arc",
+  "size": {
+    "w": 1280,
+    "h": 800
+  },
+  "owner": {
+    "seconds": 22.442,
+    "holdBottom": 6.523,
+    "holdTop": 11.54,
+    "boxes": {
+      "allowance": {
+        "x": 824,
+        "y": 196,
+        "w": 344,
+        "h": 114
+      },
+      "runway": {
+        "x": 824,
+        "y": 322,
+        "w": 344,
+        "h": 114
+      },
+      "needsYou": {
+        "x": 824,
+        "y": 448,
+        "w": 344,
+        "h": 114
+      },
+      "why": {
+        "x": 248,
+        "y": 321,
+        "w": 241.234375,
+        "h": 20
+      },
+      "whyText": "Paid by the agent inside the limits",
+      "table": {
+        "x": 112,
+        "y": 232,
+        "w": 680,
+        "h": 127
+      },
+      "scrollMax": 228
+    }
+  },
+  "agent": {
+    "seconds": 12.016,
+    "cut": 1.5,
+    "expand": 4.001,
+    "slots": {
+      "x": 128,
+      "y": 478,
+      "w": 454.828125,
+      "h": 80,
+      "text": "Slot\tAlg\tKey id\tVerified\nagent\t–\t–\tno\ncounterparty\t–\t–\tno\nwitness\tchain-receipt\tchain:5042002\tyes"
+    }
+  }
+}

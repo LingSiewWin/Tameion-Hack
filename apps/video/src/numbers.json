@@ -1,0 +1,137 @@
+{
+  "generated": "node scripts/video/numbers.mjs",
+  "notes": [],
+  "organiser": {
+    "file": "proof/organiser-sentences-2026-10-17.txt",
+    "sentence": {
+      "lines": "3-4",
+      "text": "A ledger checks that debits equal credits. It does not check that the vendor was the right one, that the invoice was real, or that a retry didn't pay it twice."
+    },
+    "run": {
+      "line": 25,
+      "text": "date: 2026-10-17 23:45:58 +0800"
+    },
+    "command": {
+      "line": 32,
+      "text": "$ cargo test --locked -p operator --test organiser -- --nocapture --test-threads=1"
+    },
+    "tests": [
+      {
+        "name": "wrong_vendor",
+        "line": 41,
+        "text": "test wrong_vendor ... wrong_vendor: approved payee paid 0.10 USDC, tx 0x3aadc9a03c9bb8e50922004062a02137d2359fab423b35e94e22b23ec76b3b5e; unapproved 0x7aaed9e1951800dc8e639754883ccec9b6ca5037 refused \"payee_not_approved\" (executed: \"no\"); Paid events on policy 0x063e1b30405150986238288cb42e59b6ce88fa13: 1; unapproved balance 0 wei",
+        "shown": "wrong_vendor: approved payee paid 0.10 USDC, tx 0x…; unapproved 0x… refused \"payee_not_approved\" (executed: \"no\"); Paid events on policy 0x…: 1; unapproved balance 0 wei",
+        "ok": "ok"
+      },
+      {
+        "name": "phantom_invoice",
+        "line": 39,
+        "text": "test phantom_invoice ... phantom_invoice: real invoice 201; phantom 422 \"not signed by the payee: the signature is 0x717eea2de29646e7cd1c807d45b41bcd996631a3's, the money would go to 0x52acf32d5654dbfc39b18bfffaabd04a2054821f\"; invoices.jsonl lines 1; pass root 0xa22aafa4781862a2a4ee2bae2321319d010f65be5df6e50b54937b39284177c7 anchored by tx 0x400816fa0f89b897cbb184838e9cd63c7bec9e7b01bf840da07b9239618a6f8b at 0x5fbdb2315678afecb367f032d93f642f64180aa3; record lines 2, phantom in it: no",
+        "shown": "phantom_invoice: real invoice 201; phantom 422 \"not signed by the payee: the signature is 0x…'s, the money would go to 0x…\"; invoices.jsonl lines 1; pass root 0x… anchored by tx 0x… at 0x…; record lines 2, phantom in it: no",
+        "ok": "ok"
+      },
+      {
+        "name": "double_pay_on_retry",
+        "line": 37,
+        "text": "test double_pay_on_retry ... double_pay_on_retry: operation op_organiser-retry-0001, action hash 0x5e598ba0998612d2aade6b8c0d9d067836a54637f918710f2ae8afb2f98e1668: first send abandoned; retry 200 replayed after 0 x 409 idempotency_pending; again 200 replayed; second service 200 replayed from executed(); Paid events for it: 1; tx 0x846fb8fa18718f8937f6b2a8c62062ad93d63fffccaaa585c5745a73e84a088f; executed: true",
+        "shown": "double_pay_on_retry: operation op_organiser-retry-0001, action hash 0x…: first send abandoned; retry 200 replayed after 0 x 409 idempotency_pending; again 200 replayed; second service 200 replayed from executed(); Paid events for it: 1; tx 0x…; executed: true",
+        "ok": "ok"
+      }
+    ],
+    "result": {
+      "line": 44,
+      "text": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.67s"
+    }
+  },
+  "symbolon": {
+    "file": "proof/symbolon-count-2026-10-18-4ce997c.txt",
+    "header": {
+      "line": 42,
+      "text": "account                                    records unsigned single double triple  chain"
+    },
+    "total": {
+      "line": 75,
+      "text": "total                                          237        0    236      1      0"
+    },
+    "records": 237,
+    "unsigned": 0,
+    "single": 236,
+    "double": 1,
+    "triple": 0
+  },
+  "metrics": {
+    "file": "proof/metrics-2026-10-16.txt",
+    "passes": {
+      "line": 13,
+      "text": "passes: 122 (91 done, 31 failed, 0 other)",
+      "all": 122,
+      "finished": 91
+    },
+    "rules": {
+      "line": 50,
+      "text": "90 \"reasoner\":\"rule-based\"",
+      "n": 90
+    },
+    "fallback": {
+      "line": 51,
+      "text": "1 \"reasoner\":\"rule-based (fallback from claude-opus-5)\"",
+      "n": 1
+    },
+    "model": {
+      "line": 52,
+      "n": 0
+    }
+  },
+  "credit": {
+    "file": "proof/credit-line-2026-10-18.txt",
+    "headline": {
+      "line": 2,
+      "text": "No external lender; testnet; not a lending protocol."
+    },
+    "chainId": 5042002,
+    "explorer": "https://explorer.testnet.arc.io/tx/",
+    "txs": [
+      {
+        "step": "lock",
+        "amount": "0.010000",
+        "url": "https://explorer.testnet.arc.io/tx/0xcc330476aa6dad1fa45d54f2b76070ea1fae391d8a54731337dab6ce8b120000",
+        "hash": "0xcc330476aa6dad1fa45d54f2b76070ea1fae391d8a54731337dab6ce8b120000",
+        "line": 14,
+        "text": "1. lock   0.010000  https://explorer.testnet.arc.io/tx/0xcc330476aa6dad1fa45d54f2b76070ea1fae391d8a54731337dab6ce8b120000"
+      },
+      {
+        "step": "draw",
+        "amount": "0.005000",
+        "url": "https://explorer.testnet.arc.io/tx/0x04a942a11f79459377fdcedc2aeebc4e9d8156351ad8e612c323359e126fff58",
+        "hash": "0x04a942a11f79459377fdcedc2aeebc4e9d8156351ad8e612c323359e126fff58",
+        "line": 15,
+        "text": "2. draw   0.005000  https://explorer.testnet.arc.io/tx/0x04a942a11f79459377fdcedc2aeebc4e9d8156351ad8e612c323359e126fff58"
+      },
+      {
+        "step": "repay",
+        "amount": "0.005000",
+        "url": "https://explorer.testnet.arc.io/tx/0x80ebc193122cb4fecf4b1c88518d60d1a55c56e6065511e665bfbc484744b541",
+        "hash": "0x80ebc193122cb4fecf4b1c88518d60d1a55c56e6065511e665bfbc484744b541",
+        "line": 16,
+        "text": "3. repay  0.005000  https://explorer.testnet.arc.io/tx/0x80ebc193122cb4fecf4b1c88518d60d1a55c56e6065511e665bfbc484744b541"
+      },
+      {
+        "step": "slash",
+        "amount": "0.002000",
+        "url": "https://explorer.testnet.arc.io/tx/0xb57599854f2f2d446809424b20fc441d94d1514c008aa910469dc11335ed08cc",
+        "hash": "0xb57599854f2f2d446809424b20fc441d94d1514c008aa910469dc11335ed08cc",
+        "line": 17,
+        "text": "4. slash  0.002000  https://explorer.testnet.arc.io/tx/0xb57599854f2f2d446809424b20fc441d94d1514c008aa910469dc11335ed08cc"
+      }
+    ]
+  },
+  "gateway": {
+    "file": "proof/audit-pack-2026-10-18.txt",
+    "line": 59,
+    "text": "gateway    0.000000 USDC at Circle for the bill wallet 0x3c559e1152b109323eb70ad0fcf6d4e7aa9210f5 (second balance line)",
+    "verdict": {
+      "line": 61,
+      "text": "audit pack: every check held"
+    }
+  }
+}

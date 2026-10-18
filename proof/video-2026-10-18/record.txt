@@ -1,0 +1,18 @@
+# node scripts/video/record.mjs
+recorded 2026-10-18 12:06:19 +0800 from https://tami-home.up.railway.app/a/guest-demo-arc
+ownerLoaded    4.61 s
+boxes {"allowance":{"x":824,"y":196,"w":344,"h":114},"runway":{"x":824,"y":322,"w":344,"h":114},"needsYou":{"x":824,"y":448,"w":344,"h":114},"why":{"x":248,"y":321,"w":241.234375,"h":20},"whyText":"Paid by the agent inside the limits","table":{"x":112,"y":232,"w":680,"h":127},"scrollMax":228}
+owner view text: no 0x… string (checked on load)
+scrollDown     6.11 s
+holdBottom     11.13 s
+scrollUp       13.13 s
+holdTop        16.15 s
+click          27.15 s
+agentLoaded    42.44 s
+expand         44.94 s
+slots {"x":128,"y":478,"w":454.828125,"h":80,"text":"Slot\tAlg\tKey id\tVerified\nagent\t–\t–\tno\ncounterparty\t–\t–\tno\nwitness\tchain-receipt\tchain:5042002\tyes"}
+end            52.96 s
+flip frame at 27.36 s of the take; marks move by 0.21 s
+raw take kept outside the tree: /var/folders/g4/1m9xkbrd2cv9js0zzsrn5gfh0000gn/T/tami-rec-G3P6nF/take.webm
+owner.mp4 22.442 s (take 4.82-27.26), agent.mp4 12.016 s (take 26.96-28.46 + 42.65-53.17)
+finished 2026-10-18 12:07:18 +0800
