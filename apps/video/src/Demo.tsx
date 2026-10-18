@@ -248,7 +248,7 @@ const Honest: React.FC = () => {
     "Testnet only.",
     "No outside operator yet.",
     "The agent has only bought from our own x402 seller.",
-    `The rules decided ${m.rules.n} of ${m.passes.finished} passes, the model is bounded by the contract.`,
+    `The rules decided all ${m.passes.finished} finished passes; the model decided ${m.model.n === 0 ? "none" : m.model.n}. The contract bounds both.`,
   ];
   let at = 12;
   return (
@@ -261,7 +261,7 @@ const Honest: React.FC = () => {
       <div style={{ fontFamily: MONO, fontSize: 36, color: C.ink2, marginTop: 12, opacity: fadeIn(frame, at) }}>
         <div>{m.rules.text}</div>
         <div>{m.fallback.text}</div>
-        <div style={{ marginTop: 8 }}>{m.file}:{m.rules.line}-{m.fallback.line}</div>
+        <div style={{ marginTop: 8 }}>{m.file}:{m.rules.line}-{m.model.line}</div>
       </div>
     </AbsoluteFill>
   );

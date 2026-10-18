@@ -76,6 +76,10 @@
       "line": 51,
       "text": "1 \"reasoner\":\"rule-based (fallback from claude-opus-5)\"",
       "n": 1
+    },
+    "model": {
+      "line": 52,
+      "n": 0
     }
   },
   "credit": {

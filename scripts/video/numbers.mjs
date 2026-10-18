@@ -54,6 +54,7 @@ const met = read(MET);
 const passes = find(MET, met, /passes: (\d+) \((\d+) done, (\d+) failed/);
 const rules = find(MET, met, /^\s+(\d+) "reasoner":"rule-based"$/);
 const fallback = find(MET, met, /^\s+(\d+) "reasoner":"rule-based \(fallback from [^)]+\)"$/);
+const model = find(MET, met, /a model has decided (\d+) passes; the rule baseline decided all of them/);
 const finished = Number(passes.m[2]);
 if (Number(rules.m[1]) + Number(fallback.m[1]) !== finished) throw new Error(`${MET}: the reasoner lines do not add up to ${finished}`);
 
@@ -95,6 +96,7 @@ const out = {
     passes: { line: passes.line, text: passes.text.trim(), all: Number(passes.m[1]), finished },
     rules: { line: rules.line, text: rules.text.trim(), n: Number(rules.m[1]) },
     fallback: { line: fallback.line, text: fallback.text.trim(), n: Number(fallback.m[1]) },
+    model: { line: model.line, n: Number(model.m[1]) },
   },
   credit: {
     file: CR,
@@ -107,4 +109,4 @@ const out = {
 };
 writeFileSync(join(ROOT, "apps", "video", "src", "numbers.json"), JSON.stringify(out, null, 2) + "\n");
 console.log(`numbers.json: ${tests.length} tests, ${records} records (${single} single, ${double} double, ${triple} triple), ` +
-  `rules ${rules.m[1]} of ${finished}, ${txs.length} credit txs, gateway line ${AP}:${gw.line}${notes.length ? `; notes: ${notes.join("; ")}` : ""}`);
+  `rules ${rules.m[1]} + fallback ${fallback.m[1]} of ${finished}, model ${model.m[1]}, ${txs.length} credit txs, gateway line ${AP}:${gw.line}${notes.length ? `; notes: ${notes.join("; ")}` : ""}`);

@@ -30,8 +30,7 @@ const LINES = [
   { at: 64.8, until: 78, text: "The chain's half is read back." },
   { at: 68.3, until: 78, text: "The seller's half arrives with a signed invoice." },
   { at: 72.6, until: 78, text: "The agent's half is next." },
-  { at: 79.0, until: 96, text: "Credit drawn against the same book on Arc testnet." },
-  { at: 83.8, until: 96, text: "No external lender. Not a lending protocol." },
+  { at: 79.0, until: 96, text: "Credit on Arc testnet: lock, draw, repay, slash. No external lender. Not a lending protocol." },
   { at: 89.0, until: 96, text: "The Gateway balance is the second witness.", say: "The Gateway balance [[slnc 150]] is the second witness." },
   { at: 104.0, until: 110, text: "Every line on screen has a file in proof/.", say: "Every line on screen has a file in proof slash." },
 ];

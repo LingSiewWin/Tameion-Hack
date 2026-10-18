@@ -89,34 +89,26 @@
   },
   {
     "id": "12",
-    "text": "Credit drawn against the same book on Arc testnet.",
+    "text": "Credit on Arc testnet: lock, draw, repay, slash. No external lender. Not a lending protocol.",
     "from": 2370,
-    "to": 2481,
+    "to": 2596,
     "voice": "voice/12.mp3",
-    "voiceSeconds": 2.587
+    "voiceSeconds": 6.918
   },
   {
     "id": "13",
-    "text": "No external lender. Not a lending protocol.",
-    "from": 2514,
-    "to": 2614,
-    "voice": "voice/13.mp3",
-    "voiceSeconds": 2.735
-  },
-  {
-    "id": "14",
     "text": "The Gateway balance is the second witness.",
     "from": 2670,
     "to": 2765,
-    "voice": "voice/14.mp3",
+    "voice": "voice/13.mp3",
     "voiceSeconds": 2.555
   },
   {
-    "id": "15",
+    "id": "14",
     "text": "Every line on screen has a file in proof/.",
     "from": 3120,
     "to": 3231,
-    "voice": "voice/15.mp3",
+    "voice": "voice/14.mp3",
     "voiceSeconds": 2.597
   }
 ]
