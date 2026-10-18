@@ -4,6 +4,7 @@
 
 /** Type roles (DESIGN §Typography), as the classes tokens.css defines. */
 export const T = {
+  hero: "authority",
   title: "sheet-title",
   rowTitle: "row-title",
   row: "row",

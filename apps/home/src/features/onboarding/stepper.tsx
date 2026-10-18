@@ -5,6 +5,7 @@
 // on the server (actions.ts). Every trust decision is one tap; nothing else asks the person to do anything.
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
+import { useSkeleton } from "../../components/skeleton.tsx";
 import type { Demo, Inbox } from "../../lib/types.ts";
 import { openAccount, ownerPost, readInbox, type Opened } from "./actions.ts";
 import * as copy from "./copy.ts";
@@ -57,17 +58,10 @@ const getJson = async <T,>(path: string): Promise<T> => {
 };
 
 export function Stepper() {
-  const router = useRouter();
-  const [step, setStep] = useState<Step>(0);
   const [cfg, setCfg] = useState<Cfg | null>(null);
   const [demo, setDemo] = useState<Demo | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [loads, setLoads] = useState(0);
-  const [name, setName] = useState(suggestName);
-  const [pub, setPub] = useState<Pub | null>(null);
-  const [opened, setOpened] = useState<Opened | null>(null);
-  const [inbox, setInbox] = useState<Inbox | null>(null);
-  const [readAt, setReadAt] = useState(0);
 
   useEffect(() => {
     Promise.all([getJson<Cfg>("/api/level1/config"), getJson<Demo>("/api/level1/demo")]).then(
@@ -79,25 +73,45 @@ export function Stepper() {
       () => setLoadError(true),
     );
   }, [loads]);
+  // A shown skeleton holds at least 300 ms (DESIGN §States), H1's hook.
+  const loading = useSkeleton(!loadError && (!cfg || !demo));
 
   // The console's choice (start.tsx): Arbitrum Sepolia first, where the demo's USDC is a token the relayer can send.
   const anchored = cfg?.chains.filter((c) => c.anchor) ?? [];
   const chain = anchored.find((c) => c.key === "arbitrum-sepolia") ?? anchored[0] ?? null;
 
-  if (loadError)
-    return (
-      <div role="alert" className={`${PLATE} flex flex-col gap-(--space-3)`}>
-        <p className={T.rowTitle}>{copy.load.down}</p>
-        <button type="button" className={CTA} onClick={() => setLoads((n) => n + 1)}>
-          {copy.load.retry}
-        </button>
-      </div>
-    );
-  if (!cfg || !demo || !chain) return <StepSkeleton />;
-  if (!demo.enabled) return <p className={T.row}>{copy.load.demoOff}</p>;
-
+  // One hero per surface: the stepper's h1 stays while the steps under it change (each step's title is an h2).
   return (
     <div className="flex max-w-(--measure) flex-col gap-(--space-5)">
+      <h1 className={T.hero}>{copy.stepper.title}</h1>
+      {loadError ? (
+        <div role="alert" className={`${PLATE} flex flex-col gap-(--space-3)`}>
+          <p className={T.rowTitle}>{copy.load.down}</p>
+          <button type="button" className={CTA} onClick={() => setLoads((n) => n + 1)}>
+            {copy.load.retry}
+          </button>
+        </div>
+      ) : loading || !cfg || !demo || !chain ? (
+        <StepSkeleton />
+      ) : !demo.enabled ? (
+        <p className={T.row}>{copy.load.demoOff}</p>
+      ) : (
+        <Steps demo={demo} chain={chain} />
+      )}
+    </div>
+  );
+}
+
+function Steps({ demo, chain }: { demo: Demo; chain: Chain }) {
+  const router = useRouter();
+  const [step, setStep] = useState<Step>(0);
+  const [name, setName] = useState(suggestName);
+  const [pub, setPub] = useState<Pub | null>(null);
+  const [opened, setOpened] = useState<Opened | null>(null);
+  const [inbox, setInbox] = useState<Inbox | null>(null);
+  const [readAt, setReadAt] = useState(0);
+  return (
+    <div className="flex flex-col gap-(--space-5)">
       {step !== 4 && <Segments labels={copy.steps} done={step + 1} current={step} label={copy.stepOf(step, copy.steps.length, copy.steps[step])} />}
       {step === 0 && <NameStep name={name} setName={setName} onDone={() => setStep(1)} />}
       {step === 1 && (
@@ -138,7 +152,7 @@ export function Stepper() {
       {step === 4 && opened && inbox && (
         <div className="flex flex-col gap-(--space-5)">
           <div className="flex flex-col gap-(--space-2)">
-            <h1 className={T.title}>{copy.receipt.title(opened.name)}</h1>
+            <h2 className={T.title}>{copy.receipt.title(opened.name)}</h2>
             <p className={`${T.row} ${T.money}`}>{copy.receipt.holds(usdc(inbox.balance), chain.name)}</p>
           </div>
           <ReceiptView receipt={receiptOf(inbox, readAt)} />
@@ -153,7 +167,7 @@ export function Stepper() {
 
 function StepSkeleton() {
   return (
-    <div role="status" aria-busy="true" aria-label={copy.load.loading} className="flex max-w-(--measure) flex-col gap-(--space-4)">
+    <div role="status" aria-busy="true" aria-label={copy.load.loading} className="flex flex-col gap-(--space-4)">
       <span aria-hidden className="skeleton block h-1 w-full" />
       <span aria-hidden className="skeleton block h-8 w-3/4" />
       <span aria-hidden className="skeleton block h-(--button) w-full" />
@@ -194,9 +208,9 @@ function NameStep({ name, setName, onDone }: { name: string; setName: (n: string
         onDone();
       }}
     >
-      <h1 id="name-title" className={T.title}>
+      <h2 id="name-title" className={T.title}>
         {copy.name.title}
-      </h1>
+      </h2>
       <div className="flex flex-col gap-(--space-2)">
         <input
           ref={input}
@@ -241,7 +255,7 @@ function PasskeyStep({ onDone }: { onDone: (p: Pub) => void }) {
   };
   return (
     <div className="flex flex-col gap-(--space-5)">
-      <h1 className={T.title}>{copy.passkey.title}</h1>
+      <h2 className={T.title}>{copy.passkey.title}</h2>
       <p className={T.row}>{copy.passkey.primer}</p>
       <button type="button" className={CTA} onClick={make} aria-busy={waiting}>
         {waiting ? copy.passkey.waiting : savedPub() ? copy.passkey.use : copy.passkey.make}
@@ -317,7 +331,7 @@ function FundStep({ name, pub, chain, onTaken, onDone }: { name: string; pub: Pu
 
   return (
     <div className="flex flex-col gap-(--space-5)">
-      <h1 className={T.title}>{copy.fund.title(chain.name)}</h1>
+      <h2 className={T.title}>{copy.fund.title(chain.name)}</h2>
       <div className={`${PLATE} flex flex-col gap-(--space-3)`}>
         <Segments labels={copy.fund.stops} done={done} current={done} transit={!error} label={copy.fund.label(copy.fund.stops[Math.min(done, 2)])} show />
         <p className={`${T.row} ${T.money}`} aria-live="polite">
@@ -413,7 +427,7 @@ function AllowStep({ opened, inbox, pub, chain, demo, onDone }: { opened: Opened
 
   return (
     <div className="flex flex-col gap-(--space-5)">
-      <h1 className={T.title}>{copy.allow.title}</h1>
+      <h2 className={T.title}>{copy.allow.title}</h2>
       <button type="button" className={CTA} onClick={tap} aria-busy={phase !== "idle"} aria-live="polite">
         {phase === "idle" ? label : copy.allow.phases[phase]}
       </button>

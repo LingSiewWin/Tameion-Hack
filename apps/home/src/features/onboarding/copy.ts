@@ -11,6 +11,9 @@ export const guest = {
   noDemo: "The word is right, but this host names no demo account. Make your own instead.",
 };
 
+/** The stepper's one hero (DESIGN: one hero per surface), beside the guest card's "Open the book" and "Make your own". */
+export const stepper = { title: "Open your own book" };
+
 export const steps = ["Name the account", "Your passkey", "Funded", "Allowance"] as const;
 export const stepOf = (i: number, n: number, label: string) => `Step ${i + 1} of ${n}: ${label}`;
 
@@ -94,6 +97,7 @@ export const receive = {
   copy: "Copy",
   copied: "Copied",
   share: "Share",
+  retry: "Try again",
 };
 
 export const server = {
