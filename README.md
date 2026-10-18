@@ -1,5 +1,77 @@
 # Tami
 
+The account an agent operator gives its agents: they pay inside the mandate you signed, and every payment, refusal and reason lands in a book both sides sign.
+
+![The owner's statement of a demo account on Arc testnet, on a phone: what the agents may spend today, what they paid and to whom, the why beside each row](proof/home-2026-10-18/guest-demo-opened-owner-390.png)
+
+## Try it in 5 minutes
+
+**Live:** https://tameion-home-production.up.railway.app — `/a/guest-demo-arc` is a demo account on Arc testnet (guest, read-only); `/` is the front page.
+**Console (classic):** https://tameion-agents-production-064a.up.railway.app — the account page with every owner action; the invite word is in the submission form.
+
+1. Open https://tameion-home-production.up.railway.app/a/guest-demo-arc — the owner's statement: what the agents may spend today, what they paid and to whom, the reason beside each row, not one hash on the page.
+2. Tap the toggle, or add `?view=agent` — the same account as the agent's terminal: every record with its three signature slots (agent, counterparty, witness) and the chain it is anchored on.
+3. On https://tameion-home-production.up.railway.app/ type the invite word and tap "Make your own" — name an account, one passkey tap; it arrives funded with test USDC, with a receipt and an address to receive more.
+4. On the console link, tap "Try it in 5 minutes": approve the demo vendor, save a bill, turn on Autopilot — from the next due time the agent pays by itself, every two minutes, and each row carries its reason.
+5. Raise the cap on one payment: it waits 30 s with a Cancel, and anyone can see it coming. Cut it: instant.
+
+Built for the Tameion Agents Hackathon.
+
+## Where to look
+
+| Concept | Path |
+|---|---|
+| The mandate: per-payment cap, trailing-24 h cap, floor, payee allowlist, delay on every raise, Watch → Propose → Autopilot | `contracts/src/BudgetPolicy.sol` + `contracts/src/PasskeyPrincipal.sol` |
+| The book: double-entry records, the symbolon (three signature slots), the momentum fold (rate, runway) | `crates/ledger/src/entry.rs`, `crates/ledger/src/symbolon.rs`, `crates/ledger/src/momentum.rs` |
+| Decisions and the why line (pay / ask / refuse inside a list code computes) | `crates/operator/src/decide.rs` |
+| The three named tests — `wrong_vendor`, `phantom_invoice`, `double_pay_on_retry` | `crates/operator/tests/organiser.rs` |
+| The symbolon count (records by signedness) | `crates/operator/examples/symbolon_count.rs` |
+| The Owner home and the Agent terminal | `apps/home` (design source `apps/home/DESIGN.md`) |
+| The credit primitive — the book has a price (VouchBond + CreditLine, testnet) | `contracts/src/credit/` + `crates/pistis` |
+| Proofs — every claim's real run, by date | `proof/` (each file names its run; the frontier table below points at them) |
+
+## What is verified
+
+- **The vendor was the right one** — `wrong_vendor`: a payee nobody approved is refused by the contract, nothing sent · [`proof/organiser-sentences-2026-10-17.txt`](proof/organiser-sentences-2026-10-17.txt).
+- **The invoice was real** — `phantom_invoice`: an invoice the payee did not sign gets 422 and is not in the anchored record · same proof.
+- **A retry didn't pay it twice** — `double_pay_on_retry`: one `Idempotency-Key` sent four times, one payment · same proof.
+- **Records by signedness** on the team's service, counted by `symbolon_count` at main `4ce997c`: 237 anchored records — 228 single (the chain's read-back), 1 double (settlement #2 of e1-seller-signed), 0 triple · `proof/symbolon-count-2026-10-18-4ce997c.txt`. No triple-signed record exists yet.
+- **On Arc testnet:** the demo account `guest-demo-arc` opened, funded, approved its vendor, went to Autopilot and paid by itself (`0x8739b4b0…bd11`, status 1) · `proof/home-2026-10-18/h4-onboarding-run-2026-10-18.txt`; money in by CCTP from Arbitrum Sepolia, minted on Arc `0xd13bedee…a93c` · `proof/home-2026-10-18/h5/cctp-move-proof.txt`; the credit line's four transactions (lock, draw, repay, slash) · `proof/credit-line-2026-10-18.txt`.
+- **On Arbitrum Sepolia:** the agent's live pay route and the model's decisions under one anchored root · `proof/mcp-http-pay-2026-10-17.txt`, `proof/agent-decides-2026-10-17.txt`.
+
+## How it works
+
+```mermaid
+flowchart LR
+  O[Owner's passkey] -->|signs the mandate| P[BudgetPolicy + PasskeyPrincipal<br/>caps · allowlist · delay on raises]
+  A[Agent key] -->|pays inside the mandate| P
+  P -->|one transaction per payment,<br/>every check inside it| V[Payee · USDC on Arc]
+  P --> B[The book: double-entry records<br/>symbolon = agent · counterparty · witness]
+  B -->|root anchored| C[Chain]
+  B --> S[Owner home: the statement, no hashes]
+  B --> T[Agent view: the terminal, every record and its slots]
+```
+
+## Honest state
+
+- Testnet only (Arc testnet and Arbitrum Sepolia). Every account so far was made by the team; **no outside operator has used it yet**, and none has been asked.
+- Named Tameion until 2026-10-18. The repository, the crates, the binaries (`tameion-app`, `tameion-mcp`), the SDK and the hosts still say `tameion` until the rename lands after submission; the symbolon stays the name of the record.
+- The front page's hero is design: the scene is NOAA-20 VIIRS true colour from NASA GIBS (public domain, 2026-10-16), the vessels are illustrative tracks on the strait's traffic lanes, and a test fails if any word on the page says live, recorded or real.
+- One record is double-signed; none is triple-signed. The credit primitive is a public, separate layer with no credit action on any owner surface. No external lender; testnet; not a lending protocol.
+- Arc's public RPC rate-limits: a page may show the service's last good read marked "as of HH:MM" for up to 30 s.
+
+## Since submission (2026-10-18)
+
+The tag `submission-2026-10-18` is what existed when the form went in on 2026-10-18 (clone it with `--branch submission-2026-10-18`).
+Everything after it lands here as one dated line, newest first, each naming the file in `proof/` that holds its run — so a reader can tell
+what was there at the tag and what came after. Nothing yet.
+
+## Details
+
+_Everything below is the fuller record as it stood at the tag, kept whole; headings are one level down._
+
+### The opening as it stood at the tag
+
 _Tami — named Tameion until 2026-10-18. The repository, the crates, the binaries (`tameion-app`, `tameion-mcp`), the SDK and the hosts still say `tameion` until the rename lands after submission; the symbolon stays the name of the record._
 > "Each party kept half; the agreement was real only when the halves fit." — the symbolon (the organiser's brief, Prior Art 03)<br>
 > "Officials kept the standard measures in the marketplace, and the seller's cup was checked against them." — the agoranomoi (Prior Art 06)<br>
@@ -29,7 +101,8 @@ _The account page of a test account (Arbitrum Sepolia, 2026-10-16): the instruct
 payment with 0.048 of the 0.05 a day still left, two purchases the agent made with its reason beside each, and "Check it yourself"
 at the foot._
 
-## Try it in 5 minutes
+
+### Try it in 5 minutes
 
 **Live:** https://tameion-agents-production-064a.up.railway.app (testnet; the invite word is in the submission form). No install, no wallet, no seed phrase, no address to type.
 
@@ -50,7 +123,7 @@ Your own agent on the same account — give it a key in Settings → Agents, the
 - **MCP:** `cargo build --locked -p operator --bin tameion-mcp && claude mcp add tameion -e TAMEION_URL=<the public link> -e TAMEION_TOKEN=<the agent key> -- $PWD/target/debug/tameion-mcp`
 - **SDK and CLI:** `apps/sdk/` — `@tameion/sdk`, a TypeScript client with no runtime dependencies, and the `tameion` CLI (`TAMEION_URL=<the public link> tameion inbox`, `tameion buy <url> --max <usdc> --why "…"`); the key comes from `TAMEION_TOKEN` or `--token-file`, never the command line.
 
-## What is frontier, and what is proved
+### What is frontier, and what is proved
 
 Status is built, framed or refused; a row reads built only once its proof file holds a real run.
 
@@ -69,13 +142,7 @@ Status is built, framed or refused; a row reads built only once its proof file h
 
 No external lender; testnet; not a lending protocol.
 
-## Since submission
-
-The tag `submission-2026-10-18` is what existed when the form went in on 2026-10-18 (clone it with `--branch submission-2026-10-18`).
-Everything after it lands here as one dated line, newest first, each naming the file in `proof/` that holds its run — so a reader can tell
-what was there at the tag and what came after. Nothing yet.
-
-## The problem, in numbers measured on 2026-10-16
+### The problem, in numbers measured on 2026-10-16
 
 - **Agents already pay.** 2,768,695 x402-style USDC payments from 150,399 wallets on Base in 30 days (2026-09-16 to 10-16). The x402
   Bazaar lists 42,746 paid services from 2,476 sellers, every one accepting USDC.
@@ -88,7 +155,7 @@ what was there at the tag and what came after. Nothing yet.
   ([Cointelegraph](https://cointelegraph.com/news/crypto-user-convinced-ai-bot-transfer-47k)).
 - So an operator today has no mandate an agent cannot argue past, no record of why a payment happened, and no way back when a key is lost.
 
-## What an operator does, and what the agent does alone
+### What an operator does, and what the agent does alone
 
 | The operator, once | The agent, on its own, around the clock |
 |---|---|
@@ -101,7 +168,7 @@ what was there at the tag and what came after. Nothing yet.
 The human makes only trust decisions: a new payee, a wider mandate or more autonomy, keys, a withdrawal. A person who wants to
 watch the agent opens `/agent`. An agent that wants the account reads it through `tameion-mcp`; every tool says whether it only reads.
 
-## What is ours, and what is not
+### What is ours, and what is not
 
 Capping an agent's spending on chain is not new, and we do not claim it as ours. Read from their own pages on 2026-10-16 and again for the two linked ones on 10-17:
 [Tempo's Account Keychain](https://tempo.xyz/developers/docs/protocol/transactions/AccountKeychain.md) enforces a per-token budget per
@@ -119,7 +186,7 @@ What none of those pages documents, and Tami does:
 
 That gap is real but thin, and **no operator has yet been asked whether they would pay for it.**
 
-## What is proved
+### What is proved
 
 Each row ran against a real chain; the file in `proof/` holds the requests, answers and refusals.
 
@@ -137,7 +204,7 @@ Each row ran against a real chain; the file in `proof/` holds the requests, answ
 | **Leaving without us.** A wallet you named takes the money out with only the chain and a stranger paying the gas (run on a local chain). | `proof/exit-kit-2026-10-15.txt` |
 | **A passkey-approved action on Arc costs about 150,000 gas** because Arc ships the secp256r1 precompile (EIP-7951); forge's Solidity fallback needs 318k–466k. | `proof/chain-facts-arc-2026-10-14.txt` |
 
-## The honest state
+### The honest state
 
 - **No customers.** 60 test accounts (Arbitrum Sepolia 36, Arc testnet 24); 122 agent passes, 91 finished; 7 bills paid by the agent itself (0.117 USDC); 19 x402 purchase attempts: 6 paid (0.007 USDC), 9 refused by the checks, 4 waiting for the owner; 11 signed invoices received, 7 accepted; 92 roots anchored across 25 accounts, 467 decisions under them. (Payments the owners made with their own passkey are on chain only and are not in these counts.) All accounts are the team's; the money moved is cents. (`proof/metrics-2026-10-16.txt`)
 - **User test, 2026-10-16: it failed first, then we fixed it.** Three testers (an operator, a finance lead, an outside agent) walked the
@@ -169,7 +236,7 @@ Each row ran against a real chain; the file in `proof/` holds the requests, answ
   as built would have protected none of their volatile dollars (`proof/exposure-census-2026-10-16.txt`,
   `proof/hedge-backtest-2026-10-16.txt`). The hedge stays as an optional module, below.
 
-## Check it yourself
+### Check it yourself
 
 No key, no service of ours, no trust. From a clone (Rust installed; the events behind the Arc roots are committed):
 
@@ -190,7 +257,7 @@ recomputes it, and compares it with two nodes. `POLICY=0x… scripts/max_loss.sh
 Rust 591, console 64, SDK 24; 2026-10-18 06:12), acceptance 117 of 117 (06:14). A seat that wrote none of it cloned the tag fresh and ran the
 same commands: red once without `npm ci` (the line above), then 18 of 18 and the three tests 3 of 3 (`proof/clean-clone-submission-2026-10-18.txt`).
 
-## Run it
+### Run it
 
 Needs: Rust (stable, with clippy and rustfmt), Foundry (`forge`, `anvil`), Node 20+ with npm, Python 3 with `jsonschema` (for the ERC-7730 check),
 `bean-check` (Beancount 3; `uv tool install beancount`; without it the audit-pack step prints "skipped" and the gate still passes).
@@ -223,7 +290,7 @@ TAMEION_URL=http://localhost:7880 HOME_INVITE_WORD=<the service's invite word> n
 npm run ci -- --no-browser     # tokens vs DESIGN, contrast, zero-hash, literals, hex lint, design review; without --no-browser also axe, focus, reduced motion, Lighthouse
 ```
 
-## How it is built
+### How it is built
 
 | Layer | What | Where |
 |---|---|---|
@@ -242,7 +309,7 @@ every item still passes the contract); **integer USDC end to end** (`crates/ledg
 product. **An optional module,** `crates/hedge`, can offset a treasury's BTC, ETH or SOL on Hyperliquid testnet inside a margin-safety
 rule; the agent account works without it.
 
-## Prior work
+### Prior work
 
 `MemoryAnchor.sol` comes from [arc-agent-kit](https://github.com/LingSiewWin/arc-agent-kit) (a submodule at `contracts/lib/arc-agent-kit`),
 extracted from Arcane, which took second place at the Agora Hackathon. It takes a `bytes32` and does not care what the root commits to,
