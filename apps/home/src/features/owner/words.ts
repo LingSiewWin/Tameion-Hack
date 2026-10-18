@@ -176,6 +176,39 @@ export type Line = {
   by: "the agent" | "you";
 };
 
+/** "today", "yesterday", "on 12 Oct": the day of a payment, for a folded run. */
+export function dayWords(unix: number, nowSecs: number): string {
+  const w = dateWords(unix, nowSecs);
+  return w.startsWith("Today") ? "today" : w === "Yesterday" ? "yesterday" : `on ${w}`;
+}
+
+/** Consecutive lines with the same payee, why and state, folded once there are more than three (founder, 2026-10-18:
+ *  "never more than three identical rows in a row"). One row and one disclosure stand for the run. */
+export type Run = { key: string; payee: string; payeeId: string; why: string; state: Line["state"]; lines: Line[]; title: string };
+export type Entry = { line: Line; run?: undefined } | { run: Run; line?: undefined };
+
+export function foldRuns(lines: readonly Line[], nowSecs: number): Entry[] {
+  const out: Entry[] = [];
+  for (let i = 0; i < lines.length; ) {
+    let j = i + 1;
+    const a = lines[i];
+    while (j < lines.length && lines[j].payeeId === a.payeeId && lines[j].why === a.why && lines[j].state === a.state) j++;
+    if (j - i > 3) {
+      const run = lines.slice(i, j);
+      const total = run.reduce((t, l) => t + (minor(l.amount) ?? 0n), 0n);
+      const newest = run[0].at;
+      const oldest = run[run.length - 1].at;
+      const verb = a.state === "Refused" ? "refused" : "paid";
+      const when = !newest || !oldest ? "in the last check" : dayWords(newest, nowSecs) === dayWords(oldest, nowSecs) ? dayWords(newest, nowSecs) : `since ${dayWords(oldest, nowSecs).replace(/^on /, "")}`;
+      // The founder's own words for this one row, middle dots included (DESIGN bans middle-dot meta strings elsewhere).
+      const title = `${a.payee} · ${verb} ${run.length} times ${when} · ${amount(total)} USDC`;
+      out.push({ run: { key: `run-${a.key}`, payee: a.payee, payeeId: a.payeeId, why: a.why, state: a.state, lines: run, title } });
+    } else for (let k = i; k < j; k++) out.push({ line: lines[k] });
+    i = j;
+  }
+  return out;
+}
+
 /** Which halves of a payment's record are present, from H3's projection (`GET /api/level1/symbolon`): the settlement
  *  record that names the payment's transaction. Two records naming one transaction are AND-ed; none, and nothing is shown. */
 export type Halves = { agent: boolean; payee: boolean; witness: boolean; at?: number };
@@ -347,7 +380,10 @@ export const COPY = {
   started: (at: string) => `Started. It asks before each payment from ${at}.`,
   factsLabel: "The account at rest",
   paidTitle: "What the agent paid, and why",
-  paidColumns: ["Date", "Who", "Amount", "Why", "State"],
+  paidColumns: ["Date", "Who, and why", "Amount", "State"],
+  railLabel: "The account at a glance",
+  marksTitle: "Who is who",
+  theAgent: "The agent",
   // An empty line names what comes next in words true on an account with nothing waiting (H6, 08:11): one sentence.
   paidEmptyApproved: "Nothing paid yet: the first payment goes out when a bill from a payee you approved falls due.",
   paidEmptyNoPayee: "Nothing paid yet: the first payment goes to a payee you approve, and the agent asks you under Needs you when it finds one.",

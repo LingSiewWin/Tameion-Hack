@@ -333,7 +333,16 @@ function domRules({ view, width, route, palette, spec }) {
   // Hashes live in the Agent view only: none in the Owner DOM (text and every attribute, hrefs included), none in any route
   if (view === "owner") {
     const HASH = /0x[0-9a-fA-F]{8,}/;
-    const t = document.body.innerText.match(HASH);
+    // The one allowed exception (founder, 2026-10-18): the receive address, whole, in exactly these two components, on /add
+    // and /receive only (the same list as test/zero-hash-exceptions.test.mts). Anything else marked so is a leak.
+    const ALLOWED = { AddressPlate: "add", ReceiveAddress: "receive" };
+    let text = document.body.innerText;
+    for (const e of document.body.querySelectorAll("[data-hash-allowed]")) {
+      const who = e.getAttribute("data-hash-allowed");
+      if (ALLOWED[who] === route) text = text.replace(e.innerText, "");
+      else add("fail", "zero-hash-exception", e, `data-hash-allowed="${who}" outside its one place`);
+    }
+    const t = text.match(HASH);
     if (t) add("fail", "zero-hash", null, `text: ${t[0].slice(0, 14)}...`);
     for (const e of document.body.querySelectorAll("*")) {
       if (SKIP.test(e.tagName)) continue;
