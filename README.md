@@ -6,13 +6,12 @@ The account an agent operator gives its agents: they pay inside the mandate you 
 
 ## Try it in 5 minutes
 
-**Live:** https://tameion-home-production.up.railway.app — `/a/guest-demo-arc` is a demo account on Arc testnet (guest, read-only); `/` is the front page.
-**Console (classic):** https://tameion-agents-production-064a.up.railway.app — the account page with every owner action; the invite word is in the submission form.
+**Live:** https://tameion-home-production.up.railway.app — `/a/guest-demo-arc` is a demo account on Arc testnet (guest, read-only); `/` is the front page. The invite word is in the submission form.
 
 1. Open https://tameion-home-production.up.railway.app/a/guest-demo-arc — the owner's statement: what the agents may spend today, what they paid and to whom, the reason beside each row, not one hash on the page.
 2. Tap the toggle, or add `?view=agent` — the same account as the agent's terminal: every record with its three signature slots (agent, counterparty, witness) and the chain it is anchored on.
 3. On https://tameion-home-production.up.railway.app/ type the invite word and tap "Make your own" — name an account, one passkey tap; it arrives funded with test USDC, with a receipt and an address to receive more.
-4. On the console link, tap "Try it in 5 minutes": approve the demo vendor, save a bill, turn on Autopilot — from the next due time the agent pays by itself, every two minutes, and each row carries its reason.
+4. Tap "Console" on your account page — every owner action lives there: approve the demo vendor, save the bill, turn on Autopilot; from the next due time the agent pays by itself, every two minutes, and each row carries its reason.
 5. Raise the cap on one payment: it waits 30 s with a Cancel, and anyone can see it coming. Cut it: instant.
 
 Built for the Tameion Agents Hackathon.
@@ -55,7 +54,7 @@ flowchart LR
 ## Honest state
 
 - Testnet only (Arc testnet and Arbitrum Sepolia). Every account so far was made by the team; **no outside operator has used it yet**, and none has been asked.
-- Named Tameion until 2026-10-18. The repository, the crates, the binaries (`tameion-app`, `tameion-mcp`), the SDK and the hosts still say `tameion` until the rename lands after submission; the symbolon stays the name of the record.
+- Named Tameion until 2026-10-18; the repository is now github.com/LingSiewWin/Tami (old links redirect). The crates, the binaries (`tameion-app`, `tameion-mcp`), the SDK package and the hosts' addresses still say `tameion` until that rename lands after submission; the symbolon stays the name of the record.
 - The front page's hero is design: the scene is NOAA-20 VIIRS true colour from NASA GIBS (public domain, 2026-10-16), the vessels are illustrative tracks on the strait's traffic lanes, and a test fails if any word on the page says live, recorded or real.
 - One record is double-signed; none is triple-signed. The credit primitive is a public, separate layer with no credit action on any owner surface. No external lender; testnet; not a lending protocol.
 - Arc's public RPC rate-limits: a page may show the service's last good read marked "as of HH:MM" for up to 30 s.
@@ -241,7 +240,7 @@ Each row ran against a real chain; the file in `proof/` holds the requests, answ
 No key, no service of ours, no trust. From a clone (Rust installed; the events behind the Arc roots are committed):
 
 ```bash
-git clone --recurse-submodules --branch submission-2026-10-18 https://github.com/LingSiewWin/Tameion-Hack && cd Tameion-Hack   # the submission tag; drop --branch for main
+git clone --recurse-submodules --branch submission-2026-10-18 https://github.com/LingSiewWin/Tami && cd Tameion-Hack   # the submission tag; drop --branch for main
 R=0xb30efdbd0171ecbbd9daeac83d5ddd090a096440c2a6df47dadf402b0d986b70
 AUDIT_EVENTS=proof/arc-log-2026-10-13/$R.events.jsonl TAMEION_LOG_DIR=proof/arc-log-2026-10-13 \
 AGENT=0x80c195BE650FBfD55a9ffe059f397Db39f2fe881 RPC_URL=https://explorer.testnet.arc.io/api/eth-rpc \
