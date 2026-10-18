@@ -3,6 +3,11 @@ Each block below is one run of `npm run ci -- --shots --log` (apps/home/scripts/
 what failed with the element, and what changed since the previous run. Screenshots: <route>-<state>-<view>-<width>.png in this folder; focus-ring
 crops in focus/; the last run's findings as data in preflight-last.json.
 
+Reading guide (written 09:31). Blocks before 07:16 ran on placeholders, on the PM's earlier palette or on rules I fixed afterwards: their FAIL counts are not findings (82 FAILs at 06:47 were skeleton
+pages and the UA's blend mode; 838 at 07:48 repeated three findings once per row). The runs that stand: 07:54 and 08:26 (full passes on the merged tips), 08:39 and 08:56 (the stepper with the invite; D-FIELD-1),
+09:09 (the Railway preview as a visitor: 63 checks, 0 FAIL), 09:10 to 09:28 (Lighthouse, local and preview) and 09:25 (the final full pass on the lane tip: 103 checks, 0 FAIL, 9 WARN in 5 distinct findings).
+The blocks of 07:54 to 09:08 are restored at the end of the file (P-400).
+
 How to run it in the lane (the app must be up: `cd apps/home && npm run dev` serves :3010):
   cd <your worktree>/apps/home && npm ci            # playwright-core + @axe-core/playwright are dev dependencies; Chrome is the system one
   npm run ci                                        # the gate: tokens vs DESIGN.md, contrast, zero-hash test, colour literals, then axe + DESIGN rules,
@@ -816,4 +821,284 @@ measured:
   receive/rest/agent/1280: h1 15px/22px/500; main 80..1200 (1120 wide)
   receive/rest/agent/390: h1 15px/22px/500; main 0..390 (390 wide)
 since the last run: 0 fixed, 9 new
+
+== 2026-10-18 09:28:00 +08  lane/home f1b311e (+2 uncommitted) at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home  seat H6  http://localhost:3010
+PASS  tokens  owner --up: DESIGN #2F7A00, tokens.css #2E7800 (deliberate: DESIGN's value reads 4.39:1 on its surfaces, this one 4.51:1)
+WARN  strings  8 inline strings in .tsx (DESIGN: none in components):
+        src/app/a/[name]/add/page.tsx:14  "The service did not answer"
+        src/app/a/[name]/add/page.tsx:16  "No account has that name"
+        src/features/add-money/add-money.tsx:134  "Add money"
+        src/features/add-money/add-money.tsx:229  "The demo pays an account once, when it opens"
+        src/features/add-money/move-plate.tsx:290  "The move"
+        src/features/add-money/move-plate.tsx:385  "What the wallet said"
+        src/features/add-money/move-plate.tsx:508  "Amount in USDC"
+PASS  contrast  contrast/tokens: every text pair >= 4.5:1 and every edge >= 3:1 in both views; tokens.css matches tokens.ts
+PASS  zero-hash  ℹ tests 11  ℹ pass 11  ℹ fail 0
+PASS  literals
+PASS  hex-lint  tokens-lint: no colour literal outside the tokens files; every token used is defined
+PASS  21st-review  src/tokens.css:43:12 info design-hardcoded-color Hardcoded color may drift from project design tokens.
+        51 file(s), 25 finding(s), 0 fixed.
+PASS  lighthouse  / (owner view): mobile performance 99 (DESIGN >= 85), LCP 1297 ms (DESIGN <= 2500), TBT 25 ms, CLS 0.000, 269 KB over the wire, largest image 26 KB; Lighthouse 13.5.0 on https://tameion-home-production.up.railway.app
+        /a/guest-demo (owner view): mobile performance 98 (DESIGN >= 85), LCP 2154 ms (DESIGN <= 2500), TBT 18 ms, CLS 0.000, 266 KB over the wire; Lighthouse 13.5.0 on https://tameion-home-production.up.railway.app
+since the last run: 9 fixed, 0 new
+
+== 2026-10-18 09:28:08 +08  lane/home f1b311e (+2 uncommitted) at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home  seat H6  http://localhost:3010
+PASS  tokens  owner --up: DESIGN #2F7A00, tokens.css #2E7800 (deliberate: DESIGN's value reads 4.39:1 on its surfaces, this one 4.51:1)
+WARN  strings  8 inline strings in .tsx (DESIGN: none in components):
+        src/app/a/[name]/add/page.tsx:14  "The service did not answer"
+        src/app/a/[name]/add/page.tsx:16  "No account has that name"
+        src/features/add-money/add-money.tsx:134  "Add money"
+        src/features/add-money/add-money.tsx:229  "The demo pays an account once, when it opens"
+        src/features/add-money/move-plate.tsx:290  "The move"
+        src/features/add-money/move-plate.tsx:385  "What the wallet said"
+        src/features/add-money/move-plate.tsx:508  "Amount in USDC"
+PASS  contrast  contrast/tokens: every text pair >= 4.5:1 and every edge >= 3:1 in both views; tokens.css matches tokens.ts
+PASS  zero-hash  ℹ tests 11  ℹ pass 11  ℹ fail 0
+PASS  literals
+PASS  hex-lint  tokens-lint: no colour literal outside the tokens files; every token used is defined
+PASS  21st-review  src/tokens.css:43:12 info design-hardcoded-color Hardcoded color may drift from project design tokens.
+        51 file(s), 25 finding(s), 0 fixed.
+WARN  lighthouse  /a/guest-demo (agent view): LCP 4000 ms (DESIGN <= 2500), read from Chrome under Lighthouse's mobile settings, not Lighthouse's own run; https://tameion-home-production.up.railway.app
+since the last run: 0 fixed, 0 new
+
+
+
+######## Restored 2026-10-18 09:29 +0800: blocks of runs between 07:54 and 09:08 that this file lost (an older committed copy came back over it, the PM's and others' proof commits touch this path). Each block below is the end of that run's own output, kept in the scratchpad; the two foreground runs at 08:10 and 08:56 were not saved to a file and are summarised from the terminal output of the time.
+
+---- full pass on the merged tip 685d2a7 (started 07:54, written 08:07)
+== 2026-10-18 08:07:30 +08  lane/home e1b1d30 at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home  seat H6  http://localhost:3010
+PASS  tokens  owner --up: DESIGN #2F7A00, tokens.css #2E7800 (deliberate: DESIGN's value reads 4.39:1 on its surfaces, this one 4.51:1)
+PASS  contrast  contrast/tokens: every pair >= 4.5:1 in both views; tokens.css matches tokens.ts
+PASS  zero-hash  ℹ tests 9  ℹ pass 9  ℹ fail 0
+PASS  literals
+PASS  hex-lint  tokens-lint: no colour literal outside the tokens files; every token used is defined
+PASS  21st-review  src/tokens.css:43:12 info design-hardcoded-color Hardcoded color may drift from project design tokens.
+        46 file(s), 25 finding(s), 0 fixed.
+browser: 109 checks, 290 FAIL, 49 WARN (26 + 14 distinct), 0 note
+  FAIL one-hero    0 h1 on the page (DESIGN: one hero per surface)
+       in 26: guest/rest/owner/1280, guest/rest/owner/390, guest/rest/agent/1280, guest/rest/agent/390, ...
+  FAIL axe:page-has-heading-one  html  moderate: Page must have a level-one heading
+       in 26: guest/rest/owner/1280, guest/rest/owner/390, guest/rest/agent/1280, guest/rest/agent/390, ...
+  FAIL set-view    could not switch to owner
+       in 1: guest/loading/owner/390
+  FAIL owner-mono  html > body > pre "Internal Server Error"  monospace
+       in 1: guest/loading/owner/390
+  FAIL font-not-loaded    IBM Plex Sans is not loaded (loaded: none); the page is in a fallback face
+       in 1: guest/loading/owner/390
+  FAIL network-word    the header does not say "Testnet"
+       in 2: guest/loading/owner/390, guest/loading/agent/1280
+  FAIL capsule    the header has no Owner | Agent capsule
+       in 2: guest/loading/owner/390, guest/loading/agent/1280
+  FAIL data-view    html[data-view]=undefined, expected owner
+       in 1: guest/loading/owner/390
+  FAIL axe:document-title  html  serious: Document does not have a non-empty <title> element
+       in 2: guest/loading/owner/390, guest/loading/agent/1280
+  FAIL axe:html-has-lang  html  serious: The <html> element does not have a lang attribute
+       in 2: guest/loading/owner/390, guest/loading/agent/1280
+  FAIL axe:landmark-one-main  html  moderate: Document does not have a main landmark
+       in 2: guest/loading/owner/390, guest/loading/agent/1280
+  FAIL axe:region  pre  moderate: Some page content is not contained by landmarks
+       in 1: guest/loading/owner/390
+  FAIL set-view    could not switch to agent
+       in 1: guest/loading/agent/1280
+  FAIL font-not-loaded    IBM Plex Mono is not loaded (loaded: __nextjs-Geist, __nextjs-Geist Mono); the page is in a fallback face
+       in 1: guest/loading/agent/1280
+  FAIL data-view    html[data-view]=undefined, expected agent
+       in 1: guest/loading/agent/1280
+  FAIL border-on-content  section.flex.flex-col > div.rounded-(--radius-plate).bg-(--plate) > div.grid.w-full "Date Who Amount Why State"  Bottom solid 0px; depth is one step of fill, never a border (rule is for table rows only)
+       in 6: account/rest/owner/1280, account/guest/owner/1280, account/offline/owner/1280, account/needs-you/owner/1280, ...
+  FAIL touch-target  tr.border-b.border-(--rule) > td > a.text-(--ink).underline "0x36da…f2f8"  86x17 px; DESIGN touch targets are >= 44
+       in 203: account/rest/agent/390, account/rest/agent/390, account/rest/agent/390, account/rest/agent/390, ...
+  FAIL touch-target  div.flex.flex-col > details.meta > summary.cursor-pointer "What the service said"  350x20 px; DESIGN touch targets are >= 44
+       in 1: account/error/agent/390
+  FAIL touch-target  div.flex.flex-col > div.flex.flex-col > button.row.self-start "Open in Agent view"  138x24 px; DESIGN touch targets are >= 44
+       in 1: account/detail/owner/390
+  FAIL touch-target  tr > td > a.text-(--ink).underline "0x36da…f2f8"  86x17 px; DESIGN touch targets are >= 44
+       in 1: account/detail/agent/390
+  FAIL touch-target  div.flex.flex-col > div.grid.grid-cols-[14ch_1fr] > a.text-(--ink).underline "0x36daa2337987c9f54a01f7b6d071381a7b36729967949319"  823x20 px; DESIGN touch targets are >= 44
+       in 1: account/detail/agent/390
+  FAIL touch-target  section.flex.flex-col > div.flex.flex-wrap > a.text-(--ink).underline "explorer"  62x20 px; DESIGN touch targets are >= 44
+       in 3: add/rest/agent/390, add/error/agent/390, add/offline/agent/390
+  FAIL skeleton-flash    skeleton on screen for 158 ms (DESIGN: >= 300 ms once shown)
+       in 1: receive/rest/owner/1280
+  FAIL skeleton-flash    skeleton on screen for 142 ms (DESIGN: >= 300 ms once shown)
+       in 1: receive/rest/owner/390
+  FAIL skeleton-flash    skeleton on screen for 169 ms (DESIGN: >= 300 ms once shown)
+       in 1: receive/rest/agent/1280
+  FAIL skeleton-flash    skeleton on screen for 157 ms (DESIGN: >= 300 ms once shown)
+       in 1: receive/rest/agent/390
+  WARN no-skeleton    no skeleton on screen while the service reply is held
+       in 4: guest/loading/owner/1280, guest/loading/owner/390, guest/loading/agent/1280, guest/loading/agent/390
+  WARN off-token-colour  html > body "{"props":{"pageProps":{"statusCode":500,"hostname""  color #000000 x1: a colour literal, not a token
+       in 1: guest/loading/agent/1280
+  WARN offline-no-stale-marker    no "as of HH:MM" on the page 30 s after the connection dropped (DESIGN: cached values at full ink, each marked stale with its time)
+       in 12: guest/offline/owner/1280, guest/offline/owner/390, guest/offline/agent/1280, guest/offline/agent/390, ...
+  WARN measure  div.mono-dense.flex > section.flex.flex-col > p.mono-read.m-0 "– the service gave no figure: inbox.balance, inbox"  about 81 characters per line (DESIGN: measure <= 68 ch)
+       in 1: account/error/agent/1280
+  WARN direction-alone  div.rounded-(--radius-plate).bg-(--plate) > dd.m-0.flex > span.balance.money "1"  up and down colour a direction; with a sign or a word, never alone
+       in 2: account/needs-you/owner/1280, account/needs-you/owner/390
+  WARN direction-alone  h2#needs-title "Needs you"  up and down colour a direction; with a sign or a word, never alone
+       in 2: account/needs-you/owner/1280, account/needs-you/owner/390
+  WARN touch-target  section.flex.flex-col > div.flex.flex-col > a.text-(--ink).underline "Get 20 USDC from Circle's faucet"  302x24 px; DESIGN touch targets are >= 44
+       in 3: add/rest/owner/390, add/error/owner/390, add/offline/owner/390
+  WARN touch-target  section.flex.flex-col > div.flex.flex-col > a.text-(--ink).underline "0xfc3a9882ca8e722f0df0c3ae45d71cd6c245308ee9807780"  302x40 px; DESIGN touch targets are >= 44
+       in 2: add/rest/agent/390, add/offline/agent/390
+  WARN touch-target  section.flex.flex-col > div.flex.flex-col > a.text-(--ink).underline "Get 20 USDC from Circle's faucet"  302x22 px; DESIGN touch targets are >= 44
+       in 3: add/rest/agent/390, add/error/agent/390, add/offline/agent/390
+  WARN off-token-colour  main.surface.py-(--space-5) > div.flex.flex-col > svg.size-60.rounded-(--radius-plate)  background #FFFFFF x1: a colour literal, not a token
+       in 8: receive/rest/agent/1280, receive/rest/agent/390, receive/loading/agent/1280, receive/loading/agent/390, ...
+  WARN off-token-colour  main.surface.py-(--space-5) > div.flex.flex-col > svg.size-60.rounded-(--radius-plate)  fill #000000 x2: a colour literal, not a token
+       in 8: receive/rest/agent/1280, receive/rest/agent/390, receive/loading/agent/1280, receive/loading/agent/390, ...
+  WARN not-reachable-by-tab  tr.border-b.border-(--rule) > td > a.text-(--ink).underline  51 interactive element(s) were never a Tab stop
+       in 1: focus/account/agent/390
+  WARN cta-plate  button "Open the demo account"  CTA is 287x52 px; DESIGN: a 52 px plate (44 compact), full width on mobile
+       in 1: keyboard/new/375
+  WARN cta-plate  button "Copy"  CTA is 68x44 px; DESIGN: a 52 px plate (44 compact), full width on mobile
+       in 1: keyboard/add/375
+  mocked replies (a fixture, not a real account): account/empty/owner/1280, account/empty/owner/390, account/needs-you/owner/1280, account/needs-you/owner/390, account/sealed/owner/1280, account/sealed/owner/390, account/sealed/agent/1280, account/sealed/agent/390
+measured:
+  guest/rest/owner/1280: h1 none; main 80..1200 (1120 wide)
+  guest/rest/owner/390: h1 none; main 0..390 (390 wide)
+  guest/rest/agent/1280: h1 none; main 80..1200 (1120 wide)
+  guest/rest/agent/390: h1 none; main 0..390 (390 wide)
+  account/rest/owner/1280: h1 31px/38px/500; main 80..1200 (1120 wide)
+  account/rest/owner/390: h1 31px/38px/500; main 0..390 (390 wide)
+  account/rest/agent/1280: h1 15px/22px/500; main 80..1200 (1120 wide); 5 element(s) in --red
+  account/rest/agent/390: h1 15px/22px/500; main 0..390 (390 wide); 5 element(s) in --red
+  new/rest/owner/1280: h1 none; main 80..1200 (1120 wide)
+  new/rest/owner/390: h1 none; main 0..390 (390 wide)
+  new/rest/agent/1280: h1 none; main 80..1200 (1120 wide)
+  new/rest/agent/390: h1 none; main 0..390 (390 wide)
+  add/rest/owner/1280: h1 16px/24px/600; main 80..1200 (1120 wide)
+  add/rest/owner/390: h1 16px/24px/600; main 0..390 (390 wide)
+  add/rest/agent/1280: h1 15px/22px/500; main 80..1200 (1120 wide)
+  add/rest/agent/390: h1 15px/22px/500; main 0..390 (390 wide)
+  receive/rest/owner/1280: h1 25px/32px/500; main 80..1200 (1120 wide)
+  receive/rest/owner/390: h1 25px/32px/500; main 0..390 (390 wide)
+  receive/rest/agent/1280: h1 15px/22px/500; main 80..1200 (1120 wide)
+  receive/rest/agent/390: h1 15px/22px/500; main 0..390 (390 wide)
+since the last run: 446 fixed, 100 new
+
+---- full pass on lane/home 4d1a2ab (started 08:26, written 08:35)
+== 2026-10-18 08:35:37 +08  lane/home f7b3402 (+2 uncommitted) at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home  seat H6  http://localhost:3010
+PASS  tokens  owner --up: DESIGN #2F7A00, tokens.css #2E7800 (deliberate: DESIGN's value reads 4.39:1 on its surfaces, this one 4.51:1)
+PASS  contrast  contrast/tokens: every pair >= 4.5:1 in both views; tokens.css matches tokens.ts
+PASS  zero-hash  ℹ tests 9  ℹ pass 9  ℹ fail 0
+PASS  literals
+PASS  hex-lint  tokens-lint: no colour literal outside the tokens files; every token used is defined
+PASS  21st-review  src/tokens.css:43:12 info design-hardcoded-color Hardcoded color may drift from project design tokens.
+        50 file(s), 25 finding(s), 0 fixed.
+browser: 89 checks, 2 FAIL, 30 WARN (2 + 8 distinct), 5 note
+  FAIL touch-target  div.flex.flex-col > details.meta > summary.cursor-pointer.py-(--space-1) "What the service said"  350x28 px; DESIGN touch targets are >= 44
+       in 1: account/error/agent/390
+  FAIL touch-target  div.flex.flex-col > div.grid.grid-cols-[14ch_1fr] > a.text-(--ink).underline "0x36daa2337987c9f54a01f7b6d071381a7b36729967949319"  823x28 px; DESIGN touch targets are >= 44
+       in 1: account/detail/agent/390
+  WARN no-policy    POLICY is not set: 8 account scenarios were not run
+       in 1: policy
+  WARN control-boundary  input#word  the field's edge reads 1.22:1 against what it sits on (WCAG 2.2 1.4.11 asks 3:1); only its label says where to type
+       in 4: guest/rest/owner/1280, guest/rest/owner/390, guest/error/owner/1280, guest/error/owner/390
+  WARN type-heroStatement  div.absolute.inset-x-(--gutter-narrow) > div.rounded-(--radius-plate).bg-(--paper) > h1.hero-statement.m-0 "Trade moves before money does."  h1 is 15px/22px/500; the landing hero is heroStatement 49/56 (31/38 under 640 px)
+       in 4: guest/rest/agent/1280, guest/rest/agent/390, guest/error/agent/1280, guest/error/agent/390
+  WARN control-boundary  input#word  the field's edge reads 1.15:1 against what it sits on (WCAG 2.2 1.4.11 asks 3:1); only its label says where to type
+       in 4: guest/rest/agent/1280, guest/rest/agent/390, guest/error/agent/1280, guest/error/agent/390
+  WARN measure  div.mono-dense.flex > section.flex.flex-col > p.mono-read.m-0 "– the service gave no figure: inbox.balance, inbox"  about 81 characters per line (DESIGN: measure <= 68 ch)
+       in 1: account/error/agent/1280
+  WARN control-boundary  div.flex.flex-col > label.flex.flex-col > input.row.money  the field's edge reads 1.22:1 against what it sits on (WCAG 2.2 1.4.11 asks 3:1); only its label says where to type
+       in 6: add/rest/owner/1280, add/rest/owner/390, add/error/owner/1280, add/error/owner/390, ...
+  WARN control-boundary  div.flex.flex-col > label.flex.flex-col > input.row.money  the field's edge reads 1.15:1 against what it sits on (WCAG 2.2 1.4.11 asks 3:1); only its label says where to type
+       in 6: add/rest/agent/1280, add/rest/agent/390, add/error/agent/1280, add/error/agent/390, ...
+  WARN offline-no-stale-marker    no "as of HH:MM" on the page 30 s after the connection dropped (DESIGN: cached values at full ink, each marked stale with its time)
+       in 4: add/offline/owner/1280, add/offline/owner/390, add/offline/agent/1280, add/offline/agent/390
+  NOTE not-measured    /new redirects to / until the invite word is presented there: 8 stepper scenarios were not run (INVITE_FILE=<file holding the word> measures them)
+       in 1: new
+  NOTE not-built-yet    the route still shows its skeleton after settling: no content yet
+       in 4: guest/rest/owner/1280, guest/rest/owner/390, guest/rest/agent/1280, guest/rest/agent/390
+  mocked replies (a fixture, not a real account): account/needs-you/owner/1280, account/needs-you/owner/390, account/sealed/owner/1280, account/sealed/owner/390, account/sealed/agent/1280, account/sealed/agent/390
+measured:
+  guest/rest/owner/1280: h1 49px/56px/500; main 80..1200 (1120 wide)
+  guest/rest/owner/390: h1 31px/38px/500; main 0..390 (390 wide)
+  guest/rest/agent/1280: h1 15px/22px/500; main 80..1200 (1120 wide)
+  guest/rest/agent/390: h1 15px/22px/500; main 0..390 (390 wide)
+  account/rest/owner/1280: h1 31px/38px/500; main 80..1200 (1120 wide)
+  account/rest/owner/390: h1 31px/38px/500; main 0..390 (390 wide)
+  account/rest/agent/1280: h1 15px/22px/500; main 80..1200 (1120 wide); 5 element(s) in --red
+  account/rest/agent/390: h1 15px/22px/500; main 0..390 (390 wide); 5 element(s) in --red
+  add/rest/owner/1280: h1 16px/24px/600; main 80..1200 (1120 wide)
+  add/rest/owner/390: h1 16px/24px/600; main 0..390 (390 wide)
+  add/rest/agent/1280: h1 15px/22px/500; main 80..1200 (1120 wide)
+  add/rest/agent/390: h1 15px/22px/500; main 0..390 (390 wide)
+  receive/rest/owner/1280: h1 25px/32px/500; main 80..1200 (1120 wide)
+  receive/rest/owner/390: h1 25px/32px/500; main 0..390 (390 wide)
+  receive/rest/agent/1280: h1 15px/22px/500; main 80..1200 (1120 wide)
+  receive/rest/agent/390: h1 15px/22px/500; main 0..390 (390 wide)
+since the last run: 0 fixed, 30 new
+
+---- new, receive, add with the invite presented (started 08:39, written 08:43)
+== 2026-10-18 08:43:04 +08  lane/home 97a3584 (+1 uncommitted) at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home  seat H6  http://localhost:3010
+PASS  tokens  owner --up: DESIGN #2F7A00, tokens.css #2E7800 (deliberate: DESIGN's value reads 4.39:1 on its surfaces, this one 4.51:1)
+PASS  contrast  contrast/tokens: every pair >= 4.5:1 in both views; tokens.css matches tokens.ts
+PASS  zero-hash  ℹ tests 9  ℹ pass 9  ℹ fail 0
+PASS  literals
+PASS  hex-lint  tokens-lint: no colour literal outside the tokens files; every token used is defined
+PASS  21st-review  src/tokens.css:43:12 info design-hardcoded-color Hardcoded color may drift from project design tokens.
+        50 file(s), 25 finding(s), 0 fixed.
+browser: 43 checks, 2 FAIL, 30 WARN (2 + 10 distinct), 0 note
+  FAIL console    pageerror: Cannot read properties of null (reading 'getBoundingClientRect')
+       in 1: new/rest/agent/390
+  FAIL v-while-typing  input  typed v: view owner, field reads "acme-agents-6625v"
+       in 1: typing-v/new/owner/390
+  WARN control-boundary  form.flex.flex-col > div.flex.flex-col > input.row.h-(--button)  the field's edge reads 1.08:1 against what it sits on (WCAG 2.2 1.4.11 asks 3:1); only its label says where to type
+       in 2: new/rest/owner/1280, new/rest/owner/390
+  WARN console    404 /api/level1/name/acme-agents-6271
+       in 1: new/rest/owner/1280
+  WARN console    404 /api/level1/name/acme-agents-4814
+       in 1: new/rest/owner/390
+  WARN control-boundary  form.flex.flex-col > div.flex.flex-col > input.row.h-(--button)  the field's edge reads 1.26:1 against what it sits on (WCAG 2.2 1.4.11 asks 3:1); only its label says where to type
+       in 2: new/rest/agent/1280, new/rest/agent/390
+  WARN console    404 /api/level1/name/acme-agents-6721
+       in 1: new/rest/agent/1280
+  WARN console    404 /api/level1/name/acme-agents-4224
+       in 1: new/rest/agent/390
+  WARN grouped-hash    an address spelled in groups of four ("0x907a 9f4f e960 017e e9...") passes the 0x{8,} test but is a hash on the Owner screen
+       in 6: add/rest/owner/1280, add/rest/owner/390, add/error/owner/1280, add/error/owner/390, ...
+  WARN control-boundary  div.flex.flex-col > label.flex.flex-col > input.row.money  the field's edge reads 1.22:1 against what it sits on (WCAG 2.2 1.4.11 asks 3:1); only its label says where to type
+       in 6: add/rest/owner/1280, add/rest/owner/390, add/error/owner/1280, add/error/owner/390, ...
+  WARN control-boundary  div.flex.flex-col > label.flex.flex-col > input.row.money  the field's edge reads 1.15:1 against what it sits on (WCAG 2.2 1.4.11 asks 3:1); only its label says where to type
+       in 6: add/rest/agent/1280, add/rest/agent/390, add/error/agent/1280, add/error/agent/390, ...
+  WARN not-reachable-by-tab  div.surface.flex > div.capsule > button  2 interactive element(s) were never a Tab stop
+       in 4: focus/new/owner/1280, focus/new/owner/390, focus/new/agent/1280, focus/new/agent/390
+measured:
+  new/rest/owner/1280: h1 31px/38px/500; main 80..1200 (1120 wide)
+  new/rest/owner/390: h1 31px/38px/500; main 0..390 (390 wide)
+  new/rest/agent/1280: h1 15px/22px/500; main 80..1200 (1120 wide)
+  new/rest/agent/390: h1 15px/22px/500; main 0..390 (390 wide)
+  receive/rest/owner/1280: h1 25px/32px/500; main 80..1200 (1120 wide)
+  receive/rest/owner/390: h1 25px/32px/500; main 0..390 (390 wide)
+  receive/rest/agent/1280: h1 15px/22px/500; main 80..1200 (1120 wide)
+  receive/rest/agent/390: h1 15px/22px/500; main 0..390 (390 wide)
+  add/rest/owner/1280: h1 16px/24px/600; main 80..1200 (1120 wide)
+  add/rest/owner/390: h1 16px/24px/600; main 0..390 (390 wide)
+  add/rest/agent/1280: h1 15px/22px/500; main 80..1200 (1120 wide)
+  add/rest/agent/390: h1 15px/22px/500; main 0..390 (390 wide)
+since the last run: 20 fixed, 20 new
+
+---- 08:10 real accounts, Owner view (not saved; terminal output): POLICY_EMPTY=acme-agents-3314 POLICY_NEEDS=acme-agents-4288, account rest/empty/needs-you, Owner, 1280 and 390, with extras: 12 checks, 0 FAIL, 0 WARN, ci: pass.
+---- 08:56 D-FIELD-1 on lane/home dfe8359 (not saved; terminal output): guest, new, add rest with the invite: 29 checks, 2 FAIL (both the hero measure() TypeError on leaving `/` for `/new`, cells new/rest/owner/1280 and new/rest/agent/390), 0 WARN (the field-edge warnings of 08:43 were gone).
+== 2026-10-18 09:29:56 +08  lane/home f1b311e (+2 uncommitted) at /Users/lingsiewwin/Documents/Github/Tameion-Hack/runtime/wt/home  seat H6  http://localhost:3010
+PASS  tokens  owner --up: DESIGN #2F7A00, tokens.css #2E7800 (deliberate: DESIGN's value reads 4.39:1 on its surfaces, this one 4.51:1)
+WARN  strings  8 inline strings in .tsx (DESIGN: none in components):
+        src/app/a/[name]/add/page.tsx:14  "The service did not answer"
+        src/app/a/[name]/add/page.tsx:16  "No account has that name"
+        src/features/add-money/add-money.tsx:134  "Add money"
+        src/features/add-money/add-money.tsx:229  "The demo pays an account once, when it opens"
+        src/features/add-money/move-plate.tsx:290  "The move"
+        src/features/add-money/move-plate.tsx:385  "What the wallet said"
+        src/features/add-money/move-plate.tsx:508  "Amount in USDC"
+PASS  contrast  contrast/tokens: every text pair >= 4.5:1 and every edge >= 3:1 in both views; tokens.css matches tokens.ts
+PASS  zero-hash  ℹ tests 11  ℹ pass 11  ℹ fail 0
+PASS  literals
+PASS  hex-lint  tokens-lint: no colour literal outside the tokens files; every token used is defined
+PASS  21st-review  src/tokens.css:43:12 info design-hardcoded-color Hardcoded color may drift from project design tokens.
+        51 file(s), 25 finding(s), 0 fixed.
+since the last run: 0 fixed, 0 new
 
