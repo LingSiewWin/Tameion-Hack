@@ -93,16 +93,7 @@ pub async fn may_open(c: &ChainPreset, invite: Option<&str>) -> Result<(), (&'st
             refusal("not_found", "demo mode is off on this service", None),
         ));
     }
-    if c.usdc.is_none() {
-        return Err((
-            "400 Bad Request",
-            refusal(
-                "invalid_body",
-                "demo accounts open on Arbitrum Sepolia, where USDC is a token the relayer can send",
-                None,
-            ),
-        ));
-    }
+    demo_usdc(c)?;
     match relayer_short(c).await {
         Ok(None) => Ok(()),
         Ok(Some(why)) => Err((
@@ -122,6 +113,28 @@ pub async fn may_open(c: &ChainPreset, invite: Option<&str>) -> Result<(), (&'st
             ),
         )),
     }
+}
+
+/// The USDC token the relayer sends a demo account on `c`: the preset's token, or
+/// on Arc testnet `arc::USDC_ADDRESS`, the ERC-20 face of its native USDC (6
+/// decimals), so funding is the same `transfer` as on Arbitrum Sepolia. Refused
+/// on a chain with neither.
+fn demo_usdc(c: &ChainPreset) -> Result<Address, (&'static str, Value)> {
+    match (c.usdc, c.key) {
+        (Some(t), _) => Address::from_str(t).ok(),
+        (None, "arc-testnet") => Some(arc::USDC_ADDRESS),
+        (None, _) => None,
+    }
+    .ok_or_else(|| {
+        (
+            "400 Bad Request",
+            refusal(
+                "invalid_body",
+                "demo accounts open on Arbitrum Sepolia or Arc testnet, where USDC is a token the relayer can send",
+                None,
+            ),
+        )
+    })
 }
 
 /// A refusal from the catalogue (docs/115 §2) on a page route: `error` stays the
@@ -237,10 +250,7 @@ pub async fn fund_once(app_dir: &Path, t: &Tenant) -> Value {
 
 async fn send(t: &Tenant) -> Result<String, String> {
     let c = crate::watch::chain(&t.chain).ok_or("tenant chain unknown")?;
-    let usdc = c
-        .usdc
-        .and_then(|u| Address::from_str(u).ok())
-        .ok_or("this chain's USDC is not a token")?;
+    let usdc = demo_usdc(c).map_err(|_| "this chain's USDC is not a token")?;
     if let Some(why) = relayer_short(c).await? {
         return Err(why);
     }
@@ -309,6 +319,37 @@ mod tests {
         assert!(
             !ended(&bill(30, 0), u64::MAX / 2),
             "a bill in days never ends here"
+        );
+    }
+
+    /// may_open's chain gate (after demo mode, before the relayer's balances are
+    /// read on chain): Arc testnet funds through its USDC's ERC-20 face; a chain
+    /// with no USDC token is still refused, without naming one chain as the home.
+    #[test]
+    fn arc_testnet_opens_a_demo_through_its_usdc_erc20_and_a_chain_without_usdc_is_refused() {
+        let arc = crate::watch::chain("arc-testnet").unwrap();
+        assert!(arc.usdc.is_none(), "Arc's preset keeps its USDC native");
+        assert_eq!(
+            demo_usdc(arc).unwrap(),
+            Address::from_str("0x3600000000000000000000000000000000000000").unwrap()
+        );
+        let arb = crate::watch::chain("arbitrum-sepolia").unwrap();
+        assert_eq!(
+            demo_usdc(arb).unwrap(),
+            Address::from_str(arb.usdc.unwrap()).unwrap(),
+            "every other chain keeps its preset's token"
+        );
+        let nowhere = ChainPreset {
+            key: "nowhere",
+            usdc: None,
+            ..*arc
+        };
+        let (status, v) = demo_usdc(&nowhere).unwrap_err();
+        assert_eq!(status, "400 Bad Request");
+        assert_eq!(v["code"], "invalid_body");
+        assert_eq!(
+            v["error"],
+            "demo accounts open on Arbitrum Sepolia or Arc testnet, where USDC is a token the relayer can send"
         );
     }
 
