@@ -24,6 +24,7 @@ import {
   type Move,
 } from "./cctp.ts";
 import { asOfText, ledgerText, parseUsdc, usdcText, whenText, type Held } from "./format.ts";
+import { Mark } from "./mark.tsx";
 import { cta, explorer, FAUCET, inner, mark, plate, quiet, rowLink } from "./ui.ts";
 import { allowed, codeOf, connect, gasHeld, injected, minted, receiptStatus, send, usdcHeld, type Phase } from "./wallet.ts";
 
@@ -471,6 +472,7 @@ function MoveForm({
   busy: string | null;
   onStart: () => void;
 }) {
+  const view = useView();
   const short = held && amount && held.usdc < amount;
   const noGas = held && held.gas === 0n;
   const label = busy
@@ -495,6 +497,7 @@ function MoveForm({
                 className={`flex min-h-(--touch) cursor-pointer items-center gap-(--space-2) rounded-(--radius-inner) px-(--space-3) ${chosen ? "bg-(--plate-2)" : ""}`}
               >
                 <input type="radio" name="from" className="accent-(--ink)" value={c.domain} checked={chosen} onChange={() => setFrom(c.domain)} />
+                {view === "owner" && <Mark src={c.mark} />}
                 <span className={chosen ? "row-title" : "row"}>{c.name}</span>
               </label>
             );

@@ -1,0 +1,11 @@
+Real marks for the add-money page (DESIGN: "Real marks for every token, chain and vendor"; their own colours, never tinted).
+Shown at 32 px, the USDC token logo's minimum for digital use, with at least 8 px of clear space beside them. Owner view only.
+
+usdc.svg      Circle brand kit, usdc/Token Logo/USDC Token.svg (downloaded by the founder, 2026-10-18). Circle: token logo
+              minimum 32 px high on screen; clear zone = the opening width in the symbol.
+arc.svg       Arc brand kit, Arc_Logos/Arc Network Icon/Arc_network.svg (downloaded by the founder). Arc Logo Guidelines
+              08/2025 §3.4: "Utilize this asset when referencing the Arc network only" (the yellow ARC token icon is not used).
+              Never recoloured, rotated or put on a low-contrast background (§3.3), hence Owner view only.
+base.svg      github.com/base/brand-kit, logo/TheSquare/Digital/Base_square_blue.svg (Base's brand kit), unchanged.
+arbitrum.svg  Arbitrum brand kit, 1225_Arbitrum_Logo_FullColorNavy_Clearspace.svg (downloaded by the founder). Artwork unchanged;
+              only the viewBox is framed to the logomark (97.55 113.15 290 290), so the wordmark to its right is not drawn.

@@ -35,14 +35,17 @@ export const abi = parseAbi([
 ]);
 
 export type Domain = 3 | 6 | 26;
-/** One chain as this page names it: `key` is the service's chain key where it has one; `gas` is what the wallet pays fees in. */
-export type CctpChain = { domain: Domain; key: string; chain: Chain; name: string; usdc: Address; gas: "ETH" | "USDC"; wait: string };
+/** One chain as this page names it: `key` is the service's chain key where it has one; `gas` is what the wallet pays fees in;
+ *  `mark` its real mark under public/ (public/marks/SOURCES.txt). */
+export type CctpChain = { domain: Domain; key: string; chain: Chain; name: string; usdc: Address; gas: "ETH" | "USDC"; wait: string; mark: string };
 
 export const CHAINS: readonly CctpChain[] = [
-  { domain: 3, key: "arbitrum-sepolia", chain: arbitrumSepolia, name: "Arbitrum Sepolia", usdc: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", gas: "ETH", wait: "about 15 to 19 minutes" },
-  { domain: 6, key: "base-sepolia", chain: baseSepolia, name: "Base Sepolia", usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", gas: "ETH", wait: "about 15 to 19 minutes" },
-  { domain: 26, key: "arc-testnet", chain: arcTestnet, name: "Arc testnet", usdc: "0x3600000000000000000000000000000000000000", gas: "USDC", wait: "a few seconds" },
+  { domain: 3, key: "arbitrum-sepolia", chain: arbitrumSepolia, name: "Arbitrum Sepolia", usdc: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", gas: "ETH", wait: "about 15 to 19 minutes", mark: "/marks/arbitrum.svg" },
+  { domain: 6, key: "base-sepolia", chain: baseSepolia, name: "Base Sepolia", usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", gas: "ETH", wait: "about 15 to 19 minutes", mark: "/marks/base.svg" },
+  { domain: 26, key: "arc-testnet", chain: arcTestnet, name: "Arc testnet", usdc: "0x3600000000000000000000000000000000000000", gas: "USDC", wait: "a few seconds", mark: "/marks/arc.svg" },
 ];
+/** USDC's token logo (Circle's brand kit). */
+export const USDC_MARK = "/marks/usdc.svg";
 
 export const byKey = (key: string | undefined) => CHAINS.find((c) => c.key === key);
 export const byDomain = (domain: number) => CHAINS.find((c) => c.domain === domain);
