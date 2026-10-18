@@ -43,17 +43,13 @@ The seller's half arrives with a signed invoice.
 The agent's half is next.
 
 12
-00:01:19,000 --> 00:01:22,700
-Credit drawn against the same book on Arc testnet.
+00:01:19,000 --> 00:01:26,533
+Credit on Arc testnet: lock, draw, repay, slash. No external lender. Not a lending protocol.
 
 13
-00:01:23,800 --> 00:01:27,133
-No external lender. Not a lending protocol.
-
-14
 00:01:29,000 --> 00:01:32,167
 The Gateway balance is the second witness.
 
-15
+14
 00:01:44,000 --> 00:01:47,700
 Every line on screen has a file in proof/.
